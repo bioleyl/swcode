@@ -1,0 +1,48 @@
+:host {
+  display: block;
+  min-width: 0;
+}
+
+/* In a row, the button fits its text and shrinks with the title, cut with an ellipsis; a max-width in % would size
+   it to nothing. */
+h1 {
+  display: flex;
+  min-width: 0;
+}
+
+button {
+  display: block;
+  min-width: 0;
+  padding: 2px 6px;
+  margin-left: -6px;
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--jl-radius-sm);
+  background: none;
+  font-size: 16px;
+  font-weight: 600;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: text;
+}
+
+button:hover:not(:disabled) {
+  background: var(--jl-surface-2);
+}
+
+button:disabled {
+  cursor: default;
+}
+
+input {
+  width: min(480px, 100%);
+  padding: 2px 6px;
+  margin-left: -6px;
+  border: 1px solid var(--jl-brand);
+  border-radius: var(--jl-radius-sm);
+  outline: none;
+  box-shadow: var(--jl-focus-ring);
+  font-size: 16px;
+  font-weight: 600;
+}

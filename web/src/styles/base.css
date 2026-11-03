@@ -1,0 +1,65 @@
+/* Shared by every component, first in its shadow root. */
+:host {
+  box-sizing: border-box;
+}
+
+/* A component's own display would otherwise win over the browser's rule for hidden. */
+:host([hidden]) {
+  /* biome-ignore lint/complexity/noImportantStyles: hidden must win over the component's own display */
+  display: none !important;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: inherit;
+}
+
+[hidden] {
+  /* biome-ignore lint/complexity/noImportantStyles: hidden must win over every component's own display rule */
+  display: none !important;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: none;
+  box-shadow: var(--jl-focus-ring);
+}
+
+h1,
+h2,
+h3,
+p,
+pre {
+  margin: 0;
+}
+
+code,
+pre {
+  font-family: var(--jl-font-mono);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* The small capitals over a group: "Agents", "This computer". */
+.label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--jl-muted);
+}

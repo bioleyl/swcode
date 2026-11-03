@@ -1,0 +1,50 @@
+:host {
+  display: block;
+}
+
+.models-topic {
+  display: flex;
+  flex-direction: column;
+  gap: var(--jl-space-5);
+  max-width: var(--jl-page-form);
+}
+
+.lead {
+  font-size: var(--jl-font-md);
+  color: var(--jl-text-2);
+}
+
+section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--jl-space-2);
+}
+
+/* A list's title, and the button that adds to it. */
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--jl-space-3);
+}
+
+h2 {
+  font-size: var(--jl-font-lg);
+  font-weight: 700;
+}
+
+.sources,
+.presets {
+  display: flex;
+  flex-direction: column;
+  gap: var(--jl-space-1);
+}
+
+code {
+  font-family: var(--jl-font-mono);
+  font-size: var(--jl-font-sm);
+}
+
+[hidden] {
+  display: none;
+}

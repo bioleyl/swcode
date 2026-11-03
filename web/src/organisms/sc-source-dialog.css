@@ -1,0 +1,25 @@
+:host {
+  display: contents;
+}
+
+/* Its name, its address and the models served there, its key, its part of the slots. */
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--jl-space-4);
+}
+
+.served {
+  margin-top: calc(-1 * var(--jl-space-2));
+  font-size: var(--jl-font-sm);
+  color: var(--jl-muted);
+  overflow-wrap: anywhere;
+}
+
+.served:empty {
+  display: none;
+}
+
+[hidden] {
+  display: none;
+}

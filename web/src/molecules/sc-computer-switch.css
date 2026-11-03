@@ -1,0 +1,70 @@
+:host {
+  display: block;
+}
+
+/* Where swcode works: a pill; in the desktop app, jlib's select of the computers sits in it, its frame left to the pill. */
+.where {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--jl-line);
+  border-radius: var(--jl-radius-pill);
+  background: var(--jl-surface);
+  color: var(--jl-muted);
+  --pill-select-height: 36px;
+}
+
+.where:has(jl-select:hover) {
+  background: var(--jl-surface-2);
+}
+
+.where:has(jl-select:focus-within) {
+  box-shadow: var(--jl-focus-ring);
+}
+
+/* Another computer: tinted and marked, never taken for this one. */
+:host(.remote) .where {
+  border-color: var(--jl-accent-line);
+  background: var(--jl-accent-soft);
+  color: var(--jl-accent);
+}
+
+.name,
+jl-select {
+  flex: 1;
+}
+
+.name {
+  min-width: 0;
+}
+
+.name {
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--jl-text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+jl-select::part(base) {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.badge {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--jl-accent);
+}
+
+[hidden] {
+  display: none;
+}

@@ -1,0 +1,7 @@
+node_modules/
+dist/
+desktop/*.syso
+data/
+*.log
+.DS_Store
+.claude/worktrees/

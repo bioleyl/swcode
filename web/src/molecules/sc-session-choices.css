@@ -1,0 +1,17 @@
+:host {
+  display: block;
+}
+
+/* The presets and the way to edit them, then what the session asks first, then how much its model thinks. */
+/* The popover sizes itself to them, as wide as it lets them be. */
+.groups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--jl-space-4);
+}
+
+.edit {
+  align-self: flex-start;
+  margin-top: calc(-1 * var(--jl-space-2));
+  font-size: var(--jl-font-sm);
+}

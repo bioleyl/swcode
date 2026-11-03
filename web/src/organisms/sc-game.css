@@ -1,0 +1,53 @@
+:host {
+  display: block;
+}
+
+/* The field's shape at any size: as tall as the arcade lets it be, as wide as that makes it. */
+.stage {
+  position: relative;
+  width: min(100%, calc(var(--game-height, 540px) * 2 / 3));
+  aspect-ratio: 2 / 3;
+  margin: 0 auto;
+  overflow: hidden;
+  border: 1px solid var(--jl-line);
+  border-radius: var(--jl-radius);
+  background: var(--jl-bg);
+}
+
+/* The whole field has the focus while it plays: a ring around it would only frame the game. */
+.stage:focus-visible {
+  box-shadow: none;
+}
+
+/* A finger steers the ship: the page neither scrolls nor zooms under it. */
+canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+
+.hud {
+  position: absolute;
+  inset: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--jl-space-2);
+  min-height: 44px;
+  padding: var(--jl-space-1) var(--jl-space-2) var(--jl-space-1) var(--jl-space-3);
+  pointer-events: none;
+  font-family: var(--jl-font-mono);
+  font-size: var(--jl-font-sm);
+  color: var(--jl-text);
+}
+
+.lives {
+  display: flex;
+  gap: 2px;
+  margin-left: auto;
+  color: var(--jl-accent);
+}
+
+.pause {
+  pointer-events: auto;
+}

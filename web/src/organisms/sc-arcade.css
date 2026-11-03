@@ -1,0 +1,9 @@
+/* The dialog shows in the top layer: the arcade takes no room where it sits. */
+:host {
+  display: contents;
+}
+
+/* The games as tall as the window lets them be under the dialog's heading and the tabs. */
+jl-tabs {
+  --game-height: min(540px, 100dvh - 280px);
+}

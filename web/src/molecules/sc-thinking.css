@@ -1,0 +1,46 @@
+:host {
+  display: block;
+  font-size: 13px;
+  color: var(--jl-muted);
+}
+
+button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  font-weight: 600;
+  color: var(--jl-muted);
+  cursor: pointer;
+}
+
+:host(:not([done])) .text {
+  color: var(--jl-accent);
+}
+
+jl-icon {
+  transition: transform var(--jl-fast) var(--jl-ease);
+}
+
+:host([open]) jl-icon {
+  transform: rotate(180deg);
+}
+
+.body {
+  display: none;
+  max-height: 240px;
+  margin-top: 6px;
+  padding: 10px 14px;
+  overflow-y: auto;
+  border-radius: var(--jl-radius);
+  background: var(--jl-surface-2);
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+:host([open]) .body {
+  display: block;
+}

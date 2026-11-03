@@ -1,0 +1,40 @@
+/* Over the whole game, which places it (position: relative). */
+:host {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: block;
+}
+
+.screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--jl-space-3);
+  height: 100%;
+  padding: var(--jl-space-6);
+  background: color-mix(in srgb, var(--jl-bg) 80%, transparent);
+  text-align: center;
+}
+
+.heading {
+  font-size: var(--jl-font-xl);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.text {
+  max-width: 36ch;
+  font-size: var(--jl-font-sm);
+  line-height: 1.5;
+  color: var(--jl-text-2);
+}
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--jl-space-2);
+  margin-top: var(--jl-space-2);
+}

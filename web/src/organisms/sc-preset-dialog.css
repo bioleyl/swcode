@@ -1,0 +1,14 @@
+:host {
+  display: contents;
+}
+
+/* Its name, then the main agent's model and the workers'. */
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--jl-space-4);
+}
+
+[hidden] {
+  display: none;
+}

@@ -1,0 +1,146 @@
+/* A conversation that grows past the window keeps its column where it was: the scrollbar's room stays. */
+:host {
+  display: block;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable both-edges;
+}
+
+.column {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 32px 32px 24px;
+}
+
+.items {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.empty {
+  padding: 48px 0;
+  font-size: 15px;
+  text-align: center;
+  color: var(--jl-muted);
+}
+
+.where {
+  font-family: var(--jl-font-mono);
+  font-size: 13px;
+  color: var(--jl-text-2);
+}
+
+.working {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  color: var(--jl-text-2);
+}
+
+:host([waiting]) .working {
+  color: var(--jl-accent);
+  font-weight: 600;
+}
+
+/* What the agent does, a command or a path at times: one line, cut short where it ends. */
+.working-text {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--jl-brand);
+  animation: pulse 1.6s var(--jl-ease) infinite;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dot {
+    animation: none;
+  }
+}
+
+.note {
+  font-size: 13px;
+  color: var(--jl-muted);
+}
+
+.note[data-outcome="failed"] {
+  color: var(--jl-danger);
+}
+
+@media (max-width: 720px) {
+  .column {
+    padding: 20px 16px 16px;
+  }
+}
+
+.compaction {
+  padding: 10px 14px;
+  border: 1px dashed var(--jl-line-strong);
+  border-radius: var(--jl-radius);
+  font-size: 13px;
+  color: var(--jl-muted);
+}
+
+.compaction summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.compaction p {
+  margin-top: 8px;
+  white-space: pre-wrap;
+  color: var(--jl-text-2);
+}
+
+.compaction ul {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 8px 0 0;
+  padding-left: 18px;
+  color: var(--jl-text-2);
+}
+
+.compaction li {
+  overflow-wrap: anywhere;
+}
+
+.queued {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  opacity: 0.7;
+}
+
+.queued-messages {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.queued-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--jl-muted);
+}

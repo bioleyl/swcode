@@ -1,0 +1,178 @@
+:host {
+  display: block;
+  padding: 0 32px 24px;
+}
+
+.box {
+  container: composer / inline-size;
+  display: flex;
+  flex-direction: column;
+  max-width: 760px;
+  margin: 0 auto;
+  border: 1px solid var(--jl-line-strong);
+  border-radius: var(--jl-radius-lg);
+  background: var(--jl-surface);
+}
+
+/* One focus ring at a time: the box's while people type in it, a chip's while the keyboard is on it. */
+.box:has(textarea:focus) {
+  border-color: var(--jl-brand);
+  box-shadow: var(--jl-focus-ring);
+}
+
+/* field-sizing grows the height with the text; the width stays the box's, or the placeholder sets it. */
+textarea {
+  width: 100%;
+  min-height: 56px;
+  max-height: 40dvh;
+  padding: 14px 16px 4px;
+  border: 0;
+  outline: none;
+  resize: none;
+  background: transparent;
+  font-size: 15px;
+  line-height: 1.6;
+  field-sizing: content;
+}
+
+textarea:focus-visible {
+  box-shadow: none;
+}
+
+textarea::placeholder {
+  color: var(--jl-muted);
+}
+
+/* One row at any width: stop and send keep their size, the chip's words give way. */
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 8px 8px 12px;
+}
+
+/* The popover takes the room the chip needs, no more: its words give way before stop and send do. */
+jl-popover {
+  min-width: 0;
+}
+
+/* What the session works with, in a pill that opens the panel of its choices. */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
+  gap: 6px;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--jl-line);
+  border-radius: var(--jl-radius-pill);
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  color: var(--jl-text-2);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.chip:hover {
+  border-color: var(--jl-line-strong);
+  color: var(--jl-text);
+}
+
+.chip:focus-visible {
+  outline: none;
+  box-shadow: var(--jl-focus-ring);
+}
+
+.chip jl-icon {
+  flex: none;
+}
+
+.summary {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.context {
+  flex: none;
+  margin-left: auto;
+  font-family: var(--jl-font-mono);
+  font-size: 12px;
+  white-space: nowrap;
+  color: var(--jl-muted);
+}
+
+.play,
+.stop,
+.send {
+  flex: none;
+}
+
+/* The composer's own width, not the screen's: on a phone the context count goes before the chip's words are cut. */
+@container composer (max-width: 480px) {
+  .bar {
+    gap: 6px;
+    padding-left: 8px;
+  }
+
+  .chip {
+    padding: 0 6px 0 8px;
+  }
+
+  .context {
+    display: none;
+  }
+}
+
+@media (max-width: 720px) {
+  :host {
+    padding: 0 12px calc(12px + env(safe-area-inset-bottom));
+  }
+}
+
+/* The pictures waiting to go with the message, above it. */
+.pictures {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 16px 0;
+}
+
+.thumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.thumb {
+  position: relative;
+  display: block;
+}
+
+.thumb img {
+  display: block;
+  height: 64px;
+  max-width: 160px;
+  object-fit: cover;
+  border: 1px solid var(--jl-line);
+  border-radius: var(--jl-radius);
+}
+
+.thumb .remove {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  border-radius: var(--jl-radius);
+  background: var(--jl-surface);
+}
+
+.picture-note {
+  font-size: 12px;
+  color: var(--jl-muted);
+}
+
+.picture-note:empty {
+  display: none;
+}

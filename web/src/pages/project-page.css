@@ -1,0 +1,13 @@
+:host {
+  display: block;
+}
+
+.sessions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--jl-space-1);
+}
+
+[hidden] {
+  display: none;
+}

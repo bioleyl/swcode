@@ -1,0 +1,19 @@
+:host {
+  display: block;
+}
+
+.startup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--jl-space-5);
+  max-width: var(--jl-page-form);
+}
+
+.lead {
+  font-size: var(--jl-font-md);
+  color: var(--jl-text-2);
+}
+
+[hidden] {
+  display: none;
+}

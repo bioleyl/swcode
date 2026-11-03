@@ -1,0 +1,229 @@
+// Package projects is the folders the daemon's sessions work in, each on a host, with a name for people.
+package projects
+
+import (
+	"context"
+	"encoding/json"
+	"os"
+	"path"
+	"path/filepath"
+	"sort"
+	"strings"
+	"sync"
+	"time"
+
+	"swcode/daemon/hosts"
+	"swcode/daemon/protocol"
+)
+
+const (
+	unknownProject = "There is no such project."
+	homeMark       = "~"
+)
+
+// Store keeps the projects in one file, projects.json in the data folder.
+type Store struct {
+	file string
+}
+
+func NewStore(file string) *Store { return &Store{file: file} }
+
+func (s *Store) Load() []protocol.Project {
+	data, err := os.ReadFile(s.file)
+	if err != nil {
+		return []protocol.Project{}
+	}
+	var projects []protocol.Project
+	if json.Unmarshal(data, &projects) != nil {
+		return []protocol.Project{}
+	}
+	return projects
+}
+
+func (s *Store) Save(projects []protocol.Project) error {
+	if err := os.MkdirAll(filepath.Dir(s.file), 0o755); err != nil {
+		return err
+	}
+	data, err := json.MarshalIndent(projects, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(s.file, data, 0o644)
+}
+
+// Deps is what the projects work with.
+type Deps struct {
+	Store *Store
+	Hosts *hosts.Registry
+	// HostOptions is where a new project can be, for the project dialog.
+	HostOptions func() []protocol.HostOption
+	// ProjectsFolder is where new projects usually go on this computer: the folder browser starts there.
+	ProjectsFolder string
+	// ForgetSessions deletes the sessions working in this folder of a host, or says why not: one of them is
+	// working.
+	ForgetSessions func(path string, host protocol.HostRef) string
+	Now            func() time.Time
+	NewID          func() string
+	LogError       func(error)
+}
+
+// Listener hears the projects whenever they change; it must not call back into the service.
+type Listener func(message protocol.ServerMessage)
+
+// Service is the projects of this daemon: the folders its sessions work in. Removing one deletes its sessions and
+// forgets it, its folder stays; every folder a session works in has one, made when needed.
+type Service struct {
+	deps      Deps
+	mu        sync.Mutex
+	projects  []protocol.Project
+	listeners map[int]Listener
+	next      int
+}
+
+func NewService(deps Deps) *Service {
+	return &Service{deps: deps, listeners: map[int]Listener{}, projects: []protocol.Project{}}
+}
+
+func (s *Service) Load() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.projects = s.deps.Store.Load()
+}
+
+func (s *Service) Subscribe(listener Listener) func() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	id := s.next
+	s.next++
+	s.listeners[id] = listener
+	return func() {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		delete(s.listeners, id)
+	}
+}
+
+func (s *Service) List() []protocol.Project {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.list()
+}
+
+func (s *Service) list() []protocol.Project {
+	sorted := append([]protocol.Project{}, s.projects...)
+	sort.SliceStable(sorted, func(first, second int) bool { return sorted[first].Name < sorted[second].Name })
+	return sorted
+}
+
+// Create makes a project of a folder; picking the folder of a project there already is gives that project.
+func (s *Service) Create(ctx context.Context, folder string, host *protocol.HostRef, newFolder string) (protocol.Project, string) {
+	ref := protocol.LocalHost()
+	if host != nil {
+		ref = *host
+	}
+	target := s.deps.Hosts.HostOf(ref)
+	if newFolder != "" {
+		made, err := target.MakeFolder(ctx, folder, newFolder)
+		if err != nil {
+			return protocol.Project{}, "The host did not answer: " + err.Error()
+		}
+		if !made.OK {
+			return protocol.Project{}, made.Problem
+		}
+		return s.Ensure(made.Path, ref), ""
+	}
+	path, problem := hosts.ChooseFolder(ctx, target, folder, "")
+	if problem != "" {
+		return protocol.Project{}, problem
+	}
+	return s.Ensure(path, ref), ""
+}
+
+func (s *Service) Remove(projectID string) string {
+	s.mu.Lock()
+	var found *protocol.Project
+	for index := range s.projects {
+		if s.projects[index].ID == projectID {
+			found = &s.projects[index]
+		}
+	}
+	s.mu.Unlock()
+	if found == nil {
+		return unknownProject
+	}
+	if refused := s.deps.ForgetSessions(found.Path, found.Host); refused != "" {
+		return refused
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	kept := []protocol.Project{}
+	for _, project := range s.projects {
+		if project.ID != projectID {
+			kept = append(kept, project)
+		}
+	}
+	s.change(kept)
+	return ""
+}
+
+// Ensure is the project of a folder on a host, made for it when there is none yet.
+func (s *Service) Ensure(folder string, host protocol.HostRef) protocol.Project {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, project := range s.projects {
+		if project.Path == folder && hosts.SameHost(project.Host, host) {
+			return project
+		}
+	}
+	project := protocol.Project{
+		CreatedAt: protocol.Timestamp(s.deps.Now()), Host: host, ID: s.deps.NewID(), Name: baseName(folder), Path: folder,
+	}
+	s.change(append(append([]protocol.Project{}, s.projects...), project))
+	return project
+}
+
+// baseName is a folder's name, whichever way its path is written.
+func baseName(folder string) string {
+	if strings.Contains(folder, `\`) {
+		return path.Base(strings.ReplaceAll(folder, `\`, "/"))
+	}
+	return path.Base(folder)
+}
+
+// HostOptions is where a new project can be: this computer, its WSL distributions, the SSH endpoints.
+func (s *Service) HostOptions() []protocol.HostOption {
+	return s.deps.HostOptions()
+}
+
+// Folders is the subfolders of a folder on a host: when none is given, the projects' usual folder on this
+// computer, the home folder elsewhere.
+func (s *Service) Folders(ctx context.Context, folder string, host *protocol.HostRef) hosts.FolderListing {
+	ref := protocol.LocalHost()
+	if host != nil {
+		ref = *host
+	}
+	start := folder
+	if start == "" {
+		start = homeMark
+		if hosts.IsLocal(ref) {
+			start = s.deps.ProjectsFolder
+		}
+	}
+	listing, err := s.deps.Hosts.HostOf(ref).ListFolders(ctx, start)
+	if err != nil {
+		return hosts.FolderListing{Path: start, Problem: "The host did not answer: " + err.Error()}
+	}
+	return listing
+}
+
+// change keeps the projects and tells the listeners; the caller holds the lock.
+func (s *Service) change(projects []protocol.Project) {
+	s.projects = projects
+	if err := s.deps.Store.Save(projects); err != nil {
+		s.deps.LogError(err)
+	}
+	message := protocol.ServerMessage{Value: protocol.ServerMessageProjects{Projects: s.list()}}
+	for _, listener := range s.listeners {
+		listener(message)
+	}
+}

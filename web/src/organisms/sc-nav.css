@@ -1,0 +1,111 @@
+:host {
+  display: block;
+  height: 100%;
+}
+
+jl-side-nav {
+  height: 100%;
+}
+
+.header {
+  display: grid;
+  gap: var(--jl-space-3);
+  padding: var(--jl-space-1) var(--jl-space-1) var(--jl-space-3);
+}
+
+.brand {
+  display: flex;
+  padding: var(--jl-space-1) var(--jl-space-2);
+  color: inherit;
+  text-decoration: none;
+}
+
+.footer {
+  display: grid;
+  gap: var(--jl-space-1);
+  padding-bottom: var(--jl-space-2);
+  border-top: 1px solid var(--jl-line);
+}
+
+/* Whether the daemon and llama-server answer: a dot, the words, and the address under them. */
+.status {
+  display: flex;
+  align-items: center;
+  gap: var(--jl-space-2);
+  min-width: 0;
+  padding: var(--jl-space-3) var(--jl-space-2) var(--jl-space-1);
+}
+
+/* Folding and unfolding: as wide as the nav, its icon and words where the rows start theirs. */
+.fold::part(base) {
+  justify-content: flex-start;
+}
+
+.dot {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--jl-faint);
+}
+
+.status[data-tone="ok"] .dot {
+  background: var(--jl-brand);
+}
+
+.status[data-tone="problem"] .dot {
+  background: var(--jl-danger);
+}
+
+.daemon-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.daemon-detail {
+  overflow: hidden;
+  font-family: var(--jl-font-mono);
+  font-size: var(--jl-font-xs);
+  color: var(--jl-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.daemon-detail:empty {
+  display: none;
+}
+
+/* The rail keeps the mark alone, and the place where swcode works leaves for the unfolded nav. */
+jl-side-nav[rail] .brand {
+  justify-content: center;
+  padding: var(--jl-space-1) 0;
+}
+
+jl-side-nav[rail] sc-brand::part(word) {
+  display: none;
+}
+
+jl-side-nav[rail] jl-search-button {
+  justify-self: center;
+}
+
+jl-side-nav[rail] .fold::part(base) {
+  justify-content: center;
+}
+
+jl-side-nav[rail] sc-computer-switch,
+jl-side-nav[rail] .daemon-text,
+jl-side-nav[rail] .theme {
+  display: none;
+}
+
+jl-side-nav[rail] .status {
+  justify-content: center;
+}
+
+[hidden] {
+  display: none;
+}

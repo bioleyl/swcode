@@ -1,0 +1,106 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border: 1px solid var(--jl-line);
+  border-radius: var(--jl-radius);
+  overflow: hidden;
+}
+
+.where {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px 4px 4px;
+  border-bottom: 1px solid var(--jl-line);
+  background: var(--jl-surface-2);
+}
+
+input {
+  flex: 1;
+  min-width: 0;
+  height: 32px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: var(--jl-radius-sm);
+  outline: none;
+  background: transparent;
+  font-family: var(--jl-font-mono);
+  font-size: 12px;
+  color: var(--jl-text);
+}
+
+input:focus-visible {
+  box-shadow: var(--jl-focus-ring);
+}
+
+/* A folder with many subfolders scrolls: the rows keep their width as it does. */
+ul {
+  min-height: 0;
+  max-height: 280px;
+  margin: 0;
+  padding: 4px;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  list-style: none;
+}
+
+ul:empty {
+  display: none;
+}
+
+li button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--jl-radius-sm);
+  background: transparent;
+  color: var(--jl-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+li button:hover {
+  background: var(--jl-surface-2);
+}
+
+li button jl-icon {
+  color: var(--jl-muted);
+}
+
+.name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.state {
+  padding: 12px;
+  font-size: 13px;
+  color: var(--jl-muted);
+}
+
+.state:empty {
+  display: none;
+}
+
+:host(.refused) .state {
+  color: var(--jl-danger);
+}
+
+@media (max-width: 720px) {
+  li button {
+    min-height: 44px;
+  }
+
+  ul {
+    max-height: 40dvh;
+  }
+}

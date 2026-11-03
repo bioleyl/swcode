@@ -1,0 +1,143 @@
+:host {
+  display: block;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+:host([author="user"]) {
+  padding: 14px 16px;
+  border-radius: var(--jl-radius);
+  background: var(--jl-surface-2);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+code {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--jl-code-bg);
+  font-size: 13px;
+}
+
+a {
+  color: var(--jl-accent);
+  text-underline-offset: 2px;
+}
+
+a:hover {
+  color: var(--jl-accent-strong);
+}
+
+pre {
+  overflow-x: auto;
+  padding: 12px 14px;
+  border: 1px solid var(--jl-line);
+  border-radius: var(--jl-radius);
+  background: var(--jl-surface-2);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+pre code {
+  padding: 0;
+  background: none;
+}
+
+h3,
+h4 {
+  margin: 4px 0 0;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+h4 {
+  font-size: 15px;
+}
+
+ul,
+ol {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding-left: 22px;
+}
+
+li {
+  overflow-wrap: anywhere;
+}
+
+li::marker {
+  color: var(--jl-muted);
+}
+
+.table {
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--jl-line);
+  border-radius: var(--jl-radius);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+th,
+td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--jl-line-soft);
+  text-align: left;
+  vertical-align: top;
+}
+
+th {
+  background: var(--jl-surface-2);
+  font-weight: 600;
+}
+
+tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+/* A short first column (a name, a path) stays on one line. */
+td:first-child {
+  white-space: nowrap;
+}
+
+[data-align="center"] {
+  text-align: center;
+}
+
+[data-align="right"] {
+  text-align: right;
+}
+
+/* The pictures pasted with a message, small: a click opens one whole. */
+.pictures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.pictures img {
+  display: block;
+  max-width: 100%;
+  max-height: 160px;
+  border: 1px solid var(--jl-line);
+  border-radius: var(--jl-radius);
+  background: var(--jl-surface);
+}

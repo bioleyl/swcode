@@ -1,0 +1,55 @@
+:host {
+  display: block;
+}
+
+ol {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--jl-text);
+}
+
+li jl-icon {
+  flex: none;
+  margin-top: 2px;
+  color: var(--jl-faint);
+}
+
+li[data-status="completed"] {
+  color: var(--jl-muted);
+}
+
+li[data-status="completed"] jl-icon,
+li[data-status="in_progress"] jl-icon {
+  color: var(--jl-accent);
+}
+
+li[data-status="in_progress"] {
+  font-weight: 600;
+}
+
+:host([live]) li[data-status="in_progress"] jl-icon {
+  animation: turn 1.2s linear infinite;
+}
+
+@keyframes turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :host([live]) li[data-status="in_progress"] jl-icon {
+    animation: none;
+  }
+}

@@ -1,0 +1,30 @@
+:host {
+  display: contents;
+}
+
+/* Where the project goes, whether its folder exists, its name for a new one, then the folders to go through. */
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--jl-space-4);
+}
+
+.lead {
+  font-size: var(--jl-font-md);
+  color: var(--jl-text-2);
+}
+
+.target {
+  font-family: var(--jl-font-mono);
+  font-size: var(--jl-font-sm);
+  color: var(--jl-muted);
+  overflow-wrap: anywhere;
+}
+
+.target:empty {
+  display: none;
+}
+
+[hidden] {
+  display: none;
+}

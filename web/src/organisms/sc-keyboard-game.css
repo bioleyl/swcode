@@ -1,0 +1,122 @@
+:host {
+  display: block;
+  container: keyboard / inline-size;
+}
+
+.game {
+  display: flex;
+  flex-direction: column;
+  gap: var(--jl-space-3);
+}
+
+.bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--jl-space-3);
+  font-size: var(--jl-font-sm);
+  color: var(--jl-text-2);
+}
+
+.result {
+  font-family: var(--jl-font-mono);
+  white-space: nowrap;
+}
+
+.letters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+}
+
+.letter {
+  display: inline-grid;
+  place-items: center;
+  width: 1.75em;
+  height: 1.75em;
+  border-radius: var(--jl-radius-xs);
+  font-family: var(--jl-font-mono);
+  font-size: var(--jl-font-sm);
+}
+
+.locked {
+  color: var(--jl-faint);
+}
+
+.learning {
+  background: var(--jl-surface-2);
+  color: var(--jl-text);
+}
+
+.confident {
+  background: var(--jl-accent-soft);
+  color: var(--jl-accent);
+}
+
+.focus {
+  box-shadow: 0 0 0 1px var(--jl-warn);
+}
+
+.stage {
+  position: relative;
+  display: grid;
+  align-content: center;
+  min-height: min(var(--game-height, 280px), 280px);
+  overflow: hidden;
+  border: 1px solid var(--jl-line);
+  border-radius: var(--jl-radius);
+  background: var(--jl-code-bg);
+  cursor: text;
+}
+
+.stage:focus-within {
+  border-color: var(--jl-accent-line);
+}
+
+/* The line at a size that fits its longest in the dialog, a phone's included: a monospace letter is 0.6em wide. */
+.words {
+  display: grid;
+  gap: var(--jl-space-2);
+  padding: var(--jl-space-4);
+  font-family: var(--jl-font-mono);
+  font-size: clamp(10px, (100cqi - 2 * var(--jl-space-4)) / 28, 24px);
+  line-height: 1.6;
+  white-space: pre;
+}
+
+.now {
+  color: var(--jl-text);
+}
+
+.done,
+.next {
+  color: var(--jl-faint);
+}
+
+.at {
+  border-radius: var(--jl-radius-xs);
+  background: var(--jl-accent);
+  color: var(--jl-on-accent);
+}
+
+.at.missed {
+  background: var(--jl-danger);
+  color: var(--jl-on-danger);
+}
+
+/* The keys go to this input, out of sight: a phone shows its keyboard for it. */
+.keys {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+}
+
+.news {
+  font-size: var(--jl-font-sm);
+  color: var(--jl-text-2);
+}

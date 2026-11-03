@@ -1,0 +1,72 @@
+:host {
+  display: contents;
+}
+
+section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--jl-space-3);
+}
+
+section + section {
+  margin-top: var(--jl-space-5);
+  padding-top: var(--jl-space-4);
+  border-top: 1px solid var(--jl-line);
+}
+
+h3 {
+  font-size: var(--jl-font-md);
+  font-weight: 700;
+}
+
+.lead {
+  font-size: 13px;
+  color: var(--jl-muted);
+}
+
+/* White in both themes: a camera reads a QR code as dark squares on a light ground. */
+.qr {
+  align-self: center;
+  width: 200px;
+  padding: 8px;
+  border-radius: var(--jl-radius);
+  background: #ffffff;
+}
+
+.qr svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.link {
+  overflow-wrap: anywhere;
+  font-family: var(--jl-font-mono);
+  font-size: 12px;
+  color: var(--jl-text-2);
+  user-select: all;
+}
+
+.expires,
+.none {
+  font-size: 12px;
+  color: var(--jl-muted);
+}
+
+.expires {
+  text-align: center;
+}
+
+.devices {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.note {
+  padding: 10px 12px;
+  border-radius: var(--jl-radius);
+  background: var(--jl-danger-soft);
+  font-size: 13px;
+  color: var(--jl-danger);
+}

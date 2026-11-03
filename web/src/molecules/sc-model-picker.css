@@ -1,0 +1,16 @@
+:host {
+  display: block;
+}
+
+/* The server, then its model, side by side; one above the other on a phone. */
+.picker {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  gap: var(--jl-space-2);
+}
+
+@media (max-width: 480px) {
+  .picker {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

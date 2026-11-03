@@ -1,0 +1,46 @@
+:host {
+  display: block;
+}
+
+jl-alert {
+  margin-bottom: var(--jl-space-4);
+}
+
+jl-tab-panel {
+  padding-top: var(--jl-space-6);
+}
+
+/* A topic of the settings file: what it is, then its sections, a heading over each. */
+.file-topic {
+  display: flex;
+  flex-direction: column;
+  gap: var(--jl-space-6);
+  max-width: var(--jl-page-form);
+}
+
+.lead {
+  font-size: var(--jl-font-md);
+  color: var(--jl-text-2);
+}
+
+code {
+  padding: 1px 5px;
+  border-radius: var(--jl-radius-xs);
+  background: var(--jl-code-bg);
+  font-size: var(--jl-font-xs);
+}
+
+section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--jl-space-4);
+}
+
+h2 {
+  font-size: var(--jl-font-lg);
+  font-weight: 700;
+}
+
+[hidden] {
+  display: none;
+}

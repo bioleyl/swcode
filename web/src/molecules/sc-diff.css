@@ -1,0 +1,52 @@
+:host {
+  display: block;
+  overflow-x: auto;
+  font-family: var(--jl-font-mono);
+  font-size: 12.5px;
+  line-height: 1.75;
+}
+
+.body {
+  min-width: max-content;
+  padding: 8px 0;
+}
+
+.line {
+  display: flex;
+  gap: 14px;
+  padding: 0 14px;
+  white-space: pre;
+}
+
+.line[data-kind="add"] {
+  background: var(--jl-accent-soft);
+}
+
+.line[data-kind="remove"] {
+  background: var(--jl-danger-soft);
+}
+
+.number {
+  flex: none;
+  width: 28px;
+  text-align: right;
+  color: var(--jl-faint);
+}
+
+.sign {
+  flex: none;
+  width: 8px;
+}
+
+.line[data-kind="add"] .sign {
+  color: var(--jl-accent);
+}
+
+.line[data-kind="remove"] .sign {
+  color: var(--jl-danger);
+}
+
+.gap {
+  padding: 2px 14px 2px 56px;
+  color: var(--jl-muted);
+}

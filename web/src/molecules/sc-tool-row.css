@@ -1,0 +1,181 @@
+:host {
+  display: block;
+  border: 1px solid var(--jl-line);
+  border-radius: var(--jl-radius);
+  overflow: hidden;
+  background: var(--jl-surface);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 14px;
+  border: 0;
+  background: none;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.head:disabled {
+  cursor: default;
+}
+
+.icon {
+  color: var(--jl-faint);
+}
+
+.name {
+  flex: none;
+  font-weight: 600;
+}
+
+.summary {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--jl-font-mono);
+  color: var(--jl-text-2);
+}
+
+/* An agent call's summary is its task, in words: not code. */
+:host([tool="agent"]) .summary {
+  font-family: var(--jl-font-sans);
+}
+
+.meta {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.meta-text[data-tone="muted"] {
+  color: var(--jl-muted);
+}
+
+.meta-text[data-tone="accent"] {
+  color: var(--jl-accent);
+}
+
+.meta-text[data-tone="danger"] {
+  color: var(--jl-danger);
+}
+
+:host([state="done"]) .state-icon {
+  color: var(--jl-muted);
+}
+
+:host([state="failed"]) .state-icon {
+  color: var(--jl-danger);
+}
+
+.dot {
+  display: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--jl-brand);
+}
+
+:host([state="running"]) .dot,
+:host([state="waiting"]) .dot {
+  display: block;
+}
+
+.chevron {
+  visibility: hidden;
+  color: var(--jl-faint);
+  transition: transform var(--jl-fast) var(--jl-ease);
+}
+
+:host([expandable]) .chevron {
+  visibility: visible;
+}
+
+:host([open]) .chevron {
+  transform: rotate(180deg);
+}
+
+.details {
+  border-top: 1px solid var(--jl-line);
+  background: var(--jl-surface-2);
+}
+
+pre {
+  max-height: 320px;
+  overflow: auto;
+  padding: 10px 14px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--jl-text-2);
+}
+
+.picture {
+  display: block;
+  padding: 10px 14px;
+}
+
+.picture img {
+  display: block;
+  max-width: 100%;
+  max-height: 480px;
+  border-radius: var(--jl-radius-sm);
+}
+
+.calls {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 14px;
+  font-size: 12.5px;
+  color: var(--jl-text-2);
+}
+
+.calls + sc-diff:not([hidden]),
+.calls + sc-diff + pre:not([hidden]) {
+  border-top: 1px solid var(--jl-line-soft);
+}
+
+.call {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 24px;
+}
+
+.call jl-icon {
+  color: var(--jl-faint);
+}
+
+.call-name {
+  flex: none;
+  font-weight: 600;
+}
+
+.call-summary {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--jl-font-mono);
+}
+
+.call-meta {
+  flex: none;
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--jl-muted);
+}
+
+.call[data-ok="false"] .call-meta {
+  color: var(--jl-danger);
+}

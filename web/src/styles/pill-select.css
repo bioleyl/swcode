@@ -1,0 +1,18 @@
+/*
+ * jlib's select inside a pill of swcode's (the composer's chips, the computer pill): the pill is the frame, so the
+ * select's own goes. Its native select keeps 12px before the text and its chevron 12px from the end, which jlib gives
+ * no way to change: the margins take that room back, and the text sits beside the pill's icon.
+ */
+.pill-select {
+  min-width: 0;
+  margin-inline: -12px;
+}
+
+.pill-select::part(base) {
+  min-height: 0;
+  height: var(--pill-select-height);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}

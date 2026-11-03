@@ -1,0 +1,101 @@
+/*
+ * The window's height, the conversation scrolling inside it: the page outlet's row (1fr) grows to the least height
+ * of its page, which without min-height is the whole conversation's, and the wheel then has nothing to scroll.
+ */
+:host {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  grid-template-rows: minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+}
+
+.column {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  min-width: 0;
+  height: 100%;
+}
+
+/* One row at any width: the path gives way first, then the title; the buttons keep their size. */
+header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 32px;
+  border-bottom: 1px solid var(--jl-line);
+}
+
+sc-title {
+  flex: 0 1 auto;
+}
+
+header jl-button,
+.status {
+  flex: none;
+}
+
+.delete {
+  margin-left: auto;
+}
+
+:host([panel-closed]) {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+:host([panel-closed]) sc-side-panel {
+  display: none;
+}
+
+.chip {
+  display: inline-flex;
+  flex: 0 3 auto;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--jl-line);
+  border-radius: var(--jl-radius-pill);
+  font-family: var(--jl-font-mono);
+  font-size: 12px;
+  color: var(--jl-text-2);
+}
+
+.path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+jl-alert {
+  width: min(760px, calc(100% - 64px));
+  margin: 0 auto var(--jl-space-2);
+}
+
+[hidden] {
+  display: none;
+}
+
+@media (max-width: 1100px) {
+  :host {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  sc-side-panel,
+  .panel-toggle {
+    display: none;
+  }
+}
+
+@media (max-width: 720px) {
+  header {
+    gap: var(--jl-space-2);
+    padding: var(--jl-space-2) var(--jl-space-3);
+  }
+
+  .chip {
+    display: none;
+  }
+}

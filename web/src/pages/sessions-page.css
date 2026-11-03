@@ -1,0 +1,25 @@
+:host {
+  display: block;
+}
+
+.groups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--jl-space-6);
+}
+
+section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--jl-space-1);
+}
+
+h2 {
+  margin-bottom: var(--jl-space-2);
+  font-size: var(--jl-font-lg);
+  font-weight: 700;
+}
+
+[hidden] {
+  display: none;
+}

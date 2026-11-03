@@ -1,0 +1,55 @@
+:host {
+  display: block;
+  height: 100dvh;
+}
+
+jl-app-shell {
+  height: 100%;
+}
+
+/* A phone's top bar: swcode, and the search at its end. */
+.top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--jl-space-2);
+  min-width: 0;
+}
+
+.top-brand {
+  display: flex;
+  align-items: center;
+  color: inherit;
+  text-decoration: none;
+}
+
+/*
+ * The pages scroll in the shell's main area. Its scrollbar's room stays, on both sides so a centred page stays
+ * centred: a page that grows long enough to scroll does not move sideways.
+ */
+jl-app-shell::part(main) {
+  scrollbar-gutter: stable both-edges;
+}
+
+/* The main area: a problem of the whole app over the pages, which fill the rest. */
+.main {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 100%;
+}
+
+/* In their own rows: a hidden alert takes no cell, and the pages would move up into its row, sized by content. */
+jl-alert {
+  grid-row: 1;
+  margin: var(--jl-space-3) var(--jl-space-4) 0;
+}
+
+/* The pages fill the main area: a session keeps its composer at the bottom and scrolls its conversation itself. */
+jl-page-outlet {
+  grid-row: 2;
+  height: 100%;
+}
+
+[hidden] {
+  display: none;
+}
