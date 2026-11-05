@@ -1,9 +1,9 @@
 import { createElement, css } from '@jadis/core';
 import { JlAlert, JlButton, JlField, JlInput, JlPage, JlSelect, JlTabPanel, JlTabs } from '@syware/jlib';
 
-import { EDITABLE_SETTINGS } from '../../../shared/protocol/settings.schema';
 import { ScElement } from '../base/sc-element';
 import { SETTING_FIELDS, SETTING_SECTIONS } from '../lib/settings-fields';
+import { SETTINGS_SAVED } from '../lib/settings-saved';
 import {
   DEFAULT_SETTINGS_TOPIC,
   isSettingsTopic,
@@ -16,6 +16,7 @@ import { ScComputers } from '../organisms/sc-computers';
 import { ScModelsEditor } from '../organisms/sc-models-editor';
 import { ScPhone } from '../organisms/sc-phone';
 import { ScSkillsEditor } from '../organisms/sc-skills-editor';
+import { ScSshHosts } from '../organisms/sc-ssh-hosts';
 import { ScStartupSettings } from '../organisms/sc-startup-settings';
 import { daemonBus } from '../services/daemon';
 import { refreshStatus } from '../services/daemon-status';
@@ -39,13 +40,11 @@ const DEFAULT_PORT = '4500';
 // A setting left empty takes its default; jlib's select takes an empty value for nothing chosen, so that choice has
 // a value of its own on the page.
 const DEFAULT_CHOICE = 'default';
-const SAVING = 'Saving…';
-const RESTARTING = 'Saved. swcode restarts on them: a few seconds…';
-const RESTARTED = 'Saved: swcode runs with them now.';
-const BY_PERSON = 'Saved. Restart swcode serve for them to apply.';
 const SECRET_TYPE = 'password';
-// The topics the settings file holds: the others (skills, plugins…) save as they change.
+// The topics the page's form holds, saved together: the others (skills, plugins, SSH hosts…) save as they change.
 const FILE_TOPICS: ReadonlySet<SettingsTopic> = new Set(SETTING_SECTIONS.map((section) => section.topic));
+// The settings of those topics: the page sends these alone, and the file keeps the others as they are.
+const FORM_SETTINGS: readonly SettingName[] = SETTING_SECTIONS.flatMap((section) => section.names);
 
 const toChoice = (value: string): string => (value === '' ? DEFAULT_CHOICE : value);
 const fromChoice = (value: string): string => (value === DEFAULT_CHOICE ? '' : value);
@@ -82,6 +81,7 @@ const ORGANISM_PANELS: Readonly<Partial<Record<SettingsTopic, () => Node>>> = {
   phone: () => <ScPhone />,
   plugins: () => <ScClaudeSources />,
   skills: () => <ScSkillsEditor />,
+  ssh: () => <ScSshHosts />,
   startup: () => <ScStartupSettings />,
 };
 
@@ -248,7 +248,7 @@ export class SettingsPage extends ScElement {
     for (const file of this.shadowRoot?.querySelectorAll('.file') ?? []) {
       file.textContent = view.path;
     }
-    for (const name of EDITABLE_SETTINGS) {
+    for (const name of FORM_SETTINGS) {
       this.show(name, view);
     }
   }
@@ -281,7 +281,7 @@ export class SettingsPage extends ScElement {
   /** What the page holds: an emptied field goes back to its default; one set in the environment stays out. */
   private values(): SettingValues {
     return Object.fromEntries(
-      EDITABLE_SETTINGS.flatMap((name) => {
+      FORM_SETTINGS.flatMap((name) => {
         const control = this.controlFor(name);
         return control.disabled.get() ? [] : [[name, controlValue(control)]];
       })
@@ -296,7 +296,7 @@ export class SettingsPage extends ScElement {
 
   private async save(): Promise<void> {
     const values = this.values();
-    this.say(SAVING, 'info');
+    this.say(SETTINGS_SAVED.saving, 'info');
     this._refs.save.loading.set(true);
     const saved = await saveSettings(values);
     this._refs.save.loading.set(false);
@@ -311,12 +311,12 @@ export class SettingsPage extends ScElement {
       return;
     }
     this._restarting = saved.restart === 'self';
-    this.say(saved.restart === 'self' ? RESTARTING : BY_PERSON, 'info');
+    this.say(saved.restart === 'self' ? SETTINGS_SAVED.restarting : SETTINGS_SAVED.byPerson, 'info');
   }
 
   private async restarted(): Promise<void> {
     this._restarting = false;
-    this.say(RESTARTED, 'ok');
+    this.say(SETTINGS_SAVED.restarted, 'ok');
     await refreshStatus();
     await this.load();
   }

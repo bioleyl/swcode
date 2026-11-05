@@ -9,6 +9,7 @@ import { blocksOf } from '../src/lib/markdown';
 import { paletteCommands, paletteTarget } from '../src/lib/palette';
 import { peekQuestion } from '../src/lib/peek';
 import { groupByProject, preferredProject, removalConsequence } from '../src/lib/project-groups';
+import { sshHostProblem, sshHostsLine, sshHostsOf } from '../src/lib/ssh-hosts';
 import { sessionGrantLabel, toolLabel } from '../src/lib/tool-labels';
 import { toolMeta } from '../src/lib/tool-meta';
 
@@ -305,5 +306,20 @@ describe('peekQuestion', () => {
     expect(peekQuestion('/peek')).toBe('');
     expect(peekQuestion('/peeking at it')).toBeUndefined();
     expect(peekQuestion('please /peek')).toBeUndefined();
+  });
+});
+
+describe('SSH hosts', () => {
+  it('read the setting’s line by commas or spaces, and write it by commas', () => {
+    expect(sshHostsOf('me@box, gmktec  laptop,')).toEqual(['me@box', 'gmktec', 'laptop']);
+    expect(sshHostsOf('')).toEqual([]);
+    expect(sshHostsLine(['me@box', 'gmktec'])).toBe('me@box, gmktec');
+  });
+
+  it('take one host the list does not have', () => {
+    expect(sshHostProblem('me@box', ['gmktec'])).toBe('');
+    expect(sshHostProblem('', [])).not.toBe('');
+    expect(sshHostProblem('me@box gmktec', [])).toBe('One host, without spaces or commas.');
+    expect(sshHostProblem('gmktec', ['gmktec'])).toBe('This host is in the list already.');
   });
 });

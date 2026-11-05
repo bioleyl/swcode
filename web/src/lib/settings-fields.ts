@@ -62,7 +62,7 @@ export const SETTING_FIELDS: Readonly<Record<SettingName, SettingField>> = {
 
 export const SETTING_SECTIONS: readonly SettingSection[] = [
   { names: ['SWCODE_THINKING', 'SWCODE_SUBAGENT_THINKING'], title: 'Thinking', topic: 'thinking' },
-  { names: ['SWCODE_WORKSPACE', 'SWCODE_SSH_ENDPOINTS'], title: 'Projects', topic: 'projects' },
+  { names: ['SWCODE_WORKSPACE'], title: 'Projects', topic: 'projects' },
   { names: ['SWCODE_IMAGE_URL'], title: 'Pictures', topic: 'pictures' },
   { names: ['SWCODE_HOST', 'SWCODE_PORT'], title: 'Network', topic: 'network' },
 ];

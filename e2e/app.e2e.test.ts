@@ -616,17 +616,40 @@ describe('settings', () => {
     await settingsLink(page).click();
     await settle(page);
     await topicTab(page, 'Models', true).waitFor();
-    await topicTab(page, 'Projects').click();
+    await topicTab(page, 'Pictures').click();
     await settle(page);
-    await page.locator('#setting-SWCODE_SSH_ENDPOINTS input').fill('gmktec');
+    await page.locator('#setting-SWCODE_IMAGE_URL input').fill('http://garfield:8090');
     await topicTab(page, 'Network').click();
     await settle(page);
-    expect(await page.locator('#setting-SWCODE_SSH_ENDPOINTS').isHidden()).toBe(true);
+    expect(await page.locator('#setting-SWCODE_IMAGE_URL').isHidden()).toBe(true);
     expect(await page.locator('#setting-SWCODE_PORT').isVisible()).toBe(true);
     expect(page.url()).toContain('#/settings/network');
-    await topicTab(page, 'Projects').click();
+    await topicTab(page, 'Pictures').click();
     await settle(page);
-    expect(await page.locator('#setting-SWCODE_SSH_ENDPOINTS input').inputValue()).toBe('gmktec');
+    expect(await page.locator('#setting-SWCODE_IMAGE_URL input').inputValue()).toBe('http://garfield:8090');
+  });
+
+  it('list the SSH hosts, a new one added from its dialog and saved at once', async () => {
+    const rig = await start({ replies: [] });
+    const page = await rig.browser.newPage({ viewport: DESKTOP });
+    await page.goto(rig.link);
+    await settingsLink(page).click();
+    await settle(page);
+    await topicTab(page, 'SSH').click();
+    await settle(page);
+    const hosts = page.locator('sc-ssh-hosts');
+    await hosts.getByText('No SSH host yet', { exact: false }).waitFor();
+    expect(await page.locator('settings-page jl-page > jl-button.save').isHidden()).toBe(true);
+
+    await hosts.locator('.add').click();
+    await settle(page);
+    await page.locator('sc-ssh-host-dialog .host input').fill('me@build box');
+    await page.locator('sc-ssh-host-dialog .save').click();
+    await page.locator('sc-ssh-host-dialog').getByText('One host, without spaces or commas.').waitFor();
+    await page.locator('sc-ssh-host-dialog .host input').fill('me@build-box');
+    await page.locator('sc-ssh-host-dialog .save').click();
+    await hosts.locator('.hosts jl-list-item', { hasText: 'me@build-box' }).waitFor();
+    await hosts.locator('jl-alert').getByText('Saved', { exact: false }).waitFor();
   });
 
   it('add an llm-server and a preset of its models, which a new session then picks in its composer', async () => {

@@ -322,7 +322,7 @@ window.
 ### Where projects are
 
 The project dialog's **Where** offers this computer, the WSL distributions Windows has (`wsl.exe -l`), and the SSH
-endpoints: those of the settings (`SWCODE_SSH_ENDPOINTS`, by commas) and the `Host` aliases of `~/.ssh/config`. On
+endpoints: those of Settings → SSH (`SWCODE_SSH_ENDPOINTS`, by commas) and the `Host` aliases of `~/.ssh/config`. On
 a WSL distribution or an SSH machine, the tools run there and the sessions stay with the daemon, which needs
 nothing installed there but bash and the usual tools (stat, base64, find, grep with `-P`, setsid; git when the
 project is a repository). It reaches that bash through `wsl.exe -d <distro>` (which wakes the distribution) or
@@ -367,10 +367,11 @@ Phone: the QR code pairs the phone, as above.
 ## Settings
 
 The settings page (the cog at the foot of the navigation) has a tab for each topic: the models, thinking, projects,
-pictures, the network, the phones, the skills, and Claude Code's plugins. Thinking, projects, pictures and the network
-are kept in `~/.swcode/settings.env` (`KEY=value` lines), which the page writes: saving restarts the daemon on them
-when it runs in the background (`swcode`) or in the desktop app, and waits while a session works. The environment's
-own come on top, for one command; the page shows those as set in the environment.
+SSH hosts, pictures, the network, the phones, the skills, and Claude Code's plugins. Thinking, projects, SSH,
+pictures and the network are kept in `~/.swcode/settings.env` (`KEY=value` lines), which the page writes (the SSH
+hosts, a list, as they change; the others together, with Save): saving restarts the daemon on them when it runs in
+the background (`swcode`) or in the desktop app, and waits while a session works. The environment's own come on
+top, for one command; the page shows those as set in the environment.
 
 | Variable | Default | What it sets |
 | --- | --- | --- |

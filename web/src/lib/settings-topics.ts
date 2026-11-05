@@ -5,6 +5,7 @@ export const SETTINGS_TOPICS = [
   'models',
   'thinking',
   'projects',
+  'ssh',
   'pictures',
   'network',
   'phone',
@@ -30,6 +31,7 @@ export const SETTINGS_TOPIC_LABELS: Readonly<Record<SettingsTopic, { label: stri
   plugins: { icon: 'puzzle', label: 'Plugins' },
   projects: { icon: 'folder', label: 'Projects' },
   skills: { icon: 'book-open', label: 'Skills' },
+  ssh: { icon: 'server', label: 'SSH' },
   startup: { icon: 'power', label: 'Startup' },
   thinking: { icon: 'brain', label: 'Thinking' },
 };
