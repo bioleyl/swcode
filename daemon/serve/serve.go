@@ -149,7 +149,7 @@ func announce(settings config.Config, options Options, daemon *app.App, log io.W
 		network += "\n  On the network:  " + link + access
 	}
 	ready := fmt.Sprintf("\n  swcode is ready: %s%s%s\n", address, access, network)
-	daemon.Logger().Info(fmt.Sprintf("Working in %s, with llama-server at %s", settings.Workspace, settings.LlamaURL))
+	daemon.Logger().Info(fmt.Sprintf("Working in %s, with llm-server at %s", settings.Workspace, settings.LlamaURL))
 	link := app.LocalURL(settings.Host, settings.Port) + access
 	fmt.Fprintln(readyOut(options.Mode, log), ready)
 	if options.Ready != nil {

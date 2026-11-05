@@ -228,7 +228,7 @@ func TestTheReplyBuilderGivesACallWithoutAnIDOneAndKeepsTheUsage(t *testing.T) {
 
 func TestARefusalTellsAFullContextApart(t *testing.T) {
 	refusal := refusalOf(400, []byte(`{"error":{"message":"the request exceeds the available context size","type":"exceed_context_size_error"}}`), "Bad Request")
-	if !refusal.ContextFull || refusal.Message != "llama-server answered 400: the request exceeds the available context size" {
+	if !refusal.ContextFull || refusal.Message != "llm-server answered 400: the request exceeds the available context size" {
 		t.Fatalf("got %+v", refusal)
 	}
 	if refusalOf(500, []byte(`{"error":"boom"}`), "").ContextFull {

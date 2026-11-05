@@ -23,7 +23,7 @@ const (
 
 var plainValue = regexp.MustCompile(`^[\w./:~@+-]*$`)
 
-// SavedSettings are what a settings file keeps: the llama-server from before models.json, which the models start
+// SavedSettings are what a settings file keeps: the llm-server from before models.json, which the models start
 // from until they are saved once, what the settings page changes, and the access token when one was given.
 var SavedSettings = append(append(
 	[]string{envLlamaURL, envLlamaAPIKey, envLlamaModel, envLlamaSubagent, envLlamaSlotShare},

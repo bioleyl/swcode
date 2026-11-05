@@ -20,7 +20,7 @@ const noAnswer = "The subagent ended without an answer."
 // report to.
 type SubagentDeps struct {
 	Model llm.Model
-	// Source is the llama-server it asks, and ModelName the model there: a smaller, faster one than the main
+	// Source is the llm-server it asks, and ModelName the model there: a smaller, faster one than the main
 	// agent's, typically.
 	Source        string
 	ModelName     string

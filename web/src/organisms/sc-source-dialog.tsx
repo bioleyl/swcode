@@ -13,7 +13,7 @@ import type { LlmSource } from '../../../shared/protocol/models.schema';
 const SECRET_TYPE = 'password';
 const LOOKING = 'Looking for models…';
 const NO_NAME = 'Name it: the presets show its name.';
-const NO_ADDRESS = 'Type the address llama-server answers at.';
+const NO_ADDRESS = 'Type the address llm-server answers at.';
 // jlib's select takes an empty value for nothing chosen: every slot, the default, has a value of its own here.
 const ALL_SLOTS = 'all';
 
@@ -27,7 +27,7 @@ const SHARE_OPTIONS: SelectOption[] = [
 ];
 
 /**
- * Adds a llama-server or changes one: its name in the app, its address, its key, and its part of the slots when
+ * Adds an llm-server or changes one: its name in the app, its address, its key, and its part of the slots when
  * people share it. The models it serves show under the address as it is typed. `save` gives the source; the editor
  * saves it, then closes the dialog or shows why not.
  */
@@ -56,21 +56,21 @@ export class ScSourceDialog extends ScElement {
 
   templateHtml(): Node {
     return (
-      <JlDialog heading="llama-server">
+      <JlDialog heading="llm-server">
         <div class="body">
           <JlField label="Name" hint="How the presets and the side panel call it.">
             <JlInput class="name" autocomplete="off" placeholder="gmktec" />
           </JlField>
-          <JlField label="Address" hint="Where llama-server answers.">
+          <JlField label="Address" hint="Where llm-server answers.">
             <JlInput class="address" autocomplete="off" placeholder="http://127.0.0.1:8080" />
           </JlField>
           <p class="served" />
-          <JlField label="API key" hint="Only when llama-server asks for one (its api-key option).">
+          <JlField label="API key" hint="Only when llm-server asks for one (its api-key option).">
             <JlInput class="key" autocomplete="off" placeholder="none" type={SECRET_TYPE} />
           </JlField>
           <JlField
             label="Slots this swcode uses"
-            hint="When people share one llama-server, each with their own swcode: each takes a different part.">
+            hint="When people share one llm-server, each with their own swcode: each takes a different part.">
             <JlSelect options={SHARE_OPTIONS} value={ALL_SLOTS} />
           </JlField>
           <JlAlert tone="danger" hidden />
@@ -96,7 +96,7 @@ export class ScSourceDialog extends ScElement {
   edit(source: LlmSource | undefined, taken: readonly string[]): void {
     this._id = source?.id ?? '';
     this._taken = taken;
-    this._refs.dialog.heading.set(source ? `Change ${source.name}` : 'Add a llama-server');
+    this._refs.dialog.heading.set(source ? `Change ${source.name}` : 'Add an llm-server');
     this._refs.name.value.set(source?.name ?? '');
     this._refs.address.value.set(source?.url ?? '');
     this._refs.key.value.set(source?.apiKey ?? '');

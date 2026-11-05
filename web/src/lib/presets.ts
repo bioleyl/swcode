@@ -6,7 +6,7 @@ import type { ModelRef, Preset, PresetChoices, PresetStatus } from '../../../sha
 /** Before the daemon says its presets. */
 export const NO_PRESETS: PresetChoices = { defaultPreset: '', presets: [], sources: [] };
 
-// A model a preset names none for: a single-model llama-server's, or a router's first loaded one.
+// A model a preset names none for: a single-model llm-server's, or a router's first loaded one.
 const ITS_MODEL = 'its model';
 
 /** The preset a session works with, as the daemon picks it: its own, else the default one. */

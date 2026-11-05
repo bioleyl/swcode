@@ -146,7 +146,7 @@ func fixedChars(setup Setup) int {
 }
 
 // askModel asks the model for its next reply, compacting the conversation first when it is about to fill the
-// context, and once more if llama-server still finds it too long.
+// context, and once more if llm-server still finds it too long.
 func askModel(ctx context.Context, host TurnHost, setup Setup) (llm.Reply, error) {
 	if NeedsCompaction(host.History(), fixedChars(setup), setup.ContextTokens) {
 		if err := Compact(ctx, host, setup); err != nil {
@@ -253,7 +253,7 @@ func declinedEnding(ctx context.Context) Ending {
 }
 
 // reportAtLimit has the model report at the step limit instead of stopping in silence with its changes left as
-// they are. Its tools are still listed, so the prompt stays the one llama-server cached, but no call of this last
+// they are. Its tools are still listed, so the prompt stays the one llm-server cached, but no call of this last
 // reply runs.
 func reportAtLimit(ctx context.Context, host TurnHost, setup Setup) (Ending, error) {
 	host.Record(protocol.SessionEventReminder{ID: setup.NewID(), Reason: protocol.ReminderReasonStepLimit, Text: stepLimitRequest(setup.MaxSteps)})

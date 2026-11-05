@@ -46,7 +46,7 @@ const base64Of = (blob: Blob): Promise<string> =>
   });
 
 /**
- * A pasted picture made small enough for the model, as a JPEG: llama-server reads JPEG and PNG, and a JPEG of a
+ * A pasted picture made small enough for the model, as a JPEG: llm-server reads JPEG and PNG, and a JPEG of a
  * screenshot is a fraction of its PNG. Drawn on white, so a transparent PNG does not turn black.
  */
 export async function shrinkPicture(file: Blob): Promise<PictureUpload> {

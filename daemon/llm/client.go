@@ -25,13 +25,13 @@ const (
 	callIDBytes    = 16
 	maxStreamLine  = 16 << 20
 	missingPicture = "[A pasted picture that is no longer there.]"
-	// How llama-server says the prompt does not fit in the slot's context.
+	// How llm-server says the prompt does not fit in the slot's context.
 	contextFullType = "exceed_context_size_error"
 )
 
 var contextFullMessage = regexp.MustCompile(`(?i)exceeds? the available context size`)
 
-// templateKwargs is what each thinking mode asks the chat template, through llama-server's chat_template_kwargs:
+// templateKwargs is what each thinking mode asks the chat template, through llm-server's chat_template_kwargs:
 // nothing for the model's own default, a level the Qwen 3.8 and gpt-oss templates know, or no thinking at all,
 // which Qwen templates take as instruct mode. A template that knows none of these ignores them.
 var templateKwargs = map[protocol.ThinkingMode]map[string]any{
@@ -41,7 +41,7 @@ var templateKwargs = map[protocol.ThinkingMode]map[string]any{
 	protocol.ThinkingModeOff:    {"enable_thinking": false},
 }
 
-// Options is where llama-server is, the model to name when a request names none, and its key.
+// Options is where llm-server is, the model to name when a request names none, and its key.
 type Options struct {
 	URL    string
 	Model  string
@@ -127,7 +127,7 @@ func (w wireChunk) chunk() StreamChunk {
 	return chunk
 }
 
-// errorBody is how llama-server explains a refusal: a message, or an object with a message and a type.
+// errorBody is how llm-server explains a refusal: a message, or an object with a message and a type.
 type errorBody struct {
 	Error json.RawMessage `json:"error"`
 }
@@ -155,7 +155,7 @@ func refusalOf(status int, body []byte, statusText string) *ModelError {
 	detail = firstNonEmpty(detail, statusText)
 	return &ModelError{
 		ContextFull: kind == contextFullType || contextFullMessage.MatchString(detail),
-		Message:     fmt.Sprintf("llama-server answered %d: %s", status, detail),
+		Message:     fmt.Sprintf("llm-server answered %d: %s", status, detail),
 	}
 }
 
@@ -203,7 +203,7 @@ func wireMessage(message Message) map[string]any {
 	return wire
 }
 
-// Client is llama-server's Chat Completions API, streamed, with its prompt cache on so a long conversation stays
+// Client is llm-server's Chat Completions API, streamed, with its prompt cache on so a long conversation stays
 // fast.
 type Client struct {
 	options Options
@@ -257,11 +257,11 @@ func (c *Client) Complete(ctx context.Context, request Request, onPart func(Part
 	}
 	response, err := c.options.client().Do(httpRequest)
 	if err != nil {
-		// Stopping the turn ends the request: that is not llama-server's fault.
+		// Stopping the turn ends the request: that is not llm-server's fault.
 		if ctx.Err() != nil {
 			return Reply{}, ctx.Err()
 		}
-		return Reply{}, &ModelError{Message: fmt.Sprintf("llama-server at %s does not answer.", c.options.URL)}
+		return Reply{}, &ModelError{Message: fmt.Sprintf("llm-server at %s does not answer.", c.options.URL)}
 	}
 	defer response.Body.Close()
 	if response.StatusCode >= http.StatusBadRequest {
@@ -271,7 +271,7 @@ func (c *Client) Complete(ctx context.Context, request Request, onPart func(Part
 	return readReply(ctx, response.Body, onPart)
 }
 
-// readReply reads the stream into the reply; an error llama-server reports mid-stream ends it.
+// readReply reads the stream into the reply; an error llm-server reports mid-stream ends it.
 func readReply(ctx context.Context, body io.Reader, onPart func(Part)) (Reply, error) {
 	builder := &ReplyBuilder{}
 	scanner := bufio.NewScanner(body)
@@ -285,7 +285,7 @@ func readReply(ctx context.Context, body io.Reader, onPart func(Part)) (Reply, e
 		if ctx.Err() != nil {
 			return Reply{}, ctx.Err()
 		}
-		return Reply{}, &ModelError{Message: "llama-server broke off its answer: " + err.Error()}
+		return Reply{}, &ModelError{Message: "llm-server broke off its answer: " + err.Error()}
 	}
 	return builder.Build(newCallID), nil
 }

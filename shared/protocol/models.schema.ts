@@ -1,12 +1,12 @@
 import { z } from 'zod';
 
-// A llama-server shared by several people, each with their own swcode: each takes a part of every model's slots.
+// An llm-server shared by several people, each with their own swcode: each takes a part of every model's slots.
 const SLOT_SHARE_PATTERN = /^[1-9]\d*\/[1-9]\d*$/;
 const NAME_LENGTH = 40;
 
-/** A llama-server the agents ask: its name in the app, its address, and its key when it wants one. */
+/** An llm-server the agents ask: its name in the app, its address, and its key when it wants one. */
 export const LlmSourceSchema = z.object({
-  // Only when llama-server was started with --api-key.
+  // Only when llm-server was started with --api-key.
   apiKey: z.string().trim().optional(),
   id: z.string().min(1),
   name: z.string().trim().min(1).max(NAME_LENGTH),
@@ -17,7 +17,7 @@ export const LlmSourceSchema = z.object({
 export type LlmSource = z.infer<typeof LlmSourceSchema>;
 
 /**
- * A model of a source, by the name the source serves it as. Empty for a single-model llama-server's, or, on a
+ * A model of a source, by the name the source serves it as. Empty for a single-model llm-server's, or, on a
  * router, its first loaded model.
  */
 export const ModelRefSchema = z.object({ model: z.string().trim(), source: z.string().min(1) });
@@ -68,12 +68,12 @@ export type SourceStatus = z.infer<typeof SourceStatusSchema>;
 
 /** A preset's main model as its source says now: its name, a slot's context, and whether it sees pictures. */
 export const PresetStatusSchema = z.object({
-  // The context of one slot, when llama-server says it.
+  // The context of one slot, when llm-server says it.
   contextTokens: z.number().int().optional(),
   id: z.string(),
   // The model asked for: a router's first loaded one when the preset names none.
   model: z.string().optional(),
-  // Whether it sees pictures: llama-server loaded a vision projector (--mmproj) for it.
+  // Whether it sees pictures: llm-server loaded a vision projector (--mmproj) for it.
   vision: z.boolean().optional(),
 });
 export type PresetStatus = z.infer<typeof PresetStatusSchema>;

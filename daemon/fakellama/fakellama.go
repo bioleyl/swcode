@@ -1,4 +1,4 @@
-// Package fakellama is a llama-server stand-in for the tests: it streams the replies a test scripts, and records
+// Package fakellama is an llm-server stand-in for the tests: it streams the replies a test scripts, and records
 // what the agent sent it.
 package fakellama
 
@@ -35,7 +35,7 @@ type Reply struct {
 	Text      string
 	ToolCalls []ToolCall
 	FailWith  int
-	// ErrorType is the error's type, with FailWith: llama-server's own, such as exceed_context_size_error.
+	// ErrorType is the error's type, with FailWith: llm-server's own, such as exceed_context_size_error.
 	ErrorType string
 	// Reasoning is what the model thinks before it answers, streamed apart from the answer.
 	Reasoning string
@@ -63,7 +63,7 @@ type Options struct {
 	Scripts       map[string][]Reply
 	Models        []string
 	ContextTokens int
-	// Slots is what /props reports; 0, it does not say, like an older llama-server.
+	// Slots is what /props reports; 0, it does not say, like an older llm-server.
 	Slots int
 	// Vision: /props says the model sees pictures, as with a vision projector loaded.
 	Vision bool
@@ -71,7 +71,7 @@ type Options struct {
 	Router []RouterModel
 }
 
-// Server is a running fake llama-server.
+// Server is a running fake llm-server.
 type Server struct {
 	// URL is where it answers, without /v1, as LLAMA_URL takes it.
 	URL        string
@@ -84,7 +84,7 @@ type Server struct {
 	propsAsked []string
 }
 
-// Start starts a fake llama-server; Stop ends it.
+// Start starts a fake llm-server; Stop ends it.
 func Start(options Options) *Server {
 	scripts := map[string][]Reply{}
 	for key, replies := range options.Scripts {

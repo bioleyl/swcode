@@ -15,7 +15,7 @@ const (
 	callChars    = 300
 	// transcriptShare: the transcript takes half the context, leaving room for the instructions and the summary.
 	transcriptShare = 0.5
-	// unknownContextTokens: when llama-server does not say how big the context is, the transcript stays small
+	// unknownContextTokens: when llm-server does not say how big the context is, the transcript stays small
 	// enough for any model.
 	unknownContextTokens = 8192
 	noSummary            = "The earlier conversation could not be summarized."

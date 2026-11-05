@@ -10,7 +10,7 @@ import (
 	"swcode/daemon/protocol"
 )
 
-// Server is one llama-server of the settings: what it says of its models, and the slots this daemon hands out there.
+// Server is one llm-server of the settings: what it says of its models, and the slots this daemon hands out there.
 type Server struct {
 	Status *StatusReader
 	Slots  *Scheduler
@@ -20,7 +20,7 @@ type Server struct {
 	unsubscribe func()
 }
 
-// Servers is the llama-servers of the settings, by source: a request goes to the one its target names. They change
+// Servers is the llm-servers of the settings, by source: a request goes to the one its target names. They change
 // while the daemon runs; a source whose address, key and share stay the same keeps its slots, and the requests
 // holding them.
 type Servers struct {
@@ -77,7 +77,7 @@ func (s *Servers) start(source protocol.LlmSource) *Server {
 	return server
 }
 
-// Server is the llama-server of a source, when the settings have it.
+// Server is the llm-server of a source, when the settings have it.
 func (s *Servers) Server(source string) (*Server, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -85,16 +85,16 @@ func (s *Servers) Server(source string) (*Server, bool) {
 	return server, found
 }
 
-// Complete asks the llama-server the request's target names, on a slot of its model.
+// Complete asks the llm-server the request's target names, on a slot of its model.
 func (s *Servers) Complete(ctx context.Context, request Request, onPart func(Part)) (Reply, error) {
 	server, found := s.Server(request.Target.Source)
 	if !found {
-		return Reply{}, fmt.Errorf("No llama-server %q in the settings: pick another preset.", request.Target.Source)
+		return Reply{}, fmt.Errorf("No llm-server %q in the settings: pick another preset.", request.Target.Source)
 	}
 	return server.model.Complete(ctx, request, onPart)
 }
 
-// Usage is how busy each model's slots are on every llama-server, in the settings' order, for the side panel.
+// Usage is how busy each model's slots are on every llm-server, in the settings' order, for the side panel.
 func (s *Servers) Usage() []protocol.SlotUsage {
 	s.mu.Lock()
 	servers := []*Server{}

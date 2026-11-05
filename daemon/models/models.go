@@ -1,5 +1,5 @@
-// Package models keeps the llama-servers the agents ask and the presets sessions pick from them: models.json in the
-// data folder or, until it is saved once, the settings file's one llama-server (LLAMA_URL and the like).
+// Package models keeps the llm-servers the agents ask and the presets sessions pick from them: models.json in the
+// data folder or, until it is saved once, the settings file's one llm-server (LLAMA_URL and the like).
 package models
 
 import (
@@ -22,18 +22,18 @@ const (
 	// File is where the models are kept, in the data folder: it holds the servers' keys, for its owner only.
 	File      = "models.json"
 	ownerOnly = 0o600
-	// The settings file's llama-server, as a source and the preset that uses it.
+	// The settings file's llm-server, as a source and the preset that uses it.
 	settingsSource     = "llama-server"
 	settingsPreset     = "default"
 	settingsPresetName = "Default"
 	// Why models cannot be used.
-	unknownSource = "A preset uses a llama-server that is not in the list."
+	unknownSource = "A preset uses an llm-server that is not in the list."
 	noDefault     = "The default preset is not in the list."
-	badAddress    = "A llama-server’s address is not a web address, as http://127.0.0.1:8080."
-	twice         = "Two llama-servers or two presets have the same name."
+	badAddress    = "An llm-server’s address is not a web address, as http://127.0.0.1:8080."
+	twice         = "Two llm-servers or two presets have the same name."
 )
 
-// FromConfig is the settings file's llama-server as a source, and a preset of its models: the models a daemon uses
+// FromConfig is the settings file's llm-server as a source, and a preset of its models: the models a daemon uses
 // until they are saved once.
 func FromConfig(settings config.Config) protocol.ModelSettings {
 	source := protocol.LlmSource{
@@ -135,7 +135,7 @@ func (s *Store) Save(settings protocol.ModelSettings) error {
 	return os.WriteFile(s.file, data, ownerOnly)
 }
 
-// Service is the models in use: it gives the sources to the llama-servers, picks a preset's models for each turn,
+// Service is the models in use: it gives the sources to the llm-servers, picks a preset's models for each turn,
 // says where each source and preset stands, and tells every open app when the presets change.
 type Service struct {
 	mu        sync.Mutex
@@ -284,7 +284,7 @@ func (s *Service) Status(ctx context.Context) protocol.StatusLlama {
 	return protocol.StatusLlama{Presets: presets, Sources: sources}
 }
 
-// shownModel names the model asked: a single-model llama-server's, asked for by no name, is the one it lists.
+// shownModel names the model asked: a single-model llm-server's, asked for by no name, is the one it lists.
 func shownModel(asked string, served []string) string {
 	if asked != "" || len(served) == 0 {
 		return asked

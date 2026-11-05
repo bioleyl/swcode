@@ -71,7 +71,7 @@ func measuredTokens(event protocol.SessionEvent) (int, bool) {
 	return message.Usage.PromptTokens + message.Usage.CompletionTokens, true
 }
 
-// EstimatedTokens is how many tokens the next request takes: the last reply's count, as llama-server gave it, plus
+// EstimatedTokens is how many tokens the next request takes: the last reply's count, as llm-server gave it, plus
 // a guess for what came after it (tool results, a new message). fixedChars is what every request carries: the
 // system prompt and the tools.
 func EstimatedTokens(events []protocol.SessionEvent, fixedChars int) int {

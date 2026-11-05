@@ -11,11 +11,11 @@ import type { ModelSettings, Preset } from '../../../shared/protocol/models.sche
 
 const NO_NAME = 'Name it: the composer shows its name.';
 const MAIN_EMPTY = 'Its model, or a router’s first loaded';
-const WORKERS_EMPTY = 'The main agent’s, on the same llama-server';
+const WORKERS_EMPTY = 'The main agent’s, on the same llm-server';
 
 /**
  * Adds a preset or changes one: its name, the main agent's model, and the workers' (subagents, the web page reader),
- * each a model of one of the llama-servers. `save` gives the preset; the editor saves it, then closes the dialog or
+ * each a model of one of the llm-servers. `save` gives the preset; the editor saves it, then closes the dialog or
  * shows why not.
  */
 export class ScPresetDialog extends ScElement {
@@ -69,7 +69,7 @@ export class ScPresetDialog extends ScElement {
     this._refs.save.events.register('press', () => this.submit());
   }
 
-  /** Opens on a preset to change, or on a new one, of the first llama-server. */
+  /** Opens on a preset to change, or on a new one, of the first llm-server. */
   edit(preset: Preset | undefined, settings: ModelSettings): void {
     const first = settings.sources[0]?.id ?? '';
     this._id = preset?.id ?? '';

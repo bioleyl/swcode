@@ -266,7 +266,7 @@ export class SettingsPage extends ScElement {
     }
   }
 
-  /** A select keeps a value it does not list: a model llama-server does not serve right now, say. */
+  /** A select keeps a value it does not list: a model llm-server does not serve right now, say. */
   private offer(control: Control, value: string): void {
     if (!(control instanceof JlSelect) || value === '') {
       return;

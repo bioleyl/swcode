@@ -34,7 +34,7 @@ type servedModels struct {
 }
 
 // visionOf tells whether a router's model takes pictures; known is false when the list does not say, as a
-// single-model llama-server's, whose /props does.
+// single-model llm-server's, whose /props does.
 func (m servedModels) visionOf(model string) (sees, known bool) {
 	for _, served := range m.Data {
 		if served.ID == model && served.Architecture != nil {
@@ -45,7 +45,7 @@ func (m servedModels) visionOf(model string) (sees, known bool) {
 }
 
 // props is /props: a slot's context, the slots, and what else than text the model takes (pictures once
-// llama-server loaded a vision projector, --mmproj, for it).
+// llm-server loaded a vision projector, --mmproj, for it).
 type props struct {
 	DefaultGenerationSettings *struct {
 		NCtx int `json:"n_ctx"`
@@ -88,7 +88,7 @@ func firstLoaded(models servedModels, avoid string) string {
 	return first
 }
 
-// StatusReader asks llama-server which models it serves and how long a slot's context is.
+// StatusReader asks llm-server which models it serves and how long a slot's context is.
 type StatusReader struct {
 	options Options
 }
@@ -97,7 +97,7 @@ func NewStatusReader(options Options) *StatusReader {
 	return &StatusReader{options: options}
 }
 
-// Models is the names of the models llama-server serves, and whether it answers.
+// Models is the names of the models llm-server serves, and whether it answers.
 func (s *StatusReader) Models(ctx context.Context) ([]string, bool) {
 	models, ok := s.models(ctx)
 	if !ok {
@@ -111,7 +111,7 @@ func (s *StatusReader) Models(ctx context.Context) ([]string, bool) {
 }
 
 // FirstLoaded is the model to ask when none is named: the configured one, else in router mode the first loaded one
-// other than avoid. A single-model llama-server needs none.
+// other than avoid. A single-model llm-server needs none.
 func (s *StatusReader) FirstLoaded(ctx context.Context, avoid string) string {
 	if s.options.Model != "" {
 		return s.options.Model
@@ -123,7 +123,7 @@ func (s *StatusReader) FirstLoaded(ctx context.Context, avoid string) string {
 	return firstLoaded(models, avoid)
 }
 
-// SlotsOf is how many requests the model answers at once, when llama-server says (0 when not).
+// SlotsOf is how many requests the model answers at once, when llm-server says (0 when not).
 func (s *StatusReader) SlotsOf(ctx context.Context, model string) int {
 	found := s.props(ctx, model)
 	if found == nil {
@@ -132,13 +132,13 @@ func (s *StatusReader) SlotsOf(ctx context.Context, model string) int {
 	return found.TotalSlots
 }
 
-// ContextOf is how many tokens one slot of the model holds, when llama-server says (0 when not).
+// ContextOf is how many tokens one slot of the model holds, when llm-server says (0 when not).
 func (s *StatusReader) ContextOf(ctx context.Context, model string) int {
 	return s.props(ctx, model).context()
 }
 
 // VisionOf tells whether the model sees pictures, as a router lists it whether it is loaded or not (unloaded,
-// loading or asleep, as at the start of a turn that will load it), else as llama-server's /props says once it loaded
+// loading or asleep, as at the start of a turn that will load it), else as llm-server's /props says once it loaded
 // a vision projector.
 func (s *StatusReader) VisionOf(ctx context.Context, model string) bool {
 	models, _ := s.models(ctx)

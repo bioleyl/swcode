@@ -43,7 +43,7 @@ type Command struct {
 	Kind Kind
 	Mode Mode
 	// Remote: the SSH destination, the folder to work in there, where it shows up here, and how the other machine
-	// reaches llama-server itself (through this one when empty).
+	// reaches llm-server itself (through this one when empty).
 	Host      string
 	Workspace string
 	LocalPort int
@@ -141,7 +141,7 @@ func remoteCommand(arguments []string) Command {
 
 // Usage is what swcode --help prints.
 var Usage = strings.Join([]string{
-	"swcode: a coding agent for llama-server.",
+	"swcode: a coding agent for llm-server.",
 	"",
 	"Usage:",
 	"  swcode                      Open swcode in the browser, starting its daemon in the background if needed.",
@@ -153,7 +153,7 @@ var Usage = strings.Join([]string{
 	"  swcode remote <host>        Run it on another machine over SSH, reached from here.",
 	"      -w, --workspace <dir>   The folder to work in there (the home folder by default).",
 	"      -p, --port <port>       Where it shows up here (4510 by default).",
-	"      --llama-url <url>       How that machine reaches llama-server itself; through this one by default.",
+	"      --llama-url <url>       How that machine reaches llm-server itself; through this one by default.",
 	"  swcode --version            The build.",
 	"",
 	"Settings come from ~/.swcode/settings.env, the environment on top: see the README.",

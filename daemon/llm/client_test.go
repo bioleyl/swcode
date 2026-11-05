@@ -59,7 +59,7 @@ func TestTheClientTellsAFullContextFromOtherRefusals(t *testing.T) {
 		t.Fatalf("got %v", err)
 	}
 	_, err = client.Complete(context.Background(), Request{Target: Target{Slot: NoSlot}}, func(Part) {})
-	if IsContextFull(err) || !strings.Contains(err.Error(), "llama-server answered 500: boom") {
+	if IsContextFull(err) || !strings.Contains(err.Error(), "llm-server answered 500: boom") {
 		t.Fatalf("got %v", err)
 	}
 }

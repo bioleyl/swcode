@@ -17,7 +17,7 @@ const toChoice = (model: string): string => (model === '' ? NO_MODEL : model);
 const fromChoice = (value: string): string => (value === NO_MODEL ? '' : value);
 
 /**
- * A model of a llama-server: the server among the sources, then a model it serves, listed once it answers. A model
+ * A model of an llm-server: the server among the sources, then a model it serves, listed once it answers. A model
  * it does not serve right now stays listed when it was chosen.
  */
 export class ScModelPicker extends ScElement {
@@ -40,7 +40,7 @@ export class ScModelPicker extends ScElement {
   templateHtml(): Node {
     return (
       <div class="picker">
-        <JlSelect class="source" label="llama-server" />
+        <JlSelect class="source" label="llm-server" />
         <JlSelect class="model" label="Model" />
       </div>
     );

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 /**
- * The settings the app's settings page changes: the names of `~/.swcode/settings.env`. The llama-servers and the
+ * The settings the app's settings page changes: the names of `~/.swcode/settings.env`. The llm-servers and the
  * presets are `~/.swcode/models.json` (`models.schema.ts`).
  */
 export const EDITABLE_SETTINGS = [
@@ -44,7 +44,7 @@ export const SettingsSavedSchema = z.discriminatedUnion('ok', [
 ]);
 export type SettingsSaved = z.infer<typeof SettingsSavedSchema>;
 
-/** `POST /api/settings/models`: the models a llama-server serves, to pick from before saving its address. */
+/** `POST /api/settings/models`: the models an llm-server serves, to pick from before saving its address. */
 export const ModelsQuerySchema = z.object({ apiKey: z.string().optional(), url: z.string() });
 export const ModelsAnswerSchema = z.discriminatedUnion('ok', [
   z.object({ models: z.array(z.string()), ok: z.literal(true) }),

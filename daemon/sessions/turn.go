@@ -24,7 +24,7 @@ type place struct {
 	skills   catalog.Port
 }
 
-// runTurnIn runs a turn with the models and context sizes llama-server gives now: a model may have been reloaded
+// runTurnIn runs a turn with the models and context sizes llm-server gives now: a model may have been reloaded
 // with another one, or a router may serve others.
 func (s *Service) runTurnIn(ctx context.Context, session *live, turn *runningTurn, message agent.PromptMessage) {
 	s.mu.Lock()

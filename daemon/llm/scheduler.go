@@ -40,7 +40,7 @@ type pool struct {
 	slots []int
 	// total is how many slots the model has, every daemon's.
 	total int
-	// provisional: the count is a guess, llama-server did not say, and the pool is asked again once it is idle.
+	// provisional: the count is a guess, llm-server did not say, and the pool is asked again once it is idle.
 	provisional bool
 	busy        map[int]string
 	lastHolder  map[int]string
@@ -77,7 +77,7 @@ func (p *pool) pick(agentID string) (int, bool) {
 	return 0, false
 }
 
-// sizing is a pool being sized by llama-server, which callers asking at the same time wait for together.
+// sizing is a pool being sized by llm-server, which callers asking at the same time wait for together.
 type sizing struct {
 	done chan struct{}
 	pool *pool
@@ -92,9 +92,9 @@ type Lease struct {
 
 func (l *Lease) Release() { l.once.Do(l.release) }
 
-// Scheduler hands out llama-server's slots, one request per slot, so agents running at the same time each keep
+// Scheduler hands out llm-server's slots, one request per slot, so agents running at the same time each keep
 // their own prompt cache. A request waits when every slot of its model is busy, first come, first served. When
-// several daemons share a llama-server, each hands out its share of the slots only.
+// several daemons share an llm-server, each hands out its share of the slots only.
 type Scheduler struct {
 	mu         sync.Mutex
 	capacityOf func(ctx context.Context, model string) int
@@ -105,7 +105,7 @@ type Scheduler struct {
 	next       int
 }
 
-// NewScheduler hands out slots, asking capacityOf how many a model has (0 when llama-server does not say).
+// NewScheduler hands out slots, asking capacityOf how many a model has (0 when llm-server does not say).
 func NewScheduler(capacityOf func(ctx context.Context, model string) int, share config.SlotShare) *Scheduler {
 	return &Scheduler{capacityOf: capacityOf, listeners: map[int]func(){}, share: share, sizings: map[string]*sizing{}}
 }
@@ -240,7 +240,7 @@ func (s *Scheduler) free(found *pool, slot int) {
 	s.changed()
 }
 
-// forgetGuess lets go of a pool sized by a guess once idle, so the next request asks llama-server again; the
+// forgetGuess lets go of a pool sized by a guess once idle, so the next request asks llm-server again; the
 // panels keep showing it until then. The caller holds the lock.
 func (s *Scheduler) forgetGuess(found *pool) {
 	if !found.provisional || len(found.busy) > 0 {

@@ -1,4 +1,4 @@
-/** biome-ignore-all lint/style/useNamingConvention: llama-server answers in snake_case (finish_reason, n_ctx) */
+/** biome-ignore-all lint/style/useNamingConvention: llm-server answers in snake_case (finish_reason, n_ctx) */
 import { createServer } from 'node:http';
 import { setTimeout as sleep } from 'node:timers/promises';
 
@@ -95,7 +95,7 @@ const routerProps = (router: readonly FakeRouterModel[], path: string) => {
     : { default_generation_settings: { n_ctx: 0 }, role: 'router' };
 };
 
-/** A llama-server stand-in: streams the replies a test scripts, and records what the agent sent it. */
+/** An llm-server stand-in: streams the replies a test scripts, and records what the agent sent it. */
 export async function startFakeLlama(options: FakeLlamaOptions): Promise<FakeLlama> {
   const requests: Record<string, unknown>[] = [];
   const propsAsked: string[] = [];
@@ -153,7 +153,7 @@ export async function startFakeLlama(options: FakeLlamaOptions): Promise<FakeLla
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   const address = server.address();
   if (address === null || typeof address === 'string') {
-    throw new Error('The fake llama-server has no port.');
+    throw new Error('The fake llm-server has no port.');
   }
   return {
     propsAsked,

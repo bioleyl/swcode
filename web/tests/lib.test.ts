@@ -228,12 +228,12 @@ describe('daemonLine', () => {
     workspace: '/w',
   });
 
-  it('tells whether the llama-servers answer, naming the one that does not', () => {
+  it('tells whether the llm-servers answer, naming the one that does not', () => {
     expect(
       daemonLine({ kind: 'ready', status: statusOf(source('gmktec', true), source('garfield', true)) })
     ).toEqual({
       detail: 'gmktec:8080, garfield:8080',
-      text: 'llama-server connected',
+      text: 'llm-server connected',
       tone: 'ok',
     });
     expect(
@@ -244,7 +244,7 @@ describe('daemonLine', () => {
       tone: 'problem',
     });
     expect(daemonLine({ kind: 'ready', status: statusOf(source('gmktec', false)) }).text).toBe(
-      'llama-server unreachable'
+      'llm-server unreachable'
     );
     expect(daemonLine({ kind: 'locked', pairingFailed: false }).tone).toBe('problem');
     expect(daemonLine({ kind: 'locked', pairingFailed: true }).text).toBe('This pairing code expired');

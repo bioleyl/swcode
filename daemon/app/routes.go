@@ -25,7 +25,7 @@ const (
 	noSkill    = "There is no such skill."
 	busy       = "A session is working: stop it first. The daemon restarts to take the new settings."
 	unreadable = "The settings page sent something the daemon does not understand."
-	unreached  = "Nothing answered there as llama-server."
+	unreached  = "Nothing answered there as llm-server."
 	// keepCached: a picture's address never shows another one, it can stay in the browser's cache.
 	keepCached = "private, max-age=31536000, immutable"
 )
@@ -110,7 +110,7 @@ func (a *App) pairingRoutes(mux *http.ServeMux) {
 }
 
 // settingsRoutes are the settings page's: the settings in use, saving them (the daemon then restarts, or asks the
-// person to), and the models of a llama-server before its address is saved.
+// person to), and the models of an llm-server before its address is saved.
 func (a *App) settingsRoutes(mux *http.ServeMux) {
 	file := filepath.Join(a.config.DataDir, config.SettingsFile)
 	mux.HandleFunc("GET "+protocol.EndpointSettings, func(response http.ResponseWriter, _ *http.Request) {
@@ -141,7 +141,7 @@ func (a *App) settingsRoutes(mux *http.ServeMux) {
 	})
 }
 
-// modelRoutes are the llama-servers' and the presets': as they are, with the servers' keys, and all of them saved
+// modelRoutes are the llm-servers' and the presets': as they are, with the servers' keys, and all of them saved
 // together, in use at once.
 func (a *App) modelRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET "+protocol.EndpointModels, func(response http.ResponseWriter, _ *http.Request) {

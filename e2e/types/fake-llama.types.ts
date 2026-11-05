@@ -9,7 +9,7 @@ export interface ScriptedReply {
   text?: string;
   toolCalls?: readonly ScriptedToolCall[];
   failWith?: number;
-  /** The error's type, with `failWith`: llama-server's own, such as exceed_context_size_error. */
+  /** The error's type, with `failWith`: llm-server's own, such as exceed_context_size_error. */
   errorType?: string;
   /** What the model thinks before it answers, streamed apart from the answer. */
   reasoning?: string;
@@ -37,7 +37,7 @@ export interface FakeLlamaOptions {
   scripts?: Readonly<Record<string, readonly ScriptedReply[]>>;
   models?: readonly string[];
   contextTokens?: number;
-  /** The slots /props reports; left out, it does not say, like an older llama-server. */
+  /** The slots /props reports; left out, it does not say, like an older llm-server. */
   slots?: number;
   /** Whether /props says the model sees pictures, as with a vision projector loaded. */
   vision?: boolean;
@@ -55,7 +55,7 @@ export interface FakeLlama {
   stop(): Promise<void>;
 }
 
-/** A message of a chat completion request, as the fake llama-server received it: text, or text and pictures. */
+/** A message of a chat completion request, as the fake llm-server received it: text, or text and pictures. */
 export interface WireMessage {
   role: string;
   // biome-ignore lint/style/useNamingConvention: the Chat Completions API's own field

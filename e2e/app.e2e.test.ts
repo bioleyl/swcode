@@ -629,7 +629,7 @@ describe('settings', () => {
     expect(await page.locator('#setting-SWCODE_SSH_ENDPOINTS input').inputValue()).toBe('gmktec');
   });
 
-  it('add a llama-server and a preset of its models, which a new session then picks in its composer', async () => {
+  it('add an llm-server and a preset of its models, which a new session then picks in its composer', async () => {
     const rig = await start({ replies: [{ text: 'Done.' }] });
     const page = await rig.browser.newPage({ viewport: DESKTOP });
     await page.goto(`${rig.link}#/settings/models`);

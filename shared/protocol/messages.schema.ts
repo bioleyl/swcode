@@ -86,15 +86,15 @@ export const ClientMessageSchema = z.discriminatedUnion('type', [
 export type ClientMessage = z.infer<typeof ClientMessageSchema>;
 export type ClientMessageType = ClientMessage['type'];
 
-/** How busy a model's slots are: llama-server answers as many requests at once as it has slots. */
-/** A model's slots, by llama-server's numbers: how many it has, this daemon's share of them, and its busy ones. */
+/** How busy a model's slots are: llm-server answers as many requests at once as it has slots. */
+/** A model's slots, by llm-server's numbers: how many it has, this daemon's share of them, and its busy ones. */
 export const SlotUsageSchema = z.object({
   busy: z.array(z.number().int()),
-  // The name the daemon asks for; empty for the model a single-model llama-server serves.
+  // The name the daemon asks for; empty for the model a single-model llm-server serves.
   model: z.string(),
-  // The others belong to the daemons sharing the llama-server (its slot share).
+  // The others belong to the daemons sharing the llm-server (its slot share).
   own: z.array(z.number().int()),
-  // The name of the llama-server serving it, as its source is called.
+  // The name of the llm-server serving it, as its source is called.
   source: z.string(),
   total: z.number().int(),
 });
@@ -142,7 +142,7 @@ export const ServerMessageSchema = z.discriminatedUnion('type', [
 ]);
 export type ServerMessage = z.infer<typeof ServerMessageSchema>;
 
-/** What `GET /api/status` answers: where the agent works, and whether each llama-server answers. */
+/** What `GET /api/status` answers: where the agent works, and whether each llm-server answers. */
 export const StatusSchema = z.object({
   // The name of the machine the daemon runs on: the app shows where it works.
   computer: z.string().optional(),

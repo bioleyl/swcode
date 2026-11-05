@@ -142,7 +142,7 @@ func TestTheMainAgentAndItsSubagentsAreServedTheirOwnModels(t *testing.T) {
 	}
 }
 
-// twoServers is the test's llama-server, and a second one serving a bigger model, as presets mixing them.
+// twoServers is the test's llm-server, and a second one serving a bigger model, as presets mixing them.
 func twoServers(test *App, second *fakellama.Server) protocol.ModelSettings {
 	return protocol.ModelSettings{
 		DefaultPreset: "default",
@@ -207,7 +207,7 @@ func TestModelsThatCannotWorkAreRefused(t *testing.T) {
 	settings := twoServers(test, &fakellama.Server{URL: "http://127.0.0.1:1"})
 	settings.Presets[1].Main.Source = "gone"
 	status, body := test.Call("PUT", protocol.EndpointModels, settings)
-	Expect(t, body, map[string]any{"ok": false, "problem": "A preset uses a llama-server that is not in the list."})
+	Expect(t, body, map[string]any{"ok": false, "problem": "A preset uses an llm-server that is not in the list."})
 	if status != 400 {
 		t.Fatalf("status %d", status)
 	}

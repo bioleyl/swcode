@@ -66,13 +66,13 @@ var (
 )
 
 // SlotShare is this daemon's part of each model's slots: part 2 of 2 is the second half. When people share a
-// llama-server with a daemon each, every daemon keeps to its own slots, so to its own prompt caches.
+// llm-server with a daemon each, every daemon keeps to its own slots, so to its own prompt caches.
 type SlotShare struct {
 	Part  int
 	Parts int
 }
 
-// WholeShare is every slot: one daemon on its llama-server.
+// WholeShare is every slot: one daemon on its llm-server.
 var WholeShare = SlotShare{Part: 1, Parts: 1}
 
 // Defaults is what the settings fall back on: the folder the daemon starts in, and the home folder.
@@ -89,9 +89,9 @@ type Config struct {
 	Host string
 	// A stable-diffusion.cpp sd-server (its OpenAI routes): the agent makes pictures with it.
 	ImageURL string
-	// Only when llama-server was started with --api-key.
+	// Only when llm-server was started with --api-key.
 	LlamaAPIKey string
-	// The model to ask for: needed when llama-server runs in router mode with several models.
+	// The model to ask for: needed when llm-server runs in router mode with several models.
 	LlamaModel     string
 	LlamaSlotShare SlotShare
 	// The model explore subagents ask for, a faster one; the main model when left out.

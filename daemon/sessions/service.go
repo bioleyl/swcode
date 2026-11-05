@@ -37,7 +37,7 @@ const (
 // order: it must not call back into the service.
 type Listener func(message protocol.ServerMessage)
 
-// SlotsPort is how busy llama-server's slots are, and word when that changes.
+// SlotsPort is how busy llm-server's slots are, and word when that changes.
 type SlotsPort interface {
 	Usage() []protocol.SlotUsage
 	Subscribe(listener func()) func()
@@ -59,7 +59,7 @@ type Thinking struct {
 // Deps is what the sessions work with.
 type Deps struct {
 	Store StorePort
-	// Model asks the llama-server a request's target names.
+	// Model asks the llm-server a request's target names.
 	Model llm.Model
 	// Models picks a session's models at each turn, from its preset.
 	Models        ModelsPort

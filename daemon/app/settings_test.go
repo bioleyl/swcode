@@ -17,7 +17,7 @@ import (
 
 func TestTheSettingsAreSavedToTheFileThenTheDaemonRestartsOnThem(t *testing.T) {
 	test := Start(t, Options{})
-	// The llama-server from before models.json stays in the file, which the models start from.
+	// The llm-server from before models.json stays in the file, which the models start from.
 	settingsFile := filepath.Join(test.DataDir, "settings.env")
 	_ = os.WriteFile(settingsFile, []byte("LLAMA_URL=http://192.168.1.119:8080\nLLAMA_SLOT_SHARE=2/2\n"), 0o644)
 	status, saved := test.Call("PUT", protocol.EndpointSettings, map[string]string{

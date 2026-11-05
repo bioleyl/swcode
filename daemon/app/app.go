@@ -1,4 +1,4 @@
-// Package app puts the daemon together: its hosts, llama-server, the tools, the sessions and projects, and the
+// Package app puts the daemon together: its hosts, llm-server, the tools, the sessions and projects, and the
 // routes the web app calls.
 package app
 
@@ -90,7 +90,7 @@ type App struct {
 	Handler  http.Handler
 	Sessions *sessions.Service
 	Projects *projects.Service
-	// Models is the llama-servers and the presets sessions pick from them.
+	// Models is the llm-servers and the presets sessions pick from them.
 	Models  *models.Service
 	Token   string
 	LanURLs []string

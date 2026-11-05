@@ -17,7 +17,7 @@ type Servers struct {
 }
 
 // SystemPrompt is what the model is told before the conversation. It stays the same for the whole session (no
-// date, no clock), so llama-server can keep it in its prompt cache from one turn to the next.
+// date, no clock), so llm-server can keep it in its prompt cache from one turn to the next.
 func SystemPrompt(workspace, scratch, platform string, servers Servers) string {
 	lines := []string{
 		"You are swcode, a coding agent working in a software project on the user’s computer.",

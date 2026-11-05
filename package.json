@@ -2,7 +2,7 @@
   "name": "swcode",
   "version": "0.1.0",
   "private": true,
-  "description": "A coding agent for local models on llama-server: a daemon that runs the agent and its tools, and a web app to follow and steer it from a computer or a phone",
+  "description": "A coding agent for local models on llm-server: a daemon that runs the agent and its tools, and a web app to follow and steer it from a computer or a phone",
   "type": "module",
   "engines": {
     "node": ">=24.0.0"

@@ -53,7 +53,7 @@ describe('agentsOf', () => {
 });
 
 describe('modelName', () => {
-  it('names a model llama-server knows by its file the way people would', () => {
+  it('names a model llm-server knows by its file the way people would', () => {
     expect(modelName('/home/syware/models/qwen38/Qwen3.8-Flash-Next-IQ3_S-00001-of-00002.gguf')).toBe(
       'Qwen3.8-Flash-Next-IQ3_S'
     );
