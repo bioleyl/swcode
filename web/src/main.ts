@@ -3,7 +3,6 @@ import '@fontsource-variable/jetbrains-mono';
 import './styles/global.css';
 import './services/presets';
 import './services/session-list';
-import './services/slots';
 
 import './lib/icons';
 

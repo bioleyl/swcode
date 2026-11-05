@@ -59,15 +59,3 @@ export interface AgentView {
   state: AgentState;
   activity: string;
 }
-
-/**
- * A model in the side panel: its name, and once the daemon used it, its llama-server and its slots by that server's
- * numbers: how many it has, this daemon's share, and the busy ones.
- */
-export interface ModelCard {
-  name: string;
-  source?: string;
-  busy: readonly number[];
-  own: readonly number[];
-  total: number | undefined;
-}

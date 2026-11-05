@@ -5,7 +5,8 @@ import type { DaemonState, DaemonStateMap } from '../types/daemon.types';
 
 const PROTOCOL = /^https?:\/\//;
 
-const hostOf = (url: string): string => url.replace(PROTOCOL, '');
+/** An llm-server's address without its protocol: `gmktec:8080`. */
+export const hostOf = (url: string): string => url.replace(PROTOCOL, '');
 
 const hostsOf = (sources: readonly SourceStatus[]): string =>
   sources.map((source) => hostOf(source.url)).join(', ');
@@ -47,5 +48,5 @@ const LINES: { [Kind in keyof DaemonStateMap]: (state: DaemonStateMap[Kind]) => 
 const lineFor = <Kind extends keyof DaemonStateMap>(kind: Kind, state: DaemonStateMap[Kind]): StatusLine =>
   LINES[kind](state);
 
-/** The sidebar's status line: whether the daemon and llama-server answer. */
+/** Whether the daemon and llm-server answer: the side panel's, and the alert over every page on a problem. */
 export const daemonLine = (state: DaemonState): StatusLine => lineFor(state.kind, state);

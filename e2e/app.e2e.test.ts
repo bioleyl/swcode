@@ -907,7 +907,7 @@ describe('a long conversation', () => {
 });
 
 describe('the side panel', () => {
-  it('leaves the header’s buttons on its row beside a long title, and shows the build at its bottom', async () => {
+  it('leaves the header’s buttons on its row beside a long title, and shows llm-server and the build', async () => {
     const rig = await start({ replies: [{ text: 'Hello there.' }] });
     const page = await rig.browser.newPage({ viewport: LAPTOP });
     await page.goto(rig.link);
@@ -928,6 +928,9 @@ describe('the side panel', () => {
     const path = await page.locator('session-page header .chip').boundingBox();
     expect((title?.x ?? 0) + (title?.width ?? 0)).toBeLessThanOrEqual(path?.x ?? 0);
     expect(await page.locator('session-page sc-side-panel .version').textContent()).toBe('swcode dev');
+    const server = page.locator('session-page sc-side-panel .server');
+    await server.locator('.state', { hasText: 'Connected' }).waitFor();
+    expect(await server.count()).toBe(1);
   });
 
   it('hides and shows again from the session’s header, and stays as it was left', async () => {

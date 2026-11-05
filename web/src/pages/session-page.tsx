@@ -20,7 +20,6 @@ import { HOME_PATH, navigate } from '../services/navigation';
 import { presetChoices, presetsBus } from '../services/presets';
 import { findSession, sessionListBus } from '../services/session-list';
 import { setSidePanelOpen, sidePanelOpen } from '../services/side-panel';
-import { slotsBus, slotUsage } from '../services/slots';
 import { BASE_STYLES } from '../styles/shared';
 import styles from './session-page.css?inline';
 
@@ -90,7 +89,7 @@ export class SessionPage extends ScElement {
         this._refs.plan.show(currentPlan(this._events));
         this.showUsage(usedTokens(message.events));
       }),
-    // The list itself comes through the session list service, the slots through the slots service.
+    // The list itself comes through the session list service; the slots the app no longer shows.
     sessions: () => undefined,
     slots: () => undefined,
     toolCallWriting: (message) =>
@@ -147,8 +146,6 @@ export class SessionPage extends ScElement {
     this.onBus(sessionListBus, 'changed', () => this.renderSummary());
     this.onBus(daemonStatusBus, 'changed', () => this.renderDaemon());
     this.onBus(presetsBus, 'changed', () => this.renderDaemon());
-    this.onBus(slotsBus, 'changed', (models) => this._refs.panel.slots.set([...models]));
-    this._refs.panel.slots.set([...slotUsage()]);
     conversation.events.register('answer', ({ decision, requestId }) =>
       daemon.send({ decision, requestId, sessionId: this._sessionId, type: 'answerPermission' })
     );

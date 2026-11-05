@@ -2,15 +2,14 @@ import { createElement, css } from '@jadis/core';
 import { JlButton, JlProgress } from '@syware/jlib';
 
 import { ScElement } from '../base/sc-element';
+import { daemonLine, hostOf } from '../lib/daemon-lines';
 import { tokens } from '../lib/format';
-import { modelCards, shareText } from '../lib/model-cards';
 import { BASE_STYLES } from '../styles/shared';
 import styles from './sc-side-panel.css?inline';
 
-import type { SlotUsage } from '../../../shared/protocol/messages.schema';
-import type { PresetStatus } from '../../../shared/protocol/models.schema';
+import type { PresetStatus, SourceStatus } from '../../../shared/protocol/models.schema';
 import type { SessionStatus, SessionSummary } from '../../../shared/protocol/session.schema';
-import type { AgentView, ModelCard } from '../types/conversation.types';
+import type { AgentView } from '../types/conversation.types';
 import type { DaemonState } from '../types/daemon.types';
 
 const ACTIVITY: Readonly<Record<SessionStatus, string>> = {
@@ -38,46 +37,29 @@ const agentNode = (agent: AgentView): Node => (
   </div>
 );
 
-// A slot of the model: this daemon's, busy or free, or another daemon's.
-type SlotState = 'busy' | 'free' | 'other';
+const CONNECTED = 'Connected';
+const UNREACHABLE = 'Unreachable';
 
-const slotState = (card: ModelCard, slot: number): SlotState => {
-  if (!card.own.includes(slot)) {
-    return 'other';
-  }
-  return card.busy.includes(slot) ? 'busy' : 'free';
-};
-
-const slotsNode = (card: ModelCard, total: number): Node => {
-  const share = shareText(card.own, total);
-  return (
-    <>
-      <div class="slots" aria-hidden="true">
-        {Array.from({ length: total }, (_, slot) => (
-          <span class="slot" data-state={slotState(card, slot)} />
-        ))}
-      </div>
-      <p class="slots-text">
-        {card.busy.length} of {card.own.length} slots busy
+/** An llm-server the agents ask: its name, whether it answers, and its address under them. */
+const serverNode = (source: SourceStatus): Node => (
+  <div class="server" data-reachable={String(source.reachable)} title={source.url}>
+    <span class="dot" aria-hidden="true" />
+    <div class="who">
+      <p class="heading">
+        <span class="name">{source.name}</span>
+        <span class="state">{source.reachable ? CONNECTED : UNREACHABLE}</span>
       </p>
-      {share && <p class="slots-text">{share}</p>}
-    </>
-  );
-};
-
-const cardNode = (card: ModelCard): Node => (
-  <div class="card">
-    <p class="model-name">{card.name}</p>
-    {card.source && <p class="slots-text">on {card.source}</p>}
-    {card.total === undefined ? <p class="slots-text">Not used yet</p> : slotsNode(card, card.total)}
+      <p class="address">{hostOf(source.url)}</p>
+    </div>
   </div>
 );
 
 type SessionJob = SessionSummary['jobs'][number];
 
 /**
- * Beside a session on a wide screen: the agents at work, the commands they left running, the models they run on,
- * how full the context is, and at the bottom which build of swcode runs. `stopJob` asks to stop a command.
+ * Beside a session on a wide screen: the agents at work, the commands they left running, the llm-servers and
+ * whether they answer, how full the context is, and at the bottom which build of swcode runs. `stopJob` asks to stop
+ * a command.
  */
 export class ScSidePanel extends ScElement {
   static readonly selector = 'sc-side-panel';
@@ -92,8 +74,14 @@ export class ScSidePanel extends ScElement {
     },
     { immediate: true }
   );
-  readonly daemon = this.useChange<DaemonState>({ kind: 'unknown' }, () => this.render(), { immediate: true });
-  readonly slots = this.useChange<SlotUsage[]>([], () => this.render());
+  readonly daemon = this.useChange<DaemonState>(
+    { kind: 'unknown' },
+    (state) => {
+      this.renderServers(state);
+      this.render();
+    },
+    { immediate: true }
+  );
   readonly agents = this.useChange<AgentView[]>([], (agents) =>
     this._refs.subagents.replaceChildren(...agents.slice(0, MAX_AGENTS_SHOWN).map(agentNode))
   );
@@ -109,8 +97,8 @@ export class ScSidePanel extends ScElement {
     context: ref(JlProgress),
     jobs: ref('.jobs'),
     jobsSection: ref('.background'),
-    models: ref('.models'),
     of: ref('.of'),
+    servers: ref('.servers'),
     subagents: ref('.subagents'),
     used: ref('.used'),
     version: ref('.version'),
@@ -137,8 +125,8 @@ export class ScSidePanel extends ScElement {
           <div class="jobs" />
         </section>
         <section>
-          <h2 class="label">Models</h2>
-          <div class="models" />
+          <h2 class="label">llm-server</h2>
+          <div class="servers" />
         </section>
         <section>
           <h2 class="label">Context</h2>
@@ -177,12 +165,20 @@ export class ScSidePanel extends ScElement {
     this._refs.jobs.replaceChildren(...jobs.map((job) => this.jobNode(job)));
   }
 
+  /** Each llm-server and whether it answers; while the daemon does not, what the app knows of it. */
+  private renderServers(state: DaemonState): void {
+    const servers =
+      state.kind === 'ready'
+        ? state.status.llama.sources.map(serverNode)
+        : [<p class="servers-note">{daemonLine(state).text}</p>];
+    this._refs.servers.replaceChildren(...servers);
+  }
+
   private render(): void {
     const state = this.daemon.get();
     const status = state.kind === 'ready' ? state.status : undefined;
     const used = this.used.get();
     const capacity = this.main.get()?.contextTokens;
-    this._refs.models.replaceChildren(...modelCards(this.slots.get(), status, this.main.get()).map(cardNode));
     this._refs.used.textContent = tokens(used);
     this._refs.of.textContent = capacity ? `of ${tokens(capacity)} tokens` : 'tokens';
     this._refs.context.max.set(capacity ?? 1);
