@@ -976,6 +976,30 @@ describe('the side panel', () => {
   });
 });
 
+describe('a peek', () => {
+  it('answers beside a session above the composer, and stays out of the conversation', async () => {
+    const rig = await start({ replies: [{ text: 'Hello there.' }, { text: 'I said hello.' }] });
+    const page = await rig.browser.newPage({ viewport: DESKTOP });
+    await page.goto(rig.link);
+    await page.locator('home-page textarea').fill('Hi');
+    await page.locator('home-page textarea').press('Enter');
+    await page.getByText('Hello there.').waitFor();
+
+    const composer = page.locator('session-page sc-composer');
+    await composer.locator('textarea').fill('/peek what did you say?');
+    await composer.locator('textarea').press('Enter');
+    const card = page.locator('session-page sc-peek');
+    await card.getByText('I said hello.').waitFor();
+    expect(await card.locator('.question').textContent()).toBe('what did you say?');
+    expect(await page.locator('session-page sc-conversation').getByText('I said hello.').count()).toBe(0);
+    expect(JSON.stringify(rig.llama.requests[1])).toContain('what did you say?');
+
+    await card.locator('.close').click();
+    await settle(page);
+    expect(await card.isHidden()).toBe(true);
+  });
+});
+
 describe('the navigation', () => {
   it('fills a session’s bubble and its project’s icon while it works, then done until seen, and empties them', async () => {
     const rig = await start({ replies: [{ delayMs: LIGHT_TURN_MS, text: 'Done.' }] });

@@ -1,0 +1,71 @@
+:host {
+  display: block;
+  padding: 0 32px 8px;
+}
+
+:host([hidden]) {
+  display: none;
+}
+
+/* As wide as the plan above it, set apart from the conversation by its own ground. */
+.card {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 4px 14px 10px;
+  border: 1px solid var(--jl-line);
+  border-radius: var(--jl-radius-lg);
+  background: var(--jl-surface-2);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--jl-muted);
+}
+
+.title {
+  flex: none;
+  font-weight: 600;
+  color: var(--jl-text);
+}
+
+.question {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.close {
+  flex: none;
+  margin-left: auto;
+}
+
+/* The answer can run long while the conversation keeps its room: it scrolls inside the card. */
+sc-message {
+  max-height: 40vh;
+  overflow-y: auto;
+}
+
+.state {
+  font-size: 12px;
+  color: var(--jl-muted);
+}
+
+.state:empty {
+  display: none;
+}
+
+.state[data-state="failed"] {
+  color: var(--jl-danger);
+}
+
+@media (max-width: 720px) {
+  :host {
+    padding: 0 12px 8px;
+  }
+}

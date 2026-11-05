@@ -107,6 +107,8 @@ type runningTurn struct {
 	cancel    context.CancelFunc
 	streaming *protocol.Streaming
 	pending   *pending
+	// setup is what the turn runs with once ready: a peek asks with the same, for the prompt llm-server cached.
+	setup *agent.Setup
 }
 
 // live is a session as the daemon holds it while it runs: its file's content, and what lives only in memory.
@@ -121,6 +123,8 @@ type live struct {
 	readFiles *tools.ReadFiles
 	turn      *runningTurn
 	watching  bool
+	// model is held by the agent's requests and by the peeks: one at a time on the agent's slot.
+	model sync.Mutex
 }
 
 // Service is the sessions of this daemon: it starts their turns, holds their permission requests until someone

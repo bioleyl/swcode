@@ -523,6 +523,11 @@ own come on top, for one command; the page shows those as set in the environment
   for the next turn; stopping the turn drops it. **Send now** hands the waiting messages to the model at the turn's
   next step instead, after the results of its current calls, without stopping the turn (as Claude Code steers). Sessions are renamed from their title and deleted from their
   header.
+- **Peek**: `/peek` and a question in a session's composer asks the agent beside its work. The answer
+  shows above the composer, to whoever asked, and never enters the conversation: the agent does not see it after.
+  It goes to the agent's model with the agent's own prompt, the question after it, as soon as the agent's own request
+  ends (at once while it runs a tool or a subagent, or waits for a message): the model takes up from what it cached,
+  and the agent's next request finds its cache as it was.
 - **The socket** (`/api/socket`) carries the app's commands one way and every session event the other; the app
   draws the conversation from the same events the session file holds.
 

@@ -127,6 +127,9 @@ func (h *subagentHost) AskPermission(context.Context, PermissionAsk) protocol.Pe
 // TakeMessages is none: the person talks to the main agent only.
 func (h *subagentHost) TakeMessages() *PromptMessage { return nil }
 
+// UseModel: a subagent's requests take no peek, and wait for none.
+func (h *subagentHost) UseModel(use func()) { use() }
+
 func (h *subagentHost) report(event protocol.SessionEventVariant) {
 	switch value := event.(type) {
 	case protocol.SessionEventToolCall:

@@ -12,6 +12,7 @@ import { ScTitle } from '../molecules/sc-title';
 import { ScArcade } from '../organisms/sc-arcade';
 import { ScComposer } from '../organisms/sc-composer';
 import { ScConversation } from '../organisms/sc-conversation';
+import { ScPeek } from '../organisms/sc-peek';
 import { ScPlan } from '../organisms/sc-plan';
 import { ScSidePanel } from '../organisms/sc-side-panel';
 import { daemon, daemonBus } from '../services/daemon';
@@ -54,6 +55,8 @@ export class SessionPage extends ScElement {
   static readonly selector = 'session-page';
 
   private _sessionId = '';
+  // The peeks this page asked, to name each: their answers come to this page alone.
+  private _peeks = 0;
   private _used = 0;
   // The session's events so far: the side panel lists its subagents from them.
   private _events: SessionEvent[] = [];
@@ -71,6 +74,12 @@ export class SessionPage extends ScElement {
     // Projects and folders come through the project list service and the project dialog.
     folders: () => undefined,
     hosts: () => undefined,
+    peekDelta: (message) =>
+      this.forThisSession(message.sessionId, () => this._refs.peek.delta(message.peekId, message.text)),
+    peekState: (message) =>
+      this.forThisSession(message.sessionId, () =>
+        this._refs.peek.showState(message.peekId, message.state, message.message ?? '')
+      ),
     // The presets come through the presets service.
     presets: () => undefined,
     problem: (message) => this.showProblem(message.message),
@@ -104,6 +113,7 @@ export class SessionPage extends ScElement {
     panel: ref(ScSidePanel),
     panelToggle: ref<JlButton>('.panel-toggle'),
     path: ref('.path'),
+    peek: ref(ScPeek),
     plan: ref(ScPlan),
     problem: ref(JlAlert),
     remove: ref<JlButton>('.delete'),
@@ -128,7 +138,8 @@ export class SessionPage extends ScElement {
           <ScConversation />
           <JlAlert tone="danger" hidden />
           <ScPlan hidden />
-          <ScComposer />
+          <ScPeek hidden />
+          <ScComposer peeks />
         </div>
         <ScSidePanel />
         <ScArcade />
@@ -152,6 +163,7 @@ export class SessionPage extends ScElement {
       daemon.send({ decision, requestId, sessionId: this._sessionId, type: 'answerPermission' })
     );
     composer.events.register('send', (draft) => this.send(draft));
+    composer.events.register('peek', (question) => this.peek(question));
     conversation.events.register('question', ({ answers, requestId }) =>
       daemon.send({ answers, requestId, sessionId: this._sessionId, type: 'answerQuestion' })
     );
@@ -219,6 +231,14 @@ export class SessionPage extends ScElement {
       type: 'sendPrompt',
       ...(draft.pictures.length === 0 ? {} : { pictures: draft.pictures }),
     });
+  }
+
+  /** A question beside the session: its answer shows above the composer, never in the conversation. */
+  private peek(question: string): void {
+    this._peeks += 1;
+    const peekId = `${Date.now().toString(36)}-${this._peeks}`;
+    this._refs.peek.ask(peekId, question);
+    daemon.send({ peekId, question, sessionId: this._sessionId, type: 'peek' });
   }
 
   private applyEvent(event: SessionEvent): void {

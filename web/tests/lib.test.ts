@@ -7,6 +7,7 @@ import { keepingEnd } from '../src/lib/follow-end';
 import { ago, contextText, folderName, percent, tokens } from '../src/lib/format';
 import { blocksOf } from '../src/lib/markdown';
 import { paletteCommands, paletteTarget } from '../src/lib/palette';
+import { peekQuestion } from '../src/lib/peek';
 import { groupByProject, preferredProject, removalConsequence } from '../src/lib/project-groups';
 import { sessionGrantLabel, toolLabel } from '../src/lib/tool-labels';
 import { toolMeta } from '../src/lib/tool-meta';
@@ -294,5 +295,15 @@ describe('the command palette', () => {
     expect(paletteTarget('settings:plugins')).toEqual({ id: 'plugins', kind: 'topic' });
     expect(paletteTarget('phone')).toEqual({ action: 'phone', kind: 'action' });
     expect(paletteTarget('elsewhere')).toBeUndefined();
+  });
+});
+
+describe('peekQuestion', () => {
+  it('reads the question of a /peek line, and nothing of a message', () => {
+    expect(peekQuestion('/peek what are you doing?')).toBe('what are you doing?');
+    expect(peekQuestion('  /peek\nwhy that file?  ')).toBe('why that file?');
+    expect(peekQuestion('/peek')).toBe('');
+    expect(peekQuestion('/peeking at it')).toBeUndefined();
+    expect(peekQuestion('please /peek')).toBeUndefined();
   });
 });

@@ -45,6 +45,8 @@ var ToolNames = []ToolName{ToolNameRead, ToolNameWrite, ToolNameEdit, ToolNameBa
 
 var TurnOutcomes = []TurnOutcome{TurnOutcomeDone, TurnOutcomeStopped, TurnOutcomeFailed, TurnOutcomeLimit}
 
+var PeekStates = []PeekState{PeekStateWaiting, PeekStateAnswering, PeekStateDone, PeekStateFailed}
+
 var EditableSettings = []SettingName{SettingNameSwcodeThinking, SettingNameSwcodeSubagentThinking, SettingNameSwcodeWorkspace, SettingNameSwcodeSSHEndpoints, SettingNameSwcodeImageURL, SettingNameSwcodeHost, SettingNameSwcodePort}
 
 var Restarts = []Restart{RestartSelf, RestartPerson}
@@ -214,6 +216,24 @@ const (
 func (v TurnOutcome) Valid() bool {
 	switch v {
 	case TurnOutcomeDone, TurnOutcomeStopped, TurnOutcomeFailed, TurnOutcomeLimit:
+		return true
+	}
+	return false
+}
+
+type PeekState string
+
+const (
+	PeekStateWaiting   PeekState = "waiting"
+	PeekStateAnswering PeekState = "answering"
+	PeekStateDone      PeekState = "done"
+	PeekStateFailed    PeekState = "failed"
+)
+
+// Valid tells whether v is one of the PeekState values.
+func (v PeekState) Valid() bool {
+	switch v {
+	case PeekStateWaiting, PeekStateAnswering, PeekStateDone, PeekStateFailed:
 		return true
 	}
 	return false
@@ -1748,6 +1768,8 @@ func (ClientMessageAnswerQuestion) isClientMessage() {}
 
 func (ClientMessageStopTurn) isClientMessage() {}
 
+func (ClientMessagePeek) isClientMessage() {}
+
 func (ClientMessageStopJob) isClientMessage() {}
 
 func (ClientMessageSetMode) isClientMessage() {}
@@ -1841,6 +1863,12 @@ func (u *ClientMessage) UnmarshalJSON(data []byte) error {
 			return err
 		}
 		u.Value = value
+	case "\"peek\"":
+		var value ClientMessagePeek
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
 	case "\"stopJob\"":
 		var value ClientMessageStopJob
 		if err := json.Unmarshal(data, &value); err != nil {
@@ -1913,6 +1941,7 @@ type ClientMessageMapper[R any] interface {
 	AnswerPermission(ClientMessageAnswerPermission) R
 	AnswerQuestion(ClientMessageAnswerQuestion) R
 	StopTurn(ClientMessageStopTurn) R
+	Peek(ClientMessagePeek) R
 	StopJob(ClientMessageStopJob) R
 	SetMode(ClientMessageSetMode) R
 	SetThinking(ClientMessageSetThinking) R
@@ -1947,6 +1976,8 @@ func MapClientMessage[R any](u ClientMessage, m ClientMessageMapper[R]) R {
 		return m.AnswerQuestion(value)
 	case ClientMessageStopTurn:
 		return m.StopTurn(value)
+	case ClientMessagePeek:
+		return m.Peek(value)
 	case ClientMessageStopJob:
 		return m.StopJob(value)
 	case ClientMessageSetMode:
@@ -2228,6 +2259,43 @@ func (v ClientMessageStopTurn) MarshalJSON() ([]byte, error) {
 	}{"stopTurn", p})
 }
 
+type ClientMessagePeek struct {
+	PeekID    string `json:"peekId"`
+	Question  string `json:"question"`
+	SessionID string `json:"sessionId"`
+}
+
+func (v ClientMessagePeek) MarshalJSON() ([]byte, error) {
+	type plain ClientMessagePeek
+	p := plain(v)
+	return json.Marshal(struct {
+		Key string `json:"type"`
+		plain
+	}{"peek", p})
+}
+
+func (v *ClientMessagePeek) UnmarshalJSON(data []byte) error {
+	type plain ClientMessagePeek
+	p := plain{}
+	if err := json.Unmarshal(data, &p); err != nil {
+		return err
+	}
+	*v = ClientMessagePeek(p)
+	return v.Normalize()
+}
+
+// Normalize trims and checks what the app sent, as its schema does.
+func (v *ClientMessagePeek) Normalize() error {
+	if utf8.RuneCountInString(v.PeekID) < 1 {
+		return fmt.Errorf("%s: must not be empty", "peekId")
+	}
+	v.Question = strings.TrimSpace(v.Question)
+	if utf8.RuneCountInString(v.Question) < 1 {
+		return fmt.Errorf("%s: must not be empty", "question")
+	}
+	return nil
+}
+
 type ClientMessageStopJob struct {
 	JobID     string `json:"jobId"`
 	SessionID string `json:"sessionId"`
@@ -2479,6 +2547,10 @@ func (ServerMessageToolCallWriting) isServerMessage() {}
 
 func (ServerMessageProblem) isServerMessage() {}
 
+func (ServerMessagePeekState) isServerMessage() {}
+
+func (ServerMessagePeekDelta) isServerMessage() {}
+
 func (ServerMessageProjects) isServerMessage() {}
 
 func (ServerMessagePresets) isServerMessage() {}
@@ -2554,6 +2626,18 @@ func (u *ServerMessage) UnmarshalJSON(data []byte) error {
 			return err
 		}
 		u.Value = value
+	case "\"peekState\"":
+		var value ServerMessagePeekState
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
+	case "\"peekDelta\"":
+		var value ServerMessagePeekDelta
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
 	case "\"projects\"":
 		var value ServerMessageProjects
 		if err := json.Unmarshal(data, &value); err != nil {
@@ -2606,6 +2690,8 @@ type ServerMessageMapper[R any] interface {
 	ReasoningDelta(ServerMessageReasoningDelta) R
 	ToolCallWriting(ServerMessageToolCallWriting) R
 	Problem(ServerMessageProblem) R
+	PeekState(ServerMessagePeekState) R
+	PeekDelta(ServerMessagePeekDelta) R
 	Projects(ServerMessageProjects) R
 	Presets(ServerMessagePresets) R
 	Hosts(ServerMessageHosts) R
@@ -2633,6 +2719,10 @@ func MapServerMessage[R any](u ServerMessage, m ServerMessageMapper[R]) R {
 		return m.ToolCallWriting(value)
 	case ServerMessageProblem:
 		return m.Problem(value)
+	case ServerMessagePeekState:
+		return m.PeekState(value)
+	case ServerMessagePeekDelta:
+		return m.PeekDelta(value)
 	case ServerMessageProjects:
 		return m.Projects(value)
 	case ServerMessagePresets:
@@ -2789,6 +2879,55 @@ func (v ServerMessageProblem) MarshalJSON() ([]byte, error) {
 		Key string `json:"type"`
 		plain
 	}{"problem", p})
+}
+
+type ServerMessagePeekState struct {
+	Message   string    `json:"message,omitempty"`
+	PeekID    string    `json:"peekId"`
+	SessionID string    `json:"sessionId"`
+	State     PeekState `json:"state"`
+}
+
+func (v ServerMessagePeekState) MarshalJSON() ([]byte, error) {
+	type plain ServerMessagePeekState
+	p := plain(v)
+	return json.Marshal(struct {
+		Key string `json:"type"`
+		plain
+	}{"peekState", p})
+}
+
+func (v *ServerMessagePeekState) UnmarshalJSON(data []byte) error {
+	type plain ServerMessagePeekState
+	p := plain{}
+	if err := json.Unmarshal(data, &p); err != nil {
+		return err
+	}
+	*v = ServerMessagePeekState(p)
+	return v.Normalize()
+}
+
+// Normalize trims and checks what the app sent, as its schema does.
+func (v *ServerMessagePeekState) Normalize() error {
+	if !v.State.Valid() {
+		return fmt.Errorf("%s: unknown value %q", "state", v.State)
+	}
+	return nil
+}
+
+type ServerMessagePeekDelta struct {
+	PeekID    string `json:"peekId"`
+	SessionID string `json:"sessionId"`
+	Text      string `json:"text"`
+}
+
+func (v ServerMessagePeekDelta) MarshalJSON() ([]byte, error) {
+	type plain ServerMessagePeekDelta
+	p := plain(v)
+	return json.Marshal(struct {
+		Key string `json:"type"`
+		plain
+	}{"peekDelta", p})
 }
 
 type ServerMessageProjects struct {

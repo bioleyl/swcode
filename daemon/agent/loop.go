@@ -198,11 +198,18 @@ func streamPart(host TurnHost, box tools.Box, messageID string, part llm.Part) {
 // nextReply is the model's next reply, asked for again while it comes back empty.
 func nextReply(ctx context.Context, host TurnHost, setup Setup) (llm.Reply, error) {
 	for retries := emptyReplyRetries; ; retries-- {
-		reply, err := askModel(ctx, host, setup)
+		reply, err := askModelAlone(ctx, host, setup)
 		if err != nil || !IsEmptyReply(reply.Text, reply.ToolCalls) || retries == 0 || ctx.Err() != nil {
 			return reply, err
 		}
 	}
+}
+
+// askModelAlone asks the model with no peek in between: a peek's question would take the agent's slot from under
+// its compaction or its request, and their prompts would no longer be the one llm-server cached.
+func askModelAlone(ctx context.Context, host TurnHost, setup Setup) (reply llm.Reply, err error) {
+	host.UseModel(func() { reply, err = askModel(ctx, host, setup) })
+	return reply, err
 }
 
 // takeInMessages has what the person sent to come in now join the conversation between two steps, after the

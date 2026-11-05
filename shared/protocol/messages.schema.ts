@@ -12,6 +12,14 @@ import {
   ToolNameSchema,
 } from './session.schema.js';
 
+/**
+ * Where a question beside the session (/peek) is: waiting for the agent's request running to end, being answered,
+ * answered, or failed (its `message` says why).
+ */
+export const PEEK_STATES = ['waiting', 'answering', 'done', 'failed'] as const;
+export const PeekStateSchema = z.enum(PEEK_STATES);
+export type PeekState = z.infer<typeof PeekStateSchema>;
+
 /** What the app sends the daemon over the socket. */
 export const ClientMessageSchema = z.discriminatedUnion('type', [
   // A folder of its own, and the first message to start on at once, both optional.
@@ -57,6 +65,14 @@ export const ClientMessageSchema = z.discriminatedUnion('type', [
     type: z.literal('answerQuestion'),
   }),
   z.object({ sessionId: z.string(), type: z.literal('stopTurn') }),
+  // A question beside the session (/peek): answered from the conversation as it is, never kept in it. The app names
+  // it, to tell its answer.
+  z.object({
+    peekId: z.string().min(1),
+    question: z.string().trim().min(1),
+    sessionId: z.string(),
+    type: z.literal('peek'),
+  }),
   // Stops a command the agent left running in the background.
   z.object({ jobId: z.string(), sessionId: z.string(), type: z.literal('stopJob') }),
   z.object({ mode: PermissionModeSchema, sessionId: z.string(), type: z.literal('setMode') }),
@@ -110,6 +126,15 @@ export const ServerMessageSchema = z.discriminatedUnion('type', [
     type: z.literal('toolCallWriting'),
   }),
   z.object({ message: z.string(), type: z.literal('problem') }),
+  // A peek's state and its answer as it streams, to the app that asked only.
+  z.object({
+    message: z.string().optional(),
+    peekId: z.string(),
+    sessionId: z.string(),
+    state: PeekStateSchema,
+    type: z.literal('peekState'),
+  }),
+  z.object({ peekId: z.string(), sessionId: z.string(), text: z.string(), type: z.literal('peekDelta') }),
   z.object({ projects: z.array(ProjectSchema), type: z.literal('projects') }),
   // The presets a session can work with: at connection, and again when they change.
   z.object({ choices: PresetChoicesSchema, type: z.literal('presets') }),

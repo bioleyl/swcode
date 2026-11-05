@@ -24,27 +24,47 @@ type place struct {
 	skills   catalog.Port
 }
 
-// runTurnIn runs a turn with the models and context sizes llm-server gives now: a model may have been reloaded
-// with another one, or a router may serve others.
-func (s *Service) runTurnIn(ctx context.Context, session *live, turn *runningTurn, message agent.PromptMessage) {
+// prepared is what the session's agent runs with now: its place, its models, and its setup.
+type prepared struct {
+	where    place
+	main     llm.Choice
+	subagent llm.Choice
+	setup    agent.Setup
+}
+
+// prepare finds the models and context sizes llm-server gives now (a model may have been reloaded with another
+// one, or a router may serve others), and where the session works.
+func (s *Service) prepare(ctx context.Context, session *live) (prepared, error) {
 	s.mu.Lock()
 	meta := session.meta
 	s.mu.Unlock()
 	main, subagent := s.deps.Models.Choose(ctx, meta.Preset)
-	sees := main.Vision
 	host := s.deps.Hosts.HostOf(meta.Host)
 	scratch, err := host.ScratchFolder(ctx, meta.ID)
-	if err == nil {
-		var platform string
-		if platform, err = host.Platform(ctx); err == nil {
-			where := place{host: host, platform: platform, scratch: scratch, skills: s.deps.Skills.PortFor(catalog.Place{
-				Host: host, Local: hosts.IsLocal(meta.Host), SessionID: meta.ID, Workspace: meta.Workspace,
-			})}
-			agent.RunTurn(ctx, message, s.hostFor(session, turn, subagent, where, main, sees), s.setupFor(session, meta, main, where, sees))
-			return
-		}
+	if err != nil {
+		return prepared{}, err
 	}
-	s.failTurn(session, message, err)
+	platform, err := host.Platform(ctx)
+	if err != nil {
+		return prepared{}, err
+	}
+	where := place{host: host, platform: platform, scratch: scratch, skills: s.deps.Skills.PortFor(catalog.Place{
+		Host: host, Local: hosts.IsLocal(meta.Host), SessionID: meta.ID, Workspace: meta.Workspace,
+	})}
+	return prepared{main: main, setup: s.setupFor(session, meta, main, where, main.Vision), subagent: subagent, where: where}, nil
+}
+
+// runTurnIn runs a turn with what the session's agent runs with now.
+func (s *Service) runTurnIn(ctx context.Context, session *live, turn *runningTurn, message agent.PromptMessage) {
+	ready, err := s.prepare(ctx, session)
+	if err != nil {
+		s.failTurn(session, message, err)
+		return
+	}
+	s.mu.Lock()
+	turn.setup = &ready.setup
+	s.mu.Unlock()
+	agent.RunTurn(ctx, message, s.hostFor(session, turn, ready, ready.main.Vision), ready.setup)
 }
 
 // failTurn records a turn whose host did not answer: the person's message, and why nothing came of it.
@@ -81,7 +101,8 @@ type turnHost struct {
 	context *tools.Context
 }
 
-func (s *Service) hostFor(session *live, turn *runningTurn, subagent llm.Choice, where place, main llm.Choice, sees bool) agent.TurnHost {
+func (s *Service) hostFor(session *live, turn *runningTurn, ready prepared, sees bool) agent.TurnHost {
+	where, main, subagent := ready.where, ready.main, ready.subagent
 	host := &turnHost{service: s, session: session, turn: turn}
 	host.context = &tools.Context{
 		AskQuestions: func(ctx context.Context, callID string, questions []protocol.Question) []string {
@@ -149,6 +170,12 @@ func (h *turnHost) AskPermission(ctx context.Context, ask agent.PermissionAsk) p
 }
 
 func (h *turnHost) TakeMessages() *agent.PromptMessage { return h.service.takeQueued(h.session) }
+
+func (h *turnHost) UseModel(use func()) {
+	h.session.model.Lock()
+	defer h.session.model.Unlock()
+	use()
+}
 
 func (s *Service) grantsOf(session *live) permissions.Grants {
 	grants := session.grants
