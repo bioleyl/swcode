@@ -1,8 +1,9 @@
 import { createElement, css } from '@jadis/core';
-import { JlButton, JlDialog, JlListItem } from '@syware/jlib';
+import { JlButton, JlListItem } from '@syware/jlib';
 
 import { ScElement } from '../base/sc-element';
 import { qrElement } from '../lib/qr';
+import { daemonState } from '../services/daemon-status';
 import { forgetDevice, newPairingCode, pairedDevices, pairingLink } from '../services/pairing';
 import { BASE_STYLES } from '../styles/shared';
 import styles from './sc-phone.css?inline';
@@ -21,24 +22,30 @@ const NO_DEVICES = 'No phone is paired yet.';
 
 const isLocal = (base: string): boolean => LOCAL_HOSTS.has(new URL(base).hostname);
 
+/** The address a phone reaches: the daemon's public one, else its address on the network, else this page's. */
+const phoneBase = (): string => {
+  const state = daemonState();
+  const status = state.kind === 'ready' ? state.status : undefined;
+  return status?.publicUrl ?? status?.lanUrls?.[0] ?? location.origin;
+};
+
 /**
- * How to use swcode from a phone: a QR code with a pairing code that serves once and changes every minute (a phone
- * trades it for a token of its own), and the phones paired so far.
+ * The settings' Phone topic, how to use swcode from a phone: a QR code with a pairing code that serves once and
+ * changes every minute (a phone trades it for a token of its own), and the phones paired so far. It makes codes only
+ * while its topic is shown.
  */
 export class ScPhone extends ScElement {
   static readonly selector = 'sc-phone';
 
-  /** The address a phone opens: the daemon's public one, or this page's. */
-  readonly base = this.useChange('', () => this.renderPairing());
+  /** Whether its topic is shown. */
+  readonly active = this.useChange(false, (active) => (active ? this.start() : this.stopClock()));
 
   private _code: PairingCode | undefined;
   private _renewing = false;
   private _clock: ReturnType<typeof setInterval> | undefined;
 
   private readonly _refs = this.useRefs((ref) => ({
-    close: ref<JlButton>('.close'),
     devices: ref('.devices'),
-    dialog: ref(JlDialog),
     expires: ref('.expires'),
     link: ref('.link'),
     note: ref('.note'),
@@ -47,9 +54,9 @@ export class ScPhone extends ScElement {
 
   templateHtml(): Node {
     return (
-      <JlDialog heading="Use swcode on a phone">
+      <div class="phone">
         <section>
-          <h3>Pair</h3>
+          <h2>Pair a phone</h2>
           <p class="lead">
             Scan this with the phone's camera, on the same network as this computer. The code works once and
             changes every minute: the phone that uses it gets a token of its own.
@@ -60,11 +67,10 @@ export class ScPhone extends ScElement {
           <p class="note" hidden />
         </section>
         <section>
-          <h3>Paired phones</h3>
+          <h2>Paired phones</h2>
           <div class="devices" />
         </section>
-        <JlButton slot="actions" class="close" label="Done" variant="primary" />
-      </JlDialog>
+      </div>
     );
   }
 
@@ -73,20 +79,21 @@ export class ScPhone extends ScElement {
   }
 
   onConnect(): void {
-    this._refs.close.events.register('press', () => this._refs.dialog.close());
-    this._refs.dialog.events.register('close', () => this.stopClock());
+    if (this.active.get() && this._clock === undefined) {
+      this.start();
+    }
   }
 
   onDisconnect(): void {
     this.stopClock();
   }
 
-  open(): void {
+  /** A first code, renewed every minute, and the phones paired so far. */
+  private start(): void {
     this._code = undefined;
     this.renderPairing();
     void this.renew();
     this.startClock();
-    this._refs.dialog.show();
     void this.renderDevices();
   }
 
@@ -120,10 +127,7 @@ export class ScPhone extends ScElement {
   }
 
   private renderPairing(): void {
-    const base = this.base.get();
-    if (base === '') {
-      return;
-    }
+    const base = phoneBase();
     const code = this._code;
     const link = code ? pairingLink(base, code.code) : '';
     this._refs.qr.replaceChildren(...(code ? [qrElement(link, QR_LABEL)] : []));

@@ -7,12 +7,14 @@ import { SETTING_FIELDS, SETTING_SECTIONS } from '../lib/settings-fields';
 import {
   DEFAULT_SETTINGS_TOPIC,
   isSettingsTopic,
+  PHONE_TOPIC,
   SETTINGS_TOPIC_LABELS,
   SETTINGS_TOPICS,
 } from '../lib/settings-topics';
 import { ScClaudeSources } from '../organisms/sc-claude-sources';
 import { ScComputers } from '../organisms/sc-computers';
 import { ScModelsEditor } from '../organisms/sc-models-editor';
+import { ScPhone } from '../organisms/sc-phone';
 import { ScSkillsEditor } from '../organisms/sc-skills-editor';
 import { ScStartupSettings } from '../organisms/sc-startup-settings';
 import { daemonBus } from '../services/daemon';
@@ -77,6 +79,7 @@ const controlValue = (control: Control): string => fromChoice(control.value.get(
 const ORGANISM_PANELS: Readonly<Partial<Record<SettingsTopic, () => Node>>> = {
   computers: () => <ScComputers />,
   models: () => <ScModelsEditor />,
+  phone: () => <ScPhone />,
   plugins: () => <ScClaudeSources />,
   skills: () => <ScSkillsEditor />,
   startup: () => <ScStartupSettings />,
@@ -87,9 +90,9 @@ const portNote = (port: string): string =>
 
 /**
  * The settings of this swcode, a tab for each topic, each with its own address: how much the agents think, where
- * projects go, pictures, how it listens, kept in its settings file and saved together; the llama-servers and the
- * presets, how it starts, the other computers, the skills, and Claude Code's skills and plugins, each saved as it
- * changes. Saving the file restarts the daemon on it; a setting set in the environment cannot change.
+ * projects go, pictures, how it listens, kept in its settings file and saved together; the llm-servers and the
+ * presets, the phones, how it starts, the other computers, the skills, and Claude Code's skills and plugins, each
+ * saved as it changes. Saving the file restarts the daemon on it; a setting set in the environment cannot change.
  */
 export class SettingsPage extends ScElement {
   static readonly selector = 'settings-page';
@@ -107,6 +110,7 @@ export class SettingsPage extends ScElement {
 
   private readonly _refs = this.useRefs((ref) => ({
     feedback: ref(JlAlert),
+    phone: ref(ScPhone),
     save: ref<JlButton>('.save'),
     tabs: ref(JlTabs),
   }));
@@ -139,7 +143,7 @@ export class SettingsPage extends ScElement {
     if (!inDesktopApp()) {
       this.panelFor('computers').remove();
     }
-    this.renderSave(this.topicShown());
+    this.renderTopic(this.topicShown());
     void this.load();
     void this.offerStartup();
   }
@@ -193,17 +197,18 @@ export class SettingsPage extends ScElement {
       return;
     }
     history.replaceState(history.state, '', hrefOf(settingsPath(topic)));
-    this.renderSave(topic);
+    this.renderTopic(topic);
   }
 
   private showTopic(topic: SettingsTopic): void {
     this._refs.tabs.value.set(topic);
-    this.renderSave(topic);
+    this.renderTopic(topic);
   }
 
-  /** Save is for the settings file: the other topics save as they change. */
-  private renderSave(topic: SettingsTopic): void {
+  /** Save is for the settings file: the other topics save as they change. The phone's makes codes while shown. */
+  private renderTopic(topic: SettingsTopic): void {
     this._refs.save.hidden = !FILE_TOPICS.has(topic);
+    this._refs.phone.active.set(topic === PHONE_TOPIC);
   }
 
   private sectionNode(section: SettingSection): Node {

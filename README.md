@@ -68,8 +68,8 @@ for development, and [The command line](#the-command-line) builds it for other m
 ### First start
 
 swcode prints a link with its access token, which the desktop app opens by itself: open it once, the app keeps the
-token. Then, in Settings → Models, add your llama-server (its address, its key when it has one) and the presets of
-its models; [Settings](#settings) has the rest. A phone pairs from Phone, in the navigation
+token. Then, in Settings → Models, add your llm-server (its address, its key when it has one) and the presets of
+its models; [Settings](#settings) has the rest. A phone pairs from Settings → Phone
 ([On a phone](#on-a-phone)).
 
 ## A remote daemon
@@ -106,9 +106,10 @@ Install swcode there, then start its daemon:
   the app leaves it running.
 
 Its daemon listens on the network (`SWCODE_HOST`, every interface by default). Pair your computer with it: there,
-`swcode pair` prints a code (`swcode-desktop.exe --pair` on Windows; its phone dialog shows one too). Then, in the
-desktop app's settings, Computers: its address (`gmktec`, `192.168.1.20:4600`, `https://gmktec.tailnet.ts.net`) and
-the code, which works once, for a minute; a link with that swcode's token needs no code. The app trades the code for
+`swcode pair` prints a code (`swcode-desktop.exe --pair` on Windows; its settings' Phone topic shows one too). Then,
+in the desktop app's settings, Computers: its address (`gmktec`, `192.168.1.20:4600`,
+`https://gmktec.tailnet.ts.net`) and the code, which works once, for a minute; a link with that swcode's token needs
+no code. The app trades the code for
 a token of its own, which that swcode lists with its paired phones, and keeps it in
 `%APPDATA%\swcode\computers.json`; no page ever sees it. From a browser, open that swcode's own link instead.
 
@@ -351,10 +352,10 @@ instead, with a UAC prompt, for the rule `swcode (phones on the network)` on por
 
 ## On a phone
 
-On the same network, open Phone in the navigation: its QR code opens swcode on the phone, at
-this computer's address on the network, with a pairing code. The code works once, for a minute, and the dialog
-shows a new one every minute; the phone trades it for a token of its own (`POST /api/pairing`), kept in its
-browser, which works like the access token until the dialog forgets that phone. The daemon keeps the paired phones
+On the same network, open Settings → Phone (the cog at the foot of the navigation): its QR code opens swcode on the
+phone, at this computer's address on the network, with a pairing code. The code works once, for a minute, and the
+page shows a new one every minute; the phone trades it for a token of its own (`POST /api/pairing`), kept in its
+browser, which works like the access token until the page forgets that phone. The daemon keeps the paired phones
 in `devices.json` of the data folder, their tokens as hashes only. Whoever sees the QR code, or types the address,
 gets nothing once the minute is over or the code used. The daemon listens on every interface
 (`SWCODE_HOST=127.0.0.1` keeps it to this computer).
@@ -366,16 +367,16 @@ To reach it from anywhere, put the daemon behind
 tailscale serve --bg 4500
 ```
 
-Start the daemon with that address, `SWCODE_PUBLIC_URL=https://gmktec.your-tailnet.ts.net`, then open Phone in the
-navigation: the QR code pairs the phone, as above.
+Start the daemon with that address, `SWCODE_PUBLIC_URL=https://gmktec.your-tailnet.ts.net`, then open Settings →
+Phone: the QR code pairs the phone, as above.
 
 ## Settings
 
-The settings page (Settings in the navigation) has a tab for each topic: the models, thinking, projects, pictures,
-the network, the skills, and Claude Code's plugins. Thinking, projects, pictures and the network are kept in
-`~/.swcode/settings.env` (`KEY=value` lines), which the page writes: saving restarts the daemon on them when it runs in the background (`swcode`) or in
-the desktop app, and waits while a session works. The environment's own come on top, for one command; the page shows
-those as set in the environment.
+The settings page (the cog at the foot of the navigation) has a tab for each topic: the models, thinking, projects,
+pictures, the network, the phones, the skills, and Claude Code's plugins. Thinking, projects, pictures and the network
+are kept in `~/.swcode/settings.env` (`KEY=value` lines), which the page writes: saving restarts the daemon on them
+when it runs in the background (`swcode`) or in the desktop app, and waits while a session works. The environment's
+own come on top, for one command; the page shows those as set in the environment.
 
 | Variable | Default | What it sets |
 | --- | --- | --- |
@@ -398,10 +399,12 @@ those as set in the environment.
 ## How it works
 
 - **The app** is built from jlib's components and works as SyWare's apps do: the navigation down the side (where
-  swcode works, a new session, the projects with their sessions, what needs you counted beside each, the phone, the
-  skills, the settings), folding into a rail; on a phone a top bar, the navigation in a drawer and tabs (New,
-  Sessions, Settings). A project has its page, with its sessions; Sessions lists them all, what needs you first.
-  Ctrl K (⌘K) searches the sessions, projects, settings and actions. A problem of the daemon shows over every page.
+  swcode works, a new session, the projects with their sessions, what needs you counted beside each, and at its foot
+  the fold button, Chat or Code, the settings' cog and the theme), folding into a rail; on a phone a top bar, the
+  navigation in a drawer and tabs (New, Sessions, Settings). A project has its page, with its sessions; Sessions
+  lists them all, what needs you first. Beside a session, the side panel shows its agents, the commands left running,
+  the llama-servers and whether they answer, and how full the context is. Ctrl K (⌘K) searches the sessions,
+  projects, settings and actions. A problem of the daemon or of llama-server shows over every page.
 - **Sessions** are kept as two files in the data folder: `<id>.json` (title, workspace, permission mode) and
   `<id>.jsonl`, one event a line. The model's messages are rebuilt from the events at every step, appended only,
   and the system prompt never changes, so llama-server's prompt cache (`cache_prompt`) is reused from step to step.
@@ -424,8 +427,8 @@ those as set in the environment.
   skill's name and description in the conversation, not the system prompt: after the person's message when the skills
   changed since it last saw them, and again after a compaction, so the prompt llama-server cached stays the same. The
   main agent loads a skill with `skill` (its instructions, or a file of its folder) and saves one the user asks for
-  with `saveskill`, which is an edit for the permissions; Skills in the navigation opens the settings' Skills, to read,
-  write, rename and delete them. The daemon keeps them, so they are the same for projects on every host.
+  with `saveskill`, which is an edit for the permissions; the settings' Skills topic reads, writes, renames and deletes
+  them. The daemon keeps them, so they are the same for projects on every host.
 - **Claude Code's skills and plugins** come too, read where they are at each turn, on the machine the project is on
   (this computer, WSL, SSH), as Claude Code run there would find them; nothing is copied. The person's
   `~/.claude/skills` and `~/.claude/commands`; the project's `.claude/skills` and `.claude/commands`, in its folder
@@ -519,9 +522,9 @@ those as set in the environment.
   daemon holds one slot per request, gives an agent back the slot it used last, where its conversation is still
   cached, and makes a request wait when every slot of its model is busy. The side panel shows how busy they are,
   and with `LLAMA_SLOT_SHARE`, which of them are this daemon's.
-- **Projects** are folders on the daemon's computer, kept in `projects.json` in the data folder. "New project"
-  browses the daemon's folders: use the one shown, or name a new folder to make inside it. Every folder a session
-  works in has a project; one with sessions stays, and removing one never touches its folder.
+- **Projects** are folders on the daemon's computer, kept in `projects.json` in the data folder. "New project" (on
+  the home page, or Ctrl K) browses the daemon's folders: use the one shown, or name a new folder to make inside it.
+  Every folder a session works in has a project; one with sessions stays, and removing one never touches its folder.
 - **Sessions** start from the home page: a project, and the first message. A message sent while a turn runs waits
   for the next turn; stopping the turn drops it. **Send now** hands the waiting messages to the model at the turn's
   next step instead, after the results of its current calls, without stopping the turn (as Claude Code steers). Sessions are renamed from their title and deleted from their

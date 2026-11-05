@@ -1,5 +1,12 @@
 :host {
-  display: contents;
+  display: block;
+}
+
+.phone {
+  display: flex;
+  flex-direction: column;
+  gap: var(--jl-space-5);
+  max-width: var(--jl-page-form);
 }
 
 section {
@@ -8,25 +15,24 @@ section {
   gap: var(--jl-space-3);
 }
 
+h2 {
+  font-size: var(--jl-font-lg);
+  font-weight: 700;
+}
+
 section + section {
-  margin-top: var(--jl-space-5);
   padding-top: var(--jl-space-4);
   border-top: 1px solid var(--jl-line);
 }
 
-h3 {
-  font-size: var(--jl-font-md);
-  font-weight: 700;
-}
-
 .lead {
-  font-size: 13px;
-  color: var(--jl-muted);
+  font-size: var(--jl-font-md);
+  color: var(--jl-text-2);
 }
 
 /* White in both themes: a camera reads a QR code as dark squares on a light ground. */
 .qr {
-  align-self: center;
+  align-self: flex-start;
   width: 200px;
   padding: 8px;
   border-radius: var(--jl-radius);
@@ -53,10 +59,6 @@ h3 {
   color: var(--jl-muted);
 }
 
-.expires {
-  text-align: center;
-}
-
 .devices {
   display: flex;
   flex-direction: column;
@@ -69,4 +71,8 @@ h3 {
   background: var(--jl-danger-soft);
   font-size: 13px;
   color: var(--jl-danger);
+}
+
+[hidden] {
+  display: none;
 }

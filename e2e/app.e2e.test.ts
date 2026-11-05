@@ -103,6 +103,8 @@ const fakeDesktopApp = (current = 'local', others: readonly object[] = []): stri
 // Run in the page: the tests are typed for Node, and these few expressions need no more.
 const PAGE_OVERFLOW = 'document.documentElement.scrollWidth - window.innerWidth';
 const BODY_BACKGROUND = 'getComputedStyle(document.body).backgroundColor';
+// Whether the page kept a token of its own, which a pairing code is traded for.
+const KEPT_TOKEN = "localStorage.getItem('swcode.token') !== null";
 
 /** How much wider than the screen the page is: nothing should ever scroll sideways. */
 const overflow = (page: Page) => page.evaluate(PAGE_OVERFLOW);
@@ -114,6 +116,9 @@ const cutShort = (node: { clientWidth: number; scrollWidth: number }): boolean =
 /** An item of the navigation down the side, by its label. */
 const navItem = (page: Page, label: string) =>
   page.locator('sc-nav jl-side-nav').getByText(label, { exact: true });
+
+/** The settings' cog, at the foot of the navigation. */
+const settingsLink = (page: Page) => page.locator('sc-nav .settings');
 
 /** A topic's tab on the settings page, by its label; `selected` the one shown. */
 const topicTab = (page: Page, label: string, selected?: boolean) =>
@@ -364,7 +369,7 @@ describe('projects', () => {
     });
     const page = await rig.browser.newPage({ viewport: DESKTOP });
     await page.goto(rig.link);
-    await navItem(page, 'New project').click();
+    await page.locator('home-page .new-project').click();
     await settle(page);
     await page.locator('sc-folder-browser li button', { hasText: 'src' }).click();
     await settle(page);
@@ -526,7 +531,11 @@ describe('skills', () => {
     const rig = await start({ replies: [] });
     const page = await rig.browser.newPage({ viewport: DESKTOP });
     await page.goto(rig.link);
-    await navItem(page, 'Skills').click();
+    await settingsLink(page).click();
+    await settle(page);
+    // The Startup tab leaves once the daemon says it cannot start with this computer, moving the tabs after it.
+    await topicTab(page, 'Startup').waitFor({ state: 'detached' });
+    await topicTab(page, 'Skills').click();
     await settle(page);
     await topicTab(page, 'Skills', true).waitFor();
     await expect.poll(() => skillNames(page)).toEqual(['coding-style', 'jadis']);
@@ -596,7 +605,7 @@ describe('settings', () => {
     const rig = await start({ replies: [] });
     const page = await rig.browser.newPage({ viewport: DESKTOP });
     await page.goto(rig.link);
-    await navItem(page, 'Settings').click();
+    await settingsLink(page).click();
     await settle(page);
     await topicTab(page, 'Models', true).waitFor();
     await topicTab(page, 'Projects').click();
@@ -865,18 +874,21 @@ describe('pairing a phone', () => {
     const rig = await start({ replies: [] });
     const computer = await rig.browser.newPage({ viewport: DESKTOP });
     await computer.goto(rig.link);
-    await navItem(computer, 'Phone').click();
+    await settingsLink(computer).click();
     await settle(computer);
+    await topicTab(computer, 'Phone').click();
+    await settle(computer);
+    expect(computer.url()).toContain('#/settings/phone');
     const link = computer.locator('sc-phone .link');
     await expect.poll(async () => (await link.textContent()) ?? '').toContain('pair=');
     const shown = new URL((await link.textContent()) ?? '');
     expect(shown.searchParams.has('token')).toBe(false);
-    // The dialog shows the address a phone on the network reaches; the test's daemon listens here only.
+    // The page shows the address a phone on the network reaches; the test's daemon listens here only.
     const pairing = new URL(`/?pair=${shown.searchParams.get('pair')}`, rig.link).toString();
 
     const phone = await rig.browser.newPage({ deviceScaleFactor: 2, viewport: PHONE });
     await phone.goto(pairing);
-    await phone.locator('sc-nav .status[data-tone="ok"]').waitFor({ state: 'attached' });
+    await expect.poll(() => phone.evaluate(KEPT_TOKEN)).toBe(true);
     expect(phone.url()).not.toContain('pair=');
 
     const stranger = await rig.browser.newPage({ deviceScaleFactor: 2, viewport: PHONE });

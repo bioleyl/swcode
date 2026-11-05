@@ -15,9 +15,8 @@ import { ScElement } from '../base/sc-element';
 import { daemonLine } from '../lib/daemon-lines';
 import { PALETTE_ACTION, paletteCommands, paletteTarget } from '../lib/palette';
 import { removalConsequence } from '../lib/project-groups';
-import { SETTINGS_TOPICS } from '../lib/settings-topics';
+import { PHONE_TOPIC, SETTINGS_TOPICS } from '../lib/settings-topics';
 import { NAV_ID, projectNavId, ScNav, sessionNavId } from '../organisms/sc-nav';
-import { ScPhone } from '../organisms/sc-phone';
 import { ScProjectDialog } from '../organisms/sc-project-dialog';
 import { ROUTES } from '../routes';
 import { daemon } from '../services/daemon';
@@ -49,7 +48,6 @@ import type { DaemonState } from '../types/daemon.types';
 import type { PaletteTarget, PaletteTargetMap } from '../types/palette.types';
 
 const HASH_CHANGE = 'hashchange';
-const SKILLS_TOPIC = 'skills';
 
 /** A phone's tabs, under the page: a new session, every session, the settings; More opens the navigation. */
 const TAB = { new: 'new', sessions: 'sessions', settings: 'settings' } as const;
@@ -68,11 +66,8 @@ const PLACES: Readonly<Record<RouteName, (params: Record<string, string>) => { n
   project: (params) => ({ nav: projectNavId(params.id ?? ''), tab: TAB.sessions }),
   session: (params) => ({ nav: sessionNavId(params.id ?? ''), tab: TAB.sessions }),
   sessions: () => ({ nav: '', tab: TAB.sessions }),
-  settings: () => ({ nav: NAV_ID.settings, tab: TAB.settings }),
-  settingsTopic: (params) => ({
-    nav: params.topic === SKILLS_TOPIC ? NAV_ID.skills : NAV_ID.settings,
-    tab: TAB.settings,
-  }),
+  settings: () => ({ nav: '', tab: TAB.settings }),
+  settingsTopic: () => ({ nav: '', tab: TAB.settings }),
 };
 
 const isRouteName = (name: string): name is RouteName => Object.hasOwn(PLACES, name);
@@ -102,7 +97,6 @@ export class ScAppShell extends ScElement {
     nav: ref(ScNav),
     outlet: ref(JlPageOutlet),
     palette: ref(JlCommandPalette),
-    phone: ref(ScPhone),
     projectDialog: ref(ScProjectDialog),
     tabs: ref(JlTabBar),
     topSearch: ref(JlSearchButton),
@@ -125,7 +119,6 @@ export class ScAppShell extends ScElement {
         <JlTabBar slot="tabs" items={TABS} more="More" label="swcode" />
         <JlToaster />
         <JlCommandPalette label="Search swcode" placeholder="Search sessions, projects, settings…" />
-        <ScPhone />
         <ScProjectDialog />
       </JlAppShell>
     );
@@ -142,15 +135,8 @@ export class ScAppShell extends ScElement {
     router.mountOn(outlet, { show: (page) => outlet.show(page) });
     window.addEventListener(HASH_CHANGE, () => this.follow(router.currentRoute), { signal: this.killSignal });
     this.follow(router.currentRoute);
-    // What the nav opens over the page closes a phone's drawer first, as a link does.
-    nav.events.register('newProject', () => {
-      this._refs.frame.toggleNav(false);
-      askForProject();
-    });
-    nav.events.register('phone', () => {
-      this._refs.frame.toggleNav(false);
-      this.openPhone();
-    });
+    // The settings' link, at the nav's foot, closes a phone's drawer as the nav's own links do.
+    nav.events.register('settings', () => this._refs.frame.toggleNav(false));
     nav.events.register('search', () => this._refs.palette.show());
     this._refs.topSearch.events.register('press', () => this._refs.palette.show());
     this._refs.palette.events.register('select', (id) => this.choose(paletteTarget(id)));
@@ -201,30 +187,19 @@ export class ScAppShell extends ScElement {
     const actions: Record<typeof action, () => void> = {
       [PALETTE_ACTION.newProject]: () => askForProject(),
       [PALETTE_ACTION.newSession]: () => navigate(NEW_SESSION_PATH),
-      [PALETTE_ACTION.phone]: () => this.openPhone(),
+      [PALETTE_ACTION.phone]: () => navigate(settingsPath(PHONE_TOPIC)),
       [PALETTE_ACTION.theme]: () => this._refs.nav.switchTheme(),
     };
     actions[action]();
   }
 
-  /** The daemon's state in the navigation; a problem, over every page too, where a phone sees it. */
+  /** The daemon's state: the navigation's computer, and a problem over every page, where a phone sees it. */
   private renderDaemon(state: DaemonState): void {
     this._refs.nav.daemon.set(state);
     const line = daemonLine(state);
     this._refs.alert.hidden = line.tone !== 'problem';
     this._refs.alert.heading.set(line.text);
     this._refs.alert.description.set(line.detail);
-  }
-
-  /**
-   * The phone dialog, for the address a phone reaches: the daemon's public one when it has one, else its address on
-   * the network, else this page's.
-   */
-  private openPhone(): void {
-    const state = daemonState();
-    const status = state.kind === 'ready' ? state.status : undefined;
-    this._refs.phone.base.set(status?.publicUrl ?? status?.lanUrls?.[0] ?? location.origin);
-    this._refs.phone.open();
   }
 
   /** Removes a project once the person confirms; leaves its page, and its session when one of them is open. */
