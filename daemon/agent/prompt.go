@@ -1,6 +1,11 @@
 package agent
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+
+	"swcode/daemon/protocol"
+)
 
 const (
 	webSearchLine     = "- For what the project cannot tell you (a library’s current API, an error message, a release), search the web with websearch, then read the pages that matter with webfetch, saying what you need from each."
@@ -8,6 +13,8 @@ const (
 	screenshotLine    = "- To check how a web page looks (a layout, a style, a page on a phone), use screenshot with a question; set see to look at it yourself when a question is not enough. Start the dev server first, with bash in the background."
 	imageLine         = "- To make a picture (an illustration, an icon, a mock-up), use image, describing it in full: it is saved as a PNG where you say, and the user sees it."
 	exploreSearchLine = "- For what is not in the workspace, search the web with websearch and read pages with webfetch."
+	subagentLine      = "- For a broad search, start an explore subagent with agent: it reads for you and reports back. Subagents run one after another, so start one per question, and only as many as the task needs."
+	subagentLimitLine = " You may start %d in a turn at most."
 )
 
 // Servers is which servers of the settings the main agent has: their lines join its prompt.
@@ -16,9 +23,22 @@ type Servers struct {
 	Browser bool
 }
 
+// subagentLines is what the prompt says of subagents: nothing when the preset allows none (the agent has no agent
+// tool then), and how many a turn may start when it limits them.
+func subagentLines(limit *protocol.SubagentLimit) []string {
+	if limit == nil {
+		return []string{subagentLine}
+	}
+	if limit.PerTurn == 0 {
+		return nil
+	}
+	return []string{subagentLine + fmt.Sprintf(subagentLimitLine, limit.PerTurn)}
+}
+
 // SystemPrompt is what the model is told before the conversation. It stays the same for the whole session (no
-// date, no clock), so llm-server can keep it in its prompt cache from one turn to the next.
-func SystemPrompt(workspace, scratch, platform string, servers Servers) string {
+// date, no clock), so llm-server can keep it in its prompt cache from one turn to the next. subagents is the
+// preset's limit, nil for none.
+func SystemPrompt(workspace, scratch, platform string, servers Servers, subagents *protocol.SubagentLimit) string {
 	lines := []string{
 		"You are swcode, a coding agent working in a software project on the user’s computer.",
 		"",
@@ -33,10 +53,9 @@ func SystemPrompt(workspace, scratch, platform string, servers Servers) string {
 		"- Change files with edit, by exact text replacement. Use write only for a new file or a full rewrite.",
 		"- Run commands with bash, for example to run the tests after a change. Commands get no input.",
 		"- Start a server or a watcher (npm run dev, a file watcher) with bash and background, never with &: read what it prints with output, and stop it with kill once you are done with it.",
-		"- For a broad search, start an explore subagent with agent: it reads for you and reports back. Subagents run one after another, so start one per question, and only as many as the task needs.",
-		webSearchLine,
-		webDataLine,
 	}
+	lines = append(lines, subagentLines(subagents)...)
+	lines = append(lines, webSearchLine, webDataLine)
 	if servers.Images {
 		lines = append(lines, imageLine)
 	}

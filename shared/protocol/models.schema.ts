@@ -1,6 +1,8 @@
 import { z } from 'zod';
 
 const NAME_LENGTH = 40;
+// The most subagents a preset lets the main agent start in a turn, short of no limit.
+export const MAX_SUBAGENTS_PER_TURN = 20;
 
 /** An llm-server the agents ask: its name in the app, its address, and its key when it wants one. */
 export const LlmSourceSchema = z.object({
@@ -19,11 +21,20 @@ export type LlmSource = z.infer<typeof LlmSourceSchema>;
 export const ModelRefSchema = z.object({ model: z.string().trim(), source: z.string().min(1) });
 export type ModelRef = z.infer<typeof ModelRefSchema>;
 
-/** The models a session works with, picked together by name: the main agent's, and the workers' (subagents, the web page reader). */
+/** How many subagents the main agent may start in a turn: none at 0. */
+export const SubagentLimitSchema = z.object({ perTurn: z.number().int().min(0).max(MAX_SUBAGENTS_PER_TURN) });
+export type SubagentLimit = z.infer<typeof SubagentLimitSchema>;
+
+/**
+ * The models a session works with, picked together by name: the main agent's, and the subagents' (`workers`, which
+ * reads web pages too), with how many subagents a turn may start.
+ */
 export const PresetSchema = z.object({
   id: z.string().min(1),
   main: ModelRefSchema,
   name: z.string().trim().min(1).max(NAME_LENGTH),
+  // Left out, the main agent starts as many subagents as it likes.
+  subagentLimit: SubagentLimitSchema.optional(),
   workers: ModelRefSchema,
 });
 export type Preset = z.infer<typeof PresetSchema>;

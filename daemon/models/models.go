@@ -225,6 +225,12 @@ func (s *Service) Choose(ctx context.Context, presetID string) (llm.Choice, llm.
 	return main, workers
 }
 
+// SubagentLimit is how many subagents a turn of the preset may start: nil for as many as the agent likes.
+func (s *Service) SubagentLimit(presetID string) *protocol.SubagentLimit {
+	preset, _ := s.presetOf(presetID)
+	return preset.SubagentLimit
+}
+
 func (s *Service) mainOf(ctx context.Context, preset protocol.Preset) llm.Choice {
 	main := llm.Choice{Model: preset.Main.Model, Source: preset.Main.Source}
 	server, found := s.servers.Server(main.Source)

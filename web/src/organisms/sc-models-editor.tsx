@@ -31,7 +31,8 @@ const choicesOf = (settings: ModelSettings): PresetChoices => ({
 
 /**
  * The settings' Models: the llm-servers the agents ask, and the presets each session picks from them in its
- * composer, a main agent's model and the workers'. Each change saves them all, and the daemon uses them at once.
+ * composer, a main agent's model, the subagents' and how many a turn may start. Each change saves them all, and the
+ * daemon uses them at once.
  */
 export class ScModelsEditor extends ScElement {
   static readonly selector = 'sc-models-editor';

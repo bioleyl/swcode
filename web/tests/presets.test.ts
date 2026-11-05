@@ -8,7 +8,7 @@ import {
   withPreset,
   withSource,
 } from '../src/lib/model-settings';
-import { presetDescription, presetOf } from '../src/lib/presets';
+import { presetDescription, presetOf, subagentLimitChoice, subagentLimitOf } from '../src/lib/presets';
 
 import type { ModelSettings, Preset } from '../../shared/protocol/models.schema';
 
@@ -48,9 +48,29 @@ describe('presets', () => {
     expect(presetOf(choices, undefined)?.id).toBe('local');
   });
 
-  it('say their models, and the workers’ only when they are others', () => {
-    expect(presetDescription(choices, big)).toBe('qwen3.8-flash-next on garfield · workers: qwen3.5-9b on gmktec');
+  it('say their models, and the subagents’ only when they are others', () => {
+    expect(presetDescription(choices, big)).toBe(
+      'qwen3.8-flash-next on garfield · subagents: qwen3.5-9b on gmktec'
+    );
     expect(presetDescription(choices, local)).toBe('its model on gmktec');
+  });
+
+  it('say how many subagents a turn may start, or that it starts none', () => {
+    expect(presetDescription(choices, { ...big, subagentLimit: { perTurn: 2 } })).toBe(
+      'qwen3.8-flash-next on garfield · subagents: qwen3.5-9b on gmktec, 2 a turn'
+    );
+    expect(presetDescription(choices, { ...local, subagentLimit: { perTurn: 3 } })).toBe(
+      'its model on gmktec · subagents: 3 a turn'
+    );
+    expect(presetDescription(choices, { ...big, subagentLimit: { perTurn: 0 } })).toBe(
+      'qwen3.8-flash-next on garfield · no subagents'
+    );
+  });
+
+  it('read the select’s choice of a limit back, no limit as none', () => {
+    expect(subagentLimitOf(subagentLimitChoice({ perTurn: 0 }))).toEqual({ perTurn: 0 });
+    expect(subagentLimitOf(subagentLimitChoice({ perTurn: 7 }))).toEqual({ perTurn: 7 });
+    expect(subagentLimitOf(subagentLimitChoice(undefined))).toBeUndefined();
   });
 });
 

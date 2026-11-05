@@ -41,6 +41,8 @@ type Listener func(message protocol.ServerMessage)
 // (the default preset's when it is not there), and whether there is a preset of an id.
 type ModelsPort interface {
 	Choose(ctx context.Context, preset string) (llm.Choice, llm.Choice)
+	// SubagentLimit is how many subagents a turn of the preset may start: nil for as many as the agent likes.
+	SubagentLimit(preset string) *protocol.SubagentLimit
 	Has(preset string) bool
 }
 

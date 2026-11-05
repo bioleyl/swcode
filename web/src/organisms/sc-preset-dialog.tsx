@@ -1,8 +1,9 @@
 import { css } from '@jadis/core';
-import { JlAlert, JlButton, JlDialog, JlField, JlInput } from '@syware/jlib';
+import { JlAlert, JlButton, JlDialog, JlField, JlInput, JlSelect } from '@syware/jlib';
 
 import { ScElement } from '../base/sc-element';
 import { newId } from '../lib/model-settings';
+import { SUBAGENT_LIMIT_OPTIONS, subagentLimitChoice, subagentLimitOf } from '../lib/presets';
 import { ScModelPicker } from '../molecules/sc-model-picker';
 import { BASE_STYLES } from '../styles/shared';
 import styles from './sc-preset-dialog.css?inline';
@@ -11,12 +12,11 @@ import type { ModelSettings, Preset } from '../../../shared/protocol/models.sche
 
 const NO_NAME = 'Name it: the composer shows its name.';
 const MAIN_EMPTY = 'Its model, or a router’s first loaded';
-const WORKERS_EMPTY = 'The main agent’s, on the same llm-server';
-
+const SUBAGENTS_EMPTY = 'The main agent’s, on the same llm-server';
 /**
- * Adds a preset or changes one: its name, the main agent's model, and the workers' (subagents, the web page reader),
- * each a model of one of the llm-servers. `save` gives the preset; the editor saves it, then closes the dialog or
- * shows why not.
+ * Adds a preset or changes one: its name, the main agent's model, the subagents' (which reads web pages too), each a
+ * model of one of the llm-servers, and how many subagents a turn may start. `save` gives the preset; the editor
+ * saves it, then closes the dialog or shows why not.
  */
 export class ScPresetDialog extends ScElement {
   static readonly selector = 'sc-preset-dialog';
@@ -34,7 +34,8 @@ export class ScPresetDialog extends ScElement {
     name: ref<JlInput>('.name'),
     problem: ref(JlAlert),
     save: ref<JlButton>('.save'),
-    workers: ref<ScModelPicker>('.workers'),
+    subagentLimit: ref<JlSelect>('.subagent-limit'),
+    subagents: ref<ScModelPicker>('.subagents'),
   }));
 
   templateHtml(): Node {
@@ -48,9 +49,14 @@ export class ScPresetDialog extends ScElement {
             <ScModelPicker class="main" empty={MAIN_EMPTY} />
           </JlField>
           <JlField
-            label="Workers"
-            hint="Subagents and the web page reader: a smaller, faster model reads sooner, on another computer too.">
-            <ScModelPicker class="workers" empty={WORKERS_EMPTY} />
+            label="Subagents"
+            hint="They search and read for the main agent, and read web pages: a smaller, faster model reads sooner, on another computer too.">
+            <ScModelPicker class="subagents" empty={SUBAGENTS_EMPTY} />
+          </JlField>
+          <JlField
+            label="Subagents per turn"
+            hint="How many the main agent may start in a turn. With none, it is not told they exist.">
+            <JlSelect class="subagent-limit" options={[...SUBAGENT_LIMIT_OPTIONS]} />
           </JlField>
           <JlAlert tone="danger" hidden />
         </div>
@@ -76,13 +82,24 @@ export class ScPresetDialog extends ScElement {
     this._taken = settings.presets.map((each) => each.id);
     this._refs.dialog.heading.set(preset ? `Change ${preset.name}` : 'Add a preset');
     this._refs.name.value.set(preset?.name ?? '');
-    for (const picker of [this._refs.main, this._refs.workers]) {
+    for (const picker of [this._refs.main, this._refs.subagents]) {
       picker.sources.set(settings.sources);
     }
     this._refs.main.show(preset?.main ?? { model: '', source: first });
-    this._refs.workers.show(preset?.workers ?? { model: '', source: first });
+    this._refs.subagents.show(preset?.workers ?? { model: '', source: first });
+    this.showLimit(subagentLimitChoice(preset?.subagentLimit));
     this.refuse('');
     this._refs.dialog.show();
+  }
+
+  /** The preset's limit, listed among the choices even when it is none of them (set in models.json, say). */
+  private showLimit(choice: string): void {
+    const select = this._refs.subagentLimit;
+    const listed = SUBAGENT_LIMIT_OPTIONS.some((option) => option.value === choice);
+    select.options.set(
+      listed ? [...SUBAGENT_LIMIT_OPTIONS] : [...SUBAGENT_LIMIT_OPTIONS, { label: choice, value: choice }]
+    );
+    select.value.set(choice);
   }
 
   /** Why the editor could not save it: the dialog stays open on it. */
@@ -103,11 +120,13 @@ export class ScPresetDialog extends ScElement {
       return;
     }
     this._refs.save.loading.set(true);
+    const limit = subagentLimitOf(this._refs.subagentLimit.value.get());
     this.events.emit('save', {
       id: this._id || newId(name, this._taken),
       main: this._refs.main.value(),
       name,
-      workers: this._refs.workers.value(),
+      workers: this._refs.subagents.value(),
+      ...(limit === undefined ? {} : { subagentLimit: limit }),
     });
   }
 }

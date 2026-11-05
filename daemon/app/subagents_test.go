@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"swcode/daemon/fakellama"
+	"swcode/daemon/protocol"
 	"swcode/daemon/sessions"
 	. "swcode/daemon/testapp"
 )
@@ -150,5 +151,52 @@ func TestSubagentsAreAskedForTheirAnswerWhenTheyKeepEndingEmpty(t *testing.T) {
 	}
 	if len(asked) != 4 || !strings.Contains(RequestText(asked[3]), "Your last reply was empty.") {
 		t.Fatalf("%d requests", len(asked))
+	}
+}
+
+// limitTo has the default preset let a turn start that many subagents.
+func limitTo(t *testing.T, test *App, perTurn int) {
+	t.Helper()
+	settings := test.App.Models.Settings()
+	settings.Presets[0].SubagentLimit = &protocol.SubagentLimit{PerTurn: perTurn}
+	if status, body := test.Call("PUT", protocol.EndpointModels, settings); status != 200 {
+		t.Fatalf("status %d: %v", status, body)
+	}
+}
+
+func TestAPresetThatAllowsNoSubagentsTakesTheAgentToolAway(t *testing.T) {
+	test := Start(t, Options{Replies: []fakellama.Reply{text("Done.")}})
+	limitTo(t, test, 0)
+	sessionID := prompt(t, test, "Hi")
+	test.UntilIdle(sessionID)
+	request := test.Requests()[0]
+	for _, tool := range request["tools"].([]any) {
+		if tool.(map[string]any)["function"].(map[string]any)["name"] == "agent" {
+			t.Fatal("the agent tool is offered")
+		}
+	}
+	if strings.Contains(RequestText(request), "explore subagent") {
+		t.Fatal("the prompt tells of subagents")
+	}
+}
+
+func TestATurnStartsNoMoreSubagentsThanItsPresetAllows(t *testing.T) {
+	test := Start(t, twoSubagents())
+	limitTo(t, test, 1)
+	session := test.NewSession(sessions.Request{})
+	test.App.Sessions.SendPrompt(session.ID, "Where are sessions saved, and where are the tools?", nil)
+	test.WaitForEvent("turnFinished", 1)
+	finished := Finished(test.Events(session.ID))
+	agents := []protocol.SessionEventToolFinished{}
+	for _, each := range finished {
+		if each.Meta == "refused" || strings.Contains(each.Output, "session-store") {
+			agents = append(agents, each)
+		}
+	}
+	if len(agents) != 2 || agents[0].Meta == "refused" || !strings.HasPrefix(agents[1].Output, "No more subagents in this turn: the preset allows 1.") {
+		t.Fatalf("results %+v", agents)
+	}
+	if len(OfKind(test.Events(session.ID), "subagentStarted")) != 1 {
+		t.Fatal("a second subagent started")
 	}
 }

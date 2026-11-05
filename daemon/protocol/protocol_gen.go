@@ -47,6 +47,8 @@ var TurnOutcomes = []TurnOutcome{TurnOutcomeDone, TurnOutcomeStopped, TurnOutcom
 
 var PeekStates = []PeekState{PeekStateWaiting, PeekStateAnswering, PeekStateDone, PeekStateFailed}
 
+const MaxSubagentsPerTurn = 20
+
 var EditableSettings = []SettingName{SettingNameSwcodeThinking, SettingNameSwcodeSubagentThinking, SettingNameSwcodeWorkspace, SettingNameSwcodeSSHEndpoints, SettingNameSwcodeImageURL, SettingNameSwcodeHost, SettingNameSwcodePort}
 
 var Restarts = []Restart{RestartSelf, RestartPerson}
@@ -2978,10 +2980,11 @@ func (v PresetChoices) MarshalJSON() ([]byte, error) {
 }
 
 type Preset struct {
-	ID      string   `json:"id"`
-	Main    ModelRef `json:"main"`
-	Name    string   `json:"name"`
-	Workers ModelRef `json:"workers"`
+	ID            string         `json:"id"`
+	Main          ModelRef       `json:"main"`
+	Name          string         `json:"name"`
+	SubagentLimit *SubagentLimit `json:"subagentLimit,omitempty"`
+	Workers       ModelRef       `json:"workers"`
 }
 
 func (v *Preset) UnmarshalJSON(data []byte) error {
@@ -3029,6 +3032,31 @@ func (v *ModelRef) Normalize() error {
 	v.Model = strings.TrimSpace(v.Model)
 	if utf8.RuneCountInString(v.Source) < 1 {
 		return fmt.Errorf("%s: must not be empty", "source")
+	}
+	return nil
+}
+
+type SubagentLimit struct {
+	PerTurn int `json:"perTurn"`
+}
+
+func (v *SubagentLimit) UnmarshalJSON(data []byte) error {
+	type plain SubagentLimit
+	p := plain{}
+	if err := json.Unmarshal(data, &p); err != nil {
+		return err
+	}
+	*v = SubagentLimit(p)
+	return v.Normalize()
+}
+
+// Normalize trims and checks what the app sent, as its schema does.
+func (v *SubagentLimit) Normalize() error {
+	if v.PerTurn < 0 {
+		return fmt.Errorf("%s: at least 0", "perTurn")
+	}
+	if v.PerTurn > 20 {
+		return fmt.Errorf("%s: at most 20", "perTurn")
 	}
 	return nil
 }

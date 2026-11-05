@@ -170,18 +170,19 @@ load-on-startup = true
 llama-server --models-preset ~/models/presets.ini --models-max 2 --host 0.0.0.0 --port 8080
 ```
 
-Then name both in a preset (below): the main agent on `qwen3.8-flash-next`, the workers on `qwen3.5-9b-defiant`. A
-router wants each request to name its model and loads the one it is asked for; a preset naming no main model takes the
-first loaded one that its workers do not use.
+Then name both in a preset (below): the main agent on `qwen3.8-flash-next`, the subagents on `qwen3.5-9b-defiant`.
+A router wants each request to name its model and loads the one it is asked for; a preset naming no main model takes
+the first loaded one that its subagents do not use.
 
 ### Several llm-servers, and presets
 
 Settings → Models lists the llm-servers swcode asks (a name, an address, a key) and the
-presets made of their models: each preset a name, the main agent's model and the workers' (subagents, and the reader
-of web pages), on the same llm-server or on two. Each session picks its preset in its composer, beside its
-permissions and its thinking, from its next request on; one preset is the default of new sessions. They are kept in
-`~/.swcode/models.json` and in use as soon as they change, without a restart. Until they are saved once, they are the
-`LLAMA_*` settings below: one llm-server, and a preset of its models.
+presets made of their models: each preset a name, the main agent's model and the subagents' (which reads web pages
+too), on the same llm-server or on two, and how many subagents a turn may start: with none, the main agent is not
+told they exist (no `agent` tool, no word of them in its prompt). Each session picks its preset in its composer,
+beside its permissions and its thinking, from its next request on; one preset is the default of new sessions. They
+are kept in `~/.swcode/models.json` and in use as soon as they change, without a restart. Until they are saved once,
+they are the `LLAMA_*` settings below: one llm-server, and a preset of its models.
 
 What the small model buys, measured on the GMKtec: it reads prompts 2.7 times faster (957 against 353 tokens/s),
 and reading files is most of an explore subagent's work. It does not write faster: on a unified-memory machine a

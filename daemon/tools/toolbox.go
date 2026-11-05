@@ -42,6 +42,11 @@ func (b Box) Definitions() []llm.ToolDefinition {
 	return definitions
 }
 
+// Without is the box but one tool: the main agent's without agent, for a preset that allows no subagents.
+func (b Box) Without(name protocol.ToolName) Box {
+	return Box{names: slices.DeleteFunc(slices.Clone(b.names), func(each protocol.ToolName) bool { return each == name })}
+}
+
 // Find is the tool of that name, when the agent has it.
 func (b Box) Find(name string) (Tool, bool) {
 	if !slices.Contains(b.names, protocol.ToolName(name)) {
