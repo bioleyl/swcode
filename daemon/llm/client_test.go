@@ -2,6 +2,8 @@ package llm
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"slices"
 	"strings"
@@ -118,5 +120,21 @@ func TestTheStatusOfALlamaServerThatDoesNotAnswer(t *testing.T) {
 	served, reachable := NewStatusReader(Options{URL: "http://127.0.0.1:1"}).Models(context.Background())
 	if reachable || served == nil {
 		t.Fatalf("models %v", served)
+	}
+}
+
+func TestTheContextOfAServerWithoutPropsIsReadFromItsModelsList(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != "/v1/models" {
+			http.NotFound(response, request)
+			return
+		}
+		_, _ = response.Write([]byte(`{"data":[{"id":"qwen3-coder","max_model_len":32768}]}`))
+	}))
+	defer server.Close()
+	status := NewStatusReader(Options{URL: server.URL})
+	ctx := context.Background()
+	if status.ContextOf(ctx, "qwen3-coder") != 32_768 || status.ContextOf(ctx, "") != 32_768 || status.ContextOf(ctx, "other") != 0 {
+		t.Fatal("context")
 	}
 }

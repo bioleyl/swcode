@@ -3,6 +3,8 @@ import { z } from 'zod';
 const NAME_LENGTH = 40;
 // The most subagents a preset lets the main agent start in a turn, short of no limit.
 export const MAX_SUBAGENTS_PER_TURN = 20;
+// The most tokens a preset can say a conversation holds.
+export const MAX_CONTEXT_TOKENS = 10_000_000;
 
 /** An llm-server the agents ask: its name in the app, its address, and its key when it wants one. */
 export const LlmSourceSchema = z.object({
@@ -18,7 +20,13 @@ export type LlmSource = z.infer<typeof LlmSourceSchema>;
  * A model of a source, by the name the source serves it as. Empty for a single-model llm-server's, or, on a
  * router, its first loaded model.
  */
-export const ModelRefSchema = z.object({ model: z.string().trim(), source: z.string().min(1) });
+export const ModelRefSchema = z.object({
+  // How many tokens a conversation holds, past most of which it is compacted: the source's own, when it says one,
+  // is the most. Left out, as the source says.
+  contextTokens: z.number().int().positive().max(MAX_CONTEXT_TOKENS).optional(),
+  model: z.string().trim(),
+  source: z.string().min(1),
+});
 export type ModelRef = z.infer<typeof ModelRefSchema>;
 
 /** How many subagents the main agent may start in a turn: none at 0. */

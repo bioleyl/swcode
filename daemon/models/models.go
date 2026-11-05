@@ -210,7 +210,7 @@ func (s *Service) presetOf(id string) (protocol.Preset, bool) {
 func (s *Service) Choose(ctx context.Context, presetID string) (llm.Choice, llm.Choice) {
 	preset, _ := s.presetOf(presetID)
 	main := s.mainOf(ctx, preset)
-	workers := llm.Choice{Model: preset.Workers.Model, Source: preset.Workers.Source}
+	workers := llm.Choice{ContextTokens: preset.Workers.ContextTokens, Model: preset.Workers.Model, Source: preset.Workers.Source}
 	server, found := s.servers.Server(workers.Source)
 	if !found {
 		return main, workers
@@ -221,8 +221,17 @@ func (s *Service) Choose(ctx context.Context, presetID string) (llm.Choice, llm.
 	if workers.Model == "" {
 		workers.Model = server.Status.FirstLoaded(ctx, "")
 	}
-	workers.ContextTokens = server.Status.ContextOf(ctx, workers.Model)
+	workers.ContextTokens = contextFor(server.Status.ContextOf(ctx, workers.Model), preset.Workers.ContextTokens)
 	return main, workers
+}
+
+// contextFor is how many tokens a model's conversation holds: what its server says, else what the preset asks; a
+// preset may ask fewer than the server says, never more. 0 when neither says.
+func contextFor(served, asked int) int {
+	if served > 0 && asked > 0 {
+		return min(served, asked)
+	}
+	return max(served, asked)
 }
 
 // SubagentLimit is how many subagents a turn of the preset may start: nil for as many as the agent likes.
@@ -232,7 +241,7 @@ func (s *Service) SubagentLimit(presetID string) *protocol.SubagentLimit {
 }
 
 func (s *Service) mainOf(ctx context.Context, preset protocol.Preset) llm.Choice {
-	main := llm.Choice{Model: preset.Main.Model, Source: preset.Main.Source}
+	main := llm.Choice{ContextTokens: preset.Main.ContextTokens, Model: preset.Main.Model, Source: preset.Main.Source}
 	server, found := s.servers.Server(main.Source)
 	if !found {
 		return main
@@ -244,7 +253,7 @@ func (s *Service) mainOf(ctx context.Context, preset protocol.Preset) llm.Choice
 		}
 		main.Model = server.Status.FirstLoaded(ctx, avoid)
 	}
-	main.ContextTokens = server.Status.ContextOf(ctx, main.Model)
+	main.ContextTokens = contextFor(server.Status.ContextOf(ctx, main.Model), preset.Main.ContextTokens)
 	main.Vision = server.Status.VisionOf(ctx, main.Model)
 	return main
 }

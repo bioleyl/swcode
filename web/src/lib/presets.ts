@@ -1,3 +1,4 @@
+import { MAX_CONTEXT_TOKENS } from '../../../shared/protocol/models.schema';
 import { modelName } from './model-name';
 
 import type { SelectOption } from '@syware/jlib';
@@ -9,6 +10,7 @@ import type {
   PresetStatus,
   SubagentLimit,
 } from '../../../shared/protocol/models.schema';
+import type { TokensInput } from '../types/presets.types';
 
 /** Before the daemon says its presets. */
 export const NO_PRESETS: PresetChoices = { defaultPreset: '', presets: [], sources: [] };
@@ -16,6 +18,10 @@ export const NO_PRESETS: PresetChoices = { defaultPreset: '', presets: [], sourc
 // A model a preset names none for: a single-model llm-server's, or a router's first loaded one.
 const ITS_MODEL = 'its model';
 const NO_SUBAGENTS = 'no subagents';
+// A context size as people type it: 131072, 131 072, or 128k (k is 1024 tokens).
+const TOKENS_TYPED = /^(\d[\d\s,']*)(k?)$/i;
+const DIGIT_SEPARATORS = /[\s,']/g;
+const KILO = 1024;
 // jlib's select takes an empty value for nothing chosen: no limit, the default, has a value of its own.
 const NO_LIMIT = 'any';
 const LIMITS_OFFERED = [1, 2, 3, 4, 5, 10];
@@ -48,8 +54,27 @@ export const presetStatusOf = (status: Status | undefined, preset: Preset | unde
 const sourceName = (choices: PresetChoices, id: string): string =>
   choices.sources.find((source) => source.id === id)?.name ?? id;
 
+/** A context size as the dialog shows it, and as people say it: 128k for 131072. */
+export const contextText = (tokens: number): string =>
+  tokens % KILO === 0 ? `${tokens / KILO}k` : String(tokens);
+
+/** A context size as typed in the dialog: none when empty, as the llm-server says. */
+export function readTokens(text: string): TokensInput {
+  if (text.trim() === '') {
+    return { kind: 'none' };
+  }
+  const typed = TOKENS_TYPED.exec(text.trim());
+  if (!typed) {
+    return { kind: 'invalid' };
+  }
+  const tokens = Number((typed[1] ?? '').replace(DIGIT_SEPARATORS, '')) * (typed[2] === '' ? 1 : KILO);
+  return tokens > 0 && tokens <= MAX_CONTEXT_TOKENS ? { kind: 'tokens', tokens } : { kind: 'invalid' };
+}
+
 const modelText = (choices: PresetChoices, ref: ModelRef): string =>
-  `${ref.model === '' ? ITS_MODEL : modelName(ref.model)} on ${sourceName(choices, ref.source)}`;
+  `${ref.model === '' ? ITS_MODEL : modelName(ref.model)} on ${sourceName(choices, ref.source)}${
+    ref.contextTokens === undefined ? '' : ` (${contextText(ref.contextTokens)})`
+  }`;
 
 /** Subagents asking for no model of their own on the main agent's source get the main agent's. */
 const subagentsShareMain = (preset: Preset): boolean =>

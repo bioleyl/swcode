@@ -8,7 +8,14 @@ import {
   withPreset,
   withSource,
 } from '../src/lib/model-settings';
-import { presetDescription, presetOf, subagentLimitChoice, subagentLimitOf } from '../src/lib/presets';
+import {
+  contextText,
+  presetDescription,
+  presetOf,
+  readTokens,
+  subagentLimitChoice,
+  subagentLimitOf,
+} from '../src/lib/presets';
 
 import type { ModelSettings, Preset } from '../../shared/protocol/models.schema';
 
@@ -93,5 +100,24 @@ describe('model settings', () => {
     expect(presetUsing(settings, 'garfield')?.id).toBe('big');
     expect(presetUsing(withoutPreset(settings, 'big'), 'garfield')).toBeUndefined();
     expect(sourceDescription(garfield)).toBe('https://garfield.example · with a key');
+  });
+});
+
+describe('context sizes', () => {
+  it('read as people type them, empty as the llm-server says', () => {
+    expect(readTokens('131072')).toEqual({ kind: 'tokens', tokens: 131_072 });
+    expect(readTokens(" 131'072 ")).toEqual({ kind: 'tokens', tokens: 131_072 });
+    expect(readTokens('128k')).toEqual({ kind: 'tokens', tokens: 131_072 });
+    expect(readTokens('')).toEqual({ kind: 'none' });
+    expect(readTokens('0')).toEqual({ kind: 'invalid' });
+    expect(readTokens('lots')).toEqual({ kind: 'invalid' });
+  });
+
+  it('show as people say them, and in a preset’s words', () => {
+    expect(contextText(131_072)).toBe('128k');
+    expect(contextText(100_000)).toBe('100000');
+    expect(presetDescription(choices, { ...local, main: { ...local.main, contextTokens: 65_536 } })).toBe(
+      'its model on gmktec (64k)'
+    );
   });
 });

@@ -3,16 +3,31 @@ import { JlAlert, JlButton, JlDialog, JlField, JlInput, JlSelect } from '@syware
 
 import { ScElement } from '../base/sc-element';
 import { newId } from '../lib/model-settings';
-import { SUBAGENT_LIMIT_OPTIONS, subagentLimitChoice, subagentLimitOf } from '../lib/presets';
+import {
+  contextText,
+  readTokens,
+  SUBAGENT_LIMIT_OPTIONS,
+  subagentLimitChoice,
+  subagentLimitOf,
+} from '../lib/presets';
 import { ScModelPicker } from '../molecules/sc-model-picker';
 import { BASE_STYLES } from '../styles/shared';
 import styles from './sc-preset-dialog.css?inline';
 
-import type { ModelSettings, Preset } from '../../../shared/protocol/models.schema';
+import type { ModelRef, ModelSettings, Preset } from '../../../shared/protocol/models.schema';
+import type { TokensInput } from '../types/presets.types';
 
 const NO_NAME = 'Name it: the composer shows its name.';
 const MAIN_EMPTY = 'Its model, or a router’s first loaded';
 const SUBAGENTS_EMPTY = 'The main agent’s, on the same llm-server';
+const CONTEXT_EMPTY = 'As the llm-server says';
+const CONTEXT_HINT =
+  'Tokens a conversation holds, compacted before it is full: 131072, or 128k. The llm-server’s own, when it says one, is the most.';
+const BAD_CONTEXT = 'A context is a number of tokens: 131072, or 128k.';
+
+const withContext = (ref: ModelRef, typed: TokensInput): ModelRef =>
+  typed.kind === 'tokens' ? { ...ref, contextTokens: typed.tokens } : ref;
+
 /**
  * Adds a preset or changes one: its name, the main agent's model, the subagents' (which reads web pages too), each a
  * model of one of the llm-servers, and how many subagents a turn may start. `save` gives the preset; the editor
@@ -31,11 +46,13 @@ export class ScPresetDialog extends ScElement {
     cancel: ref<JlButton>('.cancel'),
     dialog: ref(JlDialog),
     main: ref<ScModelPicker>('.main'),
+    mainContext: ref<JlInput>('.main-context'),
     name: ref<JlInput>('.name'),
     problem: ref(JlAlert),
     save: ref<JlButton>('.save'),
     subagentLimit: ref<JlSelect>('.subagent-limit'),
     subagents: ref<ScModelPicker>('.subagents'),
+    subagentsContext: ref<JlInput>('.subagents-context'),
   }));
 
   templateHtml(): Node {
@@ -48,10 +65,16 @@ export class ScPresetDialog extends ScElement {
           <JlField label="Main agent" hint="It plans, edits and answers: the best model there is.">
             <ScModelPicker class="main" empty={MAIN_EMPTY} />
           </JlField>
+          <JlField label="Main agent’s context" hint={CONTEXT_HINT}>
+            <JlInput class="main-context" autocomplete="off" placeholder={CONTEXT_EMPTY} />
+          </JlField>
           <JlField
             label="Subagents"
             hint="They search and read for the main agent, and read web pages: a smaller, faster model reads sooner, on another computer too.">
             <ScModelPicker class="subagents" empty={SUBAGENTS_EMPTY} />
+          </JlField>
+          <JlField label="Subagents’ context" hint={CONTEXT_HINT}>
+            <JlInput class="subagents-context" autocomplete="off" placeholder={CONTEXT_EMPTY} />
           </JlField>
           <JlField
             label="Subagents per turn"
@@ -87,9 +110,15 @@ export class ScPresetDialog extends ScElement {
     }
     this._refs.main.show(preset?.main ?? { model: '', source: first });
     this._refs.subagents.show(preset?.workers ?? { model: '', source: first });
+    this._refs.mainContext.value.set(this.contextShown(preset?.main));
+    this._refs.subagentsContext.value.set(this.contextShown(preset?.workers));
     this.showLimit(subagentLimitChoice(preset?.subagentLimit));
     this.refuse('');
     this._refs.dialog.show();
+  }
+
+  private contextShown(ref: ModelRef | undefined): string {
+    return ref?.contextTokens === undefined ? '' : contextText(ref.contextTokens);
   }
 
   /** The preset's limit, listed among the choices even when it is none of them (set in models.json, say). */
@@ -119,13 +148,19 @@ export class ScPresetDialog extends ScElement {
       this.refuse(NO_NAME);
       return;
     }
+    const mainContext = readTokens(this._refs.mainContext.value.get());
+    const subagentsContext = readTokens(this._refs.subagentsContext.value.get());
+    if (mainContext.kind === 'invalid' || subagentsContext.kind === 'invalid') {
+      this.refuse(BAD_CONTEXT);
+      return;
+    }
     this._refs.save.loading.set(true);
     const limit = subagentLimitOf(this._refs.subagentLimit.value.get());
     this.events.emit('save', {
       id: this._id || newId(name, this._taken),
-      main: this._refs.main.value(),
+      main: withContext(this._refs.main.value(), mainContext),
       name,
-      workers: this._refs.subagents.value(),
+      workers: withContext(this._refs.subagents.value(), subagentsContext),
       ...(limit === undefined ? {} : { subagentLimit: limit }),
     });
   }

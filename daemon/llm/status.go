@@ -20,17 +20,28 @@ const (
 )
 
 // servedModels is /v1/models; in router mode, each model also says whether it is loaded, and what it takes in,
-// loaded or not (pictures when it has a vision projector, --mmproj).
+// loaded or not (pictures when it has a vision projector, --mmproj). vLLM says how long a conversation can be.
 type servedModels struct {
 	Data []struct {
-		ID     string `json:"id"`
-		Status *struct {
+		ID          string `json:"id"`
+		MaxModelLen int    `json:"max_model_len"`
+		Status      *struct {
 			Value string `json:"value"`
 		} `json:"status"`
 		Architecture *struct {
 			InputModalities []string `json:"input_modalities"`
 		} `json:"architecture"`
 	} `json:"data"`
+}
+
+// lengthOf is the longest conversation a model takes, as vLLM lists it: the only model's when none is named.
+func (m servedModels) lengthOf(model string) int {
+	for _, served := range m.Data {
+		if served.ID == model || (model == "" && len(m.Data) == 1) {
+			return served.MaxModelLen
+		}
+	}
+	return 0
 }
 
 // visionOf tells whether a router's model takes pictures; known is false when the list does not say, as a
@@ -132,9 +143,14 @@ func (s *StatusReader) SlotsOf(ctx context.Context, model string) int {
 	return found.TotalSlots
 }
 
-// ContextOf is how many tokens one slot of the model holds, when llm-server says (0 when not).
+// ContextOf is how many tokens a conversation of the model holds, when the server says (0 when not): llama.cpp in
+// /props, a slot's; vLLM in /v1/models.
 func (s *StatusReader) ContextOf(ctx context.Context, model string) int {
-	return s.props(ctx, model).context()
+	if found := s.props(ctx, model).context(); found > 0 {
+		return found
+	}
+	models, _ := s.models(ctx)
+	return models.lengthOf(firstNonEmpty(model, s.options.Model))
 }
 
 // VisionOf tells whether the model sees pictures, as a router lists it whether it is loaded or not (unloaded,

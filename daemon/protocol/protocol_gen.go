@@ -47,6 +47,8 @@ var TurnOutcomes = []TurnOutcome{TurnOutcomeDone, TurnOutcomeStopped, TurnOutcom
 
 var PeekStates = []PeekState{PeekStateWaiting, PeekStateAnswering, PeekStateDone, PeekStateFailed}
 
+const MaxContextTokens = 10000000
+
 const MaxSubagentsPerTurn = 20
 
 var EditableSettings = []SettingName{SettingNameSwcodeThinking, SettingNameSwcodeSubagentThinking, SettingNameSwcodeWorkspace, SettingNameSwcodeSSHEndpoints, SettingNameSwcodeImageURL, SettingNameSwcodeHost, SettingNameSwcodePort}
@@ -3013,8 +3015,9 @@ func (v *Preset) Normalize() error {
 }
 
 type ModelRef struct {
-	Model  string `json:"model"`
-	Source string `json:"source"`
+	ContextTokens int    `json:"contextTokens,omitempty"`
+	Model         string `json:"model"`
+	Source        string `json:"source"`
 }
 
 func (v *ModelRef) UnmarshalJSON(data []byte) error {
@@ -3029,6 +3032,12 @@ func (v *ModelRef) UnmarshalJSON(data []byte) error {
 
 // Normalize trims and checks what the app sent, as its schema does.
 func (v *ModelRef) Normalize() error {
+	if v.ContextTokens != 0 && v.ContextTokens <= 0 {
+		return fmt.Errorf("%s: must be positive", "contextTokens")
+	}
+	if v.ContextTokens > 10000000 {
+		return fmt.Errorf("%s: at most 10000000", "contextTokens")
+	}
 	v.Model = strings.TrimSpace(v.Model)
 	if utf8.RuneCountInString(v.Source) < 1 {
 		return fmt.Errorf("%s: must not be empty", "source")

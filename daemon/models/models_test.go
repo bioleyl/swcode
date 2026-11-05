@@ -43,3 +43,18 @@ func TestModelsThatCannotWorkSayWhy(t *testing.T) {
 		}
 	}
 }
+
+func TestAPresetsContextIsTheServersAtMostAndItsOwnWhenTheServerSaysNone(t *testing.T) {
+	cases := []struct{ served, asked, want int }{
+		{131_072, 0, 131_072},
+		{131_072, 65_536, 65_536},
+		{65_536, 131_072, 65_536},
+		{0, 32_768, 32_768},
+		{0, 0, 0},
+	}
+	for _, each := range cases {
+		if got := contextFor(each.served, each.asked); got != each.want {
+			t.Errorf("served %d, asked %d: got %d", each.served, each.asked, got)
+		}
+	}
+}

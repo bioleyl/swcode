@@ -179,7 +179,8 @@ the first loaded one that its subagents do not use.
 Settings → Models lists the llm-servers swcode asks (a name, an address, a key) and the
 presets made of their models: each preset a name, the main agent's model and the subagents' (which reads web pages
 too), on the same llm-server or on two, and how many subagents a turn may start: with none, the main agent is not
-told they exist (no `agent` tool, no word of them in its prompt). Each session picks its preset in its composer,
+told they exist (no `agent` tool, no word of them in its prompt). Each model can have its context size (`128k`), the
+server's own at most ([Context](#how-it-works)). Each session picks its preset in its composer,
 beside its permissions and its thinking, from its next request on; one preset is the default of new sessions. They
 are kept in `~/.swcode/models.json` and in use as soon as they change, without a restart. Until they are saved once,
 they are the `LLAMA_*` settings below: one llm-server, and a preset of its models.
@@ -498,8 +499,10 @@ top, for one command; the page shows those as set in the environment.
   a person allows its programs for the session; one with a substitution, a redirection or a background job always
   asks.
 - **Context**: before each request the daemon estimates how full the context is, from the last reply's token
-  count (llm-server's `usage`) plus what came since. Past 80% of the model's context (`n_ctx` in `/props`), the model
-  summarizes the conversation and goes on from the summary; when llm-server still finds the prompt too long, it
+  count (llm-server's `usage`) plus what came since. Past 80% of the model's context, the model summarizes the
+  conversation and goes on from the summary. The context is what the server says (llama.cpp's `n_ctx` in `/props`,
+  vLLM's `max_model_len` in `/v1/models`), or the preset's when it sets one, the server's at most: a server that says
+  none needs the preset's to compact in time. When llm-server finds the prompt too long all the same, the model
   compacts and tries once more. The app shows where that happened, with the summary.
 - **Thinking**: what a reasoning model (gpt-oss, Qwen3) thinks before it answers streams into the conversation and
   folds away once the answer comes. It is kept with the reply and sent back with it (`reasoning_content`): Qwen's
