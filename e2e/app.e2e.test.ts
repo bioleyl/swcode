@@ -264,18 +264,14 @@ describe('the plan', () => {
 });
 
 describe('token economy', () => {
-  it('asks the model to be concise after each message, which the conversation shows as written', async () => {
+  it('is on for a new session, asking the model to be concise after each message, shown as written', async () => {
     const rig = await start({ replies: [{ text: 'Short.' }] });
     const page = await rig.browser.newPage({ viewport: PHONE });
     await page.goto(rig.link);
     const composer = page.locator('home-page sc-composer');
-    await composer.locator('.choices').click();
-    await settle(page);
-    await composer.locator('sc-session-choices jl-switch').getByRole('switch').click();
-    await settle(page);
+    await composer.locator('textarea').waitFor();
     expect(await composer.locator('.summary').textContent()).toContain('Token economy');
     expect(await overflow(page)).toBe(0);
-    await page.keyboard.press('Escape');
     await composer.locator('textarea').fill('Explain the plan');
     await composer.locator('textarea').press('Enter');
     await page.getByText('Short.').waitFor();
