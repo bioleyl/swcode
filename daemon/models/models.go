@@ -10,7 +10,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strconv"
 	"sync"
 
 	"swcode/daemon/config"
@@ -37,8 +36,7 @@ const (
 // until they are saved once.
 func FromConfig(settings config.Config) protocol.ModelSettings {
 	source := protocol.LlmSource{
-		APIKey: settings.LlamaAPIKey, ID: settingsSource, Name: hostOf(settings.LlamaURL),
-		SlotShare: shareText(settings.LlamaSlotShare), URL: settings.LlamaURL,
+		APIKey: settings.LlamaAPIKey, ID: settingsSource, Name: hostOf(settings.LlamaURL), URL: settings.LlamaURL,
 	}
 	preset := protocol.Preset{
 		ID: settingsPreset, Main: protocol.ModelRef{Model: settings.LlamaModel, Source: settingsSource}, Name: settingsPresetName,
@@ -55,22 +53,12 @@ func hostOf(address string) string {
 	return parsed.Hostname()
 }
 
-func shareText(share config.SlotShare) string {
-	if share == config.WholeShare {
-		return ""
-	}
-	return strconv.Itoa(share.Part) + "/" + strconv.Itoa(share.Parts)
-}
-
 // Problem is why the models cannot be used, if they cannot: each name given once, addresses that read, each preset's
 // models on a source of the list, and the default preset among the presets.
 func Problem(settings protocol.ModelSettings) string {
 	sources := []string{}
 	names := []string{}
 	for _, source := range settings.Sources {
-		if _, problem := config.ParseSlotShare(source.SlotShare); problem != "" {
-			return source.Name + ": " + problem + "."
-		}
 		if !isWebAddress(source.URL) {
 			return badAddress
 		}

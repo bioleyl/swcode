@@ -201,7 +201,6 @@ func (a *App) socket(response http.ResponseWriter, request *http.Request) {
 	box.push(protocol.ServerMessage{Value: protocol.ServerMessageProjects{Projects: a.Projects.List()}})
 	box.push(protocol.ServerMessage{Value: protocol.ServerMessagePresets{Choices: a.Models.Choices()}})
 	box.push(protocol.ServerMessage{Value: protocol.ServerMessageSessions{Sessions: a.Sessions.List()}})
-	box.push(a.Sessions.SlotUsage())
 	go a.send(ctx, cancel, connection, box)
 	reply := handlers{app: a, ctx: context.WithoutCancel(ctx), reply: box.push}
 	for {

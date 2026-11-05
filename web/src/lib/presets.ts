@@ -15,7 +15,7 @@ export const presetOf = (choices: PresetChoices, id: string | undefined): Preset
   ?? choices.presets.find((preset) => preset.id === choices.defaultPreset)
   ?? choices.presets[0];
 
-/** A preset's main model, as `GET /api/status` says it now: its name, a slot's context and its vision. */
+/** A preset's main model, as `GET /api/status` says it now: its name, the context it holds and its vision. */
 export const presetStatusOf = (status: Status | undefined, preset: Preset | undefined): PresetStatus | undefined =>
   status?.llama.presets.find((each) => each.id === preset?.id);
 

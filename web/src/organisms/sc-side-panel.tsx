@@ -87,7 +87,7 @@ export class ScSidePanel extends ScElement {
   );
   /** The prompt tokens of the last reply: the conversation so far. */
   readonly used = this.useChange(0, () => this.render());
-  /** The session's main model, as its llm-server says now: a slot's context, and the model before any request. */
+  /** The session's main model, as its llm-server says now: the context it holds, and the model before any request. */
   readonly main = this.useChange<PresetStatus | undefined>(undefined, () => this.render());
   /** The commands the agent left running in the background. */
   readonly jobs = this.useChange<SessionJob[]>([], (jobs) => this.renderJobs(jobs));

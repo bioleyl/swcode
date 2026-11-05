@@ -99,10 +99,6 @@ func Environment(command cli.Command, settings config.Config) map[string]string 
 		environment["SWCODE_WORKSPACE"] = command.Workspace
 	}
 	optional := map[string]string{"LLAMA_API_KEY": settings.LlamaAPIKey, "LLAMA_MODEL": settings.LlamaModel, "LLAMA_SUBAGENT_MODEL": settings.LlamaSubagentModel}
-	// The whole of the slots is the remote daemon's default: only a part needs saying.
-	if settings.LlamaSlotShare.Parts > 1 {
-		optional["LLAMA_SLOT_SHARE"] = fmt.Sprintf("%d/%d", settings.LlamaSlotShare.Part, settings.LlamaSlotShare.Parts)
-	}
 	for name, value := range optional {
 		if value != "" {
 			environment[name] = value

@@ -85,8 +85,6 @@ var pattern2 = regexp.MustCompile("^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
 var pattern3 = regexp.MustCompile("^[^/\\\\]+$")
 
-var pattern4 = regexp.MustCompile("^[1-9]\\d*\\/[1-9]\\d*$")
-
 type PictureType string
 
 const (
@@ -2481,8 +2479,6 @@ func (ServerMessageToolCallWriting) isServerMessage() {}
 
 func (ServerMessageProblem) isServerMessage() {}
 
-func (ServerMessageSlots) isServerMessage() {}
-
 func (ServerMessageProjects) isServerMessage() {}
 
 func (ServerMessagePresets) isServerMessage() {}
@@ -2558,12 +2554,6 @@ func (u *ServerMessage) UnmarshalJSON(data []byte) error {
 			return err
 		}
 		u.Value = value
-	case "\"slots\"":
-		var value ServerMessageSlots
-		if err := json.Unmarshal(data, &value); err != nil {
-			return err
-		}
-		u.Value = value
 	case "\"projects\"":
 		var value ServerMessageProjects
 		if err := json.Unmarshal(data, &value); err != nil {
@@ -2616,7 +2606,6 @@ type ServerMessageMapper[R any] interface {
 	ReasoningDelta(ServerMessageReasoningDelta) R
 	ToolCallWriting(ServerMessageToolCallWriting) R
 	Problem(ServerMessageProblem) R
-	Slots(ServerMessageSlots) R
 	Projects(ServerMessageProjects) R
 	Presets(ServerMessagePresets) R
 	Hosts(ServerMessageHosts) R
@@ -2644,8 +2633,6 @@ func MapServerMessage[R any](u ServerMessage, m ServerMessageMapper[R]) R {
 		return m.ToolCallWriting(value)
 	case ServerMessageProblem:
 		return m.Problem(value)
-	case ServerMessageSlots:
-		return m.Slots(value)
 	case ServerMessageProjects:
 		return m.Projects(value)
 	case ServerMessagePresets:
@@ -2802,42 +2789,6 @@ func (v ServerMessageProblem) MarshalJSON() ([]byte, error) {
 		Key string `json:"type"`
 		plain
 	}{"problem", p})
-}
-
-type ServerMessageSlots struct {
-	Models []SlotUsage `json:"models"`
-}
-
-func (v ServerMessageSlots) MarshalJSON() ([]byte, error) {
-	type plain ServerMessageSlots
-	p := plain(v)
-	if p.Models == nil {
-		p.Models = []SlotUsage{}
-	}
-	return json.Marshal(struct {
-		Key string `json:"type"`
-		plain
-	}{"slots", p})
-}
-
-type SlotUsage struct {
-	Busy   []int  `json:"busy"`
-	Model  string `json:"model"`
-	Own    []int  `json:"own"`
-	Source string `json:"source"`
-	Total  int    `json:"total"`
-}
-
-func (v SlotUsage) MarshalJSON() ([]byte, error) {
-	type plain SlotUsage
-	p := plain(v)
-	if p.Busy == nil {
-		p.Busy = []int{}
-	}
-	if p.Own == nil {
-		p.Own = []int{}
-	}
-	return json.Marshal(p)
 }
 
 type ServerMessageProjects struct {
@@ -3079,11 +3030,10 @@ func (v SourceStatus) MarshalJSON() ([]byte, error) {
 }
 
 type LlmSource struct {
-	APIKey    string `json:"apiKey,omitempty"`
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	SlotShare string `json:"slotShare,omitempty"`
-	URL       string `json:"url"`
+	APIKey string `json:"apiKey,omitempty"`
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+	URL    string `json:"url"`
 }
 
 func (v *LlmSource) UnmarshalJSON(data []byte) error {
@@ -3108,9 +3058,6 @@ func (v *LlmSource) Normalize() error {
 	}
 	if utf8.RuneCountInString(v.Name) > 40 {
 		return fmt.Errorf("%s: at most 40 characters", "name")
-	}
-	if v.SlotShare != "" && !pattern4.MatchString(v.SlotShare) {
-		return fmt.Errorf("%s: %s", "slotShare", "A part of the slots, as 1/2 or 2/3.")
 	}
 	v.URL = strings.TrimSpace(v.URL)
 	if utf8.RuneCountInString(v.URL) < 1 {

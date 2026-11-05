@@ -37,12 +37,6 @@ const (
 // order: it must not call back into the service.
 type Listener func(message protocol.ServerMessage)
 
-// SlotsPort is how busy llm-server's slots are, and word when that changes.
-type SlotsPort interface {
-	Usage() []protocol.SlotUsage
-	Subscribe(listener func()) func()
-}
-
 // ModelsPort is the presets: a preset's models as their sources serve them now, the main agent's and the workers'
 // (the default preset's when it is not there), and whether there is a preset of an id.
 type ModelsPort interface {
@@ -75,7 +69,6 @@ type Deps struct {
 	// Browser draws screenshots, when the daemon has one.
 	Browser   browser.Browser
 	Skills    *catalog.Catalog
-	Slots     SlotsPort
 	Workspace string
 	Thinking  Thinking
 	// OnWorkspace is told the folder of each new session, and its host: every folder sessions work in has a project.
@@ -145,13 +138,7 @@ type Service struct {
 }
 
 func NewService(deps Deps) *Service {
-	service := &Service{deps: deps, listeners: map[int]Listener{}, sessions: map[string]*live{}}
-	deps.Slots.Subscribe(func() {
-		service.mu.Lock()
-		defer service.mu.Unlock()
-		service.publish(service.slotUsage())
-	})
-	return service
+	return &Service{deps: deps, listeners: map[int]Listener{}, sessions: map[string]*live{}}
 }
 
 // Load reads the sessions kept on disk; a turn the daemon left halfway is closed as stopped.
@@ -186,15 +173,6 @@ func (s *Service) Subscribe(listener Listener) func() {
 		defer s.mu.Unlock()
 		delete(s.listeners, id)
 	}
-}
-
-// SlotUsage is how busy each model's slots are, for the panels.
-func (s *Service) SlotUsage() protocol.ServerMessage {
-	return s.slotUsage()
-}
-
-func (s *Service) slotUsage() protocol.ServerMessage {
-	return protocol.ServerMessage{Value: protocol.ServerMessageSlots{Models: s.deps.Slots.Usage()}}
 }
 
 func (s *Service) List() []protocol.SessionSummary {

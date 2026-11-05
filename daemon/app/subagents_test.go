@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"swcode/daemon/fakellama"
-	"swcode/daemon/protocol"
 	"swcode/daemon/sessions"
 	. "swcode/daemon/testapp"
 )
@@ -151,24 +150,5 @@ func TestSubagentsAreAskedForTheirAnswerWhenTheyKeepEndingEmpty(t *testing.T) {
 	}
 	if len(asked) != 4 || !strings.Contains(RequestText(asked[3]), "Your last reply was empty.") {
 		t.Fatalf("%d requests", len(asked))
-	}
-}
-
-func TestThePanelsAreToldHowBusyTheSlotsAreOneSubagentAtATime(t *testing.T) {
-	test, _ := runTwoSubagents(t)
-	busiest := 0
-	for _, message := range test.Messages() {
-		slots, ok := message.Value.(protocol.ServerMessageSlots)
-		if !ok {
-			continue
-		}
-		for _, model := range slots.Models {
-			if model.Model == subagentModel {
-				busiest = max(busiest, len(model.Busy))
-			}
-		}
-	}
-	if busiest != 1 {
-		t.Fatalf("busiest %d", busiest)
 	}
 }

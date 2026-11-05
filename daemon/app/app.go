@@ -215,7 +215,7 @@ func New(settings config.Config, options Options) (*App, error) {
 		Search: web.Paced(func(ctx context.Context, query string) web.SearchOutcome {
 			return web.SearchWeb(ctx, query, options.HTTP)
 		}, web.SearchGap),
-		Skills: skillCatalog, Slots: servers, Store: sessions.NewStore(filepath.Join(settings.DataDir, sessionsFolder)),
+		Skills: skillCatalog, Store: sessions.NewStore(filepath.Join(settings.DataDir, sessionsFolder)),
 		SubagentTools: exploreTools, Thinking: sessions.Thinking{Session: settings.Thinking, Subagents: settings.SubagentThinking},
 		Tools: mainTools, Workspace: workspace,
 	})

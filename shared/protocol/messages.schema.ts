@@ -86,20 +86,6 @@ export const ClientMessageSchema = z.discriminatedUnion('type', [
 export type ClientMessage = z.infer<typeof ClientMessageSchema>;
 export type ClientMessageType = ClientMessage['type'];
 
-/** How busy a model's slots are: llm-server answers as many requests at once as it has slots. */
-/** A model's slots, by llm-server's numbers: how many it has, this daemon's share of them, and its busy ones. */
-export const SlotUsageSchema = z.object({
-  busy: z.array(z.number().int()),
-  // The name the daemon asks for; empty for the model a single-model llm-server serves.
-  model: z.string(),
-  // The others belong to the daemons sharing the llm-server (its slot share).
-  own: z.array(z.number().int()),
-  // The name of the llm-server serving it, as its source is called.
-  source: z.string(),
-  total: z.number().int(),
-});
-export type SlotUsage = z.infer<typeof SlotUsageSchema>;
-
 /** The answer being written right now, so a page opened mid-answer shows what came so far. */
 export const StreamingSchema = z.object({ messageId: z.string(), text: z.string() });
 
@@ -124,7 +110,6 @@ export const ServerMessageSchema = z.discriminatedUnion('type', [
     type: z.literal('toolCallWriting'),
   }),
   z.object({ message: z.string(), type: z.literal('problem') }),
-  z.object({ models: z.array(SlotUsageSchema), type: z.literal('slots') }),
   z.object({ projects: z.array(ProjectSchema), type: z.literal('projects') }),
   // The presets a session can work with: at connection, and again when they change.
   z.object({ choices: PresetChoicesSchema, type: z.literal('presets') }),

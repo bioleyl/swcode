@@ -1,7 +1,5 @@
 import { z } from 'zod';
 
-// An llm-server shared by several people, each with their own swcode: each takes a part of every model's slots.
-const SLOT_SHARE_PATTERN = /^[1-9]\d*\/[1-9]\d*$/;
 const NAME_LENGTH = 40;
 
 /** An llm-server the agents ask: its name in the app, its address, and its key when it wants one. */
@@ -10,8 +8,6 @@ export const LlmSourceSchema = z.object({
   apiKey: z.string().trim().optional(),
   id: z.string().min(1),
   name: z.string().trim().min(1).max(NAME_LENGTH),
-  // This swcode's part of each model's slots, when people share the server: all of them when left out.
-  slotShare: z.string().regex(SLOT_SHARE_PATTERN, 'A part of the slots, as 1/2 or 2/3.').optional(),
   url: z.string().trim().min(1),
 });
 export type LlmSource = z.infer<typeof LlmSourceSchema>;
@@ -66,9 +62,9 @@ export const SourceStatusSchema = z.object({
 });
 export type SourceStatus = z.infer<typeof SourceStatusSchema>;
 
-/** A preset's main model as its source says now: its name, a slot's context, and whether it sees pictures. */
+/** A preset's main model as its source says now: its name, the context it holds, and whether it sees pictures. */
 export const PresetStatusSchema = z.object({
-  // The context of one slot, when llm-server says it.
+  // The context a conversation has, when llm-server says it.
   contextTokens: z.number().int().optional(),
   id: z.string(),
   // The model asked for: a router's first loaded one when the preset names none.

@@ -54,9 +54,6 @@ func TestTheRemoteDaemonGetsThisMachinesModelsAndAddressesThroughTheTunnels(t *t
 	if got := Environment(command, loaded); !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %v", got)
 	}
-	if got := Environment(remote(), settings(t, map[string]string{"LLAMA_SLOT_SHARE": "2/2"})); got["LLAMA_SLOT_SHARE"] != "2/2" {
-		t.Fatalf("got %v", got)
-	}
 }
 
 func TestTheDaemonIsForwardedHereAndLlamaServerThere(t *testing.T) {

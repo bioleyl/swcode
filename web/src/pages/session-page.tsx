@@ -91,9 +91,8 @@ export class SessionPage extends ScElement {
         this._refs.plan.show(currentPlan(this._events));
         this.showUsage(usedTokens(message.events));
       }),
-    // The list itself comes through the session list service; the slots the app no longer shows.
+    // The list itself comes through the session list service.
     sessions: () => undefined,
-    slots: () => undefined,
     toolCallWriting: (message) =>
       this.forThisSession(message.sessionId, () => this._refs.conversation.writingCall(message.tool)),
   };

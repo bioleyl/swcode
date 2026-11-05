@@ -142,8 +142,8 @@ An llm-server that does tool calls (`--jinja`, on by default in recent builds). 
 llama-server -m ~/models/gpt-oss-120b-mxfp4.gguf -c 131072 --host 0.0.0.0 --port 8080 --api-key "$LLAMA_API_KEY"
 ```
 
-Without `--parallel`, llm-server opens 4 slots that share the `-c` tokens, each able to use all of them; with
-`--parallel 4`, each slot gets a quarter. With `--host 0.0.0.0` llm-server is reachable from the network, hence
+Without `--parallel`, llm-server answers 4 conversations at once, sharing the `-c` tokens, each able to use all of
+them; with `--parallel 4`, each gets a quarter. With `--host 0.0.0.0` llm-server is reachable from the network, hence
 `--api-key`.
 
 ### A smaller model for the subagents
@@ -176,7 +176,7 @@ first loaded one that its workers do not use.
 
 ### Several llm-servers, and presets
 
-Settings → Models lists the llm-servers swcode asks (a name, an address, a key, a share of the slots) and the
+Settings → Models lists the llm-servers swcode asks (a name, an address, a key) and the
 presets made of their models: each preset a name, the main agent's model and the workers' (subagents, and the reader
 of web pages), on the same llm-server or on two. Each session picks its preset in its composer, beside its
 permissions and its thinking, from its next request on; one preset is the default of new sessions. They are kept in
@@ -188,20 +188,14 @@ and reading files is most of an explore subagent's work. It does not write faste
 token costs a read of the weights it uses, all of them for a dense 9B, the active experts only for a mixture of
 experts, so both write about 26 tokens/s. Its MTP heads (`spec-type = draft-mtp`) bring it to 34–42.
 
-### Two people, one llm-server
+### The GMKtec's presets
 
-Each person runs their own swcode, with a share of each model's slots: the first half (`1/2`) on one computer, the
-second (`2/2`) on the other, set with the llm-server in Settings → Models (`LLAMA_SLOT_SHARE` until the models are
-saved once). A daemon picks the slot of every request so that a conversation finds its prompt
-cache again; two daemons on the same slots would undo each other's cache, and processing a long conversation again
-takes minutes. With shares, one person's sessions never take the other's slots, even when those are idle.
-
-Give each model fixed slots for that, `parallel` of them sharing `ctx-size` equally (without `parallel`, the slots
-share one pool, and one long conversation can fill it for everyone). The GMKtec's file, for two people:
+Give each model a fixed number of conversations at once, `parallel` of them sharing `ctx-size` equally (without
+`parallel`, they share one pool, and one long conversation can fill it for everyone). The GMKtec's file:
 
 ```ini
-; 2 conversations each, of 196,608 tokens; an 8-bit KV cache: half the memory, the same speed here.
-; In RAM: 4 snapshots of the recurrent state per slot (default 32), a 2 GiB prompt cache (default 8).
+; 4 conversations, of 196,608 tokens; an 8-bit KV cache: half the memory, the same speed here.
+; In RAM: 4 snapshots of the recurrent state per conversation (default 32), a 2 GiB prompt cache (default 8).
 [qwen3.8-flash-next]
 parallel = 4
 ctx-size = 786432
@@ -210,7 +204,7 @@ cache-type-v = q8_0
 ctx-checkpoints = 4
 cache-ram = 2048
 
-; 3 subagents each, of 65,536 tokens.
+; 6 subagents, of 65,536 tokens.
 [qwen3.5-9b-defiant]
 parallel = 6
 ctx-size = 393216
@@ -220,10 +214,10 @@ ctx-checkpoints = 4
 cache-ram = 1024
 ```
 
-Both models keep a recurrent state beside the KV cache, and llm-server keeps snapshots of it for each slot in RAM
-as a conversation grows (112 MiB each for the main model): with 32 of them per slot and 8 GiB of prompt cache per
+Both models keep a recurrent state beside the KV cache, and llm-server keeps snapshots of it for each conversation in
+RAM as it grows (112 MiB each for the main model): with 32 of them per conversation and 8 GiB of prompt cache per
 model, the defaults no longer fit beside the models. swcode's prompts only grow at their end, so a few snapshots are
-enough. Both models were trained on 262,144 tokens, the most a slot should hold.
+enough. Both models were trained on 262,144 tokens, the most a conversation should hold.
 
 ### At boot
 
@@ -338,9 +332,8 @@ grep's Perl expressions, close to JavaScript's. Linux machines only, for now.
 
 ### On another computer
 
-Install it there as above, and add in Settings → Models that person's llm-servers, presets and share of the
-slots. To have it work
-for you while yours is off, see [A remote daemon](#a-remote-daemon).
+Install it there as above, and add in Settings → Models that person's llm-servers and presets. To have it work for
+you while yours is off, see [A remote daemon](#a-remote-daemon).
 
 ### Inside WSL instead
 
@@ -383,7 +376,6 @@ own come on top, for one command; the page shows those as set in the environment
 | `LLAMA_URL` | `http://127.0.0.1:8080` | Where llm-server answers, until `models.json` is saved once (then the Models tab). |
 | `LLAMA_MODEL` | none | The main agent's model. In router mode, without it: the first loaded one the subagents do not use. |
 | `LLAMA_SUBAGENT_MODEL` | `LLAMA_MODEL` | The model explore subagents ask for. |
-| `LLAMA_SLOT_SHARE` | `1/1` | This daemon's part of each model's slots, such as `2/2` for the second half, when people share an llm-server. |
 | `LLAMA_API_KEY` | none | llm-server's `--api-key`. |
 | `SWCODE_THINKING` | `full` | How much the main agent of a new session thinks: `full` (the model's default), `medium`, `low`, `off` (instruct). Each session changes it in its composer. |
 | `SWCODE_SUBAGENT_THINKING` | `low` | How much subagents think. |
@@ -504,7 +496,7 @@ own come on top, for one command; the page shows those as set in the environment
   a person allows its programs for the session; one with a substitution, a redirection or a background job always
   asks.
 - **Context**: before each request the daemon estimates how full the context is, from the last reply's token
-  count (llm-server's `usage`) plus what came since. Past 80% of a slot (`n_ctx` in `/props`), the model
+  count (llm-server's `usage`) plus what came since. Past 80% of the model's context (`n_ctx` in `/props`), the model
   summarizes the conversation and goes on from the summary; when llm-server still finds the prompt too long, it
   compacts and tries once more. The app shows where that happened, with the summary.
 - **Thinking**: what a reasoning model (gpt-oss, Qwen3) thinks before it answers streams into the conversation and
@@ -516,13 +508,14 @@ own come on top, for one command; the page shows those as set in the environment
   sends nothing. A template that adds an instruction for it at the start (DavidAU's do) makes the next step
   process the conversation again when a session changes it.
 - **Subagents**: the main agent's `agent` tool starts an explore subagent with the read-only tools (read, grep,
-  glob, websearch, webfetch) on `LLAMA_SUBAGENT_MODEL`. Several agent calls run one after another: on one GPU, subagents at the same
-  time share its speed, and more of them than slots wipe each other's prompt cache. A subagent's conversation
+  glob, websearch, webfetch) on `LLAMA_SUBAGENT_MODEL`. Several agent calls run one after another: on one GPU,
+  subagents at the same time share its speed, and more of them than the model answers at once wipe each other's
+  prompt cache. A subagent's conversation
   stays in memory; the session keeps a line for each of its calls, and its last answer is the call's result.
-- **Slots**: llm-server answers as many requests at once as a model has slots (`total_slots` in `/props`). The
-  daemon holds one slot per request, gives an agent back the slot it used last, where its conversation is still
-  cached, and makes a request wait when every slot of its model is busy. The side panel shows how busy they are,
-  and with `LLAMA_SLOT_SHARE`, which of them are this daemon's.
+- **Prompt cache**: llama.cpp says how many requests a model answers at once (`total_slots` in `/props`). The daemon
+  sends each agent's requests back to the same one of them (`id_slot`), where its conversation is still cached, and
+  makes a request wait while all are busy. A server that does not say gets the requests as they come, and queues and
+  caches them itself.
 - **Projects** are folders on the daemon's computer, kept in `projects.json` in the data folder. "New project" (on
   the home page, or Ctrl K) browses the daemon's folders: use the one shown, or name a new folder to make inside it.
   Every folder a session works in has a project; one with sessions stays, and removing one never touches its folder.
@@ -540,7 +533,7 @@ own come on top, for one command; the page shows those as set in the environment
 | `shared/` | The protocol's schemas (zod), which the app parses with and the daemon's Go types are generated from (`npm run protocol`, into `daemon/protocol/protocol_gen.go`); the command parser for permissions. |
 | `skills/` | The skills a new skills folder starts with: the user's coding style and Jadis. |
 | `cmd/swcode/` | The command line: `open`, `serve`, `daemon`, `stop`, `install`, `remote`. |
-| `daemon/` | The daemon, in Go: `agent/` (the loop), `llm/` (llm-server client, slot scheduler), `tools/`, `hosts/` (this computer, WSL, SSH), `web/` (search, pages, the reader), `skills/`, `claude/` (Claude Code's skills and plugins), `permissions/`, `sessions/`, `projects/`, `app/` (the API and the socket), `serve/`, `local/` and `remote/` (what the command line does). Tests beside the code; `fakellama/` plays a scripted llm-server, `testapp/` runs a daemon for them. |
+| `daemon/` | The daemon, in Go: `agent/` (the loop), `llm/` (llm-server client, prompt cache), `tools/`, `hosts/` (this computer, WSL, SSH), `web/` (search, pages, the reader), `skills/`, `claude/` (Claude Code's skills and plugins), `permissions/`, `sessions/`, `projects/`, `app/` (the API and the socket), `serve/`, `local/` and `remote/` (what the command line does). Tests beside the code; `fakellama/` plays a scripted llm-server, `testapp/` runs a daemon for them. |
 | `desktop/` | The Windows app: its window on WebView2 with the daemon inside, its icon and notifications, the daemon alone (`--daemon`); `watch/` follows a daemon's sessions for the notifications, `computers/` keeps the other computers and pairs with them. |
 | `web/src/` | The app, built from jlib's components (`@syware/jlib`, on Jadis) as SyWare's apps are, and swcode's own: `atoms/`, `molecules/`, `organisms/`, `templates/`, `pages/`, `services/`, `lib/`. |
 | `web/tests/`, `shared/tests/` | `npm test`. |

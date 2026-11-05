@@ -28,7 +28,6 @@ const garfield = {
   apiKey: 'secret',
   id: 'garfield',
   name: 'garfield',
-  slotShare: '2/2',
   url: 'https://garfield.example',
 };
 const settings: ModelSettings = {
@@ -73,6 +72,6 @@ describe('model settings', () => {
   it('know which preset uses a source, and say a source in a few words', () => {
     expect(presetUsing(settings, 'garfield')?.id).toBe('big');
     expect(presetUsing(withoutPreset(settings, 'big'), 'garfield')).toBeUndefined();
-    expect(sourceDescription(garfield)).toBe('https://garfield.example · share 2/2 · with a key');
+    expect(sourceDescription(garfield)).toBe('https://garfield.example · with a key');
   });
 });

@@ -17,9 +17,10 @@ import (
 
 func TestTheSettingsAreSavedToTheFileThenTheDaemonRestartsOnThem(t *testing.T) {
 	test := Start(t, Options{})
-	// The llm-server from before models.json stays in the file, which the models start from.
+	// The llm-server from before models.json stays in the file, which the models start from; a setting swcode no
+	// longer has goes.
 	settingsFile := filepath.Join(test.DataDir, "settings.env")
-	_ = os.WriteFile(settingsFile, []byte("LLAMA_URL=http://192.168.1.119:8080\nLLAMA_SLOT_SHARE=2/2\n"), 0o644)
+	_ = os.WriteFile(settingsFile, []byte("LLAMA_URL=http://192.168.1.119:8080\nLLAMA_MODEL=big\nLLAMA_SLOT_SHARE=2/2\n"), 0o644)
 	status, saved := test.Call("PUT", protocol.EndpointSettings, map[string]string{
 		"SWCODE_IMAGE_URL": "http://garfield.home:8090", "SWCODE_THINKING": "low",
 	})
@@ -29,10 +30,13 @@ func TestTheSettingsAreSavedToTheFileThenTheDaemonRestartsOnThem(t *testing.T) {
 	Expect(t, saved, `{"ok":true,"restart":"self"}`)
 	test.WaitForRestart()
 	file, _ := os.ReadFile(settingsFile)
-	for _, line := range []string{"SWCODE_THINKING=low\n", "LLAMA_URL=http://192.168.1.119:8080\n", "LLAMA_SLOT_SHARE=2/2\n"} {
+	for _, line := range []string{"SWCODE_THINKING=low\n", "LLAMA_URL=http://192.168.1.119:8080\n", "LLAMA_MODEL=big\n"} {
 		if !strings.Contains(string(file), line) {
 			t.Fatalf("file %s", file)
 		}
+	}
+	if strings.Contains(string(file), "LLAMA_SLOT_SHARE") {
+		t.Fatalf("file %s", file)
 	}
 	_, view := test.Call("GET", protocol.EndpointSettings, nil)
 	Expect(t, view, `{"environment":[],"restart":"self","values":{"SWCODE_IMAGE_URL":"http://garfield.home:8090","SWCODE_THINKING":"low"}}`)
