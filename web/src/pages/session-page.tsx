@@ -18,6 +18,7 @@ import { daemon, daemonBus } from '../services/daemon';
 import { daemonState, daemonStatusBus } from '../services/daemon-status';
 import { HOME_PATH, navigate } from '../services/navigation';
 import { presetChoices, presetsBus } from '../services/presets';
+import { markSeen } from '../services/seen-sessions';
 import { findSession, sessionListBus } from '../services/session-list';
 import { setSidePanelOpen, sidePanelOpen } from '../services/side-panel';
 import { BASE_STYLES } from '../styles/shared';
@@ -29,6 +30,7 @@ import type { PromptDraft } from '../types/composer.types';
 import type { ServerHandlers, ServerMessageMap } from '../types/page.types';
 
 const NOT_FOUND = 'This session is not on the daemon.';
+const VISIBILITY_CHANGE = 'visibilitychange';
 // On the host while the side panel is hidden.
 const PANEL_CLOSED = 'panel-closed';
 // The events that can change the plan above the composer: a new turn hides the last one, a plan call shows its own.
@@ -144,6 +146,7 @@ export class SessionPage extends ScElement {
     this.onBus(daemonBus, 'message', (message) => this.receive(message));
     this.onBus(daemonBus, 'online', (online) => this.reopen(online));
     this.onBus(sessionListBus, 'changed', () => this.renderSummary());
+    this.on(document, VISIBILITY_CHANGE, () => this.noteSeen());
     this.onBus(daemonStatusBus, 'changed', () => this.renderDaemon());
     this.onBus(presetsBus, 'changed', () => this.renderDaemon());
     conversation.events.register('answer', ({ decision, requestId }) =>
@@ -297,10 +300,20 @@ export class SessionPage extends ScElement {
     this._refs.plan.working.set((session?.status ?? 'idle') !== 'idle');
     this._refs.panel.status.set(session?.status ?? 'idle');
     this._refs.arcade.status.set(session?.status ?? 'idle');
+    this.noteSeen();
     document.title = session ? `${session.title} · swcode` : 'swcode';
   }
 
-  /** What the session's main model is, as its llama-server says now: whether it sees, how much context it holds. */
+  /** The session in view is seen as it is now, while the window shows it: its icon in the navigation empties. */
+  private noteSeen(): void {
+    const session = findSession(this._sessionId);
+    if (!session || document.visibilityState !== 'visible') {
+      return;
+    }
+    markSeen(session);
+  }
+
+  /** What the session's main model is, as its llm-server says now: whether it sees, how much context it holds. */
   private renderDaemon(): void {
     const state = daemonState();
     const preset = presetOf(presetChoices(), findSession(this._sessionId)?.preset);

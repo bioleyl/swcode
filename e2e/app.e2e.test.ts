@@ -50,6 +50,9 @@ const GAME_FLOW = {
   replies: [{ delayMs: GAME_TURN_MS, text: 'Done.' }],
 };
 
+// Long enough to see a session at work, and to leave it for another page before its turn ends.
+const LIGHT_TURN_MS = 3_000;
+
 // Far more than a window's height of paragraphs, and a turn of the wheel up through them.
 const PARAGRAPHS = 80;
 const LONG_REPLY = Array.from({ length: PARAGRAPHS }, (_, index) => `Paragraph ${index + 1}.`).join('\n\n');
@@ -119,6 +122,10 @@ const navItem = (page: Page, label: string) =>
 
 /** The settings' cog, at the foot of the navigation. */
 const settingsLink = (page: Page) => page.locator('sc-nav .settings');
+
+/** The style of the first shape of a navigation item's icon, by the start of its id: its light's fill, or none. */
+const navIconFill = (page: Page, id: string) =>
+  page.locator(`sc-nav .item[data-id^="${id}"] svg > *`).first().getAttribute('style');
 
 /** A topic's tab on the settings page, by its label; `selected` the one shown. */
 const topicTab = (page: Page, label: string, selected?: boolean) =>
@@ -490,7 +497,7 @@ describe('the composer', () => {
     await vim.getByText('Paused').waitFor();
   });
 
-  it('turns the spinners while a turn runs, in the side nav and the session’s header', async () => {
+  it('turns the header’s spinner while a turn runs, the side nav filling the session’s bubble instead', async () => {
     const rig = await start(WORKING_FLOW);
     const page = await rig.browser.newPage({ viewport: LAPTOP });
     await page.goto(rig.link);
@@ -500,9 +507,10 @@ describe('the composer', () => {
     const before = JSON.parse(String(await page.evaluate(TURNING_SHAPES)));
     await page.waitForTimeout(TURN_SAMPLE_MS);
     const after = JSON.parse(String(await page.evaluate(TURNING_SHAPES)));
-    // One in the side nav, one in the header's status.
-    expect(before.length).toBeGreaterThanOrEqual(2);
+    // The header's status; the side nav lights its icon, without a spinner.
+    expect(before.length).toBeGreaterThanOrEqual(1);
     expect(after).not.toEqual(before);
+    expect(await navIconFill(page, 'session:')).toContain('--jl-accent');
   });
 
   it('keeps them there on a phone, the model and the context count left out', async () => {
@@ -965,6 +973,29 @@ describe('the side panel', () => {
     await page.getByRole('button', { name: 'Show the side panel' }).click();
     await settle(page);
     expect(await panel.isVisible()).toBe(true);
+  });
+});
+
+describe('the navigation', () => {
+  it('fills a session’s bubble and its project’s icon while it works, then done until seen, and empties them', async () => {
+    const rig = await start({ replies: [{ delayMs: LIGHT_TURN_MS, text: 'Done.' }] });
+    const page = await rig.browser.newPage({ viewport: DESKTOP });
+    await page.goto(rig.link);
+    await page.locator('home-page textarea').fill('Hi');
+    await page.locator('home-page textarea').press('Enter');
+    await expect.poll(() => navIconFill(page, 'session:')).toContain('--jl-accent');
+    expect(await navIconFill(page, 'project:')).toContain('--jl-accent');
+
+    await settingsLink(page).click();
+    await settle(page);
+    await expect.poll(() => navIconFill(page, 'session:'), { timeout: LIGHT_TURN_MS * 2 }).toContain('--jl-ok');
+    expect(await navIconFill(page, 'project:')).toContain('--jl-ok');
+
+    await page.locator('sc-nav .item[data-id^="session:"]').click();
+    await settle(page);
+    await page.getByText('Done.').waitFor();
+    await expect.poll(() => navIconFill(page, 'session:')).toBeNull();
+    expect(await navIconFill(page, 'project:')).toBeNull();
   });
 });
 

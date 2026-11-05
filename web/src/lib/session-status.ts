@@ -13,7 +13,7 @@ export const SESSION_STATUS_LOOKS: Readonly<Record<SessionStatus, StatusLook>> =
   working: { hint: 'Its turn runs.', icon: 'loader', label: 'Working', tone: 'accent' },
 };
 
-/** The icon of a session in the navigation, by its state. */
+/** The icon of a session in the search palette, by its state; the navigation lights its bubble instead. */
 export const SESSION_STATUS_ICONS: Readonly<Record<SessionStatus, string>> = {
   idle: 'message',
   waiting: 'circle-alert',

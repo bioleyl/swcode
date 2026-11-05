@@ -6,7 +6,8 @@ import { ScBrand } from '../atoms/sc-brand';
 import { ScElement } from '../base/sc-element';
 import { HOST_ICONS } from '../lib/hosts';
 import { groupByProject } from '../lib/project-groups';
-import { SESSION_STATUS_ICONS, waitingCount } from '../lib/session-status';
+import { LIT_ICONS, litIcon, projectLight, SESSION_ICON, sessionLight } from '../lib/session-lights';
+import { waitingCount } from '../lib/session-status';
 import { ScComputerSwitch } from '../molecules/sc-computer-switch';
 import {
   HOME_PATH,
@@ -33,6 +34,7 @@ registerIcons({
   'panel-left-close': PanelLeftClose,
   'panel-left-open': PanelLeftOpen,
   server: Server,
+  ...LIT_ICONS,
 });
 
 /** The navigation's own item; a project's and a session's ids carry theirs (`project:…`, `session:…`). */
@@ -74,26 +76,37 @@ const keepFold = (folded: boolean): void => {
   }
 };
 
-const sessionItem = (session: SessionSummary): SideNavItem => ({
+/** A session, its bubble filled while it works, waits for the person, or is done and not seen yet. */
+const sessionItem = (session: SessionSummary, seen: Readonly<Record<string, string>>): SideNavItem => ({
   href: hrefOf(sessionPath(session.id)),
-  icon: SESSION_STATUS_ICONS[session.status],
+  icon: litIcon(SESSION_ICON, sessionLight(session, seen[session.id])),
   id: sessionNavId(session.id),
   label: session.title,
 });
 
-/** A project and its sessions, the count of those that need the person beside its name. */
-const projectItem = (group: ProjectGroup): SideNavItem => ({
+/**
+ * A project and its sessions, its icon filled as the one of them that most needs the person, the count of those that
+ * wait for them beside its name.
+ */
+const projectItem = (group: ProjectGroup, seen: Readonly<Record<string, string>>): SideNavItem => ({
   badge: waitingCount(group.sessions) || undefined,
-  children: group.sessions.map(sessionItem),
+  children: group.sessions.map((session) => sessionItem(session, seen)),
   ...(group.projectId === undefined ? {} : { href: hrefOf(projectPath(group.projectId)) }),
-  icon: HOST_ICONS[group.host.kind],
+  icon: litIcon(
+    HOST_ICONS[group.host.kind],
+    projectLight(group.sessions.map((session) => sessionLight(session, seen[session.id])))
+  ),
   id: projectNavId(group.projectId ?? group.path),
   label: group.name,
 });
 
-const sectionsOf = (projects: readonly Project[], sessions: readonly SessionSummary[]): SideNavSection[] => [
+const sectionsOf = (
+  projects: readonly Project[],
+  sessions: readonly SessionSummary[],
+  seen: Readonly<Record<string, string>>
+): SideNavSection[] => [
   { items: [{ href: hrefOf(NEW_SESSION_PATH), icon: 'plus', id: NAV_ID.newSession, label: 'New session' }] },
-  { items: groupByProject(projects, sessions).map(projectItem), label: 'Projects' },
+  { items: groupByProject(projects, sessions).map((group) => projectItem(group, seen)), label: 'Projects' },
 ];
 
 /**
@@ -110,6 +123,8 @@ export class ScNav extends ScElement {
 
   readonly projects = this.useChange<Project[]>([], () => this.renderSections());
   readonly sessions = this.useChange<SessionSummary[]>([], () => this.renderSections());
+  /** When the person last saw each session, by its last activity then. */
+  readonly seen = this.useChange<Record<string, string>>({}, () => this.renderSections());
   /** The item of the page shown: `new`, `settings`, `project:…`, `session:…`. */
   readonly active = this.useChange('', (id) => this._refs.nav.value.set(id));
   /** The daemon's state: the computer it runs on, in a browser. */
@@ -211,7 +226,7 @@ export class ScNav extends ScElement {
   }
 
   private renderSections(): void {
-    this._refs.nav.sections.set(sectionsOf(this.projects.get(), this.sessions.get()));
+    this._refs.nav.sections.set(sectionsOf(this.projects.get(), this.sessions.get(), this.seen.get()));
   }
 
   /** The other theme, and the button that offers it back. */

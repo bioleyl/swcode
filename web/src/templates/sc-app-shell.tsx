@@ -35,6 +35,7 @@ import {
   settingsPath,
 } from '../services/navigation';
 import { allProjects, askForProject, findProject, projectListBus } from '../services/project-list';
+import { seenBus, seenSessions } from '../services/seen-sessions';
 import { allSessions, findSession, sessionListBus } from '../services/session-list';
 import { loadStartup } from '../services/startup';
 import { BASE_STYLES } from '../styles/shared';
@@ -147,10 +148,12 @@ export class ScAppShell extends ScElement {
     this.onBus(projectListBus, 'remove', (projectId) => void this.removeProject(projectId));
     this.onBus(projectListBus, 'changed', () => nav.projects.set([...allProjects()]));
     this.onBus(sessionListBus, 'changed', () => nav.sessions.set([...allSessions()]));
+    this.onBus(seenBus, 'changed', () => nav.seen.set({ ...seenSessions() }));
     this.onBus(sessionListBus, 'created', (session) => navigate(sessionPath(session.id)));
     this.onBus(daemonStatusBus, 'changed', (state) => this.renderDaemon(state));
     nav.projects.set([...allProjects()]);
     nav.sessions.set([...allSessions()]);
+    nav.seen.set({ ...seenSessions() });
     this.renderDaemon(daemonState());
   }
 

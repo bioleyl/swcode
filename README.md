@@ -399,12 +399,13 @@ own come on top, for one command; the page shows those as set in the environment
 ## How it works
 
 - **The app** is built from jlib's components and works as SyWare's apps do: the navigation down the side (where
-  swcode works, a new session, the projects with their sessions, what needs you counted beside each, and at its foot
-  the fold button, Chat or Code, the settings' cog and the theme), folding into a rail; on a phone a top bar, the
-  navigation in a drawer and tabs (New, Sessions, Settings). A project has its page, with its sessions; Sessions
-  lists them all, what needs you first. Beside a session, the side panel shows its agents, the commands left running,
-  the llama-servers and whether they answer, and how full the context is. Ctrl K (⌘K) searches the sessions,
-  projects, settings and actions. A problem of the daemon or of llama-server shows over every page.
+  swcode works, a new session, the projects with their sessions, each icon filled while a session works (blue),
+  waits for you or is done and not seen yet, and at its foot the fold button, Chat or Code, the settings' cog and the
+  theme), folding into a rail; on a phone a top bar, the navigation in a drawer and tabs
+  (New, Sessions, Settings). A project has its page, with its sessions; Sessions lists them all, what needs you
+  first. Beside a session, the side panel shows its agents, the commands left running, the llm-servers and whether
+  they answer, and how full the context is. Ctrl K (⌘K) searches the sessions, projects, settings and actions. A
+  problem of the daemon or of llm-server shows over every page.
 - **Sessions** are kept as two files in the data folder: `<id>.json` (title, workspace, permission mode) and
   `<id>.jsonl`, one event a line. The model's messages are rebuilt from the events at every step, appended only,
   and the system prompt never changes, so llama-server's prompt cache (`cache_prompt`) is reused from step to step.
