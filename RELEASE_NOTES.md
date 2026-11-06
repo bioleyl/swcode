@@ -1,18 +1,22 @@
-# swcode 0.2.0
+# swcode 0.3.0
 
 Released 2026-11-06.
 
-swcode 0.2 adds a full Chat mode alongside Code mode, broader model-server support, and better ways to run and steer agents.
+swcode 0.3 reads skills where other coding agents do, lets each project choose its skills, and adds slash commands to the composer.
 
 ## Highlights
 
-- **Chat mode**: talk to a model, search the web and generate images without a project.
-- **OpenAI Responses API**: use OpenAI alongside compatible llm-servers.
-- **Background subagents**: configure their model, context and concurrency in presets.
-- **Agent steering**: use `/peek` to ask a question beside a running session.
-- **Search**: press Ctrl/Cmd+K to search sessions, projects, settings and what sessions say.
-- **Remote projects**: configure SSH hosts and work on projects over SSH.
-- **Clearer status**: see session, project and llm-server state at a glance.
-- **Phone pairing**: pair from Settings.
+- **Skills in `.agents`**: swcode reads your `~/.agents/skills` and the project's `.agents/skills`, on the machine the project is on, as other agents that share the convention do.
+- **Skills per project**: a project's page lists its skills, each with a switch for its sessions.
+- **Slash commands**: type `/` in the composer for `/new`, `/compact`, `/peek`, `/help` and your skills. `/<skill>` runs a skill with your message.
+- **Projects**: delete sessions from a project's page, set what its new sessions start with, and start one from the `+` beside the project in the navigation.
 
-Install or update with the command in the [README](README.md), or download the release for your platform. Checksums are published with the release.
+## Upgrading
+
+swcode no longer keeps skills of its own, and no longer reads Claude Code's skills, commands or plugins. Skills in `~/.swcode/skills` are not read anymore: copy the ones you want to keep to `~/.agents/skills`, on each machine your projects are on (for a project in WSL, in WSL):
+
+```bash
+mkdir -p ~/.agents/skills && cp -Rn ~/.swcode/skills/* ~/.agents/skills/
+```
+
+Install or update with the command in the [README](https://github.com/bioleyl/swcode#install), or download the release for your platform. Checksums are published with the release.
