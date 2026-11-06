@@ -169,6 +169,20 @@ func (s *Service) Remove(projectID string) string {
 	return ""
 }
 
+// SetDefaults sets what the project's new sessions start with: nil for the app's own defaults again.
+func (s *Service) SetDefaults(projectID string, defaults *protocol.SessionDefaults) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	index := slices.IndexFunc(s.projects, func(project protocol.Project) bool { return project.ID == projectID })
+	if index < 0 {
+		return unknownProject
+	}
+	projects := append([]protocol.Project{}, s.projects...)
+	projects[index].Defaults = defaults
+	s.change(projects)
+	return ""
+}
+
 // Ensure is the project of a folder on a host, made for it when there is none yet.
 func (s *Service) Ensure(folder string, host protocol.HostRef) protocol.Project {
 	s.mu.Lock()

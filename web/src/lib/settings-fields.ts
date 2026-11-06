@@ -1,5 +1,5 @@
 /** biome-ignore-all lint/style/useNamingConvention: the settings are environment variable names */
-import { THINKING_MODES } from '../../../shared/protocol/session.schema';
+import { THINKING_MODES } from '../../../shared/protocol/choices.schema';
 import { THINKING_LABELS } from './thinking-labels';
 
 import type { SettingName } from '../../../shared/protocol/settings.schema';

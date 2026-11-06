@@ -1,5 +1,5 @@
 import { css } from '@jadis/core';
-import { confirmDialog, JlAlert, JlBadge, JlButton, JlIcon } from '@syware/jlib';
+import { JlAlert, JlBadge, JlButton, JlIcon } from '@syware/jlib';
 
 import { ScElement } from '../base/sc-element';
 import { agentsOf } from '../lib/agents';
@@ -21,18 +21,14 @@ import { daemonState, daemonStatusBus } from '../services/daemon-status';
 import { navigate, newPathOf } from '../services/navigation';
 import { presetChoices, presetsBus } from '../services/presets';
 import { markSeen } from '../services/seen-sessions';
+import { deleteSession } from '../services/session-delete';
 import { findSession, sessionListBus } from '../services/session-list';
 import { setSidePanelOpen, sidePanelOpen } from '../services/side-panel';
 import { BASE_STYLES } from '../styles/shared';
 import styles from './session-page.css?inline';
 
 import type { ClientMessage, ServerMessage } from '../../../shared/protocol/messages.schema';
-import type {
-  SessionEvent,
-  SessionEventKind,
-  SessionKind,
-  SessionSummary,
-} from '../../../shared/protocol/session.schema';
+import type { SessionEvent, SessionEventKind, SessionSummary } from '../../../shared/protocol/session.schema';
 import type { PromptDraft } from '../types/composer.types';
 import type { ServerHandlers, ServerMessageMap } from '../types/page.types';
 
@@ -48,12 +44,6 @@ const SUBAGENT_EVENTS: ReadonlySet<SessionEventKind> = new Set([
   'subagentActivity',
   'subagentFinished',
 ]);
-
-/** What deleting a session takes, said in the dialog that asks first: a coding session leaves its project behind. */
-const DELETE_CONSEQUENCES: Readonly<Record<SessionKind, string>> = {
-  chat: 'Its conversation and its pictures go for good.',
-  code: 'Its conversation goes for good. Its project and files stay.',
-};
 
 /**
  * The prompt tokens of the last reply, plus its own: how much of the context the conversation fills. None after a
@@ -321,18 +311,13 @@ export class SessionPage extends ScElement {
   /** Deletes the session once the person confirms, its conversation for good; a new one of its kind shows then. */
   private async deleteSession(): Promise<void> {
     const session = findSession(this._sessionId);
-    const kind = session?.kind ?? 'code';
-    const confirmed = await confirmDialog({
-      confirmLabel: 'Delete',
-      heading: `Delete “${session?.title ?? ''}”?`,
-      text: DELETE_CONSEQUENCES[kind],
-      tone: 'danger',
-    });
-    if (!confirmed) {
+    if (!session) {
       return;
     }
-    daemon.send({ sessionId: this._sessionId, type: 'deleteSession' });
-    navigate(newPathOf(kind));
+    if (!(await deleteSession(session))) {
+      return;
+    }
+    navigate(newPathOf(session.kind));
   }
 
   /** What the daemon refused, over the composer: nothing once a new message goes. */

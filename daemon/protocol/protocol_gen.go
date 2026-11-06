@@ -17,6 +17,10 @@ var (
 	_ = utf8.RuneCountInString
 )
 
+var PermissionModes = []PermissionMode{PermissionModeAuto, PermissionModeAcceptEdits, PermissionModeAsk}
+
+var ThinkingModes = []ThinkingMode{ThinkingModeFull, ThinkingModeMedium, ThinkingModeLow, ThinkingModeOff}
+
 const MaxPictures = 4
 
 var PictureTypes = []PictureType{PictureTypeImageJpeg, PictureTypeImagePng}
@@ -31,8 +35,6 @@ var DiffLineKinds = []DiffLineKind{DiffLineKindAdd, DiffLineKindRemove, DiffLine
 
 var PermissionDecisions = []PermissionDecision{PermissionDecisionAllowOnce, PermissionDecisionAllowSession, PermissionDecisionDeny}
 
-var PermissionModes = []PermissionMode{PermissionModeAuto, PermissionModeAcceptEdits, PermissionModeAsk}
-
 var PlanStepStatuses = []PlanStepStatus{PlanStepStatusPending, PlanStepStatusInProgress, PlanStepStatusCompleted}
 
 var ReminderReasons = []ReminderReason{ReminderReasonPlan, ReminderReasonStepLimit}
@@ -40,8 +42,6 @@ var ReminderReasons = []ReminderReason{ReminderReasonPlan, ReminderReasonStepLim
 var SessionKinds = []SessionKind{SessionKindCode, SessionKindChat}
 
 var SessionStatuses = []SessionStatus{SessionStatusIdle, SessionStatusWorking, SessionStatusWaiting}
-
-var ThinkingModes = []ThinkingMode{ThinkingModeFull, ThinkingModeMedium, ThinkingModeLow, ThinkingModeOff}
 
 var ToolNames = []ToolName{ToolNameRead, ToolNameWrite, ToolNameEdit, ToolNameBash, ToolNameGrep, ToolNameGlob, ToolNameAgent, ToolNamePlan, ToolNameQuestion, ToolNameWebsearch, ToolNameWebfetch, ToolNameImage, ToolNameDraw, ToolNameOutput, ToolNameKill, ToolNameSkill, ToolNameSaveskill, ToolNameScreenshot}
 
@@ -93,6 +93,41 @@ var pattern2 = regexp.MustCompile("^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
 var pattern3 = regexp.MustCompile("^[^/\\\\]+$")
 
+type PermissionMode string
+
+const (
+	PermissionModeAuto        PermissionMode = "auto"
+	PermissionModeAcceptEdits PermissionMode = "acceptEdits"
+	PermissionModeAsk         PermissionMode = "ask"
+)
+
+// Valid tells whether v is one of the PermissionMode values.
+func (v PermissionMode) Valid() bool {
+	switch v {
+	case PermissionModeAuto, PermissionModeAcceptEdits, PermissionModeAsk:
+		return true
+	}
+	return false
+}
+
+type ThinkingMode string
+
+const (
+	ThinkingModeFull   ThinkingMode = "full"
+	ThinkingModeMedium ThinkingMode = "medium"
+	ThinkingModeLow    ThinkingMode = "low"
+	ThinkingModeOff    ThinkingMode = "off"
+)
+
+// Valid tells whether v is one of the ThinkingMode values.
+func (v ThinkingMode) Valid() bool {
+	switch v {
+	case ThinkingModeFull, ThinkingModeMedium, ThinkingModeLow, ThinkingModeOff:
+		return true
+	}
+	return false
+}
+
 type PictureType string
 
 const (
@@ -126,23 +161,6 @@ func (v PermissionDecision) Valid() bool {
 	return false
 }
 
-type PermissionMode string
-
-const (
-	PermissionModeAuto        PermissionMode = "auto"
-	PermissionModeAcceptEdits PermissionMode = "acceptEdits"
-	PermissionModeAsk         PermissionMode = "ask"
-)
-
-// Valid tells whether v is one of the PermissionMode values.
-func (v PermissionMode) Valid() bool {
-	switch v {
-	case PermissionModeAuto, PermissionModeAcceptEdits, PermissionModeAsk:
-		return true
-	}
-	return false
-}
-
 type SessionKind string
 
 const (
@@ -171,24 +189,6 @@ const (
 func (v SessionStatus) Valid() bool {
 	switch v {
 	case SessionStatusIdle, SessionStatusWorking, SessionStatusWaiting:
-		return true
-	}
-	return false
-}
-
-type ThinkingMode string
-
-const (
-	ThinkingModeFull   ThinkingMode = "full"
-	ThinkingModeMedium ThinkingMode = "medium"
-	ThinkingModeLow    ThinkingMode = "low"
-	ThinkingModeOff    ThinkingMode = "off"
-)
-
-// Valid tells whether v is one of the ThinkingMode values.
-func (v ThinkingMode) Valid() bool {
-	switch v {
-	case ThinkingModeFull, ThinkingModeMedium, ThinkingModeLow, ThinkingModeOff:
 		return true
 	}
 	return false
@@ -365,6 +365,34 @@ func (v Restart) Valid() bool {
 		return true
 	}
 	return false
+}
+
+type SessionDefaults struct {
+	Concise  bool           `json:"concise"`
+	Mode     PermissionMode `json:"mode"`
+	Preset   string         `json:"preset"`
+	Thinking ThinkingMode   `json:"thinking"`
+}
+
+func (v *SessionDefaults) UnmarshalJSON(data []byte) error {
+	type plain SessionDefaults
+	p := plain{}
+	if err := json.Unmarshal(data, &p); err != nil {
+		return err
+	}
+	*v = SessionDefaults(p)
+	return v.Normalize()
+}
+
+// Normalize trims and checks what the app sent, as its schema does.
+func (v *SessionDefaults) Normalize() error {
+	if !v.Mode.Valid() {
+		return fmt.Errorf("%s: unknown value %q", "mode", v.Mode)
+	}
+	if !v.Thinking.Valid() {
+		return fmt.Errorf("%s: unknown value %q", "thinking", v.Thinking)
+	}
+	return nil
 }
 
 type PictureRef struct {
@@ -591,11 +619,12 @@ func (v *HostRefSSH) Normalize() error {
 }
 
 type Project struct {
-	CreatedAt string  `json:"createdAt"`
-	Host      HostRef `json:"host"`
-	ID        string  `json:"id"`
-	Name      string  `json:"name"`
-	Path      string  `json:"path"`
+	CreatedAt string           `json:"createdAt"`
+	Defaults  *SessionDefaults `json:"defaults,omitempty"`
+	Host      HostRef          `json:"host"`
+	ID        string           `json:"id"`
+	Name      string           `json:"name"`
+	Path      string           `json:"path"`
 }
 
 func (v *Project) UnmarshalJSON(data []byte) error {
@@ -1878,6 +1907,8 @@ func (ClientMessageCreateProject) isClientMessage() {}
 
 func (ClientMessageRemoveProject) isClientMessage() {}
 
+func (ClientMessageSetProjectDefaults) isClientMessage() {}
+
 func (ClientMessageListHosts) isClientMessage() {}
 
 func (ClientMessageListFolders) isClientMessage() {}
@@ -2017,6 +2048,12 @@ func (u *ClientMessage) UnmarshalJSON(data []byte) error {
 			return err
 		}
 		u.Value = value
+	case "\"setProjectDefaults\"":
+		var value ClientMessageSetProjectDefaults
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
 	case "\"listHosts\"":
 		var value ClientMessageListHosts
 		if err := json.Unmarshal(data, &value); err != nil {
@@ -2057,6 +2094,7 @@ type ClientMessageMapper[R any] interface {
 	SetConcise(ClientMessageSetConcise) R
 	CreateProject(ClientMessageCreateProject) R
 	RemoveProject(ClientMessageRemoveProject) R
+	SetProjectDefaults(ClientMessageSetProjectDefaults) R
 	ListHosts(ClientMessageListHosts) R
 	ListFolders(ClientMessageListFolders) R
 }
@@ -2104,6 +2142,8 @@ func MapClientMessage[R any](u ClientMessage, m ClientMessageMapper[R]) R {
 		return m.CreateProject(value)
 	case ClientMessageRemoveProject:
 		return m.RemoveProject(value)
+	case ClientMessageSetProjectDefaults:
+		return m.SetProjectDefaults(value)
 	case ClientMessageListHosts:
 		return m.ListHosts(value)
 	case ClientMessageListFolders:
@@ -2636,6 +2676,20 @@ func (v ClientMessageRemoveProject) MarshalJSON() ([]byte, error) {
 		Key string `json:"type"`
 		plain
 	}{"removeProject", p})
+}
+
+type ClientMessageSetProjectDefaults struct {
+	Defaults  *SessionDefaults `json:"defaults,omitempty"`
+	ProjectID string           `json:"projectId"`
+}
+
+func (v ClientMessageSetProjectDefaults) MarshalJSON() ([]byte, error) {
+	type plain ClientMessageSetProjectDefaults
+	p := plain(v)
+	return json.Marshal(struct {
+		Key string `json:"type"`
+		plain
+	}{"setProjectDefaults", p})
 }
 
 type ClientMessageListHosts struct {

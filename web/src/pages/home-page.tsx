@@ -4,7 +4,7 @@ import { JlAlert, JlButton, JlField, JlPage, JlSelect } from '@syware/jlib';
 import { hostLabel } from '../../../shared/hosts/host-key';
 import { ScElement } from '../base/sc-element';
 import { folderName } from '../lib/format';
-import { CONCISE_AT_FIRST } from '../lib/new-session';
+import { appDefaults, CONCISE_AT_FIRST, startingChoices } from '../lib/new-session';
 import { presetOf, presetStatusOf } from '../lib/presets';
 import { preferredProject } from '../lib/project-groups';
 import { sessionsOf } from '../lib/session-kinds';
@@ -18,8 +18,8 @@ import { BASE_STYLES } from '../styles/shared';
 import styles from './home-page.css?inline';
 
 import type { SelectOption } from '@syware/jlib';
+import type { SessionDefaults } from '../../../shared/protocol/choices.schema';
 import type { Project } from '../../../shared/protocol/project.schema';
-import type { PermissionMode, ThinkingMode } from '../../../shared/protocol/session.schema';
 import type { PromptDraft } from '../types/composer.types';
 
 const APP_NAME = 'swcode';
@@ -37,11 +37,8 @@ const projectOption = (project: Project): SelectOption => ({ label: projectLabel
 export class HomePage extends ScElement {
   static readonly selector = 'home-page';
 
-  private _mode: PermissionMode = 'auto';
-  // Picked here; otherwise the daemon's default for new sessions.
-  private _thinking: ThinkingMode | undefined;
-  private _preset: string | undefined;
-  private _concise = CONCISE_AT_FIRST;
+  // What the person picked here, for this session alone: the project's defaults, then the app's, give the rest.
+  private _picks: Partial<SessionDefaults> = {};
   // The project in the address (/new/<id>), then the one the person picks.
   private _chosen: string | undefined;
 
@@ -85,22 +82,14 @@ export class HomePage extends ScElement {
   onConnect(): void {
     const composer = this._refs.composer;
     composer.events.register('send', (draft) => this.start(draft));
-    composer.events.register('mode', (mode) => {
-      this._mode = mode;
-    });
-    composer.events.register('thinking', (thinking) => {
-      this._thinking = thinking;
-    });
-    composer.events.register('concise', (concise) => {
-      this._concise = concise;
-    });
-    composer.events.register('preset', (preset) => {
-      this._preset = preset;
-      this.renderProjects();
-    });
+    composer.events.register('mode', (mode) => this.pick({ mode }));
+    composer.events.register('thinking', (thinking) => this.pick({ thinking }));
+    composer.events.register('concise', (concise) => this.pick({ concise }));
+    composer.events.register('preset', (preset) => this.pick({ preset }));
     this._refs.newProject.events.register('press', () => askForProject());
     this._refs.project.events.register('change', (value) => {
       this._chosen = value;
+      this.renderChoices();
     });
     this.onBus(daemonStatusBus, 'changed', () => this.renderProjects());
     this.onBus(projectListBus, 'changed', () => this.renderProjects());
@@ -120,16 +109,29 @@ export class HomePage extends ScElement {
   private start(draft: PromptDraft): void {
     this.showProblem('');
     const project = findProject(this._refs.project.value.get());
+    const choices = this.choicesFor(project);
     daemon.send({
-      concise: this._concise,
-      mode: this._mode,
+      concise: choices.concise,
+      mode: choices.mode,
       prompt: draft.text,
+      thinking: choices.thinking,
       type: 'createSession',
       ...(draft.pictures.length === 0 ? {} : { pictures: draft.pictures }),
-      ...(this._thinking === undefined ? {} : { thinking: this._thinking }),
-      ...(this._preset === undefined ? {} : { preset: this._preset }),
+      ...(choices.preset === '' ? {} : { preset: choices.preset }),
       ...(project === undefined ? {} : { host: project.host, workspace: project.path }),
     });
+  }
+
+  private pick(choice: Partial<SessionDefaults>): void {
+    this._picks = { ...this._picks, ...choice };
+    this.renderChoices();
+  }
+
+  /** What the session starts with in a project: the person's picks, its defaults, the app's. */
+  private choicesFor(project: Project | undefined): SessionDefaults {
+    const state = daemonState();
+    const app = appDefaults(state.kind === 'ready' ? state.status.thinking : undefined);
+    return startingChoices(app, project?.defaults, this._picks);
   }
 
   private renderProjects(): void {
@@ -141,11 +143,23 @@ export class HomePage extends ScElement {
       projects.length === 0 ? [{ label: daemonFolder, value: DAEMON_FOLDER }] : projects.map(projectOption)
     );
     this._refs.project.value.set(selected?.id ?? DAEMON_FOLDER);
-    const preset = presetOf(presetChoices(), this._preset);
-    const main = presetStatusOf(state.kind === 'ready' ? state.status : undefined, preset);
-    this._refs.composer.seesPictures.set(main?.vision ?? false);
-    const thinking = state.kind === 'ready' ? state.status.thinking : undefined;
-    this._refs.composer.thinking.set(this._thinking ?? thinking ?? 'full');
+    this.renderChoices();
+  }
+
+  /** The composer's choices, as the session would start with them in the project chosen. */
+  private renderChoices(): void {
+    const state = daemonState();
+    const choices = this.choicesFor(findProject(this._refs.project.value.get()));
+    const main = presetStatusOf(
+      state.kind === 'ready' ? state.status : undefined,
+      presetOf(presetChoices(), choices.preset)
+    );
+    const composer = this._refs.composer;
+    composer.seesPictures.set(main?.vision ?? false);
+    composer.preset.set(choices.preset);
+    composer.mode.set(choices.mode);
+    composer.thinking.set(choices.thinking);
+    composer.concise.set(choices.concise);
   }
 
   /** What the daemon refused, under the message: nothing once a new one goes. */

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { SessionDefaultsSchema } from './choices.schema.js';
 import { PresetChoicesSchema, PresetStatusSchema, SourceStatusSchema } from './models.schema.js';
 import { MAX_PICTURES, PictureUploadSchema } from './picture.schema.js';
 import { HostOptionSchema, HostRefSchema, NewFolderNameSchema, ProjectSchema } from './project.schema.js';
@@ -104,6 +105,12 @@ export const ClientMessageSchema = z.discriminatedUnion('type', [
     type: z.literal('createProject'),
   }),
   z.object({ projectId: z.string(), type: z.literal('removeProject') }),
+  // What the project's new sessions start with: the app's own defaults again when left out.
+  z.object({
+    defaults: SessionDefaultsSchema.optional(),
+    projectId: z.string(),
+    type: z.literal('setProjectDefaults'),
+  }),
   // Where projects can be: this computer, its WSL distributions, the SSH endpoints.
   z.object({ type: z.literal('listHosts') }),
   // The subfolders of a folder, to pick a project's; without a path, of the folder projects usually go in.

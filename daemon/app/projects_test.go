@@ -147,3 +147,26 @@ func TestAProjectOnAnotherHostRunsItsSessionsToolsThere(t *testing.T) {
 		t.Fatal("the scratch folder is not the other host's")
 	}
 }
+
+func TestAProjectKeepsWhatItsNewSessionsStartWithUntilItGoesBackToTheAppsDefaults(t *testing.T) {
+	first := Start(t, Options{})
+	project := first.App.Projects.Ensure(first.Workspace, protocol.LocalHost())
+	defaults := &protocol.SessionDefaults{Concise: false, Mode: protocol.PermissionModeAsk, Preset: "fast", Thinking: protocol.ThinkingModeLow}
+	if problem := first.App.Projects.SetDefaults(project.ID, defaults); problem != "" {
+		t.Fatal(problem)
+	}
+	if problem := first.App.Projects.SetDefaults("nope", defaults); problem == "" {
+		t.Fatal("an unknown project took defaults")
+	}
+	first.Stop()
+
+	again := Start(t, Options{DataDir: first.DataDir})
+	kept := again.App.Projects.List()
+	if len(kept) != 1 || !reflect.DeepEqual(kept[0].Defaults, defaults) {
+		t.Fatalf("got %+v", kept)
+	}
+	again.App.Projects.SetDefaults(project.ID, nil)
+	if got := again.App.Projects.List()[0].Defaults; got != nil {
+		t.Fatalf("still %+v", got)
+	}
+}

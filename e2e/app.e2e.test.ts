@@ -406,6 +406,71 @@ describe('projects', () => {
   });
 });
 
+describe('a project’s page', () => {
+  async function openProject(rig: E2eRig): Promise<Page> {
+    const page = await rig.browser.newPage({ viewport: DESKTOP });
+    await page.goto(rig.link);
+    await page.locator('home-page textarea').fill('Hi');
+    await page.locator('home-page textarea').press('Enter');
+    await page.getByText('Hello there.').waitFor();
+    await navItem(page, basename(rig.workspace)).click();
+    await settle(page);
+    await page.locator('project-page sc-session-row').getByText('Hi', { exact: true }).first().waitFor();
+    return page;
+  }
+
+  it('deletes a session from its row, once confirmed', async () => {
+    const rig = await start({ replies: [{ text: 'Hello there.' }] });
+    const page = await openProject(rig);
+
+    await page.locator('project-page sc-session-row').getByRole('button', { name: 'Delete this session' }).click();
+    await settle(page);
+    await page.locator('jl-confirm').getByRole('button', { name: 'Delete' }).click();
+    await settle(page);
+    await page.locator('project-page jl-empty').getByText('No sessions yet').waitFor();
+    expect(await page.locator('project-page sc-session-row').count()).toBe(0);
+    expect(new URL(page.url()).hash).toContain('/projects/');
+  });
+
+  it('keeps what its new sessions start with, until it goes back to the app’s defaults', async () => {
+    const rig = await start({ replies: [{ text: 'Hello there.' }, { text: 'Going.' }] });
+    const page = await openProject(rig);
+    const card = page.locator('project-page .defaults');
+    const reset = page.locator('project-page .reset');
+    await card.getByText('until you pick otherwise here', { exact: false }).waitFor();
+    expect(await reset.isHidden()).toBe(true);
+
+    await card.locator('sc-session-choices .thinking').getByText('Low', { exact: true }).click();
+    await settle(page);
+    await card.locator('sc-session-choices jl-switch').click();
+    await settle(page);
+    await card.getByText('Set for this project', { exact: false }).waitFor();
+    expect(await reset.isVisible()).toBe(true);
+
+    await page.locator('project-page .new-session').click();
+    await settle(page);
+    const summary = page.locator('home-page sc-composer .summary');
+    await expect.poll(() => summary.textContent()).toContain('Think briefly');
+    expect(await summary.textContent()).not.toContain('Token economy');
+    await page.locator('home-page textarea').fill('Go');
+    await page.locator('home-page textarea').press('Enter');
+    await page.getByText('Going.').waitFor();
+    expect(await page.locator('session-page sc-composer .summary').textContent()).toContain('Think briefly');
+    // Token economy, by message: the first session's by the app's defaults, the next by the project's.
+    const concise = rig
+      .events()
+      .flatMap((event) => (event.kind === 'userMessage' ? [`${event.text}: ${event.concise === true}`] : []));
+    expect(concise.sort()).toEqual(['Go: false', 'Hi: true']);
+
+    await navItem(page, basename(rig.workspace)).click();
+    await settle(page);
+    await reset.click();
+    await settle(page);
+    await card.getByText('until you pick otherwise here', { exact: false }).waitFor();
+    expect(await reset.isHidden()).toBe(true);
+  });
+});
+
 describe('the composer', () => {
   async function startTurn(page: Page): Promise<Locator> {
     await page.locator('home-page textarea').fill('Read greet');

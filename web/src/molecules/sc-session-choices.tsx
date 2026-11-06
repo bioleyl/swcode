@@ -1,7 +1,7 @@
 import { css } from '@jadis/core';
 import { JlField, JlLink, JlRadioGroup, JlSegmented, JlSwitch } from '@syware/jlib';
 
-import { PERMISSION_MODES, THINKING_MODES } from '../../../shared/protocol/session.schema';
+import { PERMISSION_MODES, THINKING_MODES } from '../../../shared/protocol/choices.schema';
 import { ScElement } from '../base/sc-element';
 import { MODE_LABELS } from '../lib/mode-labels';
 import { NO_PRESETS, presetDescription } from '../lib/presets';

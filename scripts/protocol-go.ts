@@ -6,6 +6,7 @@ import { resolve } from 'node:path';
 
 import { z } from 'zod';
 
+import * as choices from '../shared/protocol/choices.schema.js';
 import * as claude from '../shared/protocol/claude.schema.js';
 import * as desktop from '../shared/protocol/desktop.schema.js';
 import * as endpoints from '../shared/protocol/endpoints.js';
@@ -23,6 +24,7 @@ const OUTPUT = resolve(import.meta.dirname, '../daemon/protocol/protocol_gen.go'
 const CHECK_FLAG = '--check';
 // In the order they import each other: a schema is named where it is exported first.
 const MODULES: readonly Record<string, unknown>[] = [
+  choices,
   picture,
   project,
   skill,

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { PermissionModeSchema, ThinkingModeSchema } from './choices.schema.js';
 import { PictureRefSchema } from './picture.schema.js';
 import { HostRefSchema, LOCAL_HOST } from './project.schema.js';
 import { SkillSummarySchema } from './skill.schema.js';
@@ -34,21 +35,10 @@ export const PERMISSION_DECISIONS = ['allowOnce', 'allowSession', 'deny'] as con
 export const PermissionDecisionSchema = z.enum(PERMISSION_DECISIONS);
 export type PermissionDecision = z.infer<typeof PermissionDecisionSchema>;
 
-/**
- * `auto`: edits and commands go through. `acceptEdits`: edits go through, commands wait for a person. `ask`: both
- * wait.
- */
-export const PERMISSION_MODES = ['auto', 'acceptEdits', 'ask'] as const;
-export const PermissionModeSchema = z.enum(PERMISSION_MODES);
-export type PermissionMode = z.infer<typeof PermissionModeSchema>;
+export { PermissionModeSchema, ThinkingModeSchema } from './choices.schema.js';
 
-/**
- * How much the model thinks before it answers: as much as it does by itself (`full`), less (`medium`, `low`, the
- * levels Qwen 3.8 and gpt-oss templates know), or not at all (`off`, instruct).
- */
-export const THINKING_MODES = ['full', 'medium', 'low', 'off'] as const;
-export const ThinkingModeSchema = z.enum(THINKING_MODES);
-export type ThinkingMode = z.infer<typeof ThinkingModeSchema>;
+// The choices a session works with are also a project's defaults, which project.schema holds: they live apart.
+export type { PermissionMode, ThinkingMode } from './choices.schema.js';
 
 /**
  * What a session is: an agent at work in a project (`code`), or a conversation with the model, which reads the web

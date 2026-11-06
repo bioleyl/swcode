@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { SessionDefaultsSchema } from './choices.schema.js';
+
 /** Where a folder is: this computer, a WSL distribution of it, or a machine reached over SSH. */
 export const HostRefSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('local') }),
@@ -16,6 +18,8 @@ export type HostOption = z.infer<typeof HostOptionSchema>;
 /** A folder sessions work in, on a host, with a name for people: the folder's, at first. */
 export const ProjectSchema = z.object({
   createdAt: z.iso.datetime(),
+  // What its new sessions start with; the app's own defaults when it has none.
+  defaults: SessionDefaultsSchema.optional(),
   // Projects from before hosts are on this computer.
   host: HostRefSchema.default(LOCAL_HOST),
   id: z.string(),
