@@ -107,6 +107,7 @@
 
 .compaction p {
   margin-top: 8px;
+  overflow-wrap: anywhere;
   white-space: pre-wrap;
   color: var(--jl-text-2);
 }

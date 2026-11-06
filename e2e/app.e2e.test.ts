@@ -465,6 +465,73 @@ describe('a project’s page', () => {
   });
 });
 
+describe('a project’s skills', () => {
+  const ReleaseNotes = {
+    '.agents/skills/release-notes/SKILL.md':
+      '---\nname: release-notes\ndescription: Writes release notes from the commits.\n---\nList the commits.',
+  };
+  const Deploy = {
+    '.agents/skills/deploy/SKILL.md': '---\nname: deploy\ndescription: Deploys the app.\n---\nDeploy.',
+  };
+
+  it('show on its page, each turned off with its switch for its sessions and their / commands', async () => {
+    const rig = await start({ files: ReleaseNotes, homeFiles: Deploy, replies: [{ text: 'Hello there.' }] });
+    const page = await rig.browser.newPage({ viewport: DESKTOP });
+    await page.goto(rig.link);
+    await page.locator('home-page textarea').fill('Hi');
+    await page.locator('home-page textarea').press('Enter');
+    await page.getByText('Hello there.').waitFor();
+    await navItem(page, basename(rig.workspace)).click();
+    await settle(page);
+    const card = page.locator('project-page .skills');
+    const deploy = card.locator('jl-switch[data-skill="deploy"]');
+    await deploy.waitFor();
+    await card.locator('jl-switch[data-skill="release-notes"]').getByText('Project ·', { exact: false }).waitFor();
+    await deploy.getByText('Yours ·', { exact: false }).waitFor();
+    expect(await overflow(page)).toBe(0);
+
+    await deploy.getByRole('switch').click();
+    await page.evaluate('0');
+    await expect.poll(() => deploy.getByRole('switch').isChecked()).toBe(false);
+    await page.reload();
+    await deploy.waitFor();
+    expect(await deploy.getByRole('switch').isChecked()).toBe(false);
+
+    await page.locator('project-page .new-session').click();
+    await settle(page);
+    const composer = page.locator('home-page sc-composer');
+    await composer.locator('textarea').fill('/');
+    await composer.locator('.command-menu [role="option"]').first().waitFor();
+    expect(await composer.locator('.command-menu [role="option"] .name').allTextContents()).toEqual([
+      '/release-notes',
+    ]);
+  });
+
+  it('run from the composer’s / menu, the session showing the skill it ran', async () => {
+    const rig = await start({
+      homeFiles: ReleaseNotes,
+      replies: [{ text: 'Hello there.' }, { text: 'Here are the notes.' }],
+    });
+    const page = await rig.browser.newPage({ deviceScaleFactor: 2, viewport: PHONE });
+    await page.goto(rig.link);
+    await page.locator('home-page textarea').fill('Hi');
+    await page.locator('home-page textarea').press('Enter');
+    await page.getByText('Hello there.').waitFor();
+
+    const composer = page.locator('session-page sc-composer');
+    const field = composer.locator('textarea');
+    await field.pressSequentially('/rel');
+    await composer.locator('.command-menu [role="option"]', { hasText: '/release-notes' }).waitFor();
+    await field.press('Enter');
+    await page.evaluate('0');
+    await page.getByText('Here are the notes.').waitFor();
+    await page.locator('session-page sc-conversation').getByText('Ran the skill release-notes').waitFor();
+    const loaded = rig.events().flatMap((event) => (event.kind === 'skillLoaded' ? [event.name] : []));
+    expect(loaded).toEqual(['release-notes']);
+    expect(await overflow(page)).toBe(0);
+  });
+});
+
 describe('the composer', () => {
   async function startTurn(page: Page): Promise<Locator> {
     await page.locator('home-page textarea').fill('Read greet');

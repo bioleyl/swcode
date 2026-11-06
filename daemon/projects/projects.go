@@ -183,6 +183,53 @@ func (s *Service) SetDefaults(projectID string, defaults *protocol.SessionDefaul
 	return ""
 }
 
+// SetSkill turns one of the skills the project's sessions find on or off for them: they read it from their next turn.
+func (s *Service) SetSkill(projectID, name string, on bool) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	index := slices.IndexFunc(s.projects, func(project protocol.Project) bool { return project.ID == projectID })
+	if index < 0 {
+		return unknownProject
+	}
+	projects := append([]protocol.Project{}, s.projects...)
+	projects[index].SkillsOff = withSkill(projects[index].SkillsOff, name, !on)
+	s.change(projects)
+	return ""
+}
+
+// withSkill is the names turned off, with this one among them or not, sorted.
+func withSkill(off []string, name string, turnedOff bool) []string {
+	kept := slices.DeleteFunc(slices.Clone(off), func(each string) bool { return each == name })
+	if turnedOff {
+		kept = append(kept, name)
+	}
+	slices.Sort(kept)
+	return kept
+}
+
+// Find is the project of a folder on a host, if it has one.
+func (s *Service) Find(folder string, host protocol.HostRef) (protocol.Project, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, project := range s.projects {
+		if project.Path == folder && hosts.SameHost(project.Host, host) {
+			return project, true
+		}
+	}
+	return protocol.Project{}, false
+}
+
+// ByID is a project by its id, if there is one.
+func (s *Service) ByID(projectID string) (protocol.Project, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	index := slices.IndexFunc(s.projects, func(project protocol.Project) bool { return project.ID == projectID })
+	if index < 0 {
+		return protocol.Project{}, false
+	}
+	return s.projects[index], true
+}
+
 // Ensure is the project of a folder on a host, made for it when there is none yet.
 func (s *Service) Ensure(folder string, host protocol.HostRef) protocol.Project {
 	s.mu.Lock()

@@ -7,6 +7,7 @@ import { SESSION_COMMANDS } from '../lib/commands';
 import { contextText } from '../lib/format';
 import { currentPlan } from '../lib/plan';
 import { presetOf, presetStatusOf } from '../lib/presets';
+import { skillsOn } from '../lib/project-skills';
 import { sessionPlace } from '../lib/session-kinds';
 import { liveStatus, SESSION_STATUS_LOOKS } from '../lib/session-status';
 import { ScTitle } from '../molecules/sc-title';
@@ -20,6 +21,8 @@ import { daemon, daemonBus } from '../services/daemon';
 import { daemonState, daemonStatusBus } from '../services/daemon-status';
 import { navigate, newPathOf } from '../services/navigation';
 import { presetChoices, presetsBus } from '../services/presets';
+import { projectAt, projectListBus } from '../services/project-list';
+import { foundSkills, projectSkillsBus, readProjectSkills } from '../services/project-skills';
 import { markSeen } from '../services/seen-sessions';
 import { deleteSession } from '../services/session-delete';
 import { findSession, sessionListBus } from '../services/session-list';
@@ -80,6 +83,8 @@ export class SessionPage extends ScElement {
   // The peeks this page asked, to name each: their answers come to this page alone.
   private _peeks = 0;
   private _used = 0;
+  // The project whose skills this page read for the composer: they are read again for another one.
+  private _skillsOf: string | undefined;
   // The session's events so far: the side panel lists its subagents from them.
   private _events: SessionEvent[] = [];
 
@@ -181,6 +186,8 @@ export class SessionPage extends ScElement {
     this.onBus(daemonBus, 'message', (message) => this.receive(message));
     this.onBus(daemonBus, 'online', (online) => this.reopen(online));
     this.onBus(sessionListBus, 'changed', () => this.renderSummary());
+    this.onBus(projectListBus, 'changed', () => this.renderSkills());
+    this.onBus(projectSkillsBus, 'changed', () => this.renderSkills());
     this.on(document, VISIBILITY_CHANGE, () => this.noteSeen());
     this.onBus(daemonStatusBus, 'changed', () => this.renderDaemon());
     this.onBus(presetsBus, 'changed', () => this.renderDaemon());
@@ -355,6 +362,7 @@ export class SessionPage extends ScElement {
     this._refs.conversation.workspace.set(session?.workspace ?? '');
     this._refs.composer.kind.set(kind);
     this._refs.composer.commands.set([...SESSION_COMMANDS[kind]]);
+    this.renderSkills();
     this._refs.composer.mode.set(session?.mode ?? 'auto');
     this._refs.composer.thinking.set(session?.thinking ?? 'full');
     this._refs.composer.preset.set(session?.preset ?? '');
@@ -367,6 +375,21 @@ export class SessionPage extends ScElement {
     this._refs.arcade.status.set(session?.status ?? 'idle');
     this.noteSeen();
     document.title = session ? `${session.title} · swcode` : 'swcode';
+  }
+
+  /**
+   * The skills the session's project has on, the composer's / commands: read on its host once the session opens, a
+   * chat has none.
+   */
+  private renderSkills(): void {
+    const session = findSession(this._sessionId);
+    const project = session?.kind === 'code' ? projectAt(session.workspace, session.host) : undefined;
+    this._refs.composer.skills.set(project ? skillsOn(foundSkills(project.id), project) : []);
+    if (!project || project.id === this._skillsOf) {
+      return;
+    }
+    this._skillsOf = project.id;
+    void readProjectSkills(project.id);
   }
 
   /** The session in view is seen as it is now, while the window shows it: its icon in the navigation empties. */

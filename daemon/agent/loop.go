@@ -219,7 +219,7 @@ func askModelAlone(ctx context.Context, host TurnHost, setup Setup) (reply llm.R
 // takeInMessages has the reports of the subagents that finished, then what the person sent to come in now, join
 // the conversation between two steps, after the results of the last calls: the model reads them with its next
 // request. Whether anything came.
-func takeInMessages(host TurnHost, setup Setup) bool {
+func takeInMessages(ctx context.Context, host TurnHost, setup Setup) bool {
 	reports := host.TakeReports()
 	for _, report := range reports {
 		report.ID = setup.NewID()
@@ -228,6 +228,7 @@ func takeInMessages(host TurnHost, setup Setup) bool {
 	message := host.TakeMessages()
 	if message != nil {
 		host.Record(UserMessage(setup.NewID(), *message))
+		LoadAskedSkill(ctx, host, setup, message.Text)
 	}
 	return len(reports) > 0 || message != nil
 }
@@ -270,7 +271,7 @@ func runSteps(ctx context.Context, host TurnHost, setup Setup) (Ending, error) {
 		if ctx.Err() != nil {
 			return stopped, nil
 		}
-		takeInMessages(host, setup)
+		takeInMessages(ctx, host, setup)
 		reply, err := nextReply(ctx, host, setup)
 		if err != nil {
 			return Ending{}, err
@@ -285,7 +286,7 @@ func runSteps(ctx context.Context, host TurnHost, setup Setup) (Ending, error) {
 			continue
 		}
 		// A message that came while the model wrote its answer gets an answer in this turn.
-		if takeInMessages(host, setup) {
+		if takeInMessages(ctx, host, setup) {
 			continue
 		}
 		history := host.History()
@@ -358,6 +359,9 @@ func RunTurn(ctx context.Context, message *PromptMessage, host TurnHost, setup S
 		host.Record(UserMessage(setup.NewID(), *message))
 	}
 	ListSkills(ctx, host, setup)
+	if message != nil {
+		LoadAskedSkill(ctx, host, setup, message.Text)
+	}
 	ending := steps(ctx, host, setup)
 	host.Record(protocol.SessionEventTurnFinished{ID: turnID, Message: ending.Message, Outcome: ending.Outcome})
 }

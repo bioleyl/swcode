@@ -192,10 +192,13 @@ jl-popover {
   box-shadow: var(--jl-shadow-lg);
 }
 
+/* Many skills scroll inside the menu, which stays within the window. */
 .options {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  max-height: min(320px, 40vh);
+  overflow-y: auto;
 }
 
 /* One row each: the icon, the command, what it does; the pointer and the arrows choose alike. */

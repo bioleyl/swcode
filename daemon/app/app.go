@@ -197,7 +197,11 @@ func New(settings config.Config, options Options) (*App, error) {
 		Search: web.Paced(func(ctx context.Context, query string) web.SearchOutcome {
 			return web.SearchWeb(ctx, query, options.HTTP)
 		}, web.SearchGap),
-		Skills: catalog.New(logError), Store: sessions.NewStore(filepath.Join(settings.DataDir, sessionsFolder)),
+		Skills: catalog.New(logError), SkillsOff: func(path string, host protocol.HostRef) []string {
+			project, _ := app.Projects.Find(path, host)
+			return project.SkillsOff
+		},
+		Store:     sessions.NewStore(filepath.Join(settings.DataDir, sessionsFolder)),
 		ChatTools: chatTools, SubagentTools: exploreTools, Thinking: sessions.Thinking{Session: settings.Thinking, Subagents: settings.SubagentThinking},
 		Tools: mainTools, Workspace: workspace,
 	})
@@ -246,6 +250,7 @@ func (a *App) routes() http.Handler {
 	a.pairingRoutes(mux)
 	a.settingsRoutes(mux)
 	a.modelRoutes(mux)
+	a.skillRoutes(mux)
 	a.closingRoutes(mux)
 	a.startupRoutes(mux)
 	mux.HandleFunc("GET "+protocol.EndpointSocket, a.socket)

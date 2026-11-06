@@ -19,6 +19,8 @@ export const ENDPOINTS = {
   settings: '/api/settings',
   // POST an llm-server's address: the models it serves.
   settingsModels: '/api/settings/models',
+  // GET ?project=<id>: the skills the project's sessions find, read on its host.
+  skills: '/api/skills',
   socket: '/api/socket',
   // GET whether this daemon starts with its computer, and how; PUT how it should (the Windows app only).
   startup: '/api/startup',
@@ -29,6 +31,9 @@ export const ENDPOINTS = {
 
 /** The access token travels in this query parameter: a browser cannot set headers on a WebSocket. */
 export const TOKEN_PARAM = 'token';
+
+/** The project whose skills `GET /api/skills` lists travels in this query parameter. */
+export const PROJECT_PARAM = 'project';
 
 /** The pairing code travels in this query parameter of the QR code's link. */
 export const PAIR_PARAM = 'pair';

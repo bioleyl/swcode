@@ -8,6 +8,7 @@ import (
 	"swcode/daemon/llm"
 	"swcode/daemon/permissions"
 	"swcode/daemon/protocol"
+	"swcode/daemon/skills"
 	"swcode/daemon/tools"
 )
 
@@ -69,6 +70,9 @@ type Setup struct {
 	ContextTokens int
 	// Skills is the user's skills as they are now, which the model is told of; nil for subagents.
 	Skills func(ctx context.Context) []protocol.SkillSummary
+	// LoadSkill is one of those skills as the model reads it, for a message that runs it with /<its name>; nil for
+	// subagents.
+	LoadSkill func(ctx context.Context, name string) skills.Text
 	// Pictures is the session's pasted pictures; nil for a subagent, and the summary of a compaction.
 	Pictures *PictureView
 }

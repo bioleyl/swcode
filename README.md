@@ -451,7 +451,12 @@ top, for one command; the page shows those as set in the environment.
   is told each skill's name and description in the conversation, not the system prompt: after the person's message
   when the skills changed since it last saw them, and again after a compaction, so the prompt llm-server cached stays
   the same. The main agent loads a skill with `skill` (its instructions, after its base directory, where its scripts
-  are run from; or a file of its folder), and writes one the user asks for in the project's `.agents/skills`.
+  are run from; or a file of its folder), and writes one the user asks for in the project's `.agents/skills`. A
+  project's page lists the skills its sessions find, each with where it is and a switch: one turned off there (by
+  name, in `projects.json`) is neither told to its sessions' agents nor run, from their next turn on. Each skill on is
+  a command in the composer: `/<its name>` at the start of a message (the words after it are what it works on) has
+  the daemon load the skill right after the message, so the model reads its instructions with the message instead of
+  spending a step on `skill`; the session shows the skill it ran, folded.
 - **Tools**: `read`, `write`, `edit` (exact text replacement), `bash`, `grep`, `glob`. An edit or a write needs a
   read of the file as it is now, and is refused, without asking anyone, when it cannot apply. The file tools stay
   in the workspace and the session's scratch folder (`scratch/<id>` in the data folder, deleted with the session,
@@ -550,9 +555,10 @@ top, for one command; the page shows those as set in the environment.
   Every folder a session works in has a project; one with sessions stays, and removing one never touches its folder.
   The `+` of a project's row in the navigation starts a session there (shown while the row is pointed at, always on
   a touch screen: jlib's side nav takes no button of the app's, so `sc-nav` adds it to the rows jlib draws). A
-  project's page lists its sessions, each with its delete button, and what its new sessions start with: its preset,
+  project's page lists its sessions, each with its delete button, what its new sessions start with: its preset,
   permissions, thinking and token economy, saved as they are picked (in `projects.json`, all four at once) until
-  **Use the app's defaults**. The new session's composer starts from them, and can still change them for that session.
+  **Use the app's defaults**, and its skills, each with its switch ([Skills](#how-it-works)). The new session's
+  composer starts from them, and can still change them for that session.
 - **Sessions** start from the home page: a project, and the first message. A message sent while a turn runs waits
   for the next turn; stopping the turn drops it. **Send now** hands the waiting messages to the model at the turn's
   next step instead, after the results of its current calls, without stopping the turn (as Claude Code steers). Sessions are renamed from their title and deleted from their
@@ -562,7 +568,8 @@ top, for one command; the page shows those as set in the environment.
   closes the list. `/new` starts a new session with the same settings (its folder, preset, permissions, thinking and
   token economy), `/compact` summarizes the conversation now, `/peek` asks beside the agent's work (a coding session's
   only), `/help` shows them all and the field's keys. A command that takes no words runs alone: with words after it,
-  the message is a message.
+  the message is a message. The skills the project has on come after them, there and in a new session's composer:
+  Enter sends the skill alone, Tab completes it for the words it works on.
 - **Peek**: `/peek` and a question in a session's composer asks the agent beside its work. The answer
   shows above the composer, to whoever asked, and never enters the conversation: the agent does not see it after.
   It goes to the agent's model with the agent's own prompt, the question after it, as soon as the agent's own request

@@ -3,7 +3,16 @@ import { JlButton, JlIcon, JlKbd, JlPopover } from '@syware/jlib';
 
 import { MAX_PICTURES } from '../../../shared/protocol/picture.schema';
 import { ScElement } from '../base/sc-element';
-import { COMMAND_PREFIX, COMMANDS, commandLine, commandsMatching, commandText, stepIn } from '../lib/commands';
+import {
+  COMMAND_PREFIX,
+  COMMANDS,
+  commandLine,
+  commandText,
+  menuMatching,
+  skillLine,
+  skillText,
+  stepIn,
+} from '../lib/commands';
 import { MODE_LABELS } from '../lib/mode-labels';
 import { isPicture, pictureUrl, shrinkPicture } from '../lib/pictures';
 import { presetOf } from '../lib/presets';
@@ -16,8 +25,9 @@ import styles from './sc-composer.css?inline';
 
 import type { PictureUpload } from '../../../shared/protocol/picture.schema';
 import type { PermissionMode, SessionKind, ThinkingMode } from '../../../shared/protocol/session.schema';
+import type { SkillSummary } from '../../../shared/protocol/skill.schema';
 import type { CommandName } from '../lib/commands';
-import type { CommandLine } from '../types/commands.types';
+import type { CommandLine, MenuEntry } from '../types/commands.types';
 import type { PromptDraft } from '../types/composer.types';
 
 const ENTER = 'Enter';
@@ -33,9 +43,14 @@ const CHOICES_ICON_SIZE = 14;
 const SUMMARY_SEPARATOR = ' · ';
 const CONCISE_LABEL = 'Token economy';
 const COMMAND_ICON_SIZE = 16;
+const SKILL_ICON = 'book-open';
 // The list's id and each option's, for the field to say which one is chosen (`aria-activedescendant`).
 const COMMAND_LIST_ID = 'command-list';
 const OPTION_ID_PREFIX = 'command-';
+const SKILL_OPTION_ID_PREFIX = 'skill-';
+
+const optionId = (entry: MenuEntry): string =>
+  entry.kind === 'command' ? `${OPTION_ID_PREFIX}${entry.name}` : `${SKILL_OPTION_ID_PREFIX}${entry.skill.name}`;
 
 /**
  * Where the person writes: the message and the pictures pasted or dropped with it, and send, or stop while the agent
@@ -43,9 +58,10 @@ const OPTION_ID_PREFIX = 'command-';
  * economy) and opens them all in a panel; a chat has no permissions, since it runs nothing. A picture is made small as
  * it comes in.
  *
- * A message that starts with a slash lists the commands available here, narrowed as the name is typed: the arrows
- * move through them, Enter runs the one chosen (or completes one that takes words), Tab completes it, Escape closes
- * the list. The list is drawn in the field's own shadow root, for the field to name the option chosen.
+ * A message that starts with a slash lists the commands available here, then the skills, narrowed as the name is
+ * typed: the arrows move through them, Enter runs the one chosen (or completes one that takes words), Tab completes
+ * it, Escape closes the list. A skill runs as a message, `/<its name>` and the words after it, which the daemon reads
+ * the skill for. The list is drawn in the field's own shadow root, for the field to name the option chosen.
  */
 export class ScComposer extends ScElement {
   static readonly selector = 'sc-composer';
@@ -70,6 +86,11 @@ export class ScComposer extends ScElement {
   /** The commands available here: none where there is no session yet, where a slash is only a word. */
   readonly commands = this.useChange<CommandName[]>([], (names) => {
     this._refs.help.commands.set(names);
+    this.renderMenu();
+  });
+  /** The skills here, which run as messages: those the project has on. */
+  readonly skills = this.useChange<SkillSummary[]>([], (skills) => {
+    this._refs.help.skills.set(skills);
     this.renderMenu();
   });
   readonly working = this.useChange(false, (value) => {
@@ -103,8 +124,8 @@ export class ScComposer extends ScElement {
 
   // The pictures waiting to go with the message, made small already.
   private _pictures: PictureUpload[] = [];
-  // The commands listed for what is typed, and the one chosen among them.
-  private _matches: CommandName[] = [];
+  // The commands and skills listed for what is typed, and the one chosen among them.
+  private _matches: MenuEntry[] = [];
   private _chosen = 0;
   // The text the list was closed on (Escape, or the field left): it stays closed until the text changes.
   private _dismissed: string | undefined;
@@ -257,6 +278,26 @@ export class ScComposer extends ScElement {
 
   private step(step: number): void {
     this.markChosen(stepIn(this._chosen, step, this._matches.length));
+    this.revealChosen();
+  }
+
+  /** Scrolls a long list, and it alone, just enough for the row chosen to show. */
+  private revealChosen(): void {
+    const list = this._refs.commandOptions;
+    const option = list.children[this._chosen];
+    if (!(option instanceof HTMLElement)) {
+      return;
+    }
+    // The list and its rows have the menu as their offset parent: this is the row's place in the list.
+    const top = option.offsetTop - list.offsetTop;
+    const bottom = top + option.offsetHeight;
+    if (top < list.scrollTop) {
+      list.scrollTop = top;
+      return;
+    }
+    if (bottom > list.scrollTop + list.clientHeight) {
+      list.scrollTop = bottom - list.clientHeight;
+    }
   }
 
   /** The list closes on the text as it is, and opens again once the text changes or the field is back in focus. */
@@ -270,24 +311,34 @@ export class ScComposer extends ScElement {
     this.renderMenu();
   }
 
-  /** Runs the command chosen, or completes it when it takes words: the person writes them next. */
-  private choose(name = this._matches[this._chosen]): void {
-    if (name === undefined) {
+  /** Runs the row chosen: a skill as a message alone; a command, or completes it when it takes words. */
+  private choose(entry = this._matches[this._chosen]): void {
+    if (entry === undefined) {
       return;
     }
+    if (entry.kind === 'skill') {
+      this._refs.text.value = skillLine(entry.skill.name);
+      this.submit();
+      return;
+    }
+    this.chooseCommand(entry.name);
+  }
+
+  /** Runs the command chosen, or completes it when it takes words: the person writes them next. */
+  private chooseCommand(name: CommandName): void {
     if (COMMANDS[name].argument !== undefined) {
-      this.complete(name);
+      this.complete({ kind: 'command', name });
       return;
     }
     this.run({ argument: '', name });
   }
 
-  /** The command chosen in the field, the caret after it. */
-  private complete(name: CommandName | undefined): void {
-    if (name === undefined) {
+  /** The row chosen in the field, the caret after it: a skill, a space after it for the words it works on. */
+  private complete(entry: MenuEntry | undefined): void {
+    if (entry === undefined) {
       return;
     }
-    const text = commandText(name);
+    const text = entry.kind === 'command' ? commandText(entry.name) : skillText(entry.skill.name);
     this._refs.text.value = text;
     this._refs.text.setSelectionRange(text.length, text.length);
     this.typed();
@@ -335,9 +386,11 @@ export class ScComposer extends ScElement {
   /** The commands matching what is typed, the list hidden when none does. */
   private renderMenu(): void {
     const text = this._refs.text.value;
-    this._matches = text === this._dismissed ? [] : commandsMatching(text, this.commands.get());
+    this._matches = text === this._dismissed ? [] : menuMatching(text, this.commands.get(), this.skills.get());
     this._refs.commandList.hidden = this._matches.length === 0;
-    this._refs.commandOptions.replaceChildren(...this._matches.map((name, index) => this.optionNode(name, index)));
+    this._refs.commandOptions.replaceChildren(
+      ...this._matches.map((entry, index) => this.optionNode(entry, index))
+    );
     this.markChosen(Math.min(this._chosen, Math.max(this._matches.length - 1, 0)));
   }
 
@@ -355,14 +408,18 @@ export class ScComposer extends ScElement {
       return;
     }
     field.setAttribute('aria-controls', COMMAND_LIST_ID);
-    field.setAttribute('aria-activedescendant', `${OPTION_ID_PREFIX}${chosen}`);
+    field.setAttribute('aria-activedescendant', optionId(chosen));
   }
 
-  private optionNode(name: CommandName, index: number): Node {
-    const { argument, description, icon } = COMMANDS[name];
+  private optionNode(entry: MenuEntry, index: number): Node {
+    const { argument, description, icon } =
+      entry.kind === 'command'
+        ? COMMANDS[entry.name]
+        : { argument: undefined, description: entry.skill.description, icon: SKILL_ICON };
+    const name = entry.kind === 'command' ? entry.name : entry.skill.name;
     return (
       // Focus stays in the field, which names the option chosen: an option is focusable by script only.
-      <div role="option" id={`${OPTION_ID_PREFIX}${name}`} class="option" data-index={String(index)} tabIndex={-1}>
+      <div role="option" id={optionId(entry)} class="option" data-index={String(index)} tabIndex={-1}>
         <JlIcon name={icon} size={COMMAND_ICON_SIZE} />
         <span class="name">
           {COMMAND_PREFIX}

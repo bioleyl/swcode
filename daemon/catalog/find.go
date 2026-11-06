@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"swcode/daemon/hosts"
+	"swcode/daemon/protocol"
 	"swcode/daemon/skills"
 )
 
@@ -20,15 +21,17 @@ const (
 type HostSkill struct {
 	Name        string
 	Description string
+	Origin      protocol.SkillOrigin
 	// File is its SKILL.md, in Folder with the files its instructions name.
 	File   string
 	Folder string
 }
 
-// shelf is a .agents/skills folder of a host.
+// shelf is the .agents/skills folders of a host of one origin: the person's, or the project's.
 type shelf struct {
-	ctx  context.Context
-	host hosts.Host
+	ctx    context.Context
+	host   hosts.Host
+	origin protocol.SkillOrigin
 }
 
 func (s shelf) readText(path string) (string, bool) {
@@ -48,7 +51,7 @@ func (s shelf) skillAt(folder, folderName string) (HostSkill, bool) {
 	if name == "" {
 		name = folderName
 	}
-	return HostSkill{Description: parsed.Description, File: file, Folder: folder, Name: name}, true
+	return HostSkill{Description: parsed.Description, File: file, Folder: folder, Name: name, Origin: s.origin}, true
 }
 
 // skillsIn is the skills of a .agents/skills folder: its subfolders that hold a SKILL.md.
@@ -103,13 +106,13 @@ func Find(ctx context.Context, host hosts.Host, workspace string) ([]HostSkill, 
 	if err != nil {
 		return nil, err
 	}
-	found := shelf{ctx: ctx, host: host}
-	all := found.skillsUnder(home)
+	all := shelf{ctx: ctx, host: host, origin: protocol.SkillOriginPersonal}.skillsUnder(home)
 	if workspace == "" {
 		return all, ctx.Err()
 	}
+	project := shelf{ctx: ctx, host: host, origin: protocol.SkillOriginProject}
 	for _, folder := range projectFolders(ctx, host, workspace) {
-		all = append(all, found.skillsUnder(folder)...)
+		all = append(all, project.skillsUnder(folder)...)
 	}
 	return all, ctx.Err()
 }

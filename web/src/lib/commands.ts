@@ -1,5 +1,6 @@
 import type { SessionKind } from '../../../shared/protocol/session.schema';
-import type { CommandLine, CommandSpec } from '../types/commands.types';
+import type { SkillSummary } from '../../../shared/protocol/skill.schema';
+import type { CommandLine, CommandSpec, MenuEntry } from '../types/commands.types';
 
 /** The composer's commands, in the order the menu and the help list them. */
 export const COMMAND_NAMES = ['new', 'compact', 'peek', 'help'] as const;
@@ -40,6 +41,32 @@ export const commandsMatching = (text: string, available: readonly CommandName[]
   const typed = TYPED_NAME.exec(text)?.[1];
   return typed === undefined ? [] : available.filter((name) => name.startsWith(typed.toLowerCase()));
 };
+
+/** The skills whose name starts as typed, as for the commands; one named as a command is left to the command. */
+export const skillsMatching = (text: string, skills: readonly SkillSummary[]): SkillSummary[] => {
+  const typed = TYPED_NAME.exec(text)?.[1]?.toLowerCase();
+  return typed === undefined
+    ? []
+    : skills.filter(
+        (skill) => !isAvailable(skill.name, COMMAND_NAMES) && skill.name.toLowerCase().startsWith(typed)
+      );
+};
+
+/** The menu's rows for what is typed: the commands available, then the skills. */
+export const menuMatching = (
+  text: string,
+  available: readonly CommandName[],
+  skills: readonly SkillSummary[]
+): MenuEntry[] => [
+  ...commandsMatching(text, available).map((name): MenuEntry => ({ kind: 'command', name })),
+  ...skillsMatching(text, skills).map((skill): MenuEntry => ({ kind: 'skill', skill })),
+];
+
+/** A message that runs a skill alone. */
+export const skillLine = (name: string): string => `${COMMAND_PREFIX}${name}`;
+
+/** A skill as the field holds it once completed: words may follow, for the skill to work on. */
+export const skillText = (name: string): string => `${skillLine(name)} `;
 
 /** A command as the field holds it once chosen: followed by a space when words come after it. */
 export const commandText = (name: CommandName): string =>

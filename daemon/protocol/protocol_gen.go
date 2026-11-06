@@ -25,6 +25,8 @@ const MaxPictures = 4
 
 var PictureTypes = []PictureType{PictureTypeImageJpeg, PictureTypeImagePng}
 
+var SkillOrigins = []SkillOrigin{SkillOriginPersonal, SkillOriginProject}
+
 var DiffLineKinds = []DiffLineKind{DiffLineKindAdd, DiffLineKindRemove, DiffLineKindContext, DiffLineKindGap}
 
 var PermissionDecisions = []PermissionDecision{PermissionDecisionAllowOnce, PermissionDecisionAllowSession, PermissionDecisionDeny}
@@ -69,6 +71,7 @@ const (
 	EndpointPairingCode    = "/api/pairing/code"
 	EndpointSettings       = "/api/settings"
 	EndpointSettingsModels = "/api/settings/models"
+	EndpointSkills         = "/api/skills"
 	EndpointSocket         = "/api/socket"
 	EndpointStartup        = "/api/startup"
 	EndpointStatus         = "/api/status"
@@ -76,6 +79,8 @@ const (
 )
 
 const PairParam = "pair"
+
+const ProjectParam = "project"
 
 const TokenParam = "token"
 
@@ -129,6 +134,22 @@ const (
 func (v PictureType) Valid() bool {
 	switch v {
 	case PictureTypeImageJpeg, PictureTypeImagePng:
+		return true
+	}
+	return false
+}
+
+type SkillOrigin string
+
+const (
+	SkillOriginPersonal SkillOrigin = "personal"
+	SkillOriginProject  SkillOrigin = "project"
+)
+
+// Valid tells whether v is one of the SkillOrigin values.
+func (v SkillOrigin) Valid() bool {
+	switch v {
+	case SkillOriginPersonal, SkillOriginProject:
 		return true
 	}
 	return false
@@ -615,11 +636,21 @@ type Project struct {
 	ID        string           `json:"id"`
 	Name      string           `json:"name"`
 	Path      string           `json:"path"`
+	SkillsOff []string         `json:"skillsOff"`
+}
+
+func (v Project) MarshalJSON() ([]byte, error) {
+	type plain Project
+	p := plain(v)
+	if p.SkillsOff == nil {
+		p.SkillsOff = []string{}
+	}
+	return json.Marshal(p)
 }
 
 func (v *Project) UnmarshalJSON(data []byte) error {
 	type plain Project
-	p := plain{Host: HostRef{Value: HostRefLocal{}}}
+	p := plain{Host: HostRef{Value: HostRefLocal{}}, SkillsOff: []string{}}
 	if err := json.Unmarshal(data, &p); err != nil {
 		return err
 	}
@@ -630,6 +661,45 @@ func (v *Project) UnmarshalJSON(data []byte) error {
 // Normalize trims and checks what the app sent, as its schema does.
 func (v *Project) Normalize() error {
 	return nil
+}
+
+type ProjectSkill struct {
+	Description string      `json:"description"`
+	Folder      string      `json:"folder"`
+	Name        string      `json:"name"`
+	Origin      SkillOrigin `json:"origin"`
+}
+
+func (v *ProjectSkill) UnmarshalJSON(data []byte) error {
+	type plain ProjectSkill
+	p := plain{}
+	if err := json.Unmarshal(data, &p); err != nil {
+		return err
+	}
+	*v = ProjectSkill(p)
+	return v.Normalize()
+}
+
+// Normalize trims and checks what the app sent, as its schema does.
+func (v *ProjectSkill) Normalize() error {
+	if !v.Origin.Valid() {
+		return fmt.Errorf("%s: unknown value %q", "origin", v.Origin)
+	}
+	return nil
+}
+
+type ProjectSkills struct {
+	Problem string         `json:"problem,omitempty"`
+	Skills  []ProjectSkill `json:"skills"`
+}
+
+func (v ProjectSkills) MarshalJSON() ([]byte, error) {
+	type plain ProjectSkills
+	p := plain(v)
+	if p.Skills == nil {
+		p.Skills = []ProjectSkill{}
+	}
+	return json.Marshal(p)
 }
 
 type SkillSummary struct {
@@ -727,6 +797,8 @@ func (SessionEventReminder) isSessionEvent() {}
 
 func (SessionEventSkillsListed) isSessionEvent() {}
 
+func (SessionEventSkillLoaded) isSessionEvent() {}
+
 func (SessionEventToolCall) isSessionEvent() {}
 
 func (SessionEventPermissionRequested) isSessionEvent() {}
@@ -800,6 +872,12 @@ func (u *SessionEvent) UnmarshalJSON(data []byte) error {
 		u.Value = value
 	case "\"skillsListed\"":
 		var value SessionEventSkillsListed
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
+	case "\"skillLoaded\"":
+		var value SessionEventSkillLoaded
 		if err := json.Unmarshal(data, &value); err != nil {
 			return err
 		}
@@ -896,6 +974,7 @@ type SessionEventMapper[R any] interface {
 	ContextCompacted(SessionEventContextCompacted) R
 	Reminder(SessionEventReminder) R
 	SkillsListed(SessionEventSkillsListed) R
+	SkillLoaded(SessionEventSkillLoaded) R
 	ToolCall(SessionEventToolCall) R
 	PermissionRequested(SessionEventPermissionRequested) R
 	PermissionAnswered(SessionEventPermissionAnswered) R
@@ -926,6 +1005,8 @@ func MapSessionEvent[R any](u SessionEvent, m SessionEventMapper[R]) R {
 		return m.Reminder(value)
 	case SessionEventSkillsListed:
 		return m.SkillsListed(value)
+	case SessionEventSkillLoaded:
+		return m.SkillLoaded(value)
 	case SessionEventToolCall:
 		return m.ToolCall(value)
 	case SessionEventPermissionRequested:
@@ -1085,6 +1166,22 @@ func (v SessionEventSkillsListed) MarshalJSON() ([]byte, error) {
 		Key string `json:"kind"`
 		plain
 	}{"skillsListed", p})
+}
+
+type SessionEventSkillLoaded struct {
+	At   string `json:"at"`
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Text string `json:"text"`
+}
+
+func (v SessionEventSkillLoaded) MarshalJSON() ([]byte, error) {
+	type plain SessionEventSkillLoaded
+	p := plain(v)
+	return json.Marshal(struct {
+		Key string `json:"kind"`
+		plain
+	}{"skillLoaded", p})
 }
 
 type SessionEventToolCall struct {
@@ -1659,6 +1756,8 @@ func (ClientMessageRemoveProject) isClientMessage() {}
 
 func (ClientMessageSetProjectDefaults) isClientMessage() {}
 
+func (ClientMessageSetProjectSkill) isClientMessage() {}
+
 func (ClientMessageListHosts) isClientMessage() {}
 
 func (ClientMessageListFolders) isClientMessage() {}
@@ -1804,6 +1903,12 @@ func (u *ClientMessage) UnmarshalJSON(data []byte) error {
 			return err
 		}
 		u.Value = value
+	case "\"setProjectSkill\"":
+		var value ClientMessageSetProjectSkill
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
 	case "\"listHosts\"":
 		var value ClientMessageListHosts
 		if err := json.Unmarshal(data, &value); err != nil {
@@ -1845,6 +1950,7 @@ type ClientMessageMapper[R any] interface {
 	CreateProject(ClientMessageCreateProject) R
 	RemoveProject(ClientMessageRemoveProject) R
 	SetProjectDefaults(ClientMessageSetProjectDefaults) R
+	SetProjectSkill(ClientMessageSetProjectSkill) R
 	ListHosts(ClientMessageListHosts) R
 	ListFolders(ClientMessageListFolders) R
 }
@@ -1894,6 +2000,8 @@ func MapClientMessage[R any](u ClientMessage, m ClientMessageMapper[R]) R {
 		return m.RemoveProject(value)
 	case ClientMessageSetProjectDefaults:
 		return m.SetProjectDefaults(value)
+	case ClientMessageSetProjectSkill:
+		return m.SetProjectSkill(value)
 	case ClientMessageListHosts:
 		return m.ListHosts(value)
 	case ClientMessageListFolders:
@@ -2440,6 +2548,39 @@ func (v ClientMessageSetProjectDefaults) MarshalJSON() ([]byte, error) {
 		Key string `json:"type"`
 		plain
 	}{"setProjectDefaults", p})
+}
+
+type ClientMessageSetProjectSkill struct {
+	Name      string `json:"name"`
+	On        bool   `json:"on"`
+	ProjectID string `json:"projectId"`
+}
+
+func (v ClientMessageSetProjectSkill) MarshalJSON() ([]byte, error) {
+	type plain ClientMessageSetProjectSkill
+	p := plain(v)
+	return json.Marshal(struct {
+		Key string `json:"type"`
+		plain
+	}{"setProjectSkill", p})
+}
+
+func (v *ClientMessageSetProjectSkill) UnmarshalJSON(data []byte) error {
+	type plain ClientMessageSetProjectSkill
+	p := plain{}
+	if err := json.Unmarshal(data, &p); err != nil {
+		return err
+	}
+	*v = ClientMessageSetProjectSkill(p)
+	return v.Normalize()
+}
+
+// Normalize trims and checks what the app sent, as its schema does.
+func (v *ClientMessageSetProjectSkill) Normalize() error {
+	if utf8.RuneCountInString(v.Name) < 1 {
+		return fmt.Errorf("%s: must not be empty", "name")
+	}
+	return nil
 }
 
 type ClientMessageListHosts struct {

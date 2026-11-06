@@ -1,8 +1,9 @@
 import { Bus } from '@jadis/core';
 
+import { sameHost } from '../../../shared/hosts/host-key';
 import { daemonBus } from './daemon';
 
-import type { Project } from '../../../shared/protocol/project.schema';
+import type { HostRef, Project } from '../../../shared/protocol/project.schema';
 
 // The list lives as long as the page: its bus listener never needs to stop.
 const forever = new AbortController().signal;
@@ -16,6 +17,10 @@ export const allProjects = (): readonly Project[] => state.projects;
 
 export const findProject = (id: string): Project | undefined =>
   state.projects.find((project) => project.id === id);
+
+/** The project of a folder on a host, the one a session works in. */
+export const projectAt = (path: string, host: HostRef): Project | undefined =>
+  state.projects.find((project) => project.path === path && sameHost(project.host, host));
 
 /** Opens the dialog that makes a project, wherever the app is. */
 export const askForProject = (): void => projectListBus.emit('open');

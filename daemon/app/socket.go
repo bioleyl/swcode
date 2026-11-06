@@ -146,6 +146,10 @@ func (h handlers) SetProjectDefaults(message protocol.ClientMessageSetProjectDef
 	return h.problem(h.app.Projects.SetDefaults(message.ProjectID, message.Defaults))
 }
 
+func (h handlers) SetProjectSkill(message protocol.ClientMessageSetProjectSkill) struct{} {
+	return h.problem(h.app.Projects.SetSkill(message.ProjectID, message.Name, message.On))
+}
+
 func (h handlers) RenameSession(message protocol.ClientMessageRenameSession) struct{} {
 	return h.problem(h.app.Sessions.Rename(message.SessionID, message.Title))
 }

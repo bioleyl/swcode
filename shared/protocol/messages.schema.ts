@@ -111,6 +111,13 @@ export const ClientMessageSchema = z.discriminatedUnion('type', [
     projectId: z.string(),
     type: z.literal('setProjectDefaults'),
   }),
+  // Turns one of the skills the project's sessions find on or off for them, from their next turn on.
+  z.object({
+    name: z.string().min(1),
+    on: z.boolean(),
+    projectId: z.string(),
+    type: z.literal('setProjectSkill'),
+  }),
   // Where projects can be: this computer, its WSL distributions, the SSH endpoints.
   z.object({ type: z.literal('listHosts') }),
   // The subfolders of a folder, to pick a project's; without a path, of the folder projects usually go in.

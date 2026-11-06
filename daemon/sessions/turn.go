@@ -65,7 +65,7 @@ func (s *Service) prepare(ctx context.Context, session *live) (prepared, error) 
 		return prepared{}, err
 	}
 	where := place{host: host, platform: platform, scratch: scratch, skills: s.deps.Skills.PortFor(catalog.Place{
-		Host: host, Workspace: meta.Workspace,
+		Host: host, Off: s.deps.SkillsOff(meta.Workspace, meta.Host), Workspace: meta.Workspace,
 	})}
 	return prepared{
 		main: main, setup: s.setupFor(session, meta, main, where, main.Vision, limit), subagent: subagent, subagents: limit, where: where,
@@ -126,6 +126,7 @@ func (s *Service) setupFor(session *live, meta Meta, main llm.Choice, where plac
 		Model:         s.deps.Model,
 		NewID:         s.deps.NewID,
 		Pictures:      &agent.PictureView{Folder: s.picturesFolderOf(session), Seen: sees},
+		LoadSkill:     where.skills.Load,
 		Skills:        where.skills.List,
 		SystemPrompt: agent.SystemPrompt(meta.Workspace, where.scratch, where.platform, agent.Servers{
 			Browser: s.deps.Browser != nil && sees, Images: s.deps.ImageURL != "",

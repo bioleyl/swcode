@@ -47,6 +47,8 @@ func charsOf(event protocol.SessionEvent) int {
 		// About as long as the lines the model reads.
 		data, _ := json.Marshal(value.Skills)
 		return chars(string(data))
+	case protocol.SessionEventSkillLoaded:
+		return chars(LoadedSkillText(value))
 	case protocol.SessionEventContextCompacted:
 		return chars(value.Summary)
 	}

@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"swcode/daemon/fakellama"
+	"swcode/daemon/protocol"
 	"swcode/daemon/sessions"
 	. "swcode/daemon/testapp"
 )
@@ -147,5 +148,67 @@ func TestTheSkillsAreToldAgainAfterACompaction(t *testing.T) {
 	requests := test.Requests()
 	if !strings.Contains(RequestText(requests[len(requests)-1]), "- deploy: Deploys the app") {
 		t.Fatal("the skills were not told after the summary")
+	}
+}
+
+// releaseNotes is a skill of the project's own .agents folder.
+var releaseNotes = map[string]string{
+	".agents/skills/release-notes/SKILL.md": "---\nname: release-notes\ndescription: Writes release notes.\n---\nList the commits.",
+}
+
+func TestAProjectsPageListsTheSkillsItsSessionsFindAndWhereEachIs(t *testing.T) {
+	test := startWithDeploy(t, Options{Files: releaseNotes})
+	project := test.App.Projects.Ensure(test.Workspace, protocol.LocalHost())
+	_, listed := test.Call("GET", protocol.EndpointSkills+"?project="+project.ID, nil)
+	Expect(t, listed, map[string]any{"skills": []any{
+		map[string]any{"folder": filepath.Join(test.Home, ".agents", "skills", "deploy"), "name": "deploy", "origin": "personal"},
+		map[string]any{"folder": filepath.Join(test.Workspace, ".agents", "skills", "release-notes"), "name": "release-notes", "origin": "project"},
+	}})
+	if status, _ := test.Call("GET", protocol.EndpointSkills+"?project=nope", nil); status != 404 {
+		t.Fatalf("status %d", status)
+	}
+}
+
+func TestASkillTurnedOffInAProjectIsNeitherToldNorRun(t *testing.T) {
+	test := startWithDeploy(t, Options{Files: releaseNotes, Replies: []fakellama.Reply{text("Done."), text("Again.")}})
+	project := test.App.Projects.Ensure(test.Workspace, protocol.LocalHost())
+	if problem := test.App.Projects.SetSkill(project.ID, "deploy", false); problem != "" {
+		t.Fatal(problem)
+	}
+	session := test.NewSession(sessions.Request{Prompt: "/deploy staging"})
+	test.UntilIdle(session.ID)
+	Expect(t, listings(test, session.ID)[0], `{"skills":[{"name":"release-notes"}]}`)
+	if len(OfKind(test.Events(session.ID), "skillLoaded")) != 0 {
+		t.Fatal("a skill turned off was run")
+	}
+	// On again, it is told from the next turn on.
+	test.App.Projects.SetSkill(project.ID, "deploy", true)
+	if got := test.App.Projects.List()[0].SkillsOff; len(got) != 0 {
+		t.Fatalf("still off: %v", got)
+	}
+	test.App.Sessions.SendPrompt(session.ID, "Once more", nil)
+	test.WaitForEvent("turnFinished", 2)
+	told := listings(test, session.ID)
+	Expect(t, told[len(told)-1], `{"skills":[{"name":"deploy"},{"name":"release-notes"}]}`)
+}
+
+func TestAMessageThatStartsWithASkillsNameRunsItTheModelReadingItWithTheMessage(t *testing.T) {
+	test := startWithDeploy(t, Options{Replies: []fakellama.Reply{text("Deployed."), text("Hi.")}})
+	session := test.NewSession(sessions.Request{Prompt: "/deploy staging"})
+	test.UntilIdle(session.ID)
+	Expect(t, Kinds(test.Events(session.ID)), []any{"turnStarted", "userMessage", "skillsListed", "skillLoaded", "assistantMessage", "turnFinished"})
+	Expect(t, OfKind(test.Events(session.ID), "skillLoaded")[0], `{"name":"deploy"}`)
+	messages := fakellama.Messages(test.Requests()[0])
+	content := messages[len(messages)-1]["content"].(string)
+	if len(messages) != 2 || !strings.Contains(content, "/deploy staging\n\nThe user’s skills:") ||
+		!strings.Contains(content, "The user ran /deploy: that skill is loaded below, for their message. Follow it.\n\nBase directory for this skill: ") ||
+		!strings.HasSuffix(content, "[Files of this skill, to read with skill and file: references/hosts.md]") {
+		t.Fatalf("content %q", content)
+	}
+	// A slash and a word that names no skill is a message.
+	test.App.Sessions.SendPrompt(session.ID, "/usr/bin is on the path", nil)
+	test.WaitForEvent("turnFinished", 2)
+	if len(OfKind(test.Events(session.ID), "skillLoaded")) != 1 {
+		t.Fatal("a message ran a skill")
 	}
 }

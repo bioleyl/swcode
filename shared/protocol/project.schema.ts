@@ -25,6 +25,8 @@ export const ProjectSchema = z.object({
   id: z.string(),
   name: z.string(),
   path: z.string(),
+  // The skills its sessions are neither told of nor can run, by name: every skill found is on until turned off here.
+  skillsOff: z.array(z.string()).default([]),
 });
 export type Project = z.infer<typeof ProjectSchema>;
 

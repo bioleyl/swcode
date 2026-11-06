@@ -161,6 +161,9 @@ export const SessionEventSchema = z.discriminatedUnion('kind', [
   }),
   // The user's skills, as the model was told them: at a turn's start when they changed, and after a compaction.
   z.object({ at, id: z.string(), kind: z.literal('skillsListed'), skills: z.array(SkillSummarySchema) }),
+  // A skill the person ran with /<its name> at the start of their message, as the model read it then: right after
+  // that message.
+  z.object({ at, id: z.string(), kind: z.literal('skillLoaded'), name: z.string(), text: z.string() }),
   z.object({
     at,
     callId: z.string(),

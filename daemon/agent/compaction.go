@@ -63,6 +63,8 @@ func lineOf(event protocol.SessionEvent) (string, bool) {
 		return "Result: " + clip(value.Output, messageChars), true
 	case protocol.SessionEventReminder:
 		return "swcode: " + value.Text, true
+	case protocol.SessionEventSkillLoaded:
+		return "swcode: the user ran the skill " + value.Name + ": " + clip(value.Text, messageChars), true
 	case protocol.SessionEventContextCompacted:
 		return "Summary of what came before: " + value.Summary, true
 	}

@@ -122,6 +122,13 @@ export class ScConversation extends ScElement {
           <p>{event.text}</p>
         </details>
       ),
+    skillLoaded: (event) =>
+      this.add(
+        <details class="compaction">
+          <summary>{`Ran the skill ${event.name}`}</summary>
+          <p>{event.text}</p>
+        </details>
+      ),
     skillsListed: (event) =>
       this.add(
         <details class="compaction">

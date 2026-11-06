@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -19,10 +20,12 @@ const allFiles = "**/*"
 
 var pathSeparators = regexp.MustCompile(`[\\/]`)
 
-// Place is where a session's agent works, which decides the skills it has: they are read there.
+// Place is where a session's agent works, which decides the skills it has: they are read there, but those its
+// project turned off.
 type Place struct {
 	Host      hosts.Host
 	Workspace string
+	Off       []string
 }
 
 // Port is a session's skills, for the main agent's tools.
@@ -57,13 +60,19 @@ type port struct {
 	found   []HostSkill
 }
 
-// skills is each name once: the first of two skills of the same name wins, the person's before the project's.
+// skills is each name once, but those turned off: the first of two skills of the same name wins, the person's
+// before the project's, and turning a name off leaves out both.
 func (p *port) skills(ctx context.Context) []HostSkill {
-	p.once.Do(func() { p.found = distinct(p.catalog.hostSkills(ctx, p.place)) })
+	p.once.Do(func() {
+		p.found = slices.DeleteFunc(Distinct(p.catalog.hostSkills(ctx, p.place)), func(skill HostSkill) bool {
+			return slices.Contains(p.place.Off, skill.Name)
+		})
+	})
 	return p.found
 }
 
-func distinct(found []HostSkill) []HostSkill {
+// Distinct is each name once: the first of two skills of the same name wins.
+func Distinct(found []HostSkill) []HostSkill {
 	kept := []HostSkill{}
 	seen := map[string]bool{}
 	for _, skill := range found {

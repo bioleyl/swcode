@@ -10,6 +10,25 @@
   gap: var(--jl-space-6);
 }
 
+.side,
+.skill-list {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.side {
+  gap: var(--jl-space-6);
+}
+
+.skill-list {
+  gap: var(--jl-space-4);
+}
+
+.skill-list jl-switch {
+  overflow-wrap: anywhere;
+}
+
 .sessions {
   display: flex;
   flex-direction: column;

@@ -80,8 +80,10 @@ type Deps struct {
 	ImageURL     string
 	ImagesFolder string
 	// Browser draws screenshots, when the daemon has one.
-	Browser   browser.Browser
-	Skills    *catalog.Catalog
+	Browser browser.Browser
+	Skills  *catalog.Catalog
+	// SkillsOff is the skills a folder's project turned off, by name: its sessions are neither told of them nor run them.
+	SkillsOff func(path string, host protocol.HostRef) []string
 	Workspace string
 	Thinking  Thinking
 	// OnWorkspace is told the folder of each new session, and its host: every folder sessions work in has a project.

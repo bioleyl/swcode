@@ -1,7 +1,16 @@
 import { describe, expect, it } from 'vitest';
 
 import { activityLine } from '../src/lib/activity';
-import { commandLine, commandsMatching, commandText, SESSION_COMMANDS, stepIn } from '../src/lib/commands';
+import {
+  commandLine,
+  commandsMatching,
+  commandText,
+  menuMatching,
+  SESSION_COMMANDS,
+  skillLine,
+  skillText,
+  stepIn,
+} from '../src/lib/commands';
 import { daemonLine } from '../src/lib/daemon-lines';
 import { childPath } from '../src/lib/folders';
 import { keepingEnd } from '../src/lib/follow-end';
@@ -9,6 +18,7 @@ import { ago, contextText, folderName, percent, tokens } from '../src/lib/format
 import { blocksOf } from '../src/lib/markdown';
 import { matchCommands, paletteCommands, paletteTarget } from '../src/lib/palette';
 import { groupByProject, preferredProject, removalConsequence } from '../src/lib/project-groups';
+import { isSkillOn, skillsOn } from '../src/lib/project-skills';
 import { SESSION_STATUS_ICONS } from '../src/lib/session-status';
 import { sshHostProblem, sshHostsLine, sshHostsOf } from '../src/lib/ssh-hosts';
 import { sessionGrantLabel, toolLabel } from '../src/lib/tool-labels';
@@ -152,6 +162,7 @@ describe('groupByProject', () => {
     id,
     name: id,
     path,
+    skillsOff: [],
   });
   const Projects = [project('shop', '/w/shop'), project('api', '/w/api'), project('blog', '/w/blog')];
 
@@ -263,6 +274,7 @@ describe('the command palette', () => {
     id: 'p1',
     name: 'shop',
     path: '/home/me/shop',
+    skillsOff: [],
   };
   const session = (id: string, status: SessionSummary['status']): SessionSummary => ({
     concise: false,
@@ -355,12 +367,55 @@ describe('commands', () => {
     expect(commandsMatching('/', [])).toEqual([]);
   });
 
+  it('list the skills after the commands, one named as a command left to it, as a skill runs as a message', () => {
+    const skills = [
+      { description: 'Deploys.', name: 'deploy' },
+      { description: 'Writes notes.', name: 'Release-Notes' },
+      { description: 'Not this one.', name: 'compact' },
+    ];
+    expect(menuMatching('/', ['compact'], skills)).toEqual([
+      { kind: 'command', name: 'compact' },
+      { kind: 'skill', skill: skills[0] },
+      { kind: 'skill', skill: skills[1] },
+    ]);
+    expect(menuMatching('/re', code, skills)).toEqual([{ kind: 'skill', skill: skills[1] }]);
+    expect(menuMatching('/deploy staging', code, skills)).toEqual([]);
+    expect(skillLine('deploy')).toBe('/deploy');
+    expect(skillText('deploy')).toBe('/deploy ');
+  });
+
   it('complete a command with a space when words follow it, and step round the list', () => {
     expect(commandText('peek')).toBe('/peek ');
     expect(commandText('compact')).toBe('/compact');
     expect(stepIn(3, 1, 4)).toBe(0);
     expect(stepIn(0, -1, 4)).toBe(3);
     expect(stepIn(0, 1, 0)).toBe(0);
+  });
+});
+
+describe('a project’s skills', () => {
+  const project: Project = {
+    createdAt: '2026-11-06T09:00:00.000Z',
+    host: { kind: 'local' },
+    id: 'p1',
+    name: 'shop',
+    path: '/w/shop',
+    skillsOff: ['deploy'],
+  };
+  const found = [
+    {
+      description: 'Deploys.',
+      folder: '/home/me/.agents/skills/deploy',
+      name: 'deploy',
+      origin: 'personal' as const,
+    },
+    { description: 'Notes.', folder: '/w/shop/.agents/skills/notes', name: 'notes', origin: 'project' as const },
+  ];
+
+  it('are on until the project turns them off, and the composer runs those on', () => {
+    expect(isSkillOn(project, 'deploy')).toBe(false);
+    expect(isSkillOn(project, 'notes')).toBe(true);
+    expect(skillsOn(found, project)).toEqual([{ description: 'Notes.', name: 'notes' }]);
   });
 });
 

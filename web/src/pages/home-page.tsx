@@ -7,12 +7,14 @@ import { folderName } from '../lib/format';
 import { appDefaults, CONCISE_AT_FIRST, startingChoices } from '../lib/new-session';
 import { presetOf, presetStatusOf } from '../lib/presets';
 import { preferredProject } from '../lib/project-groups';
+import { skillsOn } from '../lib/project-skills';
 import { sessionsOf } from '../lib/session-kinds';
 import { ScComposer } from '../organisms/sc-composer';
 import { daemon, daemonBus } from '../services/daemon';
 import { daemonState, daemonStatusBus } from '../services/daemon-status';
 import { presetChoices, presetsBus } from '../services/presets';
 import { allProjects, askForProject, findProject, projectListBus } from '../services/project-list';
+import { foundSkills, projectSkillsBus, readProjectSkills } from '../services/project-skills';
 import { allSessions, sessionListBus } from '../services/session-list';
 import { BASE_STYLES } from '../styles/shared';
 import styles from './home-page.css?inline';
@@ -33,7 +35,10 @@ const projectLabel = (project: Project): string =>
 
 const projectOption = (project: Project): SelectOption => ({ label: projectLabel(project), value: project.id });
 
-/** Where a session starts: the project to work in, and the first message, which creates it. */
+/**
+ * Where a session starts: the project to work in, and the first message, which creates it; the composer's / commands
+ * are the skills that project has on.
+ */
 export class HomePage extends ScElement {
   static readonly selector = 'home-page';
 
@@ -41,6 +46,8 @@ export class HomePage extends ScElement {
   private _picks: Partial<SessionDefaults> = {};
   // The project in the address (/new/<id>), then the one the person picks.
   private _chosen: string | undefined;
+  // The project whose skills this page read for the composer: they are read again for another one.
+  private _skillsOf: string | undefined;
 
   readonly route = this.useAttributes({
     project: (id) => {
@@ -95,6 +102,7 @@ export class HomePage extends ScElement {
     this.onBus(projectListBus, 'changed', () => this.renderProjects());
     this.onBus(sessionListBus, 'changed', () => this.renderProjects());
     this.onBus(presetsBus, 'changed', () => this.renderProjects());
+    this.onBus(projectSkillsBus, 'changed', () => this.renderSkills());
     this.onBus(daemonBus, 'message', (message) => {
       if (message.type !== 'problem') {
         return;
@@ -160,6 +168,18 @@ export class HomePage extends ScElement {
     composer.mode.set(choices.mode);
     composer.thinking.set(choices.thinking);
     composer.concise.set(choices.concise);
+    this.renderSkills();
+  }
+
+  /** The skills of the project chosen, which the first message may run: read on its host once it is chosen. */
+  private renderSkills(): void {
+    const project = findProject(this._refs.project.value.get());
+    this._refs.composer.skills.set(project ? skillsOn(foundSkills(project.id), project) : []);
+    if (!project || project.id === this._skillsOf) {
+      return;
+    }
+    this._skillsOf = project.id;
+    void readProjectSkills(project.id);
   }
 
   /** What the daemon refused, under the message: nothing once a new one goes. */

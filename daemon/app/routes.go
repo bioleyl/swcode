@@ -1,13 +1,17 @@
 package app
 
 import (
+	"context"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 
+	"swcode/daemon/catalog"
 	"swcode/daemon/config"
+	"swcode/daemon/hosts"
 	"swcode/daemon/llm"
 	"swcode/daemon/protocol"
 	"swcode/daemon/version"
@@ -18,6 +22,7 @@ const (
 	noCode     = "Send the pairing code of the QR code."
 	codeUsed   = "This pairing code expired or was already used: scan the QR code again, it changes every minute."
 	noDevice   = "There is no such phone."
+	noProject  = "There is no such project."
 	busy       = "A session is working: stop it first. The daemon restarts to take the new settings."
 	unreadable = "The settings page sent something the daemon does not understand."
 	unreached  = "Nothing answered there as llm-server."
@@ -239,6 +244,32 @@ func (a *App) settingsProblem(values map[string]string) string {
 		return err.Error()
 	}
 	return ""
+}
+
+// skillRoutes are a project's page's: the skills its sessions find, read on its host as a turn reads them.
+func (a *App) skillRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("GET "+protocol.EndpointSkills, func(response http.ResponseWriter, request *http.Request) {
+		project, found := a.Projects.ByID(request.URL.Query().Get(protocol.ProjectParam))
+		if !found {
+			fail(response, http.StatusNotFound, noProject)
+			return
+		}
+		answer(response, a.projectSkills(request.Context(), project))
+	})
+}
+
+// projectSkills is each name once, the person's first, whether the project turned it off or not; why the host could
+// not be read, when it could not.
+func (a *App) projectSkills(ctx context.Context, project protocol.Project) protocol.ProjectSkills {
+	found, err := catalog.Find(ctx, a.hosts.HostOf(project.Host), project.Path)
+	if err != nil {
+		return protocol.ProjectSkills{Problem: fmt.Sprintf("%s could not be read: %v", hosts.Label(project.Host), err)}
+	}
+	listed := []protocol.ProjectSkill{}
+	for _, skill := range catalog.Distinct(found) {
+		listed = append(listed, protocol.ProjectSkill{Description: skill.Description, Folder: skill.Folder, Name: skill.Name, Origin: skill.Origin})
+	}
+	return protocol.ProjectSkills{Skills: listed}
 }
 
 // closingRoutes tell what closing the desktop app would stop, for its window to ask first: no warning when nothing
