@@ -6,9 +6,7 @@ import (
 	"net/url"
 	"strings"
 
-	"swcode/daemon/permissions"
 	"swcode/daemon/protocol"
-	"swcode/daemon/skills"
 	"swcode/daemon/web"
 )
 
@@ -262,19 +260,18 @@ var agentTool = Define(Spec[agentInput]{
 })
 
 type skillInput struct {
-	Arguments string `json:"arguments"`
-	File      string `json:"file"`
-	Name      string `json:"name"`
+	File string `json:"file"`
+	Name string `json:"name"`
 }
 
-// skillTool loads one of the user's skills: its instructions, then the files of its folder they name. swcode's own
-// are kept by the daemon, the same on every host; Claude Code's are read where the project is.
+// skillTool loads one of the user's skills: its instructions, then the files of its folder they name. They are read
+// where the project is, in the .agents/skills folders.
 var skillTool = Define(Spec[skillInput]{
 	Check: func(ctx context.Context, input skillInput, tc *Context) Check {
 		if tc.Skills == nil {
 			return Refuse(NoSkills)
 		}
-		read := tc.Skills.Load(ctx, input.Name, input.Arguments)
+		read := tc.Skills.Load(ctx, input.Name)
 		if input.File != "" {
 			read = tc.Skills.ReadFile(ctx, input.Name, input.File)
 		}
@@ -285,16 +282,15 @@ var skillTool = Define(Spec[skillInput]{
 			return Outcome{Meta: linesLabel(strings.Count(read.Text, "\n") + 1), OK: true, Output: read.Text}
 		}, nil)
 	},
-	Description: "Loads one of the user’s skills, listed in the conversation: their instructions for a kind of task. Load the skill that fits before you start the task, and follow it; when it names its base directory, its scripts are run from there. With file, reads a file of the skill’s folder that its instructions name.",
+	Description: "Loads one of the user’s skills, listed in the conversation: their instructions for a kind of task. Load the skill that fits before you start the task, and follow it; its scripts are run from its base directory. With file, reads a file of the skill’s folder that its instructions name.",
 	Input: Object(
-		Optional("arguments", String().Trimmed().Describe("What the skill works on, when its description or argument hint asks for it: an issue number, a file, words. As on a command line: quote what holds spaces.")),
 		Optional("file", String().Trimmed().Min(1).Describe("A file of the skill’s folder that its instructions name, such as references/api.md.")),
 		Required("name", String().Trimmed().Min(1).Describe("The skill’s name, as the list of skills gives it.")),
 	),
 	Name:    protocol.ToolNameSkill,
 	Subject: reads[skillInput],
 	Summarize: func(input skillInput) string {
-		return strings.Join(nonEmpty(input.Name, input.Arguments, input.File), ": ")
+		return strings.Join(nonEmpty(input.Name, input.File), ": ")
 	},
 })
 
@@ -307,39 +303,3 @@ func nonEmpty(parts ...string) []string {
 	}
 	return kept
 }
-
-// saveSkillTool saves a skill the user asked for, in the daemon's skills folder: a new one, or a new version of
-// one, which the person sees as a change to its file. Sessions are told of it from their next turn on.
-var saveSkillTool = Define(Spec[protocol.Skill]{
-	Check: func(_ context.Context, input protocol.Skill, tc *Context) Check {
-		if tc.Skills == nil {
-			return Refuse(NoSkills)
-		}
-		if !protocol.SkillNamePattern.MatchString(input.Name) {
-			return Refuse("name: lowercase letters, digits and hyphens, such as deploy-staging")
-		}
-		draft := tc.Skills.Draft(input)
-		diff := diffDisplay(FileDiff(draft.Label, draft.Before, draft.After))
-		return Ready(func(context.Context) Outcome {
-			if err := tc.Skills.Save(input); err != nil {
-				return Failure(err.Error(), "failed")
-			}
-			verb := "Replaced"
-			if draft.Before == "" {
-				verb = "Created"
-			}
-			return Outcome{Display: diff, OK: true, Output: fmt.Sprintf("%s the skill %s. Sessions are told of it from their next turn on.", verb, input.Name)}
-		}, diff)
-	},
-	Description: "Saves a skill when the user asks for one: instructions for a kind of task, kept for later sessions. Creates it, or replaces the skill of that name: to change a skill, load it with skill first, then give it whole.",
-	Input: Object(
-		Required("description", String().Trimmed().Min(1).Max(protocol.MaxSkillDescription).Describe("What the skill is for and when to use it, in one or two sentences: agents pick a skill by this alone.")),
-		Required("instructions", String().Trimmed().Min(1).Describe("The instructions, in markdown: how to do the task, step by step, with the commands, paths and rules it needs.")),
-		Required("name", String().Trimmed().Min(1).Max(protocol.MaxSkillName).Describe("Lowercase letters, digits and hyphens, such as deploy-staging. A skill of that name is replaced.")),
-	),
-	Name: protocol.ToolNameSaveskill,
-	Subject: func(input protocol.Skill, _ *Context) permissions.Subject {
-		return edits(skills.Label(input.Name))
-	},
-	Summarize: func(input protocol.Skill) string { return input.Name },
-})

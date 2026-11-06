@@ -11,8 +11,6 @@ export const SETTINGS_TOPICS = [
   'phone',
   'startup',
   'computers',
-  'skills',
-  'plugins',
 ] as const;
 export type SettingsTopic = (typeof SETTINGS_TOPICS)[number];
 
@@ -28,9 +26,7 @@ export const SETTINGS_TOPIC_LABELS: Readonly<Record<SettingsTopic, { label: stri
   network: { icon: 'network', label: 'Network' },
   phone: { icon: 'smartphone', label: 'Phone' },
   pictures: { icon: 'image', label: 'Pictures' },
-  plugins: { icon: 'puzzle', label: 'Plugins' },
   projects: { icon: 'folder', label: 'Projects' },
-  skills: { icon: 'book-open', label: 'Skills' },
   ssh: { icon: 'server', label: 'SSH' },
   startup: { icon: 'power', label: 'Startup' },
   thinking: { icon: 'brain', label: 'Thinking' },

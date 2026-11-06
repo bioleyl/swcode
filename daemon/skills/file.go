@@ -1,5 +1,5 @@
-// Package skills is the user's instructions for kinds of tasks: SKILL.md files as Agent Skills (and Claude Code)
-// write them, swcode's own kept in a folder of the daemon.
+// Package skills is the user's instructions for kinds of tasks: SKILL.md files as Agent Skills write them, a folder
+// each in the common .agents/skills folders.
 package skills
 
 import (
@@ -7,8 +7,6 @@ import (
 	"regexp"
 	"strings"
 	"unicode/utf8"
-
-	"swcode/daemon/protocol"
 )
 
 // SkillFile is the file of a skill's folder.
@@ -17,18 +15,12 @@ const SkillFile = "SKILL.md"
 const (
 	nameKey        = "name"
 	descriptionKey = "description"
-	// Claude Code's keys swcode acts on; it keeps the others (allowed-tools, model, hooks…) and ignores them.
-	forPeopleKey    = "disable-model-invocation"
-	whenToUseKey    = "when_to_use"
-	argumentsKey    = "arguments"
-	argumentHintKey = "argument-hint"
-	literalMark     = "|"
-	doubleQuote     = `"`
-	singleQuote     = "'"
-	escapedQuote    = "''"
-	listSeparator   = ","
-	// Claude Code cuts a skill's line in the listing there, its description and when_to_use together.
-	maxListedDescription = 1536
+	literalMark    = "|"
+	doubleQuote    = `"`
+	singleQuote    = "'"
+	escapedQuote   = "''"
+	// maxDescription is Agent Skills' longest description: what the agent reads of a skill in every conversation.
+	maxDescription = 1024
 )
 
 var (
@@ -41,31 +33,15 @@ var (
 	// A line break between two lines of text folds to a space; a blank line stays a line break.
 	foldedBreak = regexp.MustCompile(`([^\n])\n([^\n])`)
 	blankLine   = regexp.MustCompile(`\n\n`)
-	listItem    = regexp.MustCompile(`^\s*-\s+(.*)$`)
-	flowList    = regexp.MustCompile(`^\[(.*)\]$`)
-	quotes      = regexp.MustCompile(`^(["'])(.*)["']$`)
-	headingMark = regexp.MustCompile(`^#+\s*`)
-	// trueWords are YAML's words for true, in any case, as Claude Code reads them.
-	trueWords = map[string]bool{"true": true, "yes": true, "on": true, "1": true}
-	ownKeys   = map[string]bool{nameKey: true, descriptionKey: true}
 )
 
-// File is a SKILL.md as the daemon reads it: the frontmatter's name and description, then the instructions.
+// File is a SKILL.md as the daemon reads it: the frontmatter's name and description, then the instructions. Its
+// other keys (license, metadata…) are left alone.
 type File struct {
-	// Name is the frontmatter's name, empty when it has none; the skill's name is its folder's.
+	// Name is the frontmatter's name, empty when it has none; the skill's name is then its folder's.
 	Name         string
 	Description  string
 	Instructions string
-	// Extra is the frontmatter's other lines (license, metadata…), kept as they are when the skill is saved again.
-	Extra string
-	// ForPeople is disable-model-invocation: for Claude Code's person to type, not for the agent to load.
-	ForPeople bool
-	// WhenToUse is when_to_use: more of what the skill is for, after its description in the list.
-	WhenToUse string
-	// ArgumentNames are the arguments' names in order, which the instructions use as $name.
-	ArgumentNames []string
-	// ArgumentHint is what the skill is given, such as [issue-number].
-	ArgumentHint string
 }
 
 // entry is a key of the frontmatter, with the lines its value takes: the key's own, and the indented ones under it.
@@ -73,25 +49,18 @@ type entry struct {
 	key   string
 	first string
 	rest  []string
-	raw   []string
-}
-
-// Label is the file a skill's name has, as the conversation names it.
-func Label(name string) string {
-	return "skills/" + name + "/" + SkillFile
 }
 
 func entriesOf(block string) []*entry {
 	entries := []*entry{}
 	for _, line := range lineBreak.Split(block, -1) {
 		if found := keyLine.FindStringSubmatch(line); found != nil {
-			entries = append(entries, &entry{first: strings.TrimSpace(found[2]), key: found[1], raw: []string{line}})
+			entries = append(entries, &entry{first: strings.TrimSpace(found[2]), key: found[1]})
 			continue
 		}
 		if len(entries) > 0 {
 			last := entries[len(entries)-1]
 			last.rest = append(last.rest, line)
-			last.raw = append(last.raw, line)
 		}
 	}
 	return entries
@@ -161,36 +130,12 @@ func (e *entry) value() string {
 	return folded(append([]string{e.first}, e.rest...))
 }
 
-func unquoted(text string) string {
-	if found := quotes.FindStringSubmatch(text); found != nil {
-		return found[2]
+// clippedDescription is a description as long as Agent Skills allow one.
+func clippedDescription(text string) string {
+	if utf8.RuneCountInString(text) <= maxDescription {
+		return text
 	}
-	return text
-}
-
-// list reads a list as frontmatter writes one: `- item` lines under the key, [a, b], or words on its line.
-func (e *entry) list() []string {
-	items := []string{}
-	for _, line := range e.rest {
-		if found := listItem.FindStringSubmatch(line); found != nil {
-			items = append(items, strings.TrimSpace(found[1]))
-		}
-	}
-	if len(items) == 0 {
-		text := e.value()
-		if flow := flowList.FindStringSubmatch(text); flow != nil {
-			items = strings.Split(flow[1], listSeparator)
-		} else {
-			items = strings.Fields(text)
-		}
-	}
-	kept := []string{}
-	for _, item := range items {
-		if value := unquoted(strings.TrimSpace(item)); value != "" {
-			kept = append(kept, value)
-		}
-	}
-	return kept
+	return string([]rune(text)[:maxDescription])
 }
 
 // Parse reads a SKILL.md: the frontmatter between its --- lines, then the instructions; a file without one is all
@@ -198,103 +143,20 @@ func (e *entry) list() []string {
 func Parse(text string) File {
 	match := frontmatter.FindStringSubmatchIndex(text)
 	if match == nil {
-		return File{ArgumentNames: []string{}, Instructions: strings.TrimSpace(text)}
+		return File{Instructions: strings.TrimSpace(text)}
 	}
 	entries := entriesOf(text[match[2]:match[3]])
-	find := func(key string) *entry {
+	value := func(key string) string {
 		for _, each := range entries {
 			if each.key == key {
-				return each
+				return each.value()
 			}
-		}
-		return nil
-	}
-	value := func(key string) string {
-		if found := find(key); found != nil {
-			return found.value()
 		}
 		return ""
 	}
-	extra := []string{}
-	for _, each := range entries {
-		if !ownKeys[each.key] {
-			extra = append(extra, each.raw...)
-		}
-	}
-	names := []string{}
-	if found := find(argumentsKey); found != nil {
-		names = found.list()
-	}
 	return File{
-		ArgumentHint:  value(argumentHintKey),
-		ArgumentNames: names,
-		Description:   value(descriptionKey),
-		Extra:         strings.Join(extra, "\n"),
-		ForPeople:     trueWords[strings.ToLower(value(forPeopleKey))],
-		Instructions:  strings.TrimRight(leadingBlankLines.ReplaceAllString(text[match[1]:], ""), " \t\r\n"),
-		Name:          value(nameKey),
-		WhenToUse:     value(whenToUseKey),
+		Description:  clippedDescription(value(descriptionKey)),
+		Instructions: strings.TrimRight(leadingBlankLines.ReplaceAllString(text[match[1]:], ""), " \t\r\n"),
+		Name:         value(nameKey),
 	}
-}
-
-func firstLine(text string) string {
-	for _, line := range lineBreak.Split(text, -1) {
-		if strings.TrimSpace(line) != "" {
-			return strings.TrimSpace(headingMark.ReplaceAllString(line, ""))
-		}
-	}
-	return ""
-}
-
-// ListedDescription is a Claude Code skill's line in the list the agent reads: its description, or its first line
-// without one, then when_to_use, then the arguments it takes.
-func ListedDescription(file File) string {
-	description := file.Description
-	if description == "" {
-		description = firstLine(file.Instructions)
-	}
-	hint := ""
-	if file.ArgumentHint != "" {
-		hint = "Arguments: " + file.ArgumentHint + "."
-	}
-	parts := []string{}
-	for _, part := range []string{description, file.WhenToUse, hint} {
-		if part != "" {
-			parts = append(parts, part)
-		}
-	}
-	listed := strings.Join(parts, " ")
-	if utf8.RuneCountInString(listed) > maxListedDescription {
-		return string([]rune(listed)[:maxListedDescription])
-	}
-	return listed
-}
-
-// plainValue: a plain YAML value needs no quotes, no indicator first, no ": " or " #" inside, nothing blank at its
-// end.
-var (
-	plainStart  = regexp.MustCompile(`^[-?:,\[\]{}#&*!|>'"%@` + "`" + `\s]`)
-	plainInside = regexp.MustCompile(`: | #|\s$`)
-)
-
-func yamlValue(text string) string {
-	if text != "" && !plainStart.MatchString(text) && !plainInside.MatchString(text) {
-		return text
-	}
-	// JSON's escapes are YAML's in double quotes.
-	var quoted strings.Builder
-	encoder := json.NewEncoder(&quoted)
-	encoder.SetEscapeHTML(false)
-	_ = encoder.Encode(text)
-	return strings.TrimSuffix(quoted.String(), "\n")
-}
-
-// FileText is the SKILL.md of a skill, with the other lines its frontmatter had.
-func FileText(skill protocol.Skill, extra string) string {
-	lines := []string{"---", nameKey + ": " + skill.Name, descriptionKey + ": " + yamlValue(skill.Description)}
-	if extra != "" {
-		lines = append(lines, extra)
-	}
-	lines = append(lines, "---", "", strings.TrimSpace(skill.Instructions), "")
-	return strings.Join(lines, "\n")
 }

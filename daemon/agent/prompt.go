@@ -66,7 +66,7 @@ func SystemPrompt(workspace, scratch, platform string, servers Servers, subagent
 	}
 	lines = append(lines,
 		"- The user’s skills are their instructions for kinds of tasks, listed in the conversation: when one fits the task, load it with skill before you start, and follow it.",
-		"- When the user asks for a skill (a way to do a kind of task, kept for later sessions), write it with saveskill: its name, what it is for and when to use it, and the instructions.",
+		"- When the user asks for a skill (a way to do a kind of task, kept for later sessions), write it in the project as .agents/skills/<name>/SKILL.md: a frontmatter with its name (lowercase letters, digits and hyphens) and its description (what it is for and when to use it), then the instructions.",
 		"- When a command fails twice, check what you assumed (its name, its --help, the project’s docs) before you try another way.",
 		"- When a decision is the user’s to make (what they want, a choice between approaches), ask them with question instead of guessing. Find out by yourself whatever the project can tell you.",
 		"- When a call is declined, stop and wait for the user’s instructions.",

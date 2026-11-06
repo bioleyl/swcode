@@ -94,8 +94,9 @@ constants, guard clauses, exhaustive mappers, types in `types/` directories).
 - `/tmp` is a 16 GB tmpfs in RAM: a benchmark's workspaces and outputs go on the disk.
 - **A new tool or system prompt line lengthens every request**: the compaction tests size their context to what
   the prompt and the tools take, and compact too early when those grow.
-- **Claude Code's skills are read on the project's host**, from its home (`daemon/claude/reader.go`): the test app
-  and the e2e rig give the daemon a home of their own, or the person's `~/.claude` enters the tests.
+- **The skills are read on the project's host**, from `.agents/skills` in its home and in the project
+  (`daemon/catalog/find.go`): the test app and the e2e rig give the daemon a home of their own, or the person's
+  `~/.agents` enters the tests.
 - **The skills are listed in the conversation, never in the system prompt** (`daemon/agent/skills.go`): two user
   messages in a row are joined into one (`ConversationOf`), since some chat templates want the roles to alternate.
 - Commit only after `npm run check` passed: it stops at the first failing step.

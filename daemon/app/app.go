@@ -18,7 +18,6 @@ import (
 	"swcode"
 	"swcode/daemon/browser"
 	"swcode/daemon/catalog"
-	"swcode/daemon/claude"
 	"swcode/daemon/config"
 	"swcode/daemon/hosts"
 	"swcode/daemon/llm"
@@ -27,7 +26,6 @@ import (
 	"swcode/daemon/projects"
 	"swcode/daemon/protocol"
 	"swcode/daemon/sessions"
-	"swcode/daemon/skills"
 	"swcode/daemon/tools"
 	"swcode/daemon/web"
 )
@@ -40,9 +38,6 @@ const (
 	// devicesFile is the paired phones, their tokens kept as hashes.
 	devicesFile  = "devices.json"
 	projectsFile = "projects.json"
-	// skillsFolder is the user's skills, a folder each; claudeFile, which of Claude Code's swcode reads.
-	skillsFolder = "skills"
-	claudeFile   = "claude.json"
 	// maxSteps is enough for a long task (a local model takes 20 to 40 s a step); past it, the model reports what it
 	// did.
 	maxSteps = 150
@@ -72,10 +67,8 @@ type Options struct {
 	Environment map[string]string
 	// Defaults is what settings fall back on, to check new ones.
 	Defaults config.Defaults
-	// DefaultSkills is the files a new skills folder starts with: the program's own otherwise.
-	DefaultSkills fs.FS
-	// Home is this computer's home folder, where Claude Code's ~/.claude is: a test's own, without the person's
-	// skills.
+	// Home is this computer's home folder, where the person's skills are (~/.agents/skills): a test's own, without
+	// the person's.
 	Home string
 	// Log writes the daemon's log; nothing for the tests.
 	Log io.Writer
@@ -102,7 +95,6 @@ type App struct {
 	http         *http.Client
 	hosts        *hosts.Registry
 	pairing      *pairing.Pairing
-	skills       *skills.Store
 	logger       *slog.Logger
 }
 
@@ -136,9 +128,6 @@ func (o *Options) fill() {
 	}
 	if o.Home == "" {
 		o.Home, _ = os.UserHomeDir()
-	}
-	if o.DefaultSkills == nil {
-		o.DefaultSkills = swcode.DefaultSkills()
 	}
 	if o.Log == nil {
 		o.Log = io.Discard
@@ -184,18 +173,11 @@ func New(settings config.Config, options Options) (*App, error) {
 	registry := hosts.NewRegistry(local, options.ConnectHost)
 	found := options.browser()
 	mainTools, exploreTools, chatTools := tools.Boxes(tools.Servers{Browser: found != nil, Images: settings.ImageURL != ""})
-	store := skills.NewStore(filepath.Join(settings.DataDir, skillsFolder))
-	if err := store.Seed(options.DefaultSkills); err != nil {
-		return nil, err
-	}
-	sources := claude.NewSourcesStore(filepath.Join(settings.DataDir, claudeFile))
-	skillCatalog := catalog.New(store, sources, logError)
 	app := &App{
 		LanURLs: LANURLs(settings.Host, settings.Port, options.Interfaces()), Token: token,
 		Models: modelService, config: settings, hosts: registry, http: options.HTTP,
-		imagesFolder: filepath.Join(settings.DataDir, imagesFolder), logger: logger, options: options, skills: store,
-		workspace: workspace,
-		pairing:   pairing.New(filepath.Join(settings.DataDir, devicesFile), options.Now, options.NewID),
+		imagesFolder: filepath.Join(settings.DataDir, imagesFolder), logger: logger, options: options, workspace: workspace,
+		pairing: pairing.New(filepath.Join(settings.DataDir, devicesFile), options.Now, options.NewID),
 	}
 	var service *sessions.Service
 	app.Projects = projects.NewService(projects.Deps{
@@ -215,7 +197,7 @@ func New(settings config.Config, options Options) (*App, error) {
 		Search: web.Paced(func(ctx context.Context, query string) web.SearchOutcome {
 			return web.SearchWeb(ctx, query, options.HTTP)
 		}, web.SearchGap),
-		Skills: skillCatalog, Store: sessions.NewStore(filepath.Join(settings.DataDir, sessionsFolder)),
+		Skills: catalog.New(logError), Store: sessions.NewStore(filepath.Join(settings.DataDir, sessionsFolder)),
 		ChatTools: chatTools, SubagentTools: exploreTools, Thinking: sessions.Thinking{Session: settings.Thinking, Subagents: settings.SubagentThinking},
 		Tools: mainTools, Workspace: workspace,
 	})
@@ -231,7 +213,7 @@ func New(settings config.Config, options Options) (*App, error) {
 	if app.options.Busy == nil {
 		app.options.Busy = func() bool { return anyWorking(service.List()) }
 	}
-	app.Handler = app.routes(skillCatalog, sources)
+	app.Handler = app.routes()
 	return app, nil
 }
 
@@ -257,15 +239,13 @@ func (a *App) webFiles() fs.FS {
 	return nil
 }
 
-func (a *App) routes(skillCatalog *catalog.Catalog, sources *claude.SourcesStore) http.Handler {
+func (a *App) routes() http.Handler {
 	mux := http.NewServeMux()
 	a.statusRoutes(mux)
 	a.imageRoutes(mux)
 	a.pairingRoutes(mux)
 	a.settingsRoutes(mux)
 	a.modelRoutes(mux)
-	a.skillRoutes(mux)
-	a.claudeRoutes(mux, skillCatalog, sources)
 	a.closingRoutes(mux)
 	a.startupRoutes(mux)
 	mux.HandleFunc("GET "+protocol.EndpointSocket, a.socket)

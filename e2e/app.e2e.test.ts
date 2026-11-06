@@ -140,12 +140,6 @@ const topicTab = (page: Page, label: string, selected?: boolean) =>
     .locator('settings-page jl-tabs')
     .getByRole('tab', { exact: true, name: label, ...(selected ? { selected } : {}) });
 
-/** The names of the skills the settings list, in order. */
-const skillNames = (page: Page) =>
-  page
-    .locator('sc-skills-editor jl-list-item[data-name]')
-    .evaluateAll((items) => items.map((item) => item.getAttribute('data-name')));
-
 /** A tab of a phone's bar under the page, by its label. */
 const tab = (page: Page, label: string) => page.locator('jl-tab-bar').getByText(label, { exact: true });
 
@@ -597,86 +591,27 @@ describe('the composer', () => {
 });
 
 describe('skills', () => {
-  const ReleaseNotes = {
-    description: 'Writes release notes from the commits.',
-    instructions: 'List the commits since the last tag.',
-    name: 'release-notes',
-  };
-
-  it('start with the coding style and Jadis, and are written, opened and deleted in the settings', async () => {
-    const rig = await start({ replies: [] });
-    const page = await rig.browser.newPage({ viewport: DESKTOP });
-    await page.goto(rig.link);
-    await settingsLink(page).click();
-    await settle(page);
-    // The Startup tab leaves once the daemon says it cannot start with this computer, moving the tabs after it.
-    await topicTab(page, 'Startup').waitFor({ state: 'detached' });
-    await topicTab(page, 'Skills').click();
-    await settle(page);
-    await topicTab(page, 'Skills', true).waitFor();
-    await expect.poll(() => skillNames(page)).toEqual(['coding-style', 'jadis']);
-
-    await page.locator('sc-skills-editor jl-list-item[data-name="jadis"]').click();
-    await settle(page);
-    const editor = page.locator('sc-skills-editor form');
-    await expect.poll(() => editor.locator('#skill-name input').inputValue()).toBe('jadis');
-    expect(await editor.locator('#skill-instructions textarea').inputValue()).toContain('# Jadis');
-    await editor.locator('.instructions-field').getByText('references/api.md', { exact: false }).waitFor();
-
-    await page.locator('sc-skills-editor .create button').click();
-    await settle(page);
-    await editor.locator('#skill-name input').fill(ReleaseNotes.name);
-    await editor.locator('#skill-description textarea').fill(ReleaseNotes.description);
-    await editor.locator('#skill-instructions textarea').fill(ReleaseNotes.instructions);
-    await editor.locator('.save button').click();
-    await settle(page);
-    await expect.poll(() => skillNames(page)).toEqual(['coding-style', 'jadis', 'release-notes']);
-    expect(
-      await page.locator('sc-skills-editor jl-list-item[data-name="release-notes"]').getAttribute('selected')
-    ).toBe('');
-
-    await editor.locator('.remove button').click();
-    await settle(page);
-    await page.locator('jl-confirm').getByRole('button', { name: 'Delete' }).click();
-    await settle(page);
-    await expect.poll(() => skillNames(page)).toEqual(['coding-style', 'jadis']);
-    expect(await editor.isHidden()).toBe(true);
-    expect(await overflow(page)).toBe(0);
-  });
-
-  it('are made by the agent when asked, and the session shows what it was told of them', async () => {
+  it('are read from the home’s .agents folder, and the session shows what the agent was told of them', async () => {
     const rig = await start({
-      replies: [{ toolCalls: [{ arguments: ReleaseNotes, name: 'saveskill' }] }, { text: 'The skill is saved.' }],
+      homeFiles: {
+        '.agents/skills/release-notes/SKILL.md':
+          '---\nname: release-notes\ndescription: Writes release notes from the commits.\n---\nList the commits.',
+      },
+      replies: [{ text: 'Here are the notes.' }],
     });
     const page = await rig.browser.newPage({ deviceScaleFactor: 2, viewport: PHONE });
     await page.goto(rig.link);
     await tab(page, 'New').click();
     await settle(page);
-    await page.locator('home-page textarea').fill('Make a skill for release notes');
+    await page.locator('home-page textarea').fill('Write the release notes');
     await page.locator('home-page textarea').press('Enter');
-    await page.getByText('The skill is saved.').waitFor();
-    await page.getByText('Skills the agent was told of: coding-style, jadis').waitFor();
-    expect(await overflow(page)).toBe(0);
-
-    await page.goto(`${rig.link}#/settings/skills`);
-    await page.locator('sc-skills-editor jl-list-item[data-name="release-notes"]').waitFor();
+    await page.getByText('Here are the notes.').waitFor();
+    await page.getByText('Skills the agent was told of: release-notes').waitFor();
     expect(await overflow(page)).toBe(0);
   });
 });
 
 describe('settings', () => {
-  const ClaudeHome = {
-    '.claude/plugins/cache/jadis/jadis/1.6.0/skills/jadis/SKILL.md':
-      '---\nname: jadis\ndescription: Builds apps with Jadis.\n---\nUse Jadis.',
-    '.claude/plugins/installed_plugins.json': JSON.stringify({
-      plugins: {
-        'jadis@jadis': [{ installPath: '/home/someone/.claude/plugins/cache/jadis/jadis/1.6.0', scope: 'user' }],
-      },
-      version: 2,
-    }),
-    '.claude/skills/pixel-art/SKILL.md': '---\nname: pixel-art\ndescription: Makes sprites.\n---\nPaint.',
-  };
-
   it('open on the models, and keep what the form holds from one topic to the other', async () => {
     const rig = await start({ replies: [] });
     const page = await rig.browser.newPage({ viewport: DESKTOP });
@@ -762,25 +697,6 @@ describe('settings', () => {
     await composer.locator('textarea').press('Enter');
     await phone.getByText('Done.').waitFor();
     expect(await phone.locator('session-page sc-composer .summary').textContent()).toContain('Mixed');
-  });
-
-  it('show Claude Code’s skills and plugins under Plugins, and turn a plugin off for the next turns', async () => {
-    const rig = await start({ homeFiles: ClaudeHome, replies: [] });
-    const page = await rig.browser.newPage({ deviceScaleFactor: 2, viewport: PHONE });
-    await page.goto(`${rig.link}#/settings/plugins`);
-    const plugin = page.locator('sc-claude-sources .plugin', { hasText: 'jadis@jadis' });
-    await plugin.waitFor();
-    expect(await plugin.textContent()).toContain('jadis:jadis');
-    expect(await page.locator('sc-claude-sources .skills').textContent()).toContain('pixel-art');
-    expect(await overflow(page)).toBe(0);
-
-    await plugin.getByRole('switch').click();
-    await settle(page);
-    await page.locator('sc-claude-sources jl-alert').getByText('Saved', { exact: false }).waitFor();
-    await plugin.getByText('set here', { exact: false }).waitFor();
-    await page.reload();
-    await plugin.waitFor();
-    expect(await plugin.getByRole('switch').isChecked()).toBe(false);
   });
 
   it('leave Startup and Computers out in a browser, and set how the Windows app starts with Windows', async () => {

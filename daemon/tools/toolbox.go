@@ -12,7 +12,7 @@ var all = map[protocol.ToolName]Tool{
 	protocol.ToolNameAgent: agentTool, protocol.ToolNameBash: bashTool, protocol.ToolNameDraw: drawTool, protocol.ToolNameEdit: editTool,
 	protocol.ToolNameGlob: globTool, protocol.ToolNameGrep: grepTool, protocol.ToolNameImage: imageTool,
 	protocol.ToolNameKill: killTool, protocol.ToolNameOutput: outputTool, protocol.ToolNamePlan: planTool,
-	protocol.ToolNameQuestion: questionTool, protocol.ToolNameRead: readTool, protocol.ToolNameSaveskill: saveSkillTool,
+	protocol.ToolNameQuestion: questionTool, protocol.ToolNameRead: readTool,
 	protocol.ToolNameScreenshot: screenshotTool, protocol.ToolNameSkill: skillTool,
 	protocol.ToolNameWebfetch: webfetchTool, protocol.ToolNameWebsearch: websearchTool, protocol.ToolNameWrite: writeTool,
 }
@@ -30,6 +30,8 @@ var (
 	imageTools = []protocol.ToolName{protocol.ToolNameImage, protocol.ToolNameDraw}
 	// browserTools need a browser.
 	browserTools = []protocol.ToolName{protocol.ToolNameScreenshot}
+	// retiredTools are offered no longer: their names stay for the calls older sessions hold.
+	retiredTools = []protocol.ToolName{protocol.ToolNameSaveskill}
 )
 
 // Box is the tools an agent has: as the model reads them, and by name.
@@ -86,9 +88,9 @@ func Boxes(servers Servers) (Box, Box, Box) {
 	return available(mainTools), available(exploreTools), available(chatTools)
 }
 
-// mainTools is every tool but a chat's own.
+// mainTools is every tool but a chat's own and those retired.
 var mainTools = slices.DeleteFunc(slices.Clone(protocol.ToolNames), func(name protocol.ToolName) bool {
-	return slices.Contains(chatOnlyTools, name)
+	return slices.Contains(chatOnlyTools, name) || slices.Contains(retiredTools, name)
 })
 
 // Main is the main agent's tools, with all servers.

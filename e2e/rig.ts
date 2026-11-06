@@ -87,7 +87,7 @@ const eventsIn = (dataDir: string): SessionEvent[] => {
 export async function startRig(options: E2eOptions): Promise<E2eRig> {
   const workspace = mkdtempSync(join(tmpdir(), 'swcode-e2e-workspace-'));
   const dataDir = mkdtempSync(join(tmpdir(), 'swcode-e2e-data-'));
-  // A home of its own, where Claude Code's ~/.claude is: the person's skills and plugins stay out.
+  // A home of its own, where the person's skills are (~/.agents/skills): theirs stay out.
   const home = mkdtempSync(join(tmpdir(), 'swcode-e2e-home-'));
   writeAll(workspace, options.files ?? {});
   writeAll(home, options.homeFiles ?? {});

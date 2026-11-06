@@ -56,19 +56,12 @@ func TestAMissingFieldTakesItsDefault(t *testing.T) {
 	if _, local := project.Host.Value.(HostRefLocal); !local {
 		t.Fatalf("host %#v", project.Host.Value)
 	}
-	var sources ClaudeSources
-	if err := json.Unmarshal([]byte(`{"project":false}`), &sources); err != nil {
-		t.Fatal(err)
-	}
-	if !sources.Personal || sources.Project || sources.Plugins == nil {
-		t.Fatalf("sources %#v", sources)
-	}
 }
 
-func TestASkillNameSaysWhatItWants(t *testing.T) {
-	var skill Skill
-	err := json.Unmarshal([]byte(`{"name":"Release Notes","description":"d","instructions":"i"}`), &skill)
-	if err == nil || !strings.Contains(err.Error(), "lowercase letters") {
+func TestANewFolderNameSaysWhatItWants(t *testing.T) {
+	var create ClientMessageCreateProject
+	err := json.Unmarshal([]byte(`{"folder":"/work","newFolder":"apps/web"}`), &create)
+	if err == nil || !strings.Contains(err.Error(), "a folder name, without / or") {
 		t.Fatalf("got %v", err)
 	}
 }

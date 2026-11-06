@@ -7,7 +7,6 @@ import { resolve } from 'node:path';
 import { z } from 'zod';
 
 import * as choices from '../shared/protocol/choices.schema.js';
-import * as claude from '../shared/protocol/claude.schema.js';
 import * as desktop from '../shared/protocol/desktop.schema.js';
 import * as endpoints from '../shared/protocol/endpoints.js';
 import * as messages from '../shared/protocol/messages.schema.js';
@@ -28,7 +27,6 @@ const MODULES: readonly Record<string, unknown>[] = [
   picture,
   project,
   skill,
-  claude,
   session,
   messages,
   models,
@@ -183,7 +181,7 @@ const NO_CHECKS: Checks = {
   trim: false,
 };
 
-/** A check's own message, when the schema gives one (the skill name's pattern). */
+/** A check's own message, when the schema gives one (a folder name's pattern). */
 const messageOf = (check: Record<string, unknown>): string | undefined => {
   if (typeof check.error !== 'function') {
     return undefined;

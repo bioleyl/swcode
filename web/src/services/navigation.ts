@@ -34,7 +34,7 @@ export const newPathOf = (kind: SessionKind): string => NEW_PATHS[kind];
 
 export const SETTINGS_PATH = '/settings';
 
-/** A topic of the settings page: the LLM, the skills, the plugins… */
+/** A topic of the settings page: the models, the SSH hosts, the phones… */
 export const settingsPath = (topic: string): string => `${SETTINGS_PATH}/${encodeURIComponent(topic)}`;
 
 /** The form for a new session, its project chosen. */

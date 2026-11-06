@@ -24,6 +24,7 @@ export const TOOL_NAMES = [
   'output',
   'kill',
   'skill',
+  // Offered no longer: the calls older sessions hold keep their name.
   'saveskill',
   'screenshot',
 ] as const;

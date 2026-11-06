@@ -280,8 +280,8 @@ where it is.
 npm run build:binary
 ```
 
-builds `dist/swcode-<os>-<arch>` (`swcode-linux-amd64`, as Go names platforms): one program with the web app and
-the skills inside, nothing to install beside it. Go builds it for other platforms from here, named as arguments:
+builds `dist/swcode-<os>-<arch>` (`swcode-linux-amd64`, as Go names platforms): one program with the web app
+inside, nothing to install beside it. Go builds it for other platforms from here, named as arguments:
 `npm run build:binary -- linux-arm64 darwin-arm64 windows-amd64`.
 
 ```bash
@@ -385,7 +385,7 @@ Phone: the QR code pairs the phone, as above.
 ## Settings
 
 The settings page (the cog at the foot of the navigation) has a tab for each topic: the models, thinking, projects,
-SSH hosts, pictures, the network, the phones, the skills, and Claude Code's plugins. Thinking, projects, SSH,
+SSH hosts, pictures, the network, the phones, how it starts and the other computers. Thinking, projects, SSH,
 pictures and the network are kept in `~/.swcode/settings.env` (`KEY=value` lines), which the page writes (the SSH
 hosts, a list, as they change; the others together, with Save): saving restarts the daemon on them when it runs in
 the background (`swcode`) or in the desktop app, and waits while a session works. The environment's own come on
@@ -403,7 +403,7 @@ top, for one command; the page shows those as set in the environment.
 | `SWCODE_SSH_ENDPOINTS` | none | Machines projects can be on, reached over SSH: ssh destinations by commas (`me@box, gmktec`). The `Host` aliases of `~/.ssh/config` come too. |
 | `SWCODE_IMAGE_URL` | none | A stable-diffusion.cpp `sd-server`, such as `http://garfield.home:8090`: the main agent makes pictures with it (`image`). Without one the tool is not offered. |
 | `SWCODE_HOST`, `SWCODE_PORT` | `0.0.0.0`, `4500` | Where the daemon listens: every interface, so phones on the network reach it; `127.0.0.1` for this computer only. |
-| `SWCODE_DATA_DIR` | `~/.swcode` | Where the sessions, the projects, the skills, the access token and `settings.env` are kept. |
+| `SWCODE_DATA_DIR` | `~/.swcode` | Where the sessions, the projects, the access token and `settings.env` are kept. |
 | `SWCODE_TOKEN` | created once, kept in the data folder | The access token every API call and the socket need. |
 | `SWCODE_PUBLIC_URL` | `http://host:port` | The address the printed link uses. |
 | `SWCODE_WEB_DIR` | the app inside the program, else `dist/web` | The built web app. |
@@ -443,32 +443,15 @@ top, for one command; the page shows those as set in the environment.
 - **Questions**: the main agent's `question` tool asks you 1 to 3 questions, each with 2 to 4 answers to pick (one
   or several) or your own words, for decisions that are yours to make. The turn waits as for an approval: the
   session shows "Needs you", and the answers come back to the model as the result.
-- **Skills**: the user's instructions for kinds of tasks, a folder each in `skills/` of the data folder, as Agent
-  Skills (and Claude Code's) have them: a `SKILL.md` with a name and a description in its frontmatter, then the
-  instructions, and the files they name. A new skills folder starts with the coding style and Jadis (the repository's
-  `skills/`, inside the binary and the desktop app too); one that exists stays as it is. The model is told each
-  skill's name and description in the conversation, not the system prompt: after the person's message when the skills
-  changed since it last saw them, and again after a compaction, so the prompt llm-server cached stays the same. The
-  main agent loads a skill with `skill` (its instructions, or a file of its folder) and saves one the user asks for
-  with `saveskill`, which is an edit for the permissions; the settings' Skills topic reads, writes, renames and deletes
-  them. The daemon keeps them, so they are the same for projects on every host.
-- **Claude Code's skills and plugins** come too, read where they are at each turn, on the machine the project is on
-  (this computer, WSL, SSH), as Claude Code run there would find them; nothing is copied. The person's
-  `~/.claude/skills` and `~/.claude/commands`; the project's `.claude/skills` and `.claude/commands`, in its folder
-  and its parents up to the repository's root; and the plugins Claude Code installed
-  (`~/.claude/plugins/installed_plugins.json`), each enabled or not as Claude Code's settings say (`enabledPlugins`
-  of `~/.claude/settings.json`, then the project's `.claude/settings.json` and `settings.local.json`), their skills
-  and commands named after them (`jadis:jadis`, `my-plugin:db:migrate`). The settings' Plugins topic turns each
-  source and each plugin on or off for swcode (`claude.json` in the data folder), Claude Code's own settings left
-  as they are, and shows what it finds on each machine. swcode's own skills come first: a Claude Code skill of the
-  same name is left out. A loaded skill starts with its base directory, where its scripts are run from, and gets
-  Claude Code's substitutions: the arguments the agent passes (`$ARGUMENTS`, `$0`, `$ARGUMENTS[1]`, the names of
-  its `arguments`, or an `ARGUMENTS:` line at the end), `${CLAUDE_SKILL_DIR}`, `${CLAUDE_PLUGIN_ROOT}`,
-  `${CLAUDE_PLUGIN_DATA}`, `${CLAUDE_PROJECT_DIR}` and `${CLAUDE_SESSION_ID}`. A skill with
-  `disable-model-invocation` is a command for the person in Claude Code: the agent is not offered it. swcode runs
-  none of a skill's `` !`command` `` lines before the model reads it, and says to run them with bash instead; a
-  skill's `allowed-tools`, `model`, `context: fork` and `hooks`, and a plugin's agents, hooks and MCP servers, are
-  left out.
+- **Skills**: the user's instructions for kinds of tasks, as Agent Skills have them: a folder each, with a `SKILL.md`
+  (a name and a description in its frontmatter, then the instructions) and the files they name. swcode reads them
+  where agents that share the convention look, on the machine the project is on (this computer, WSL, SSH), at each
+  turn; nothing is copied: the person's in `~/.agents/skills`, then the project's in the `.agents/skills` of its
+  folder and of its parents up to the repository's root. Of two skills of the same name, the person's wins. The model
+  is told each skill's name and description in the conversation, not the system prompt: after the person's message
+  when the skills changed since it last saw them, and again after a compaction, so the prompt llm-server cached stays
+  the same. The main agent loads a skill with `skill` (its instructions, after its base directory, where its scripts
+  are run from; or a file of its folder), and writes one the user asks for in the project's `.agents/skills`.
 - **Tools**: `read`, `write`, `edit` (exact text replacement), `bash`, `grep`, `glob`. An edit or a write needs a
   read of the file as it is now, and is refused, without asking anyone, when it cannot apply. The file tools stay
   in the workspace and the session's scratch folder (`scratch/<id>` in the data folder, deleted with the session,
@@ -593,9 +576,8 @@ top, for one command; the page shows those as set in the environment.
 | Folder | What is there |
 | --- | --- |
 | `shared/` | The protocol's schemas (zod), which the app parses with and the daemon's Go types are generated from (`npm run protocol`, into `daemon/protocol/protocol_gen.go`); the command parser for permissions. |
-| `skills/` | The skills a new skills folder starts with: the user's coding style and Jadis. |
 | `cmd/swcode/` | The command line: `open`, `serve`, `daemon`, `stop`, `install`, `remote`. |
-| `daemon/` | The daemon, in Go: `agent/` (the loop), `llm/` (llm-server client, prompt cache), `tools/`, `hosts/` (this computer, WSL, SSH), `web/` (search, pages, the reader), `skills/`, `claude/` (Claude Code's skills and plugins), `permissions/`, `sessions/`, `projects/`, `app/` (the API and the socket), `serve/`, `local/` and `remote/` (what the command line does). Tests beside the code; `fakellama/` plays a scripted llm-server, `testapp/` runs a daemon for them. |
+| `daemon/` | The daemon, in Go: `agent/` (the loop), `llm/` (llm-server client, prompt cache), `tools/`, `hosts/` (this computer, WSL, SSH), `web/` (search, pages, the reader), `skills/` (reading a `SKILL.md`), `catalog/` (the skills of a session, in the `.agents` folders of its host), `permissions/`, `sessions/`, `projects/`, `app/` (the API and the socket), `serve/`, `local/` and `remote/` (what the command line does). Tests beside the code; `fakellama/` plays a scripted llm-server, `testapp/` runs a daemon for them. |
 | `desktop/` | The Windows app: its window on WebView2 with the daemon inside, its icon and notifications, the daemon alone (`--daemon`); `watch/` follows a daemon's sessions for the notifications, `computers/` keeps the other computers and pairs with them. |
 | `web/src/` | The app, built from jlib's components (`@syware/jlib`, on Jadis) as SyWare's apps are, and swcode's own: `atoms/`, `molecules/`, `organisms/`, `templates/`, `pages/`, `services/`, `lib/`. |
 | `web/tests/`, `shared/tests/` | `npm test`. |

@@ -25,12 +25,6 @@ const MaxPictures = 4
 
 var PictureTypes = []PictureType{PictureTypeImageJpeg, PictureTypeImagePng}
 
-const MaxSkillDescription = 1024
-
-const MaxSkillName = 64
-
-var SkillNamePattern = regexp.MustCompile("^[a-z0-9]+(?:-[a-z0-9]+)*$")
-
 var DiffLineKinds = []DiffLineKind{DiffLineKindAdd, DiffLineKindRemove, DiffLineKindContext, DiffLineKindGap}
 
 var PermissionDecisions = []PermissionDecision{PermissionDecisionAllowOnce, PermissionDecisionAllowSession, PermissionDecisionDeny}
@@ -66,7 +60,6 @@ const APIPrefix = "/api/"
 const BearerPrefix = "Bearer "
 
 const (
-	EndpointClaude         = "/api/claude"
 	EndpointClosing        = "/api/closing"
 	EndpointDevices        = "/api/devices"
 	EndpointHealth         = "/api/health"
@@ -76,7 +69,6 @@ const (
 	EndpointPairingCode    = "/api/pairing/code"
 	EndpointSettings       = "/api/settings"
 	EndpointSettingsModels = "/api/settings/models"
-	EndpointSkills         = "/api/skills"
 	EndpointSocket         = "/api/socket"
 	EndpointStartup        = "/api/startup"
 	EndpointStatus         = "/api/status"
@@ -89,9 +81,7 @@ const TokenParam = "token"
 
 var pattern1 = regexp.MustCompile("^[A-Za-z0-9+/]+={0,2}$")
 
-var pattern2 = regexp.MustCompile("^[a-z0-9]+(?:-[a-z0-9]+)*$")
-
-var pattern3 = regexp.MustCompile("^[^/\\\\]+$")
+var pattern2 = regexp.MustCompile("^[^/\\\\]+$")
 
 type PermissionMode string
 
@@ -642,249 +632,9 @@ func (v *Project) Normalize() error {
 	return nil
 }
 
-// SkillChange holds one of its variants, told apart by "ok".
-type SkillChange struct {
-	Value SkillChangeVariant
-}
-
-type SkillChangeVariant interface {
-	isSkillChange()
-}
-
-func (SkillChangeOk) isSkillChange() {}
-
-func (SkillChangeFailed) isSkillChange() {}
-
-func (u SkillChange) MarshalJSON() ([]byte, error) {
-	if u.Value == nil {
-		return nil, errors.New("protocol: an empty SkillChange")
-	}
-	return json.Marshal(u.Value)
-}
-
-func (u *SkillChange) UnmarshalJSON(data []byte) error {
-	var head struct {
-		Key json.RawMessage `json:"ok"`
-	}
-	if err := json.Unmarshal(data, &head); err != nil {
-		return err
-	}
-	switch string(head.Key) {
-	case "true":
-		var value SkillChangeOk
-		if err := json.Unmarshal(data, &value); err != nil {
-			return err
-		}
-		u.Value = value
-	case "false":
-		var value SkillChangeFailed
-		if err := json.Unmarshal(data, &value); err != nil {
-			return err
-		}
-		u.Value = value
-	default:
-		return fmt.Errorf("protocol: no SkillChange with ok %s", head.Key)
-	}
-	return nil
-}
-
-// SkillChangeMapper has a method per variant: a new variant does not compile until its mappers have one.
-type SkillChangeMapper[R any] interface {
-	Ok(SkillChangeOk) R
-	Failed(SkillChangeFailed) R
-}
-
-// MapSkillChange calls the mapper's method for the variant u holds.
-func MapSkillChange[R any](u SkillChange, m SkillChangeMapper[R]) R {
-	switch value := u.Value.(type) {
-	case SkillChangeOk:
-		return m.Ok(value)
-	case SkillChangeFailed:
-		return m.Failed(value)
-	}
-	panic(fmt.Sprintf("protocol: an empty or unknown SkillChange %T", u.Value))
-}
-
-type SkillChangeOk struct {
-	Name string `json:"name"`
-}
-
-func (v SkillChangeOk) MarshalJSON() ([]byte, error) {
-	type plain SkillChangeOk
-	p := plain(v)
-	return json.Marshal(struct {
-		Key bool `json:"ok"`
-		plain
-	}{true, p})
-}
-
-type SkillChangeFailed struct {
-	Problem string `json:"problem"`
-}
-
-func (v SkillChangeFailed) MarshalJSON() ([]byte, error) {
-	type plain SkillChangeFailed
-	p := plain(v)
-	return json.Marshal(struct {
-		Key bool `json:"ok"`
-		plain
-	}{false, p})
-}
-
-type Skill struct {
-	Description  string `json:"description"`
-	Instructions string `json:"instructions"`
-	Name         string `json:"name"`
-}
-
-func (v *Skill) UnmarshalJSON(data []byte) error {
-	type plain Skill
-	p := plain{}
-	if err := json.Unmarshal(data, &p); err != nil {
-		return err
-	}
-	*v = Skill(p)
-	return v.Normalize()
-}
-
-// Normalize trims and checks what the app sent, as its schema does.
-func (v *Skill) Normalize() error {
-	v.Description = strings.TrimSpace(v.Description)
-	if utf8.RuneCountInString(v.Description) < 1 {
-		return fmt.Errorf("%s: must not be empty", "description")
-	}
-	if utf8.RuneCountInString(v.Description) > 1024 {
-		return fmt.Errorf("%s: at most 1024 characters", "description")
-	}
-	v.Instructions = strings.TrimSpace(v.Instructions)
-	if utf8.RuneCountInString(v.Instructions) < 1 {
-		return fmt.Errorf("%s: must not be empty", "instructions")
-	}
-	v.Name = strings.TrimSpace(v.Name)
-	if utf8.RuneCountInString(v.Name) < 1 {
-		return fmt.Errorf("%s: must not be empty", "name")
-	}
-	if utf8.RuneCountInString(v.Name) > 64 {
-		return fmt.Errorf("%s: at most 64 characters", "name")
-	}
-	if !pattern2.MatchString(v.Name) {
-		return fmt.Errorf("%s: %s", "name", "lowercase letters, digits and hyphens, such as deploy-staging")
-	}
-	return nil
-}
-
 type SkillSummary struct {
 	Description string `json:"description"`
 	Name        string `json:"name"`
-}
-
-type SkillView struct {
-	Description  string   `json:"description"`
-	Files        []string `json:"files"`
-	Instructions string   `json:"instructions"`
-	Name         string   `json:"name"`
-}
-
-func (v SkillView) MarshalJSON() ([]byte, error) {
-	type plain SkillView
-	p := plain(v)
-	if p.Files == nil {
-		p.Files = []string{}
-	}
-	return json.Marshal(p)
-}
-
-type SkillsView struct {
-	Folder string         `json:"folder"`
-	Skills []SkillSummary `json:"skills"`
-}
-
-func (v SkillsView) MarshalJSON() ([]byte, error) {
-	type plain SkillsView
-	p := plain(v)
-	if p.Skills == nil {
-		p.Skills = []SkillSummary{}
-	}
-	return json.Marshal(p)
-}
-
-type ClaudePluginView struct {
-	Description     string            `json:"description"`
-	EnabledInClaude bool              `json:"enabledInClaude"`
-	ID              string            `json:"id"`
-	Name            string            `json:"name"`
-	On              bool              `json:"on"`
-	Skills          []ClaudeSkillView `json:"skills"`
-	Version         string            `json:"version"`
-}
-
-func (v ClaudePluginView) MarshalJSON() ([]byte, error) {
-	type plain ClaudePluginView
-	p := plain(v)
-	if p.Skills == nil {
-		p.Skills = []ClaudeSkillView{}
-	}
-	return json.Marshal(p)
-}
-
-type ClaudeSkillView struct {
-	Description string `json:"description"`
-	ForPeople   bool   `json:"forPeople"`
-	Name        string `json:"name"`
-}
-
-type ClaudeSources struct {
-	Personal bool            `json:"personal"`
-	Plugins  map[string]bool `json:"plugins"`
-	Project  bool            `json:"project"`
-}
-
-func (v ClaudeSources) MarshalJSON() ([]byte, error) {
-	type plain ClaudeSources
-	p := plain(v)
-	if p.Plugins == nil {
-		p.Plugins = map[string]bool{}
-	}
-	return json.Marshal(p)
-}
-
-func (v *ClaudeSources) UnmarshalJSON(data []byte) error {
-	type plain ClaudeSources
-	p := plain{Personal: true, Plugins: map[string]bool{}, Project: true}
-	if err := json.Unmarshal(data, &p); err != nil {
-		return err
-	}
-	*v = ClaudeSources(p)
-	return v.Normalize()
-}
-
-// Normalize trims and checks what the app sent, as its schema does.
-func (v *ClaudeSources) Normalize() error {
-	return nil
-}
-
-type ClaudeView struct {
-	Folder   string             `json:"folder"`
-	Hosts    []HostOption       `json:"hosts"`
-	Personal []ClaudeSkillView  `json:"personal"`
-	Plugins  []ClaudePluginView `json:"plugins"`
-	Problem  string             `json:"problem,omitempty"`
-	Sources  ClaudeSources      `json:"sources"`
-}
-
-func (v ClaudeView) MarshalJSON() ([]byte, error) {
-	type plain ClaudeView
-	p := plain(v)
-	if p.Hosts == nil {
-		p.Hosts = []HostOption{}
-	}
-	if p.Personal == nil {
-		p.Personal = []ClaudeSkillView{}
-	}
-	if p.Plugins == nil {
-		p.Plugins = []ClaudePluginView{}
-	}
-	return json.Marshal(p)
 }
 
 type DiffLine struct {
@@ -2659,7 +2409,7 @@ func (v *ClientMessageCreateProject) Normalize() error {
 	if utf8.RuneCountInString(v.NewFolder) > 255 {
 		return fmt.Errorf("%s: at most 255 characters", "newFolder")
 	}
-	if v.NewFolder != "" && !pattern3.MatchString(v.NewFolder) {
+	if v.NewFolder != "" && !pattern2.MatchString(v.NewFolder) {
 		return fmt.Errorf("%s: %s", "newFolder", "a folder name, without / or \\")
 	}
 	return nil

@@ -21,7 +21,7 @@ export interface E2eOptions {
   /** Replies for the conversations whose first message says the key: a subagent's task. */
   scripts?: Readonly<Record<string, readonly ScriptedReply[]>>;
   files?: Readonly<Record<string, string>>;
-  /** Files of the daemon's home folder, by path: Claude Code's skills and plugins in .claude. */
+  /** Files of the daemon's home folder, by path: the person's skills in .agents/skills. */
   homeFiles?: Readonly<Record<string, string>>;
   /** The model llm-server serves, gpt-oss-120b when left out. */
   model?: string;

@@ -16,7 +16,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"testing/fstest"
 	"time"
 
 	"swcode/daemon/app"
@@ -55,7 +54,8 @@ type Options struct {
 	ConnectHost func(protocol.HostRef) hosts.Host
 	MaxSteps    int
 	Environment map[string]string
-	// Home is this computer's home folder, where Claude Code's ~/.claude is: an empty one of its own otherwise.
+	// Home is this computer's home folder, where the person's skills are (~/.agents/skills): an empty one of its own
+	// otherwise, so the model's prompts are only what the test sets up.
 	Home string
 	// Settings are more settings, as the environment names them.
 	Settings map[string]string
@@ -130,8 +130,7 @@ func Start(t *testing.T, options Options) *App {
 	}
 	daemon, err := app.New(settings, app.Options{
 		Browser: options.Browser, ConnectHost: options.ConnectHost, Defaults: config.Defaults{Cwd: workspace, Home: home},
-		// A test starts without skills, so the model's prompts are only what the test sets up.
-		DefaultSkills: fstest.MapFS{}, Environment: environmentOf, Home: home, MaxSteps: options.MaxSteps,
+		Environment: environmentOf, Home: home, MaxSteps: options.MaxSteps,
 		OnRestart: func() { test.restarts <- struct{}{} }, OnStop: func() { test.stops <- struct{}{} },
 		Startup: options.Startup,
 	})

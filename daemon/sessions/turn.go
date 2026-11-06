@@ -65,7 +65,7 @@ func (s *Service) prepare(ctx context.Context, session *live) (prepared, error) 
 		return prepared{}, err
 	}
 	where := place{host: host, platform: platform, scratch: scratch, skills: s.deps.Skills.PortFor(catalog.Place{
-		Host: host, Local: hosts.IsLocal(meta.Host), SessionID: meta.ID, Workspace: meta.Workspace,
+		Host: host, Workspace: meta.Workspace,
 	})}
 	return prepared{
 		main: main, setup: s.setupFor(session, meta, main, where, main.Vision, limit), subagent: subagent, subagents: limit, where: where,

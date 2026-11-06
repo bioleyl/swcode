@@ -2,8 +2,6 @@
 export const API_PREFIX = '/api/';
 
 export const ENDPOINTS = {
-  // GET ?host=<key>: Claude Code's skills and plugins on that machine; PUT which of them swcode reads.
-  claude: '/api/claude',
   // GET: what closing the desktop app would stop, and the warning its window shows first.
   closing: '/api/closing',
   // GET: the paired phones; DELETE /api/devices/<id> forgets one, its token with it.
@@ -21,8 +19,6 @@ export const ENDPOINTS = {
   settings: '/api/settings',
   // POST an llm-server's address: the models it serves.
   settingsModels: '/api/settings/models',
-  // GET the skills, POST a new one; GET, PUT (a new name renames it) or DELETE /api/skills/<name>.
-  skills: '/api/skills',
   socket: '/api/socket',
   // GET whether this daemon starts with its computer, and how; PUT how it should (the Windows app only).
   startup: '/api/startup',
