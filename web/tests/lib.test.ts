@@ -6,9 +6,10 @@ import { childPath } from '../src/lib/folders';
 import { keepingEnd } from '../src/lib/follow-end';
 import { ago, contextText, folderName, percent, tokens } from '../src/lib/format';
 import { blocksOf } from '../src/lib/markdown';
-import { paletteCommands, paletteTarget } from '../src/lib/palette';
+import { matchCommands, paletteCommands, paletteTarget } from '../src/lib/palette';
 import { peekQuestion } from '../src/lib/peek';
 import { groupByProject, preferredProject, removalConsequence } from '../src/lib/project-groups';
+import { SESSION_STATUS_ICONS } from '../src/lib/session-status';
 import { sshHostProblem, sshHostsLine, sshHostsOf } from '../src/lib/ssh-hosts';
 import { sessionGrantLabel, toolLabel } from '../src/lib/tool-labels';
 import { toolMeta } from '../src/lib/tool-meta';
@@ -296,9 +297,27 @@ describe('the command palette', () => {
 
   it('says what a command stands for', () => {
     expect(paletteTarget('session:b')).toEqual({ id: 'b', kind: 'session' });
+    expect(paletteTarget('match:b')).toEqual({ id: 'b', kind: 'session' });
     expect(paletteTarget('settings:plugins')).toEqual({ id: 'plugins', kind: 'topic' });
     expect(paletteTarget('phone')).toEqual({ action: 'phone', kind: 'action' });
     expect(paletteTarget('elsewhere')).toBeUndefined();
+  });
+
+  it('lists the sessions found in their conversations, where and the words around, leaving out those it does not know', () => {
+    const matches = [
+      { sessionId: 'b', snippet: '…the prompt cache is lost…' },
+      { sessionId: 'gone', snippet: 'cache' },
+    ];
+    expect(matchCommands(matches, [session('a', 'idle'), session('b', 'working')])).toEqual([
+      {
+        description: 'shop · …the prompt cache is lost…',
+        group: 'In conversations',
+        icon: SESSION_STATUS_ICONS.working,
+        id: 'match:b',
+        label: 'Session b',
+        result: true,
+      },
+    ]);
   });
 });
 

@@ -1,9 +1,10 @@
 import { HOST_ICONS, placeText } from './hosts';
-import { sessionPlace } from './session-kinds';
+import { sessionPlace, sessionPlaceName } from './session-kinds';
 import { SESSION_STATUS_ICONS, SESSION_STATUS_LOOKS } from './session-status';
 import { SETTINGS_TOPIC_LABELS } from './settings-topics';
 
 import type { PaletteCommand } from '@syware/jlib';
+import type { SessionMatch } from '../../../shared/protocol/messages.schema';
 import type { Project } from '../../../shared/protocol/project.schema';
 import type { SessionSummary } from '../../../shared/protocol/session.schema';
 import type { PaletteTarget } from '../types/palette.types';
@@ -20,9 +21,17 @@ export const PALETTE_ACTION = {
 type PaletteAction = (typeof PALETTE_ACTION)[keyof typeof PALETTE_ACTION];
 
 const SESSION_PREFIX = 'session:';
+// A session found in its conversation: the same session may be listed by its title too.
+const MATCH_PREFIX = 'match:';
 const PROJECT_PREFIX = 'project:';
 const TOPIC_PREFIX = 'settings:';
-const GROUP = { actions: 'Actions', projects: 'Projects', sessions: 'Sessions', settings: 'Settings' } as const;
+const GROUP = {
+  actions: 'Actions',
+  conversations: 'In conversations',
+  projects: 'Projects',
+  sessions: 'Sessions',
+  settings: 'Settings',
+} as const;
 
 const ACTIONS: readonly PaletteCommand[] = [
   {
@@ -72,6 +81,15 @@ const sessionCommand = (session: SessionSummary): PaletteCommand => ({
   label: session.title,
 });
 
+const matchCommand = (session: SessionSummary, match: SessionMatch): PaletteCommand => ({
+  description: `${sessionPlaceName(session)} · ${match.snippet}`,
+  group: GROUP.conversations,
+  icon: SESSION_STATUS_ICONS[session.status],
+  id: `${MATCH_PREFIX}${session.id}`,
+  label: session.title,
+  result: true,
+});
+
 const projectCommand = (project: Project): PaletteCommand => ({
   description: placeText(project.host, project.path),
   group: GROUP.projects,
@@ -105,6 +123,17 @@ export function paletteCommands(
   ];
 }
 
+/** The sessions the daemon found saying what was typed, each with the words around it; none it does not list. */
+export function matchCommands(
+  matches: readonly SessionMatch[],
+  sessions: readonly SessionSummary[]
+): PaletteCommand[] {
+  return matches.flatMap((match) => {
+    const session = sessions.find((each) => each.id === match.sessionId);
+    return session ? [matchCommand(session, match)] : [];
+  });
+}
+
 /** What a command the palette gave stands for; nothing for an id it never made. */
 export function paletteTarget(id: string): PaletteTarget | undefined {
   if (isAction(id)) {
@@ -113,6 +142,7 @@ export function paletteTarget(id: string): PaletteTarget | undefined {
   const prefixed = (
     [
       [SESSION_PREFIX, 'session'],
+      [MATCH_PREFIX, 'session'],
       [PROJECT_PREFIX, 'project'],
       [TOPIC_PREFIX, 'topic'],
     ] as const

@@ -1795,6 +1795,8 @@ func (ClientMessageAnswerQuestion) isClientMessage() {}
 
 func (ClientMessageStopTurn) isClientMessage() {}
 
+func (ClientMessageSearchSessions) isClientMessage() {}
+
 func (ClientMessagePeek) isClientMessage() {}
 
 func (ClientMessageStopJob) isClientMessage() {}
@@ -1890,6 +1892,12 @@ func (u *ClientMessage) UnmarshalJSON(data []byte) error {
 			return err
 		}
 		u.Value = value
+	case "\"searchSessions\"":
+		var value ClientMessageSearchSessions
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
 	case "\"peek\"":
 		var value ClientMessagePeek
 		if err := json.Unmarshal(data, &value); err != nil {
@@ -1968,6 +1976,7 @@ type ClientMessageMapper[R any] interface {
 	AnswerPermission(ClientMessageAnswerPermission) R
 	AnswerQuestion(ClientMessageAnswerQuestion) R
 	StopTurn(ClientMessageStopTurn) R
+	SearchSessions(ClientMessageSearchSessions) R
 	Peek(ClientMessagePeek) R
 	StopJob(ClientMessageStopJob) R
 	SetMode(ClientMessageSetMode) R
@@ -2003,6 +2012,8 @@ func MapClientMessage[R any](u ClientMessage, m ClientMessageMapper[R]) R {
 		return m.AnswerQuestion(value)
 	case ClientMessageStopTurn:
 		return m.StopTurn(value)
+	case ClientMessageSearchSessions:
+		return m.SearchSessions(value)
 	case ClientMessagePeek:
 		return m.Peek(value)
 	case ClientMessageStopJob:
@@ -2290,6 +2301,38 @@ func (v ClientMessageStopTurn) MarshalJSON() ([]byte, error) {
 	}{"stopTurn", p})
 }
 
+type ClientMessageSearchSessions struct {
+	Query string `json:"query"`
+}
+
+func (v ClientMessageSearchSessions) MarshalJSON() ([]byte, error) {
+	type plain ClientMessageSearchSessions
+	p := plain(v)
+	return json.Marshal(struct {
+		Key string `json:"type"`
+		plain
+	}{"searchSessions", p})
+}
+
+func (v *ClientMessageSearchSessions) UnmarshalJSON(data []byte) error {
+	type plain ClientMessageSearchSessions
+	p := plain{}
+	if err := json.Unmarshal(data, &p); err != nil {
+		return err
+	}
+	*v = ClientMessageSearchSessions(p)
+	return v.Normalize()
+}
+
+// Normalize trims and checks what the app sent, as its schema does.
+func (v *ClientMessageSearchSessions) Normalize() error {
+	v.Query = strings.TrimSpace(v.Query)
+	if utf8.RuneCountInString(v.Query) < 1 {
+		return fmt.Errorf("%s: must not be empty", "query")
+	}
+	return nil
+}
+
 type ClientMessagePeek struct {
 	PeekID    string `json:"peekId"`
 	Question  string `json:"question"`
@@ -2566,6 +2609,8 @@ func (ServerMessageSessions) isServerMessage() {}
 
 func (ServerMessageSessionCreated) isServerMessage() {}
 
+func (ServerMessageSessionMatches) isServerMessage() {}
+
 func (ServerMessageSessionHistory) isServerMessage() {}
 
 func (ServerMessageSessionEvent) isServerMessage() {}
@@ -2617,6 +2662,12 @@ func (u *ServerMessage) UnmarshalJSON(data []byte) error {
 		u.Value = value
 	case "\"sessionCreated\"":
 		var value ServerMessageSessionCreated
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
+	case "\"sessionMatches\"":
+		var value ServerMessageSessionMatches
 		if err := json.Unmarshal(data, &value); err != nil {
 			return err
 		}
@@ -2715,6 +2766,7 @@ func (u *ServerMessage) UnmarshalJSON(data []byte) error {
 type ServerMessageMapper[R any] interface {
 	Sessions(ServerMessageSessions) R
 	SessionCreated(ServerMessageSessionCreated) R
+	SessionMatches(ServerMessageSessionMatches) R
 	SessionHistory(ServerMessageSessionHistory) R
 	SessionEvent(ServerMessageSessionEvent) R
 	AssistantDelta(ServerMessageAssistantDelta) R
@@ -2738,6 +2790,8 @@ func MapServerMessage[R any](u ServerMessage, m ServerMessageMapper[R]) R {
 		return m.Sessions(value)
 	case ServerMessageSessionCreated:
 		return m.SessionCreated(value)
+	case ServerMessageSessionMatches:
+		return m.SessionMatches(value)
 	case ServerMessageSessionHistory:
 		return m.SessionHistory(value)
 	case ServerMessageSessionEvent:
@@ -2797,6 +2851,28 @@ func (v ServerMessageSessionCreated) MarshalJSON() ([]byte, error) {
 		Key string `json:"type"`
 		plain
 	}{"sessionCreated", p})
+}
+
+type ServerMessageSessionMatches struct {
+	Matches []SessionMatch `json:"matches"`
+	Query   string         `json:"query"`
+}
+
+func (v ServerMessageSessionMatches) MarshalJSON() ([]byte, error) {
+	type plain ServerMessageSessionMatches
+	p := plain(v)
+	if p.Matches == nil {
+		p.Matches = []SessionMatch{}
+	}
+	return json.Marshal(struct {
+		Key string `json:"type"`
+		plain
+	}{"sessionMatches", p})
+}
+
+type SessionMatch struct {
+	SessionID string `json:"sessionId"`
+	Snippet   string `json:"snippet"`
 }
 
 type ServerMessageSessionHistory struct {

@@ -21,6 +21,13 @@ export const PEEK_STATES = ['waiting', 'answering', 'done', 'failed'] as const;
 export const PeekStateSchema = z.enum(PEEK_STATES);
 export type PeekState = z.infer<typeof PeekStateSchema>;
 
+/**
+ * A session whose conversation says what the palette's search typed: where it says it, a line around the words (the
+ * person's message, the model's answer, a summary, or a tool call's file or command).
+ */
+export const SessionMatchSchema = z.object({ sessionId: z.string(), snippet: z.string() });
+export type SessionMatch = z.infer<typeof SessionMatchSchema>;
+
 /** What the app sends the daemon over the socket. */
 export const ClientMessageSchema = z.discriminatedUnion('type', [
   // A folder of its own (a coding session's), and the first message to start on at once, both optional.
@@ -68,6 +75,8 @@ export const ClientMessageSchema = z.discriminatedUnion('type', [
     type: z.literal('answerQuestion'),
   }),
   z.object({ sessionId: z.string(), type: z.literal('stopTurn') }),
+  // The conversations that say every word typed in the palette's search; the answer goes to this socket alone.
+  z.object({ query: z.string().trim().min(1), type: z.literal('searchSessions') }),
   // A question beside the session (/peek): answered from the conversation as it is, never kept in it. The app names
   // it, to tell its answer.
   z.object({
@@ -112,6 +121,8 @@ export const StreamingSchema = z.object({ messageId: z.string(), text: z.string(
 export const ServerMessageSchema = z.discriminatedUnion('type', [
   z.object({ sessions: z.array(SessionSummarySchema), type: z.literal('sessions') }),
   z.object({ session: SessionSummarySchema, type: z.literal('sessionCreated') }),
+  // The answer to a search, the newest sessions first: the query comes back, for the app to drop an answer too late.
+  z.object({ matches: z.array(SessionMatchSchema), query: z.string(), type: z.literal('sessionMatches') }),
   z.object({
     events: z.array(SessionEventSchema),
     sessionId: z.string(),

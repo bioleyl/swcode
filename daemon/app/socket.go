@@ -178,6 +178,13 @@ func (h handlers) Peek(message protocol.ClientMessagePeek) struct{} {
 	return h.problem(h.app.Sessions.Peek(message.SessionID, message.PeekID, message.Question, h.reply))
 }
 
+func (h handlers) SearchSessions(message protocol.ClientMessageSearchSessions) struct{} {
+	go func() {
+		h.reply(protocol.ServerMessage{Value: protocol.ServerMessageSessionMatches{Matches: h.app.Sessions.Search(message.Query), Query: message.Query}})
+	}()
+	return struct{}{}
+}
+
 func (h handlers) StopTurn(message protocol.ClientMessageStopTurn) struct{} {
 	return h.problem(h.app.Sessions.Stop(message.SessionID))
 }

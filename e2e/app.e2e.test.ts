@@ -787,6 +787,27 @@ describe('the command palette', () => {
     await settle(page);
     await page.locator('session-page').getByText('Tidied.').waitFor();
   });
+
+  it('finds a session by what its conversation says, the words around shown under its title', async () => {
+    const rig = await start({ replies: [{ text: 'The badge now reads green on main.' }] });
+    const page = await rig.browser.newPage({ viewport: DESKTOP });
+    await page.goto(rig.link);
+    await page.locator('home-page textarea').fill('Tidy the README');
+    await page.locator('home-page textarea').press('Enter');
+    await page.getByText('The badge now reads green').waitFor();
+    await navItem(page, 'New session').click();
+    await settle(page);
+
+    await page.keyboard.press('Control+k');
+    const palette = page.locator('jl-command-palette');
+    await palette.getByRole('combobox').fill('badge green');
+    const found = palette.getByRole('option', { name: /Tidy the README/ });
+    await found.waitFor();
+    expect(await found.textContent()).toMatch(/swcode-e2e-workspace-\w+ · The badge now reads green on main\./);
+    await page.keyboard.press('Enter');
+    await settle(page);
+    await page.locator('session-page').getByText('The badge now reads green').waitFor();
+  });
 });
 
 describe('the computer', () => {

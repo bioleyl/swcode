@@ -109,6 +109,8 @@ export class SessionPage extends ScElement {
         this._refs.plan.show(currentPlan(this._events));
         this.showUsage(usedTokens(message.events));
       }),
+    // The palette's search hears its answers through the search service.
+    sessionMatches: () => undefined,
     // The list itself comes through the session list service.
     sessions: () => undefined,
     toolCallWriting: (message) =>

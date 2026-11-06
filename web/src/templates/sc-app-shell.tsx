@@ -13,7 +13,7 @@ import {
 import { ScBrand } from '../atoms/sc-brand';
 import { ScElement } from '../base/sc-element';
 import { daemonLine } from '../lib/daemon-lines';
-import { PALETTE_ACTION, paletteCommands, paletteTarget } from '../lib/palette';
+import { matchCommands, PALETTE_ACTION, paletteCommands, paletteTarget } from '../lib/palette';
 import { removalConsequence } from '../lib/project-groups';
 import { PHONE_TOPIC, SETTINGS_TOPICS } from '../lib/settings-topics';
 import { NAV_ID, projectNavId, ScNav, sessionNavId } from '../organisms/sc-nav';
@@ -40,13 +40,14 @@ import {
 import { allProjects, askForProject, findProject, projectListBus } from '../services/project-list';
 import { seenBus, seenSessions } from '../services/seen-sessions';
 import { allSessions, findSession, sessionListBus } from '../services/session-list';
+import { searchSessions, sessionSearchBus } from '../services/session-search';
 import { loadStartup } from '../services/startup';
 import { setWorkMode, workMode, workModeBus } from '../services/work-mode';
 import { BASE_STYLES } from '../styles/shared';
 import styles from './sc-app-shell.css?inline';
 
 import type { ActiveRoute } from '@jadis/core';
-import type { TabBarItem } from '@syware/jlib';
+import type { PaletteCommand, TabBarItem } from '@syware/jlib';
 import type { SessionKind } from '../../../shared/protocol/session.schema';
 import type { SettingsTopic } from '../lib/settings-topics';
 import type { RouteName } from '../routes';
@@ -110,6 +111,8 @@ export class ScAppShell extends ScElement {
   private _route: ActiveRoute | undefined;
   // Whether this daemon can start with its computer: the palette offers the Startup topic then.
   private _startup = false;
+  // What the palette finds by itself, as it opened: the conversations the daemon finds join them.
+  private _commands: PaletteCommand[] = [];
 
   private readonly _palette: { [Kind in keyof PaletteTargetMap]: (target: PaletteTargetMap[Kind]) => void } = {
     action: (target) => this.runAction(target.action),
@@ -146,7 +149,10 @@ export class ScAppShell extends ScElement {
         </div>
         <JlTabBar slot="tabs" more="More" label="swcode" />
         <JlToaster />
-        <JlCommandPalette label="Search swcode" placeholder="Search sessions, projects, settings…" />
+        <JlCommandPalette
+          label="Search swcode"
+          placeholder="Search sessions and what they say, projects, settings…"
+        />
         <ScProjectDialog />
       </JlAppShell>
     );
@@ -176,6 +182,11 @@ export class ScAppShell extends ScElement {
     this._refs.topSearch.events.register('press', () => this._refs.palette.show());
     this._refs.palette.events.register('select', (id) => this.choose(paletteTarget(id)));
     this._refs.palette.events.register('open', () => this.renderPalette());
+    this._refs.palette.events.register('search', (query) => this._refs.palette.loading.set(searchSessions(query)));
+    this.onBus(sessionSearchBus, 'found', (matches) => {
+      this._refs.palette.loading.set(false);
+      this._refs.palette.commands.set([...this._commands, ...matchCommands(matches, allSessions())]);
+    });
     void this.offerStartup();
     this._refs.projectDialog.events.register('created', (project) => navigate(newSessionPath(project.id)));
     this.onBus(projectListBus, 'open', () => this._refs.projectDialog.open());
@@ -195,10 +206,11 @@ export class ScAppShell extends ScElement {
     this.renderDaemon(daemonState());
   }
 
-  /** What the palette finds, as it opens: the sessions and projects of now. */
+  /** What the palette finds, as it opens: the sessions and projects of now; what was typed is looked for after. */
   private renderPalette(): void {
     const topics = SETTINGS_TOPICS.filter((topic) => this.offersTopic(topic));
-    this._refs.palette.commands.set(paletteCommands(allProjects(), allSessions(), topics));
+    this._commands = paletteCommands(allProjects(), allSessions(), topics);
+    this._refs.palette.commands.set(this._commands);
   }
 
   /** The topics only some places have: the other computers in the desktop app, startup where the daemon can. */

@@ -399,7 +399,10 @@ top, for one command; the page shows those as set in the environment.
   button, Chat or Code, the settings' cog and the theme), folding into a rail; on a phone a top bar, the navigation
   in a drawer and tabs (New, Sessions, Settings). A project has its page, with its sessions; Sessions lists them all, what needs you
   first. Beside a session, the side panel shows its agents, the commands left running, the llm-servers and whether
-  they answer, and how full the context is. Ctrl K (⌘K) searches the sessions, projects, settings and actions. A
+  they answer, and how full the context is. Ctrl K (⌘K) searches the sessions, projects, settings and actions, and
+  what the sessions say: the daemon looks through the conversations it holds (your messages, the model's answers,
+  the summaries, the files and commands of the tool calls; not the tools' results) for the sessions that say every
+  word typed, and lists the newest 20, the words around under each title. A
   problem of the daemon or of llm-server shows over every page.
 - **Chat or Code**, at the navigation's foot: Code is the agent at work in a project; Chat is a conversation with
   the preset's model, as Claude's chat is, in no project. A chat's model reads the web (`websearch`, `webfetch`) and,
