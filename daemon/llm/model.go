@@ -1,4 +1,4 @@
-// Package llm talks to llama-server: the Chat Completions API streamed, its status, and its slots shared out
+// Package llm talks to llm-server: the Chat Completions API streamed, its status, and its slots shared out
 // between the agents.
 package llm
 
@@ -45,8 +45,8 @@ type ToolDefinition struct {
 	Parameters  map[string]any `json:"parameters"`
 }
 
-// Identity is which agent asks, the llama-server it asks (a source's id), the model it asks there (empty for the one a
-// single-model llama-server serves), and how much it thinks: the scheduler gives it a slot of that model.
+// Identity is which agent asks, the llm-server it asks (a source's id), the model it asks there (empty for the one a
+// single-model llm-server serves), and how much it thinks: the scheduler gives it a slot of that model.
 type Identity struct {
 	AgentID  string
 	Source   string
@@ -69,7 +69,7 @@ type Target struct {
 	Slot int
 }
 
-// NoSlot leaves the slot to llama-server.
+// NoSlot leaves the slot to llm-server.
 const NoSlot = -1
 
 type Request struct {
@@ -107,7 +107,7 @@ type Model interface {
 	Complete(ctx context.Context, request Request, onPart func(Part)) (Reply, error)
 }
 
-// ModelError is llama-server not reached, refusing the request or breaking off: the message says which, for people.
+// ModelError is llm-server not reached, refusing the request or breaking off: the message says which, for people.
 type ModelError struct {
 	Message string
 	// ContextFull: the conversation no longer fits in the model's context, and compacting it lets the turn go on.

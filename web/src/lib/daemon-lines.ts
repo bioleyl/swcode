@@ -5,23 +5,24 @@ import type { DaemonState, DaemonStateMap } from '../types/daemon.types';
 
 const PROTOCOL = /^https?:\/\//;
 
-const hostOf = (url: string): string => url.replace(PROTOCOL, '');
+/** An llm-server's address without its protocol: `gmktec:8080`. */
+export const hostOf = (url: string): string => url.replace(PROTOCOL, '');
 
 const hostsOf = (sources: readonly SourceStatus[]): string =>
   sources.map((source) => hostOf(source.url)).join(', ');
 
-/** Whether every llama-server answers; one that does not is named, when there are several. */
+/** Whether every llm-server answers; one that does not is named, when there are several. */
 const llamaLine = (status: Status): StatusLine => {
   const sources = status.llama.sources;
   const silent = sources.filter((source) => !source.reachable);
   const first = silent[0];
   if (first === undefined) {
-    return { detail: hostsOf(sources), text: 'llama-server connected', tone: 'ok' };
+    return { detail: hostsOf(sources), text: 'llm-server connected', tone: 'ok' };
   }
   const named = silent.length === 1 && sources.length > 1;
   return {
     detail: `Nothing answers at ${hostsOf(silent)}`,
-    text: named ? `${first.name} unreachable` : 'llama-server unreachable',
+    text: named ? `${first.name} unreachable` : 'llm-server unreachable',
     tone: 'problem',
   };
 };
@@ -47,5 +48,5 @@ const LINES: { [Kind in keyof DaemonStateMap]: (state: DaemonStateMap[Kind]) => 
 const lineFor = <Kind extends keyof DaemonStateMap>(kind: Kind, state: DaemonStateMap[Kind]): StatusLine =>
   LINES[kind](state);
 
-/** The sidebar's status line: whether the daemon and llama-server answer. */
+/** Whether the daemon and llm-server answer: the side panel's, and the alert over every page on a problem. */
 export const daemonLine = (state: DaemonState): StatusLine => lineFor(state.kind, state);

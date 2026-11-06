@@ -174,6 +174,10 @@ func (h handlers) StopJob(message protocol.ClientMessageStopJob) struct{} {
 	return h.problem(h.app.Sessions.StopJob(message.SessionID, message.JobID))
 }
 
+func (h handlers) Peek(message protocol.ClientMessagePeek) struct{} {
+	return h.problem(h.app.Sessions.Peek(message.SessionID, message.PeekID, message.Question, h.reply))
+}
+
 func (h handlers) StopTurn(message protocol.ClientMessageStopTurn) struct{} {
 	return h.problem(h.app.Sessions.Stop(message.SessionID))
 }
@@ -201,7 +205,6 @@ func (a *App) socket(response http.ResponseWriter, request *http.Request) {
 	box.push(protocol.ServerMessage{Value: protocol.ServerMessageProjects{Projects: a.Projects.List()}})
 	box.push(protocol.ServerMessage{Value: protocol.ServerMessagePresets{Choices: a.Models.Choices()}})
 	box.push(protocol.ServerMessage{Value: protocol.ServerMessageSessions{Sessions: a.Sessions.List()}})
-	box.push(a.Sessions.SlotUsage())
 	go a.send(ctx, cancel, connection, box)
 	reply := handlers{app: a, ctx: context.WithoutCancel(ctx), reply: box.push}
 	for {

@@ -1,4 +1,4 @@
-// Package testapp runs the daemon on temporary folders for the tests, talking to a fake llama-server that plays
+// Package testapp runs the daemon on temporary folders for the tests, talking to a fake llm-server that plays
 // the scripted replies.
 package testapp
 
@@ -274,7 +274,7 @@ func (a *App) Call(method, path string, body any) (int, any) {
 	return response.StatusCode, answer
 }
 
-// Requests is what the agent sent llama-server, in order.
+// Requests is what the agent sent llm-server, in order.
 func (a *App) Requests() []map[string]any { return a.Llama.Requests() }
 
 // Kinds is the kinds of events, in order.

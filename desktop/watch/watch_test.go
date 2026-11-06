@@ -61,8 +61,8 @@ func TestAFinishedTurnSaysTheLastAnswerOnOneShortLine(t *testing.T) {
 
 func TestAFailedTurnSaysWhyAndAStoppedOneNothing(t *testing.T) {
 	tracker := watch.NewTracker()
-	found, told := tracker.Take(eventMessage("s1", protocol.SessionEventTurnFinished{Message: "llama-server did not answer.", Outcome: protocol.TurnOutcomeFailed}))
-	expectNotice(t, found, told, watch.Notice{Kind: watch.Failed, SessionID: "s1", Text: "llama-server did not answer.", Title: "A session"})
+	found, told := tracker.Take(eventMessage("s1", protocol.SessionEventTurnFinished{Message: "llm-server did not answer.", Outcome: protocol.TurnOutcomeFailed}))
+	expectNotice(t, found, told, watch.Notice{Kind: watch.Failed, SessionID: "s1", Text: "llm-server did not answer.", Title: "A session"})
 	if _, told := tracker.Take(eventMessage("s1", protocol.SessionEventTurnFinished{Outcome: protocol.TurnOutcomeStopped})); told {
 		t.Fatal("a stopped turn made a notice")
 	}

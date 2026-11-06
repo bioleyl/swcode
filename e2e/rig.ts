@@ -81,7 +81,7 @@ const eventsIn = (dataDir: string): SessionEvent[] => {
 };
 
 /**
- * The Go daemon on temporary folders serving the built app (npm run build first), a fake llama-server playing the
+ * The Go daemon on temporary folders serving the built app (npm run build first), a fake llm-server playing the
  * replies, and a headless Chromium: SWCODE_CHROMIUM names its executable, else Playwright's own is used.
  */
 export async function startRig(options: E2eOptions): Promise<E2eRig> {

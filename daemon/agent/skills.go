@@ -52,7 +52,7 @@ func lastListed(events []protocol.SessionEvent) []protocol.SkillSummary {
 }
 
 // ListSkills tells the model the user's skills when they are not the ones it last saw, since the last compaction:
-// a message at the end of the conversation, so the system prompt and what came before stay as llama-server cached
+// a message at the end of the conversation, so the system prompt and what came before stay as llm-server cached
 // them.
 func ListSkills(ctx context.Context, host TurnHost, setup Setup) {
 	if setup.Skills == nil {

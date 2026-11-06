@@ -24,6 +24,8 @@ const APP_NAME = 'swcode';
 // Without a project yet, a session goes in the daemon's folder, which then becomes one. jlib's select takes an empty
 // value for nothing chosen: this choice has a value of its own.
 const DAEMON_FOLDER = 'daemon-folder';
+// A new session starts in token economy: the person turns it off in the composer's choices.
+const CONCISE_AT_FIRST = true;
 
 /** A project in the picker: its name, and its host when it is not this computer. */
 const projectLabel = (project: Project): string =>
@@ -39,7 +41,7 @@ export class HomePage extends ScElement {
   // Picked here; otherwise the daemon's default for new sessions.
   private _thinking: ThinkingMode | undefined;
   private _preset: string | undefined;
-  private _concise = false;
+  private _concise = CONCISE_AT_FIRST;
   // The project in the address (/new/<id>), then the one the person picks.
   private _chosen: string | undefined;
 
@@ -70,7 +72,7 @@ export class HomePage extends ScElement {
           </JlField>
           <JlButton class="new-project" icon="folder-plus" label="New project" />
         </div>
-        <ScComposer />
+        <ScComposer concise={CONCISE_AT_FIRST} />
         <JlAlert tone="danger" hidden />
       </JlPage>
     );

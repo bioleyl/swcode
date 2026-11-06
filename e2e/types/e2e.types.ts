@@ -2,7 +2,7 @@ import type { Browser } from 'playwright-core';
 import type { SessionEvent } from '../../shared/protocol/session.schema.js';
 import type { FakeLlama, ScriptedReply } from './fake-llama.types.js';
 
-/** The Go daemon with the built web app, a fake llama-server, and a browser, for one test. */
+/** The Go daemon with the built web app, a fake llm-server, and a browser, for one test. */
 export interface E2eRig {
   llama: FakeLlama;
   browser: Browser;
@@ -19,7 +19,7 @@ export interface E2eOptions {
   files?: Readonly<Record<string, string>>;
   /** Files of the daemon's home folder, by path: Claude Code's skills and plugins in .claude. */
   homeFiles?: Readonly<Record<string, string>>;
-  /** The model llama-server serves, gpt-oss-120b when left out. */
+  /** The model llm-server serves, gpt-oss-120b when left out. */
   model?: string;
   /** Whether that model sees pictures. */
   vision?: boolean;

@@ -8,7 +8,7 @@ import { pairingFailed } from './pairing';
 import type { DaemonState } from '../types/daemon.types';
 
 const UNAUTHORIZED = 401;
-// llama-server can stop or change models at any time: the panels ask again now and then.
+// llm-server can stop or change models at any time: the panels ask again now and then.
 const POLL_MS = 15_000;
 
 export const daemonStatusBus = new Bus<{ changed: DaemonState }>();

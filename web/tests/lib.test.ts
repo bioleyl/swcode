@@ -7,7 +7,9 @@ import { keepingEnd } from '../src/lib/follow-end';
 import { ago, contextText, folderName, percent, tokens } from '../src/lib/format';
 import { blocksOf } from '../src/lib/markdown';
 import { paletteCommands, paletteTarget } from '../src/lib/palette';
+import { peekQuestion } from '../src/lib/peek';
 import { groupByProject, preferredProject, removalConsequence } from '../src/lib/project-groups';
+import { sshHostProblem, sshHostsLine, sshHostsOf } from '../src/lib/ssh-hosts';
 import { sessionGrantLabel, toolLabel } from '../src/lib/tool-labels';
 import { toolMeta } from '../src/lib/tool-meta';
 
@@ -228,12 +230,12 @@ describe('daemonLine', () => {
     workspace: '/w',
   });
 
-  it('tells whether the llama-servers answer, naming the one that does not', () => {
+  it('tells whether the llm-servers answer, naming the one that does not', () => {
     expect(
       daemonLine({ kind: 'ready', status: statusOf(source('gmktec', true), source('garfield', true)) })
     ).toEqual({
       detail: 'gmktec:8080, garfield:8080',
-      text: 'llama-server connected',
+      text: 'llm-server connected',
       tone: 'ok',
     });
     expect(
@@ -244,7 +246,7 @@ describe('daemonLine', () => {
       tone: 'problem',
     });
     expect(daemonLine({ kind: 'ready', status: statusOf(source('gmktec', false)) }).text).toBe(
-      'llama-server unreachable'
+      'llm-server unreachable'
     );
     expect(daemonLine({ kind: 'locked', pairingFailed: false }).tone).toBe('problem');
     expect(daemonLine({ kind: 'locked', pairingFailed: true }).text).toBe('This pairing code expired');
@@ -294,5 +296,30 @@ describe('the command palette', () => {
     expect(paletteTarget('settings:plugins')).toEqual({ id: 'plugins', kind: 'topic' });
     expect(paletteTarget('phone')).toEqual({ action: 'phone', kind: 'action' });
     expect(paletteTarget('elsewhere')).toBeUndefined();
+  });
+});
+
+describe('peekQuestion', () => {
+  it('reads the question of a /peek line, and nothing of a message', () => {
+    expect(peekQuestion('/peek what are you doing?')).toBe('what are you doing?');
+    expect(peekQuestion('  /peek\nwhy that file?  ')).toBe('why that file?');
+    expect(peekQuestion('/peek')).toBe('');
+    expect(peekQuestion('/peeking at it')).toBeUndefined();
+    expect(peekQuestion('please /peek')).toBeUndefined();
+  });
+});
+
+describe('SSH hosts', () => {
+  it('read the setting’s line by commas or spaces, and write it by commas', () => {
+    expect(sshHostsOf('me@box, gmktec  laptop,')).toEqual(['me@box', 'gmktec', 'laptop']);
+    expect(sshHostsOf('')).toEqual([]);
+    expect(sshHostsLine(['me@box', 'gmktec'])).toBe('me@box, gmktec');
+  });
+
+  it('take one host the list does not have', () => {
+    expect(sshHostProblem('me@box', ['gmktec'])).toBe('');
+    expect(sshHostProblem('', [])).not.toBe('');
+    expect(sshHostProblem('me@box gmktec', [])).toBe('One host, without spaces or commas.');
+    expect(sshHostProblem('gmktec', ['gmktec'])).toBe('This host is in the list already.');
   });
 });

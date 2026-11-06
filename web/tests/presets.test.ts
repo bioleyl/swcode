@@ -8,7 +8,14 @@ import {
   withPreset,
   withSource,
 } from '../src/lib/model-settings';
-import { presetDescription, presetOf } from '../src/lib/presets';
+import {
+  contextText,
+  presetDescription,
+  presetOf,
+  readTokens,
+  subagentLimitChoice,
+  subagentLimitOf,
+} from '../src/lib/presets';
 
 import type { ModelSettings, Preset } from '../../shared/protocol/models.schema';
 
@@ -28,7 +35,6 @@ const garfield = {
   apiKey: 'secret',
   id: 'garfield',
   name: 'garfield',
-  slotShare: '2/2',
   url: 'https://garfield.example',
 };
 const settings: ModelSettings = {
@@ -49,9 +55,29 @@ describe('presets', () => {
     expect(presetOf(choices, undefined)?.id).toBe('local');
   });
 
-  it('say their models, and the workers’ only when they are others', () => {
-    expect(presetDescription(choices, big)).toBe('qwen3.8-flash-next on garfield · workers: qwen3.5-9b on gmktec');
+  it('say their models, and the subagents’ only when they are others', () => {
+    expect(presetDescription(choices, big)).toBe(
+      'qwen3.8-flash-next on garfield · subagents: qwen3.5-9b on gmktec'
+    );
     expect(presetDescription(choices, local)).toBe('its model on gmktec');
+  });
+
+  it('say how many subagents a turn may start, or that it starts none', () => {
+    expect(presetDescription(choices, { ...big, subagentLimit: { perTurn: 2 } })).toBe(
+      'qwen3.8-flash-next on garfield · subagents: qwen3.5-9b on gmktec, 2 a turn'
+    );
+    expect(presetDescription(choices, { ...local, subagentLimit: { perTurn: 3 } })).toBe(
+      'its model on gmktec · subagents: 3 a turn'
+    );
+    expect(presetDescription(choices, { ...big, subagentLimit: { perTurn: 0 } })).toBe(
+      'qwen3.8-flash-next on garfield · no subagents'
+    );
+  });
+
+  it('read the select’s choice of a limit back, no limit as none', () => {
+    expect(subagentLimitOf(subagentLimitChoice({ perTurn: 0 }))).toEqual({ perTurn: 0 });
+    expect(subagentLimitOf(subagentLimitChoice({ perTurn: 7 }))).toEqual({ perTurn: 7 });
+    expect(subagentLimitOf(subagentLimitChoice(undefined))).toBeUndefined();
   });
 });
 
@@ -73,6 +99,25 @@ describe('model settings', () => {
   it('know which preset uses a source, and say a source in a few words', () => {
     expect(presetUsing(settings, 'garfield')?.id).toBe('big');
     expect(presetUsing(withoutPreset(settings, 'big'), 'garfield')).toBeUndefined();
-    expect(sourceDescription(garfield)).toBe('https://garfield.example · share 2/2 · with a key');
+    expect(sourceDescription(garfield)).toBe('https://garfield.example · with a key');
+  });
+});
+
+describe('context sizes', () => {
+  it('read as people type them, empty as the llm-server says', () => {
+    expect(readTokens('131072')).toEqual({ kind: 'tokens', tokens: 131_072 });
+    expect(readTokens(" 131'072 ")).toEqual({ kind: 'tokens', tokens: 131_072 });
+    expect(readTokens('128k')).toEqual({ kind: 'tokens', tokens: 131_072 });
+    expect(readTokens('')).toEqual({ kind: 'none' });
+    expect(readTokens('0')).toEqual({ kind: 'invalid' });
+    expect(readTokens('lots')).toEqual({ kind: 'invalid' });
+  });
+
+  it('show as people say them, and in a preset’s words', () => {
+    expect(contextText(131_072)).toBe('128k');
+    expect(contextText(100_000)).toBe('100000');
+    expect(presetDescription(choices, { ...local, main: { ...local.main, contextTokens: 65_536 } })).toBe(
+      'its model on gmktec (64k)'
+    );
   });
 });

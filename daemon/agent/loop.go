@@ -146,7 +146,7 @@ func fixedChars(setup Setup) int {
 }
 
 // askModel asks the model for its next reply, compacting the conversation first when it is about to fill the
-// context, and once more if llama-server still finds it too long.
+// context, and once more if llm-server still finds it too long.
 func askModel(ctx context.Context, host TurnHost, setup Setup) (llm.Reply, error) {
 	if NeedsCompaction(host.History(), fixedChars(setup), setup.ContextTokens) {
 		if err := Compact(ctx, host, setup); err != nil {
@@ -198,11 +198,18 @@ func streamPart(host TurnHost, box tools.Box, messageID string, part llm.Part) {
 // nextReply is the model's next reply, asked for again while it comes back empty.
 func nextReply(ctx context.Context, host TurnHost, setup Setup) (llm.Reply, error) {
 	for retries := emptyReplyRetries; ; retries-- {
-		reply, err := askModel(ctx, host, setup)
+		reply, err := askModelAlone(ctx, host, setup)
 		if err != nil || !IsEmptyReply(reply.Text, reply.ToolCalls) || retries == 0 || ctx.Err() != nil {
 			return reply, err
 		}
 	}
+}
+
+// askModelAlone asks the model with no peek in between: a peek's question would take the agent's slot from under
+// its compaction or its request, and their prompts would no longer be the one llm-server cached.
+func askModelAlone(ctx context.Context, host TurnHost, setup Setup) (reply llm.Reply, err error) {
+	host.UseModel(func() { reply, err = askModel(ctx, host, setup) })
+	return reply, err
 }
 
 // takeInMessages has what the person sent to come in now join the conversation between two steps, after the
@@ -253,7 +260,7 @@ func declinedEnding(ctx context.Context) Ending {
 }
 
 // reportAtLimit has the model report at the step limit instead of stopping in silence with its changes left as
-// they are. Its tools are still listed, so the prompt stays the one llama-server cached, but no call of this last
+// they are. Its tools are still listed, so the prompt stays the one llm-server cached, but no call of this last
 // reply runs.
 func reportAtLimit(ctx context.Context, host TurnHost, setup Setup) (Ending, error) {
 	host.Record(protocol.SessionEventReminder{ID: setup.NewID(), Reason: protocol.ReminderReasonStepLimit, Text: stepLimitRequest(setup.MaxSteps)})

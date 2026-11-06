@@ -3,7 +3,6 @@ import '@fontsource-variable/jetbrains-mono';
 import './styles/global.css';
 import './services/presets';
 import './services/session-list';
-import './services/slots';
 
 import './lib/icons';
 
@@ -22,7 +21,7 @@ applyTheme();
 adoptToken();
 document.body.replaceChildren(new ScAppShell());
 dropServiceWorker();
-// The daemon back after a restart: ask at once whether llama-server answers too.
+// The daemon back after a restart: ask at once whether llm-server answers too.
 daemonBus.register('online', () => void refreshStatus(), forever);
 // A phone opened from the QR code trades its pairing code for a token before it talks to the daemon.
 void pairFromLink().finally(() => {

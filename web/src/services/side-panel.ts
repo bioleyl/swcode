@@ -4,7 +4,7 @@ const CLOSED = 'closed';
 // Without storage, the choice lasts as long as the page.
 const memory = { open: true };
 
-/** Whether the session page shows its side panel (agents, models, context): as people last left it. */
+/** Whether the session page shows its side panel (agents, llm-server, context): as people last left it. */
 export function sidePanelOpen(): boolean {
   try {
     return localStorage.getItem(STORAGE_KEY) !== CLOSED;

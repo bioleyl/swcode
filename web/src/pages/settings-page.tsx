@@ -1,19 +1,22 @@
 import { createElement, css } from '@jadis/core';
 import { JlAlert, JlButton, JlField, JlInput, JlPage, JlSelect, JlTabPanel, JlTabs } from '@syware/jlib';
 
-import { EDITABLE_SETTINGS } from '../../../shared/protocol/settings.schema';
 import { ScElement } from '../base/sc-element';
 import { SETTING_FIELDS, SETTING_SECTIONS } from '../lib/settings-fields';
+import { SETTINGS_SAVED } from '../lib/settings-saved';
 import {
   DEFAULT_SETTINGS_TOPIC,
   isSettingsTopic,
+  PHONE_TOPIC,
   SETTINGS_TOPIC_LABELS,
   SETTINGS_TOPICS,
 } from '../lib/settings-topics';
 import { ScClaudeSources } from '../organisms/sc-claude-sources';
 import { ScComputers } from '../organisms/sc-computers';
 import { ScModelsEditor } from '../organisms/sc-models-editor';
+import { ScPhone } from '../organisms/sc-phone';
 import { ScSkillsEditor } from '../organisms/sc-skills-editor';
+import { ScSshHosts } from '../organisms/sc-ssh-hosts';
 import { ScStartupSettings } from '../organisms/sc-startup-settings';
 import { daemonBus } from '../services/daemon';
 import { refreshStatus } from '../services/daemon-status';
@@ -37,13 +40,11 @@ const DEFAULT_PORT = '4500';
 // A setting left empty takes its default; jlib's select takes an empty value for nothing chosen, so that choice has
 // a value of its own on the page.
 const DEFAULT_CHOICE = 'default';
-const SAVING = 'Saving…';
-const RESTARTING = 'Saved. swcode restarts on them: a few seconds…';
-const RESTARTED = 'Saved: swcode runs with them now.';
-const BY_PERSON = 'Saved. Restart swcode serve for them to apply.';
 const SECRET_TYPE = 'password';
-// The topics the settings file holds: the others (skills, plugins…) save as they change.
+// The topics the page's form holds, saved together: the others (skills, plugins, SSH hosts…) save as they change.
 const FILE_TOPICS: ReadonlySet<SettingsTopic> = new Set(SETTING_SECTIONS.map((section) => section.topic));
+// The settings of those topics: the page sends these alone, and the file keeps the others as they are.
+const FORM_SETTINGS: readonly SettingName[] = SETTING_SECTIONS.flatMap((section) => section.names);
 
 const toChoice = (value: string): string => (value === '' ? DEFAULT_CHOICE : value);
 const fromChoice = (value: string): string => (value === DEFAULT_CHOICE ? '' : value);
@@ -77,8 +78,10 @@ const controlValue = (control: Control): string => fromChoice(control.value.get(
 const ORGANISM_PANELS: Readonly<Partial<Record<SettingsTopic, () => Node>>> = {
   computers: () => <ScComputers />,
   models: () => <ScModelsEditor />,
+  phone: () => <ScPhone />,
   plugins: () => <ScClaudeSources />,
   skills: () => <ScSkillsEditor />,
+  ssh: () => <ScSshHosts />,
   startup: () => <ScStartupSettings />,
 };
 
@@ -87,9 +90,9 @@ const portNote = (port: string): string =>
 
 /**
  * The settings of this swcode, a tab for each topic, each with its own address: how much the agents think, where
- * projects go, pictures, how it listens, kept in its settings file and saved together; the llama-servers and the
- * presets, how it starts, the other computers, the skills, and Claude Code's skills and plugins, each saved as it
- * changes. Saving the file restarts the daemon on it; a setting set in the environment cannot change.
+ * projects go, pictures, how it listens, kept in its settings file and saved together; the llm-servers and the
+ * presets, the phones, how it starts, the other computers, the skills, and Claude Code's skills and plugins, each
+ * saved as it changes. Saving the file restarts the daemon on it; a setting set in the environment cannot change.
  */
 export class SettingsPage extends ScElement {
   static readonly selector = 'settings-page';
@@ -107,6 +110,7 @@ export class SettingsPage extends ScElement {
 
   private readonly _refs = this.useRefs((ref) => ({
     feedback: ref(JlAlert),
+    phone: ref(ScPhone),
     save: ref<JlButton>('.save'),
     tabs: ref(JlTabs),
   }));
@@ -139,7 +143,7 @@ export class SettingsPage extends ScElement {
     if (!inDesktopApp()) {
       this.panelFor('computers').remove();
     }
-    this.renderSave(this.topicShown());
+    this.renderTopic(this.topicShown());
     void this.load();
     void this.offerStartup();
   }
@@ -193,17 +197,18 @@ export class SettingsPage extends ScElement {
       return;
     }
     history.replaceState(history.state, '', hrefOf(settingsPath(topic)));
-    this.renderSave(topic);
+    this.renderTopic(topic);
   }
 
   private showTopic(topic: SettingsTopic): void {
     this._refs.tabs.value.set(topic);
-    this.renderSave(topic);
+    this.renderTopic(topic);
   }
 
-  /** Save is for the settings file: the other topics save as they change. */
-  private renderSave(topic: SettingsTopic): void {
+  /** Save is for the settings file: the other topics save as they change. The phone's makes codes while shown. */
+  private renderTopic(topic: SettingsTopic): void {
     this._refs.save.hidden = !FILE_TOPICS.has(topic);
+    this._refs.phone.active.set(topic === PHONE_TOPIC);
   }
 
   private sectionNode(section: SettingSection): Node {
@@ -243,7 +248,7 @@ export class SettingsPage extends ScElement {
     for (const file of this.shadowRoot?.querySelectorAll('.file') ?? []) {
       file.textContent = view.path;
     }
-    for (const name of EDITABLE_SETTINGS) {
+    for (const name of FORM_SETTINGS) {
       this.show(name, view);
     }
   }
@@ -261,7 +266,7 @@ export class SettingsPage extends ScElement {
     }
   }
 
-  /** A select keeps a value it does not list: a model llama-server does not serve right now, say. */
+  /** A select keeps a value it does not list: a model llm-server does not serve right now, say. */
   private offer(control: Control, value: string): void {
     if (!(control instanceof JlSelect) || value === '') {
       return;
@@ -276,7 +281,7 @@ export class SettingsPage extends ScElement {
   /** What the page holds: an emptied field goes back to its default; one set in the environment stays out. */
   private values(): SettingValues {
     return Object.fromEntries(
-      EDITABLE_SETTINGS.flatMap((name) => {
+      FORM_SETTINGS.flatMap((name) => {
         const control = this.controlFor(name);
         return control.disabled.get() ? [] : [[name, controlValue(control)]];
       })
@@ -291,7 +296,7 @@ export class SettingsPage extends ScElement {
 
   private async save(): Promise<void> {
     const values = this.values();
-    this.say(SAVING, 'info');
+    this.say(SETTINGS_SAVED.saving, 'info');
     this._refs.save.loading.set(true);
     const saved = await saveSettings(values);
     this._refs.save.loading.set(false);
@@ -306,12 +311,12 @@ export class SettingsPage extends ScElement {
       return;
     }
     this._restarting = saved.restart === 'self';
-    this.say(saved.restart === 'self' ? RESTARTING : BY_PERSON, 'info');
+    this.say(saved.restart === 'self' ? SETTINGS_SAVED.restarting : SETTINGS_SAVED.byPerson, 'info');
   }
 
   private async restarted(): Promise<void> {
     this._restarting = false;
-    this.say(RESTARTED, 'ok');
+    this.say(SETTINGS_SAVED.restarted, 'ok');
     await refreshStatus();
     await this.load();
   }

@@ -72,6 +72,9 @@ interface Checks {
   pattern: RegExp | undefined;
   patternMessage: string | undefined;
   positive: boolean;
+  // A number's bounds, both included: min(0), max(20).
+  lowest: number | undefined;
+  highest: number | undefined;
 }
 
 interface Field {
@@ -168,6 +171,8 @@ function enumType(values: string[], fallbackName: string): GoType {
 }
 
 const NO_CHECKS: Checks = {
+  highest: undefined,
+  lowest: undefined,
   max: undefined,
   min: undefined,
   pattern: undefined,
@@ -192,7 +197,9 @@ function checksOf(def: ZodDef): Checks {
     .reduce<Checks>((found, check) => {
       const tx = check.tx as ((text: string) => string) | undefined;
       const facts: Record<string, () => Partial<Checks>> = {
-        greater_than: () => ({ positive: check.value === 0 }),
+        // min(n) is greater_than n inclusive; positive() is greater_than 0, exclusive.
+        greater_than: () => (check.inclusive ? { lowest: check.value as number } : { positive: check.value === 0 }),
+        less_than: () => (check.inclusive ? { highest: check.value as number } : {}),
         max_length: () => ({ max: check.maximum as number }),
         min_length: () => ({ min: check.minimum as number }),
         overwrite: () => ({ trim: tx?.(' x ') === 'x' }),
@@ -370,9 +377,7 @@ function fieldChecks(field: Field): string[] {
     return stringChecks(target, label, field.checks, field.optional);
   }
   if (type.kind === 'int' || type.kind === 'float') {
-    return field.checks.positive
-      ? [`\tif ${target} <= 0 {\n\t\treturn fmt.Errorf("%s: must be positive", ${label})\n\t}`]
-      : [];
+    return numberChecks(target, label, field.checks, field.optional);
   }
   if (type.kind === 'enum') {
     const guard = field.optional ? `${target} != "" && ` : '';
@@ -396,7 +401,25 @@ function fieldChecks(field: Field): string[] {
   return lines;
 }
 
+// An optional number left out is 0 in Go: positive() checks one that is there.
+function numberChecks(target: string, label: string, checks: Checks, optional: boolean): string[] {
+  const lines: string[] = [];
+  if (checks.positive) {
+    const guard = optional ? `${target} != 0 && ` : '';
+    lines.push(`\tif ${guard}${target} <= 0 {\n\t\treturn fmt.Errorf("%s: must be positive", ${label})\n\t}`);
+  }
+  if (checks.lowest !== undefined) {
+    lines.push(`\tif ${target} < ${checks.lowest} {\n\t\treturn fmt.Errorf("%s: at least ${checks.lowest}", ${label})\n\t}`);
+  }
+  if (checks.highest !== undefined) {
+    lines.push(`\tif ${target} > ${checks.highest} {\n\t\treturn fmt.Errorf("%s: at most ${checks.highest}", ${label})\n\t}`);
+  }
+  return lines;
+}
+
 const hasChecks = (checks: Checks): boolean =>
+  checks.lowest !== undefined ||
+  checks.highest !== undefined ||
   checks.trim ||
   checks.min !== undefined ||
   checks.max !== undefined ||

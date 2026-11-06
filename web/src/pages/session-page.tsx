@@ -12,15 +12,16 @@ import { ScTitle } from '../molecules/sc-title';
 import { ScArcade } from '../organisms/sc-arcade';
 import { ScComposer } from '../organisms/sc-composer';
 import { ScConversation } from '../organisms/sc-conversation';
+import { ScPeek } from '../organisms/sc-peek';
 import { ScPlan } from '../organisms/sc-plan';
 import { ScSidePanel } from '../organisms/sc-side-panel';
 import { daemon, daemonBus } from '../services/daemon';
 import { daemonState, daemonStatusBus } from '../services/daemon-status';
 import { HOME_PATH, navigate } from '../services/navigation';
 import { presetChoices, presetsBus } from '../services/presets';
+import { markSeen } from '../services/seen-sessions';
 import { findSession, sessionListBus } from '../services/session-list';
 import { setSidePanelOpen, sidePanelOpen } from '../services/side-panel';
-import { slotsBus, slotUsage } from '../services/slots';
 import { BASE_STYLES } from '../styles/shared';
 import styles from './session-page.css?inline';
 
@@ -30,6 +31,7 @@ import type { PromptDraft } from '../types/composer.types';
 import type { ServerHandlers, ServerMessageMap } from '../types/page.types';
 
 const NOT_FOUND = 'This session is not on the daemon.';
+const VISIBILITY_CHANGE = 'visibilitychange';
 // On the host while the side panel is hidden.
 const PANEL_CLOSED = 'panel-closed';
 // The events that can change the plan above the composer: a new turn hides the last one, a plan call shows its own.
@@ -53,6 +55,8 @@ export class SessionPage extends ScElement {
   static readonly selector = 'session-page';
 
   private _sessionId = '';
+  // The peeks this page asked, to name each: their answers come to this page alone.
+  private _peeks = 0;
   private _used = 0;
   // The session's events so far: the side panel lists its subagents from them.
   private _events: SessionEvent[] = [];
@@ -70,6 +74,12 @@ export class SessionPage extends ScElement {
     // Projects and folders come through the project list service and the project dialog.
     folders: () => undefined,
     hosts: () => undefined,
+    peekDelta: (message) =>
+      this.forThisSession(message.sessionId, () => this._refs.peek.delta(message.peekId, message.text)),
+    peekState: (message) =>
+      this.forThisSession(message.sessionId, () =>
+        this._refs.peek.showState(message.peekId, message.state, message.message ?? '')
+      ),
     // The presets come through the presets service.
     presets: () => undefined,
     problem: (message) => this.showProblem(message.message),
@@ -90,9 +100,8 @@ export class SessionPage extends ScElement {
         this._refs.plan.show(currentPlan(this._events));
         this.showUsage(usedTokens(message.events));
       }),
-    // The list itself comes through the session list service, the slots through the slots service.
+    // The list itself comes through the session list service.
     sessions: () => undefined,
-    slots: () => undefined,
     toolCallWriting: (message) =>
       this.forThisSession(message.sessionId, () => this._refs.conversation.writingCall(message.tool)),
   };
@@ -104,6 +113,7 @@ export class SessionPage extends ScElement {
     panel: ref(ScSidePanel),
     panelToggle: ref<JlButton>('.panel-toggle'),
     path: ref('.path'),
+    peek: ref(ScPeek),
     plan: ref(ScPlan),
     problem: ref(JlAlert),
     remove: ref<JlButton>('.delete'),
@@ -128,7 +138,8 @@ export class SessionPage extends ScElement {
           <ScConversation />
           <JlAlert tone="danger" hidden />
           <ScPlan hidden />
-          <ScComposer />
+          <ScPeek hidden />
+          <ScComposer peeks />
         </div>
         <ScSidePanel />
         <ScArcade />
@@ -145,14 +156,14 @@ export class SessionPage extends ScElement {
     this.onBus(daemonBus, 'message', (message) => this.receive(message));
     this.onBus(daemonBus, 'online', (online) => this.reopen(online));
     this.onBus(sessionListBus, 'changed', () => this.renderSummary());
+    this.on(document, VISIBILITY_CHANGE, () => this.noteSeen());
     this.onBus(daemonStatusBus, 'changed', () => this.renderDaemon());
     this.onBus(presetsBus, 'changed', () => this.renderDaemon());
-    this.onBus(slotsBus, 'changed', (models) => this._refs.panel.slots.set([...models]));
-    this._refs.panel.slots.set([...slotUsage()]);
     conversation.events.register('answer', ({ decision, requestId }) =>
       daemon.send({ decision, requestId, sessionId: this._sessionId, type: 'answerPermission' })
     );
     composer.events.register('send', (draft) => this.send(draft));
+    composer.events.register('peek', (question) => this.peek(question));
     conversation.events.register('question', ({ answers, requestId }) =>
       daemon.send({ answers, requestId, sessionId: this._sessionId, type: 'answerQuestion' })
     );
@@ -220,6 +231,14 @@ export class SessionPage extends ScElement {
       type: 'sendPrompt',
       ...(draft.pictures.length === 0 ? {} : { pictures: draft.pictures }),
     });
+  }
+
+  /** A question beside the session: its answer shows above the composer, never in the conversation. */
+  private peek(question: string): void {
+    this._peeks += 1;
+    const peekId = `${Date.now().toString(36)}-${this._peeks}`;
+    this._refs.peek.ask(peekId, question);
+    daemon.send({ peekId, question, sessionId: this._sessionId, type: 'peek' });
   }
 
   private applyEvent(event: SessionEvent): void {
@@ -300,10 +319,20 @@ export class SessionPage extends ScElement {
     this._refs.plan.working.set((session?.status ?? 'idle') !== 'idle');
     this._refs.panel.status.set(session?.status ?? 'idle');
     this._refs.arcade.status.set(session?.status ?? 'idle');
+    this.noteSeen();
     document.title = session ? `${session.title} · swcode` : 'swcode';
   }
 
-  /** What the session's main model is, as its llama-server says now: whether it sees, how much context it holds. */
+  /** The session in view is seen as it is now, while the window shows it: its icon in the navigation empties. */
+  private noteSeen(): void {
+    const session = findSession(this._sessionId);
+    if (!session || document.visibilityState !== 'visible') {
+      return;
+    }
+    markSeen(session);
+  }
+
+  /** What the session's main model is, as its llm-server says now: whether it sees, how much context it holds. */
   private renderDaemon(): void {
     const state = daemonState();
     const preset = presetOf(presetChoices(), findSession(this._sessionId)?.preset);

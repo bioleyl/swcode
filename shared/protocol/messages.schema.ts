@@ -12,6 +12,14 @@ import {
   ToolNameSchema,
 } from './session.schema.js';
 
+/**
+ * Where a question beside the session (/peek) is: waiting for the agent's request running to end, being answered,
+ * answered, or failed (its `message` says why).
+ */
+export const PEEK_STATES = ['waiting', 'answering', 'done', 'failed'] as const;
+export const PeekStateSchema = z.enum(PEEK_STATES);
+export type PeekState = z.infer<typeof PeekStateSchema>;
+
 /** What the app sends the daemon over the socket. */
 export const ClientMessageSchema = z.discriminatedUnion('type', [
   // A folder of its own, and the first message to start on at once, both optional.
@@ -57,6 +65,14 @@ export const ClientMessageSchema = z.discriminatedUnion('type', [
     type: z.literal('answerQuestion'),
   }),
   z.object({ sessionId: z.string(), type: z.literal('stopTurn') }),
+  // A question beside the session (/peek): answered from the conversation as it is, never kept in it. The app names
+  // it, to tell its answer.
+  z.object({
+    peekId: z.string().min(1),
+    question: z.string().trim().min(1),
+    sessionId: z.string(),
+    type: z.literal('peek'),
+  }),
   // Stops a command the agent left running in the background.
   z.object({ jobId: z.string(), sessionId: z.string(), type: z.literal('stopJob') }),
   z.object({ mode: PermissionModeSchema, sessionId: z.string(), type: z.literal('setMode') }),
@@ -86,20 +102,6 @@ export const ClientMessageSchema = z.discriminatedUnion('type', [
 export type ClientMessage = z.infer<typeof ClientMessageSchema>;
 export type ClientMessageType = ClientMessage['type'];
 
-/** How busy a model's slots are: llama-server answers as many requests at once as it has slots. */
-/** A model's slots, by llama-server's numbers: how many it has, this daemon's share of them, and its busy ones. */
-export const SlotUsageSchema = z.object({
-  busy: z.array(z.number().int()),
-  // The name the daemon asks for; empty for the model a single-model llama-server serves.
-  model: z.string(),
-  // The others belong to the daemons sharing the llama-server (its slot share).
-  own: z.array(z.number().int()),
-  // The name of the llama-server serving it, as its source is called.
-  source: z.string(),
-  total: z.number().int(),
-});
-export type SlotUsage = z.infer<typeof SlotUsageSchema>;
-
 /** The answer being written right now, so a page opened mid-answer shows what came so far. */
 export const StreamingSchema = z.object({ messageId: z.string(), text: z.string() });
 
@@ -124,7 +126,15 @@ export const ServerMessageSchema = z.discriminatedUnion('type', [
     type: z.literal('toolCallWriting'),
   }),
   z.object({ message: z.string(), type: z.literal('problem') }),
-  z.object({ models: z.array(SlotUsageSchema), type: z.literal('slots') }),
+  // A peek's state and its answer as it streams, to the app that asked only.
+  z.object({
+    message: z.string().optional(),
+    peekId: z.string(),
+    sessionId: z.string(),
+    state: PeekStateSchema,
+    type: z.literal('peekState'),
+  }),
+  z.object({ peekId: z.string(), sessionId: z.string(), text: z.string(), type: z.literal('peekDelta') }),
   z.object({ projects: z.array(ProjectSchema), type: z.literal('projects') }),
   // The presets a session can work with: at connection, and again when they change.
   z.object({ choices: PresetChoicesSchema, type: z.literal('presets') }),
@@ -142,7 +152,7 @@ export const ServerMessageSchema = z.discriminatedUnion('type', [
 ]);
 export type ServerMessage = z.infer<typeof ServerMessageSchema>;
 
-/** What `GET /api/status` answers: where the agent works, and whether each llama-server answers. */
+/** What `GET /api/status` answers: where the agent works, and whether each llm-server answers. */
 export const StatusSchema = z.object({
   // The name of the machine the daemon runs on: the app shows where it works.
   computer: z.string().optional(),

@@ -29,7 +29,7 @@ const (
 	notPNG        = "The picture is saved as a PNG: give a path ending in .png."
 	shotTimeout   = 30 * time.Second
 	noBrowser     = "No browser to draw pages with here."
-	unseen        = "The main model is loaded without vision: no model here can look at a screenshot (llama-server needs its vision projector, mmproj)."
+	unseen        = "The main model is loaded without vision: no model here can look at a screenshot (llm-server needs its vision projector, mmproj)."
 	askOrSee      = "Give a question about the page, or see: true to look at it yourself."
 	desktopSize   = "desktop"
 	phoneSize     = "phone"

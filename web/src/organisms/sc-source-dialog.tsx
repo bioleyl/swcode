@@ -1,5 +1,5 @@
 import { css } from '@jadis/core';
-import { JlAlert, JlButton, JlDialog, JlField, JlInput, JlSelect } from '@syware/jlib';
+import { JlAlert, JlButton, JlDialog, JlField, JlInput } from '@syware/jlib';
 
 import { ScElement } from '../base/sc-element';
 import { newId } from '../lib/model-settings';
@@ -7,28 +7,15 @@ import { modelsAt } from '../services/settings';
 import { BASE_STYLES } from '../styles/shared';
 import styles from './sc-source-dialog.css?inline';
 
-import type { SelectOption } from '@syware/jlib';
 import type { LlmSource } from '../../../shared/protocol/models.schema';
 
 const SECRET_TYPE = 'password';
 const LOOKING = 'Looking for models…';
 const NO_NAME = 'Name it: the presets show its name.';
-const NO_ADDRESS = 'Type the address llama-server answers at.';
-// jlib's select takes an empty value for nothing chosen: every slot, the default, has a value of its own here.
-const ALL_SLOTS = 'all';
-
-const SHARE_OPTIONS: SelectOption[] = [
-  { label: 'All of them', value: ALL_SLOTS },
-  { label: 'The first half (1/2)', value: '1/2' },
-  { label: 'The second half (2/2)', value: '2/2' },
-  { label: 'The first third (1/3)', value: '1/3' },
-  { label: 'The second third (2/3)', value: '2/3' },
-  { label: 'The last third (3/3)', value: '3/3' },
-];
-
+const NO_ADDRESS = 'Type the address llm-server answers at.';
 /**
- * Adds a llama-server or changes one: its name in the app, its address, its key, and its part of the slots when
- * people share it. The models it serves show under the address as it is typed. `save` gives the source; the editor
+ * Adds an llm-server or changes one: its name in the app, its address and its key. The models it serves show under
+ * the address as it is typed. `save` gives the source; the editor
  * saves it, then closes the dialog or shows why not.
  */
 export class ScSourceDialog extends ScElement {
@@ -51,27 +38,21 @@ export class ScSourceDialog extends ScElement {
     problem: ref(JlAlert),
     save: ref<JlButton>('.save'),
     served: ref('.served'),
-    share: ref(JlSelect),
   }));
 
   templateHtml(): Node {
     return (
-      <JlDialog heading="llama-server">
+      <JlDialog heading="llm-server">
         <div class="body">
           <JlField label="Name" hint="How the presets and the side panel call it.">
             <JlInput class="name" autocomplete="off" placeholder="gmktec" />
           </JlField>
-          <JlField label="Address" hint="Where llama-server answers.">
+          <JlField label="Address" hint="Where llm-server answers.">
             <JlInput class="address" autocomplete="off" placeholder="http://127.0.0.1:8080" />
           </JlField>
           <p class="served" />
-          <JlField label="API key" hint="Only when llama-server asks for one (its api-key option).">
+          <JlField label="API key" hint="Only when llm-server asks for one (its api-key option).">
             <JlInput class="key" autocomplete="off" placeholder="none" type={SECRET_TYPE} />
-          </JlField>
-          <JlField
-            label="Slots this swcode uses"
-            hint="When people share one llama-server, each with their own swcode: each takes a different part.">
-            <JlSelect options={SHARE_OPTIONS} value={ALL_SLOTS} />
           </JlField>
           <JlAlert tone="danger" hidden />
         </div>
@@ -96,11 +77,10 @@ export class ScSourceDialog extends ScElement {
   edit(source: LlmSource | undefined, taken: readonly string[]): void {
     this._id = source?.id ?? '';
     this._taken = taken;
-    this._refs.dialog.heading.set(source ? `Change ${source.name}` : 'Add a llama-server');
+    this._refs.dialog.heading.set(source ? `Change ${source.name}` : 'Add an llm-server');
     this._refs.name.value.set(source?.name ?? '');
     this._refs.address.value.set(source?.url ?? '');
     this._refs.key.value.set(source?.apiKey ?? '');
-    this._refs.share.value.set(source?.slotShare ?? ALL_SLOTS);
     this._refs.save.loading.set(false);
     this.refuse('');
     this._refs.served.textContent = '';
@@ -130,7 +110,6 @@ export class ScSourceDialog extends ScElement {
       this.refuse(NO_ADDRESS);
       return;
     }
-    const share = this._refs.share.value.get();
     const apiKey = this._refs.key.value.get().trim();
     this._refs.save.loading.set(true);
     this.events.emit('save', {
@@ -138,7 +117,6 @@ export class ScSourceDialog extends ScElement {
       name,
       url,
       ...(apiKey === '' ? {} : { apiKey }),
-      ...(share === ALL_SLOTS || share === '' ? {} : { slotShare: share }),
     });
   }
 

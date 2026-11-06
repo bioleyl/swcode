@@ -37,16 +37,12 @@ const (
 // order: it must not call back into the service.
 type Listener func(message protocol.ServerMessage)
 
-// SlotsPort is how busy llama-server's slots are, and word when that changes.
-type SlotsPort interface {
-	Usage() []protocol.SlotUsage
-	Subscribe(listener func()) func()
-}
-
 // ModelsPort is the presets: a preset's models as their sources serve them now, the main agent's and the workers'
 // (the default preset's when it is not there), and whether there is a preset of an id.
 type ModelsPort interface {
 	Choose(ctx context.Context, preset string) (llm.Choice, llm.Choice)
+	// SubagentLimit is how many subagents a turn of the preset may start: nil for as many as the agent likes.
+	SubagentLimit(preset string) *protocol.SubagentLimit
 	Has(preset string) bool
 }
 
@@ -59,7 +55,7 @@ type Thinking struct {
 // Deps is what the sessions work with.
 type Deps struct {
 	Store StorePort
-	// Model asks the llama-server a request's target names.
+	// Model asks the llm-server a request's target names.
 	Model llm.Model
 	// Models picks a session's models at each turn, from its preset.
 	Models        ModelsPort
@@ -75,7 +71,6 @@ type Deps struct {
 	// Browser draws screenshots, when the daemon has one.
 	Browser   browser.Browser
 	Skills    *catalog.Catalog
-	Slots     SlotsPort
 	Workspace string
 	Thinking  Thinking
 	// OnWorkspace is told the folder of each new session, and its host: every folder sessions work in has a project.
@@ -114,6 +109,8 @@ type runningTurn struct {
 	cancel    context.CancelFunc
 	streaming *protocol.Streaming
 	pending   *pending
+	// setup is what the turn runs with once ready: a peek asks with the same, for the prompt llm-server cached.
+	setup *agent.Setup
 }
 
 // live is a session as the daemon holds it while it runs: its file's content, and what lives only in memory.
@@ -128,6 +125,8 @@ type live struct {
 	readFiles *tools.ReadFiles
 	turn      *runningTurn
 	watching  bool
+	// model is held by the agent's requests and by the peeks: one at a time on the agent's slot.
+	model sync.Mutex
 }
 
 // Service is the sessions of this daemon: it starts their turns, holds their permission requests until someone
@@ -145,13 +144,7 @@ type Service struct {
 }
 
 func NewService(deps Deps) *Service {
-	service := &Service{deps: deps, listeners: map[int]Listener{}, sessions: map[string]*live{}}
-	deps.Slots.Subscribe(func() {
-		service.mu.Lock()
-		defer service.mu.Unlock()
-		service.publish(service.slotUsage())
-	})
-	return service
+	return &Service{deps: deps, listeners: map[int]Listener{}, sessions: map[string]*live{}}
 }
 
 // Load reads the sessions kept on disk; a turn the daemon left halfway is closed as stopped.
@@ -186,15 +179,6 @@ func (s *Service) Subscribe(listener Listener) func() {
 		defer s.mu.Unlock()
 		delete(s.listeners, id)
 	}
-}
-
-// SlotUsage is how busy each model's slots are, for the panels.
-func (s *Service) SlotUsage() protocol.ServerMessage {
-	return s.slotUsage()
-}
-
-func (s *Service) slotUsage() protocol.ServerMessage {
-	return protocol.ServerMessage{Value: protocol.ServerMessageSlots{Models: s.deps.Slots.Usage()}}
 }
 
 func (s *Service) List() []protocol.SessionSummary {

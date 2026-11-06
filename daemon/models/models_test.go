@@ -9,11 +9,10 @@ import (
 
 func TestTheSettingsFilesLlamaServerIsASourceAndAPresetOfItsModels(t *testing.T) {
 	settings := FromConfig(config.Config{
-		LlamaAPIKey: "key", LlamaModel: "big", LlamaSlotShare: config.SlotShare{Part: 2, Parts: 2},
-		LlamaSubagentModel: "small", LlamaURL: "https://garfield.example:8443",
+		LlamaAPIKey: "key", LlamaModel: "big", LlamaSubagentModel: "small", LlamaURL: "https://garfield.example:8443",
 	})
 	source, preset := settings.Sources[0], settings.Presets[0]
-	if source.Name != "garfield.example" || source.SlotShare != "2/2" || source.APIKey != "key" {
+	if source.Name != "garfield.example" || source.APIKey != "key" {
 		t.Fatalf("source %+v", source)
 	}
 	if preset.Main.Model != "big" || preset.Workers.Model != "small" || settings.DefaultPreset != preset.ID {
@@ -26,7 +25,7 @@ func TestTheSettingsFilesLlamaServerIsASourceAndAPresetOfItsModels(t *testing.T)
 
 func TestModelsThatCannotWorkSayWhy(t *testing.T) {
 	valid := func() protocol.ModelSettings {
-		return FromConfig(config.Config{LlamaSlotShare: config.WholeShare, LlamaURL: "http://127.0.0.1:8080"})
+		return FromConfig(config.Config{LlamaURL: "http://127.0.0.1:8080"})
 	}
 	cases := map[string]func(*protocol.ModelSettings){
 		badAddress:    func(settings *protocol.ModelSettings) { settings.Sources[0].URL = "garfield" },
@@ -35,15 +34,27 @@ func TestModelsThatCannotWorkSayWhy(t *testing.T) {
 		twice: func(settings *protocol.ModelSettings) {
 			settings.Presets = append(settings.Presets, protocol.Preset{ID: "other", Main: settings.Presets[0].Main, Name: settings.Presets[0].Name, Workers: settings.Presets[0].Workers})
 		},
-		"127.0.0.1: the part cannot be more than the parts, as in 3/2.": func(settings *protocol.ModelSettings) {
-			settings.Sources[0].SlotShare = "3/2"
-		},
 	}
 	for want, change := range cases {
 		settings := valid()
 		change(&settings)
 		if got := Problem(settings); got != want {
 			t.Errorf("got %q, want %q", got, want)
+		}
+	}
+}
+
+func TestAPresetsContextIsTheServersAtMostAndItsOwnWhenTheServerSaysNone(t *testing.T) {
+	cases := []struct{ served, asked, want int }{
+		{131_072, 0, 131_072},
+		{131_072, 65_536, 65_536},
+		{65_536, 131_072, 65_536},
+		{0, 32_768, 32_768},
+		{0, 0, 0},
+	}
+	for _, each := range cases {
+		if got := contextFor(each.served, each.asked); got != each.want {
+			t.Errorf("served %d, asked %d: got %d", each.served, each.asked, got)
 		}
 	}
 }

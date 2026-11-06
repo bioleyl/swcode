@@ -2,7 +2,7 @@
   display: contents;
 }
 
-/* Its name, its address and the models served there, its key, its part of the slots. */
+/* Its name, its address and the models served there, its key. */
 .body {
   display: flex;
   flex-direction: column;

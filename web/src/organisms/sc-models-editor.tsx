@@ -30,8 +30,9 @@ const choicesOf = (settings: ModelSettings): PresetChoices => ({
 });
 
 /**
- * The settings' Models: the llama-servers the agents ask, and the presets each session picks from them in its
- * composer, a main agent's model and the workers'. Each change saves them all, and the daemon uses them at once.
+ * The settings' Models: the llm-servers the agents ask, and the presets each session picks from them in its
+ * composer, a main agent's model, the subagents' and how many a turn may start. Each change saves them all, and the
+ * daemon uses them at once.
  */
 export class ScModelsEditor extends ScElement {
   static readonly selector = 'sc-models-editor';
@@ -52,14 +53,14 @@ export class ScModelsEditor extends ScElement {
     return (
       <div class="models-topic">
         <p class="lead">
-          The llama-servers the agents ask, and the presets each session picks from them in its composer. Kept in{' '}
+          The llm-servers the agents ask, and the presets each session picks from them in its composer. Kept in{' '}
           <code>~/.swcode/models.json</code>, in use as soon as they change: a session at work goes on with the
           models it started with.
         </p>
         <JlAlert hidden />
         <section>
           <div class="head">
-            <h2>llama-servers</h2>
+            <h2>llm-servers</h2>
             <JlButton class="add-source" icon="plus" label="Add" size="sm" />
           </div>
           <div class="sources" />
@@ -186,7 +187,7 @@ export class ScModelsEditor extends ScElement {
     const confirmed = await confirmDialog({
       confirmLabel: 'Remove',
       heading: `Remove ${source.name}?`,
-      text: 'swcode stops asking it; llama-server itself goes on.',
+      text: 'swcode stops asking it; llm-server itself goes on.',
       tone: 'danger',
     });
     if (!confirmed) {

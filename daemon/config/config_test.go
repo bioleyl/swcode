@@ -10,25 +10,6 @@ import (
 
 var place = Defaults{Cwd: "/work", Home: "/home/me"}
 
-func TestTheShareOfTheSlotsIsAllOfThemUnlessSaid(t *testing.T) {
-	config, err := Load(map[string]string{}, place)
-	if err != nil || config.LlamaSlotShare != WholeShare {
-		t.Fatalf("got %v, %v", config.LlamaSlotShare, err)
-	}
-	config, err = Load(map[string]string{"LLAMA_SLOT_SHARE": " 2/2 "}, place)
-	if err != nil || config.LlamaSlotShare != (SlotShare{Part: 2, Parts: 2}) {
-		t.Fatalf("got %v, %v", config.LlamaSlotShare, err)
-	}
-}
-
-func TestAShareThatIsNotAPartOfTheSlotsIsRefused(t *testing.T) {
-	for _, share := range []string{"3/2", "0/2", "1/0", "half", "1/2/3"} {
-		if _, err := Load(map[string]string{"LLAMA_SLOT_SHARE": share}, place); err == nil {
-			t.Errorf("%s passed", share)
-		}
-	}
-}
-
 func TestTheDefaults(t *testing.T) {
 	config, err := Load(map[string]string{"SWCODE_SSH_ENDPOINTS": "me@box, gmktec  laptop"}, place)
 	if err != nil {
@@ -72,10 +53,10 @@ func TestTheSettingsFileGivesTheDaemonItsSettingsTheEnvironmentsOwnOnTop(t *test
 
 func TestTheSettingsFileIsWrittenQuotedWhenAValueNeedsIt(t *testing.T) {
 	text := SettingsText(map[string]string{
-		"HOME":             "/home/me",
-		"LLAMA_SLOT_SHARE": "2/2",
-		"LLAMA_URL":        "http://gmktec:8080",
-		"SWCODE_TOKEN":     "a b",
+		"HOME":         "/home/me",
+		"LLAMA_MODEL":  "gpt-oss-120b",
+		"LLAMA_URL":    "http://gmktec:8080",
+		"SWCODE_TOKEN": "a b",
 	})
 	lines := []string{}
 	for _, line := range strings.Split(text, "\n") {
@@ -83,7 +64,7 @@ func TestTheSettingsFileIsWrittenQuotedWhenAValueNeedsIt(t *testing.T) {
 			lines = append(lines, line)
 		}
 	}
-	want := []string{"LLAMA_URL=http://gmktec:8080", "LLAMA_SLOT_SHARE=2/2", "SWCODE_TOKEN='a b'", ""}
+	want := []string{"LLAMA_URL=http://gmktec:8080", "LLAMA_MODEL=gpt-oss-120b", "SWCODE_TOKEN='a b'", ""}
 	if !reflect.DeepEqual(lines, want) {
 		t.Fatalf("got %q", lines)
 	}

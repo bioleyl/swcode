@@ -15,7 +15,7 @@ constants, guard clauses, exhaustive mappers, types in `types/` directories).
 - The daemon's model of a session is its event list. Do not keep conversation state elsewhere: the model's
   messages (`daemon/agent/conversation.go`) and the app's drawing (`sc-conversation`) are both rebuilt from events.
 - Keep the system prompt and the start of the conversation stable: anything that changes them (a date, a counter)
-  makes llama-server process the whole prompt again at every step.
+  makes llm-server process the whole prompt again at every step.
 - Frontend: built from jlib's components (`@syware/jlib`), written by their class in JSX, as SyWare's UX lays them
   out: `JlAppShell` and `JlSideNav` for the frame, a `JlPage` for each page, `JlPageOutlet` showing them. swcode's
   own components keep atomic design (`atoms/`, `molecules/`, `organisms/`, `templates/`, `pages/`), extend
@@ -44,7 +44,7 @@ constants, guard clauses, exhaustive mappers, types in `types/` directories).
   the e2e `settle` waits for one page; Playwright's selectors reach into shadow roots, `jl-page-outlet > *` matches
   its insides too.
 - To see the app without a window: `npm run test:e2e` (its global setup builds the Go daemon into `dist/e2e`, and
-  `e2e/rig.ts` starts it, the fake llama-server and Chromium for each test). Send a no-op `page.evaluate('0')` after
+  `e2e/rig.ts` starts it, the fake llm-server and Chromium for each test). Send a no-op `page.evaluate('0')` after
   each click: headless clicks land on the next command. The e2e code is typed for Node only: run DOM code in the
   page as an expression string.
 - **A jl-* component's events do not bubble** (`press`, `change`…): a listener on a list never hears the buttons or

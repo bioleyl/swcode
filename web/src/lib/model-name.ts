@@ -1,4 +1,4 @@
-// llama-server names a model it was not given an alias for by its file: path, shard suffix and extension.
+// llm-server names a model it was not given an alias for by its file: path, shard suffix and extension.
 const FOLDERS = /^.*[\\/]/;
 const SHARD = /-\d{5}-of-\d{5}$/;
 const EXTENSION = /\.gguf$/i;

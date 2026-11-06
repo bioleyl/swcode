@@ -1,4 +1,4 @@
-// Package app puts the daemon together: its hosts, llama-server, the tools, the sessions and projects, and the
+// Package app puts the daemon together: its hosts, llm-server, the tools, the sessions and projects, and the
 // routes the web app calls.
 package app
 
@@ -90,7 +90,7 @@ type App struct {
 	Handler  http.Handler
 	Sessions *sessions.Service
 	Projects *projects.Service
-	// Models is the llama-servers and the presets sessions pick from them.
+	// Models is the llm-servers and the presets sessions pick from them.
 	Models  *models.Service
 	Token   string
 	LanURLs []string
@@ -215,7 +215,7 @@ func New(settings config.Config, options Options) (*App, error) {
 		Search: web.Paced(func(ctx context.Context, query string) web.SearchOutcome {
 			return web.SearchWeb(ctx, query, options.HTTP)
 		}, web.SearchGap),
-		Skills: skillCatalog, Slots: servers, Store: sessions.NewStore(filepath.Join(settings.DataDir, sessionsFolder)),
+		Skills: skillCatalog, Store: sessions.NewStore(filepath.Join(settings.DataDir, sessionsFolder)),
 		SubagentTools: exploreTools, Thinking: sessions.Thinking{Session: settings.Thinking, Subagents: settings.SubagentThinking},
 		Tools: mainTools, Workspace: workspace,
 	})

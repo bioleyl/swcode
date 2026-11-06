@@ -1,0 +1,13 @@
+:host {
+  display: contents;
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--jl-space-4);
+}
+
+[hidden] {
+  display: none;
+}

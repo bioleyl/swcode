@@ -45,6 +45,12 @@ var ToolNames = []ToolName{ToolNameRead, ToolNameWrite, ToolNameEdit, ToolNameBa
 
 var TurnOutcomes = []TurnOutcome{TurnOutcomeDone, TurnOutcomeStopped, TurnOutcomeFailed, TurnOutcomeLimit}
 
+var PeekStates = []PeekState{PeekStateWaiting, PeekStateAnswering, PeekStateDone, PeekStateFailed}
+
+const MaxContextTokens = 10000000
+
+const MaxSubagentsPerTurn = 20
+
 var EditableSettings = []SettingName{SettingNameSwcodeThinking, SettingNameSwcodeSubagentThinking, SettingNameSwcodeWorkspace, SettingNameSwcodeSSHEndpoints, SettingNameSwcodeImageURL, SettingNameSwcodeHost, SettingNameSwcodePort}
 
 var Restarts = []Restart{RestartSelf, RestartPerson}
@@ -84,8 +90,6 @@ var pattern1 = regexp.MustCompile("^[A-Za-z0-9+/]+={0,2}$")
 var pattern2 = regexp.MustCompile("^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
 var pattern3 = regexp.MustCompile("^[^/\\\\]+$")
-
-var pattern4 = regexp.MustCompile("^[1-9]\\d*\\/[1-9]\\d*$")
 
 type PictureType string
 
@@ -216,6 +220,24 @@ const (
 func (v TurnOutcome) Valid() bool {
 	switch v {
 	case TurnOutcomeDone, TurnOutcomeStopped, TurnOutcomeFailed, TurnOutcomeLimit:
+		return true
+	}
+	return false
+}
+
+type PeekState string
+
+const (
+	PeekStateWaiting   PeekState = "waiting"
+	PeekStateAnswering PeekState = "answering"
+	PeekStateDone      PeekState = "done"
+	PeekStateFailed    PeekState = "failed"
+)
+
+// Valid tells whether v is one of the PeekState values.
+func (v PeekState) Valid() bool {
+	switch v {
+	case PeekStateWaiting, PeekStateAnswering, PeekStateDone, PeekStateFailed:
 		return true
 	}
 	return false
@@ -1750,6 +1772,8 @@ func (ClientMessageAnswerQuestion) isClientMessage() {}
 
 func (ClientMessageStopTurn) isClientMessage() {}
 
+func (ClientMessagePeek) isClientMessage() {}
+
 func (ClientMessageStopJob) isClientMessage() {}
 
 func (ClientMessageSetMode) isClientMessage() {}
@@ -1843,6 +1867,12 @@ func (u *ClientMessage) UnmarshalJSON(data []byte) error {
 			return err
 		}
 		u.Value = value
+	case "\"peek\"":
+		var value ClientMessagePeek
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
 	case "\"stopJob\"":
 		var value ClientMessageStopJob
 		if err := json.Unmarshal(data, &value); err != nil {
@@ -1915,6 +1945,7 @@ type ClientMessageMapper[R any] interface {
 	AnswerPermission(ClientMessageAnswerPermission) R
 	AnswerQuestion(ClientMessageAnswerQuestion) R
 	StopTurn(ClientMessageStopTurn) R
+	Peek(ClientMessagePeek) R
 	StopJob(ClientMessageStopJob) R
 	SetMode(ClientMessageSetMode) R
 	SetThinking(ClientMessageSetThinking) R
@@ -1949,6 +1980,8 @@ func MapClientMessage[R any](u ClientMessage, m ClientMessageMapper[R]) R {
 		return m.AnswerQuestion(value)
 	case ClientMessageStopTurn:
 		return m.StopTurn(value)
+	case ClientMessagePeek:
+		return m.Peek(value)
 	case ClientMessageStopJob:
 		return m.StopJob(value)
 	case ClientMessageSetMode:
@@ -2230,6 +2263,43 @@ func (v ClientMessageStopTurn) MarshalJSON() ([]byte, error) {
 	}{"stopTurn", p})
 }
 
+type ClientMessagePeek struct {
+	PeekID    string `json:"peekId"`
+	Question  string `json:"question"`
+	SessionID string `json:"sessionId"`
+}
+
+func (v ClientMessagePeek) MarshalJSON() ([]byte, error) {
+	type plain ClientMessagePeek
+	p := plain(v)
+	return json.Marshal(struct {
+		Key string `json:"type"`
+		plain
+	}{"peek", p})
+}
+
+func (v *ClientMessagePeek) UnmarshalJSON(data []byte) error {
+	type plain ClientMessagePeek
+	p := plain{}
+	if err := json.Unmarshal(data, &p); err != nil {
+		return err
+	}
+	*v = ClientMessagePeek(p)
+	return v.Normalize()
+}
+
+// Normalize trims and checks what the app sent, as its schema does.
+func (v *ClientMessagePeek) Normalize() error {
+	if utf8.RuneCountInString(v.PeekID) < 1 {
+		return fmt.Errorf("%s: must not be empty", "peekId")
+	}
+	v.Question = strings.TrimSpace(v.Question)
+	if utf8.RuneCountInString(v.Question) < 1 {
+		return fmt.Errorf("%s: must not be empty", "question")
+	}
+	return nil
+}
+
 type ClientMessageStopJob struct {
 	JobID     string `json:"jobId"`
 	SessionID string `json:"sessionId"`
@@ -2481,7 +2551,9 @@ func (ServerMessageToolCallWriting) isServerMessage() {}
 
 func (ServerMessageProblem) isServerMessage() {}
 
-func (ServerMessageSlots) isServerMessage() {}
+func (ServerMessagePeekState) isServerMessage() {}
+
+func (ServerMessagePeekDelta) isServerMessage() {}
 
 func (ServerMessageProjects) isServerMessage() {}
 
@@ -2558,8 +2630,14 @@ func (u *ServerMessage) UnmarshalJSON(data []byte) error {
 			return err
 		}
 		u.Value = value
-	case "\"slots\"":
-		var value ServerMessageSlots
+	case "\"peekState\"":
+		var value ServerMessagePeekState
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
+	case "\"peekDelta\"":
+		var value ServerMessagePeekDelta
 		if err := json.Unmarshal(data, &value); err != nil {
 			return err
 		}
@@ -2616,7 +2694,8 @@ type ServerMessageMapper[R any] interface {
 	ReasoningDelta(ServerMessageReasoningDelta) R
 	ToolCallWriting(ServerMessageToolCallWriting) R
 	Problem(ServerMessageProblem) R
-	Slots(ServerMessageSlots) R
+	PeekState(ServerMessagePeekState) R
+	PeekDelta(ServerMessagePeekDelta) R
 	Projects(ServerMessageProjects) R
 	Presets(ServerMessagePresets) R
 	Hosts(ServerMessageHosts) R
@@ -2644,8 +2723,10 @@ func MapServerMessage[R any](u ServerMessage, m ServerMessageMapper[R]) R {
 		return m.ToolCallWriting(value)
 	case ServerMessageProblem:
 		return m.Problem(value)
-	case ServerMessageSlots:
-		return m.Slots(value)
+	case ServerMessagePeekState:
+		return m.PeekState(value)
+	case ServerMessagePeekDelta:
+		return m.PeekDelta(value)
 	case ServerMessageProjects:
 		return m.Projects(value)
 	case ServerMessagePresets:
@@ -2804,40 +2885,53 @@ func (v ServerMessageProblem) MarshalJSON() ([]byte, error) {
 	}{"problem", p})
 }
 
-type ServerMessageSlots struct {
-	Models []SlotUsage `json:"models"`
+type ServerMessagePeekState struct {
+	Message   string    `json:"message,omitempty"`
+	PeekID    string    `json:"peekId"`
+	SessionID string    `json:"sessionId"`
+	State     PeekState `json:"state"`
 }
 
-func (v ServerMessageSlots) MarshalJSON() ([]byte, error) {
-	type plain ServerMessageSlots
+func (v ServerMessagePeekState) MarshalJSON() ([]byte, error) {
+	type plain ServerMessagePeekState
 	p := plain(v)
-	if p.Models == nil {
-		p.Models = []SlotUsage{}
-	}
 	return json.Marshal(struct {
 		Key string `json:"type"`
 		plain
-	}{"slots", p})
+	}{"peekState", p})
 }
 
-type SlotUsage struct {
-	Busy   []int  `json:"busy"`
-	Model  string `json:"model"`
-	Own    []int  `json:"own"`
-	Source string `json:"source"`
-	Total  int    `json:"total"`
+func (v *ServerMessagePeekState) UnmarshalJSON(data []byte) error {
+	type plain ServerMessagePeekState
+	p := plain{}
+	if err := json.Unmarshal(data, &p); err != nil {
+		return err
+	}
+	*v = ServerMessagePeekState(p)
+	return v.Normalize()
 }
 
-func (v SlotUsage) MarshalJSON() ([]byte, error) {
-	type plain SlotUsage
+// Normalize trims and checks what the app sent, as its schema does.
+func (v *ServerMessagePeekState) Normalize() error {
+	if !v.State.Valid() {
+		return fmt.Errorf("%s: unknown value %q", "state", v.State)
+	}
+	return nil
+}
+
+type ServerMessagePeekDelta struct {
+	PeekID    string `json:"peekId"`
+	SessionID string `json:"sessionId"`
+	Text      string `json:"text"`
+}
+
+func (v ServerMessagePeekDelta) MarshalJSON() ([]byte, error) {
+	type plain ServerMessagePeekDelta
 	p := plain(v)
-	if p.Busy == nil {
-		p.Busy = []int{}
-	}
-	if p.Own == nil {
-		p.Own = []int{}
-	}
-	return json.Marshal(p)
+	return json.Marshal(struct {
+		Key string `json:"type"`
+		plain
+	}{"peekDelta", p})
 }
 
 type ServerMessageProjects struct {
@@ -2888,10 +2982,11 @@ func (v PresetChoices) MarshalJSON() ([]byte, error) {
 }
 
 type Preset struct {
-	ID      string   `json:"id"`
-	Main    ModelRef `json:"main"`
-	Name    string   `json:"name"`
-	Workers ModelRef `json:"workers"`
+	ID            string         `json:"id"`
+	Main          ModelRef       `json:"main"`
+	Name          string         `json:"name"`
+	SubagentLimit *SubagentLimit `json:"subagentLimit,omitempty"`
+	Workers       ModelRef       `json:"workers"`
 }
 
 func (v *Preset) UnmarshalJSON(data []byte) error {
@@ -2920,8 +3015,9 @@ func (v *Preset) Normalize() error {
 }
 
 type ModelRef struct {
-	Model  string `json:"model"`
-	Source string `json:"source"`
+	ContextTokens int    `json:"contextTokens,omitempty"`
+	Model         string `json:"model"`
+	Source        string `json:"source"`
 }
 
 func (v *ModelRef) UnmarshalJSON(data []byte) error {
@@ -2936,9 +3032,40 @@ func (v *ModelRef) UnmarshalJSON(data []byte) error {
 
 // Normalize trims and checks what the app sent, as its schema does.
 func (v *ModelRef) Normalize() error {
+	if v.ContextTokens != 0 && v.ContextTokens <= 0 {
+		return fmt.Errorf("%s: must be positive", "contextTokens")
+	}
+	if v.ContextTokens > 10000000 {
+		return fmt.Errorf("%s: at most 10000000", "contextTokens")
+	}
 	v.Model = strings.TrimSpace(v.Model)
 	if utf8.RuneCountInString(v.Source) < 1 {
 		return fmt.Errorf("%s: must not be empty", "source")
+	}
+	return nil
+}
+
+type SubagentLimit struct {
+	PerTurn int `json:"perTurn"`
+}
+
+func (v *SubagentLimit) UnmarshalJSON(data []byte) error {
+	type plain SubagentLimit
+	p := plain{}
+	if err := json.Unmarshal(data, &p); err != nil {
+		return err
+	}
+	*v = SubagentLimit(p)
+	return v.Normalize()
+}
+
+// Normalize trims and checks what the app sent, as its schema does.
+func (v *SubagentLimit) Normalize() error {
+	if v.PerTurn < 0 {
+		return fmt.Errorf("%s: at least 0", "perTurn")
+	}
+	if v.PerTurn > 20 {
+		return fmt.Errorf("%s: at most 20", "perTurn")
 	}
 	return nil
 }
@@ -3079,11 +3206,10 @@ func (v SourceStatus) MarshalJSON() ([]byte, error) {
 }
 
 type LlmSource struct {
-	APIKey    string `json:"apiKey,omitempty"`
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	SlotShare string `json:"slotShare,omitempty"`
-	URL       string `json:"url"`
+	APIKey string `json:"apiKey,omitempty"`
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+	URL    string `json:"url"`
 }
 
 func (v *LlmSource) UnmarshalJSON(data []byte) error {
@@ -3108,9 +3234,6 @@ func (v *LlmSource) Normalize() error {
 	}
 	if utf8.RuneCountInString(v.Name) > 40 {
 		return fmt.Errorf("%s: at most 40 characters", "name")
-	}
-	if v.SlotShare != "" && !pattern4.MatchString(v.SlotShare) {
-		return fmt.Errorf("%s: %s", "slotShare", "A part of the slots, as 1/2 or 2/3.")
 	}
 	v.URL = strings.TrimSpace(v.URL)
 	if utf8.RuneCountInString(v.URL) < 1 {

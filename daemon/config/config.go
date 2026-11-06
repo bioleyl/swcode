@@ -23,7 +23,6 @@ const (
 	defaultShutdown  = 10_000
 	minShutdown      = 100
 	maxShutdown      = 120_000
-	shareSeparator   = "/"
 	defaultThinking  = protocol.ThinkingModeFull
 	subagentThinking = protocol.ThinkingModeLow
 )
@@ -35,7 +34,6 @@ const (
 	envImageURL         = "SWCODE_IMAGE_URL"
 	envLlamaAPIKey      = "LLAMA_API_KEY"
 	envLlamaModel       = "LLAMA_MODEL"
-	envLlamaSlotShare   = "LLAMA_SLOT_SHARE"
 	envLlamaSubagent    = "LLAMA_SUBAGENT_MODEL"
 	envLlamaURL         = "LLAMA_URL"
 	envEnv              = "SWCODE_ENV"
@@ -60,20 +58,7 @@ const (
 	EnvProduction  Env = "production"
 )
 
-var (
-	slotSharePattern  = regexp.MustCompile(`^[1-9]\d*/[1-9]\d*$`)
-	endpointSeparator = regexp.MustCompile(`[\s,]+`)
-)
-
-// SlotShare is this daemon's part of each model's slots: part 2 of 2 is the second half. When people share a
-// llama-server with a daemon each, every daemon keeps to its own slots, so to its own prompt caches.
-type SlotShare struct {
-	Part  int
-	Parts int
-}
-
-// WholeShare is every slot: one daemon on its llama-server.
-var WholeShare = SlotShare{Part: 1, Parts: 1}
+var endpointSeparator = regexp.MustCompile(`[\s,]+`)
 
 // Defaults is what the settings fall back on: the folder the daemon starts in, and the home folder.
 type Defaults struct {
@@ -89,11 +74,10 @@ type Config struct {
 	Host string
 	// A stable-diffusion.cpp sd-server (its OpenAI routes): the agent makes pictures with it.
 	ImageURL string
-	// Only when llama-server was started with --api-key.
+	// Only when llm-server was started with --api-key.
 	LlamaAPIKey string
-	// The model to ask for: needed when llama-server runs in router mode with several models.
-	LlamaModel     string
-	LlamaSlotShare SlotShare
+	// The model to ask for: needed when llm-server runs in router mode with several models.
+	LlamaModel string
 	// The model explore subagents ask for, a faster one; the main model when left out.
 	LlamaSubagentModel string
 	LlamaURL           string
@@ -169,30 +153,6 @@ func (r *reader) thinking(name string, fallback protocol.ThinkingMode) protocol.
 	return mode
 }
 
-func (r *reader) share(name string) SlotShare {
-	share, problem := ParseSlotShare(r.text(name))
-	if problem != "" {
-		r.fail(name, problem)
-	}
-	return share
-}
-
-// ParseSlotShare reads a part of the slots, as 2/3: every slot when empty, and why not when it is no such part.
-func ParseSlotShare(value string) (SlotShare, string) {
-	if value == "" {
-		return WholeShare, ""
-	}
-	if !slotSharePattern.MatchString(value) {
-		return WholeShare, "a part of the slots, such as 1/2"
-	}
-	part, parts, _ := strings.Cut(value, shareSeparator)
-	share := SlotShare{Part: atoi(part), Parts: atoi(parts)}
-	if share.Part > share.Parts {
-		return WholeShare, "the part cannot be more than the parts, as in 3/2"
-	}
-	return share, ""
-}
-
 func (r *reader) env() Env {
 	env := Env(r.or(envEnv, r.or(envNodeEnv, string(EnvDevelopment))))
 	if env != EnvDevelopment && env != EnvTest && env != EnvProduction {
@@ -207,11 +167,6 @@ func (r *reader) token() string {
 		r.fail(envToken, fmt.Sprintf("at least %d characters", minTokenLength))
 	}
 	return token
-}
-
-func atoi(text string) int {
-	number, _ := strconv.Atoi(text)
-	return number
 }
 
 func endpoints(text string) []string {
@@ -238,7 +193,6 @@ func Load(environment map[string]string, defaults Defaults) (Config, error) {
 		ImageURL:           r.url(envImageURL, ""),
 		LlamaAPIKey:        r.text(envLlamaAPIKey),
 		LlamaModel:         r.text(envLlamaModel),
-		LlamaSlotShare:     r.share(envLlamaSlotShare),
 		LlamaSubagentModel: r.text(envLlamaSubagent),
 		LlamaURL:           r.url(envLlamaURL, defaultLlamaURL),
 		Port:               r.number(envPort, DefaultPort, 1, maxPort),

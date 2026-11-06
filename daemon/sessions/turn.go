@@ -2,6 +2,7 @@ package sessions
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"swcode/daemon/agent"
@@ -24,27 +25,52 @@ type place struct {
 	skills   catalog.Port
 }
 
-// runTurnIn runs a turn with the models and context sizes llama-server gives now: a model may have been reloaded
-// with another one, or a router may serve others.
-func (s *Service) runTurnIn(ctx context.Context, session *live, turn *runningTurn, message agent.PromptMessage) {
+// prepared is what the session's agent runs with now: its place, its models, how many subagents a turn may start,
+// and its setup.
+type prepared struct {
+	where     place
+	main      llm.Choice
+	subagent  llm.Choice
+	subagents *protocol.SubagentLimit
+	setup     agent.Setup
+}
+
+// prepare finds the models and context sizes llm-server gives now (a model may have been reloaded with another
+// one, or a router may serve others), and where the session works.
+func (s *Service) prepare(ctx context.Context, session *live) (prepared, error) {
 	s.mu.Lock()
 	meta := session.meta
 	s.mu.Unlock()
 	main, subagent := s.deps.Models.Choose(ctx, meta.Preset)
-	sees := main.Vision
+	limit := s.deps.Models.SubagentLimit(meta.Preset)
 	host := s.deps.Hosts.HostOf(meta.Host)
 	scratch, err := host.ScratchFolder(ctx, meta.ID)
-	if err == nil {
-		var platform string
-		if platform, err = host.Platform(ctx); err == nil {
-			where := place{host: host, platform: platform, scratch: scratch, skills: s.deps.Skills.PortFor(catalog.Place{
-				Host: host, Local: hosts.IsLocal(meta.Host), SessionID: meta.ID, Workspace: meta.Workspace,
-			})}
-			agent.RunTurn(ctx, message, s.hostFor(session, turn, subagent, where, main, sees), s.setupFor(session, meta, main, where, sees))
-			return
-		}
+	if err != nil {
+		return prepared{}, err
 	}
-	s.failTurn(session, message, err)
+	platform, err := host.Platform(ctx)
+	if err != nil {
+		return prepared{}, err
+	}
+	where := place{host: host, platform: platform, scratch: scratch, skills: s.deps.Skills.PortFor(catalog.Place{
+		Host: host, Local: hosts.IsLocal(meta.Host), SessionID: meta.ID, Workspace: meta.Workspace,
+	})}
+	return prepared{
+		main: main, setup: s.setupFor(session, meta, main, where, main.Vision, limit), subagent: subagent, subagents: limit, where: where,
+	}, nil
+}
+
+// runTurnIn runs a turn with what the session's agent runs with now.
+func (s *Service) runTurnIn(ctx context.Context, session *live, turn *runningTurn, message agent.PromptMessage) {
+	ready, err := s.prepare(ctx, session)
+	if err != nil {
+		s.failTurn(session, message, err)
+		return
+	}
+	s.mu.Lock()
+	turn.setup = &ready.setup
+	s.mu.Unlock()
+	agent.RunTurn(ctx, message, s.hostFor(session, turn, ready, ready.main.Vision), ready.setup)
 }
 
 // failTurn records a turn whose host did not answer: the person's message, and why nothing came of it.
@@ -57,7 +83,15 @@ func (s *Service) failTurn(session *live, message agent.PromptMessage, err error
 	s.record(session, protocol.SessionEventTurnFinished{ID: turnID, Message: "The host did not answer: " + err.Error(), Outcome: protocol.TurnOutcomeFailed})
 }
 
-func (s *Service) setupFor(session *live, meta Meta, main llm.Choice, where place, sees bool) agent.Setup {
+// toolsFor is the main agent's tools: without agent when the preset allows no subagents.
+func (s *Service) toolsFor(limit *protocol.SubagentLimit) tools.Box {
+	if limit != nil && limit.PerTurn == 0 {
+		return s.deps.Tools.Without(protocol.ToolNameAgent)
+	}
+	return s.deps.Tools
+}
+
+func (s *Service) setupFor(session *live, meta Meta, main llm.Choice, where place, sees bool, limit *protocol.SubagentLimit) agent.Setup {
 	return agent.Setup{
 		Agent:         llmIdentity(meta, main),
 		ContextTokens: main.ContextTokens,
@@ -68,8 +102,8 @@ func (s *Service) setupFor(session *live, meta Meta, main llm.Choice, where plac
 		Skills:        where.skills.List,
 		SystemPrompt: agent.SystemPrompt(meta.Workspace, where.scratch, where.platform, agent.Servers{
 			Browser: s.deps.Browser != nil && sees, Images: s.deps.ImageURL != "",
-		}),
-		Tools: s.deps.Tools,
+		}, limit),
+		Tools: s.toolsFor(limit),
 	}
 }
 
@@ -81,7 +115,8 @@ type turnHost struct {
 	context *tools.Context
 }
 
-func (s *Service) hostFor(session *live, turn *runningTurn, subagent llm.Choice, where place, main llm.Choice, sees bool) agent.TurnHost {
+func (s *Service) hostFor(session *live, turn *runningTurn, ready prepared, sees bool) agent.TurnHost {
+	where, main, subagent := ready.where, ready.main, ready.subagent
 	host := &turnHost{service: s, session: session, turn: turn}
 	host.context = &tools.Context{
 		AskQuestions: func(ctx context.Context, callID string, questions []protocol.Question) []string {
@@ -94,7 +129,7 @@ func (s *Service) hostFor(session *live, turn *runningTurn, subagent llm.Choice,
 		Scratch:     where.scratch,
 		Screenshots: s.screenshotsFor(session, main, sees),
 		Skills:      where.skills,
-		Subagents:   subagents{service: s, session: session, subagent: subagent, where: where},
+		Subagents:   subagents{budget: &subagentBudget{limit: ready.subagents}, service: s, session: session, subagent: subagent, where: where},
 		Web:         s.webFor(subagent),
 		Workspace:   session.meta.Workspace,
 	}
@@ -149,6 +184,12 @@ func (h *turnHost) AskPermission(ctx context.Context, ask agent.PermissionAsk) p
 }
 
 func (h *turnHost) TakeMessages() *agent.PromptMessage { return h.service.takeQueued(h.session) }
+
+func (h *turnHost) UseModel(use func()) {
+	h.session.model.Lock()
+	defer h.session.model.Unlock()
+	use()
+}
 
 func (s *Service) grantsOf(session *live) permissions.Grants {
 	grants := session.grants
@@ -361,15 +402,39 @@ func (s *Service) webFor(subagent llm.Choice) *web.Port {
 	return &port
 }
 
+func noSubagentLeft(allowed int) string {
+	return fmt.Sprintf("No more subagents in this turn: the preset allows %d. Go on with what you found, or look yourself.", allowed)
+}
+
+// subagentBudget is how many subagents a turn started, against what its preset allows (any number without a
+// limit): the calls run one after another, so it needs no lock.
+type subagentBudget struct {
+	limit   *protocol.SubagentLimit
+	started int
+}
+
+// take counts a subagent starting: false when the turn may start no more.
+func (b *subagentBudget) take() bool {
+	if b.limit != nil && b.started >= b.limit.PerTurn {
+		return false
+	}
+	b.started++
+	return true
+}
+
 // subagents start explore subagents for a session's main agent.
 type subagents struct {
 	service  *Service
 	session  *live
 	subagent llm.Choice
 	where    place
+	budget   *subagentBudget
 }
 
 func (a subagents) Run(ctx context.Context, task tools.SubagentTask) tools.Outcome {
+	if !a.budget.take() {
+		return tools.Outcome{Meta: "refused", Output: noSubagentLeft(a.budget.limit.PerTurn)}
+	}
 	s := a.service
 	return agent.RunSubagent(ctx, task, agent.SubagentDeps{
 		ContextTokens: a.subagent.ContextTokens, Host: a.where.host, MaxSteps: s.deps.MaxSubagentSteps, Model: s.deps.Model,

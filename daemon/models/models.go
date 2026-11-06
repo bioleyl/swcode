@@ -1,5 +1,5 @@
-// Package models keeps the llama-servers the agents ask and the presets sessions pick from them: models.json in the
-// data folder or, until it is saved once, the settings file's one llama-server (LLAMA_URL and the like).
+// Package models keeps the llm-servers the agents ask and the presets sessions pick from them: models.json in the
+// data folder or, until it is saved once, the settings file's one llm-server (LLAMA_URL and the like).
 package models
 
 import (
@@ -10,7 +10,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strconv"
 	"sync"
 
 	"swcode/daemon/config"
@@ -22,23 +21,22 @@ const (
 	// File is where the models are kept, in the data folder: it holds the servers' keys, for its owner only.
 	File      = "models.json"
 	ownerOnly = 0o600
-	// The settings file's llama-server, as a source and the preset that uses it.
+	// The settings file's llm-server, as a source and the preset that uses it.
 	settingsSource     = "llama-server"
 	settingsPreset     = "default"
 	settingsPresetName = "Default"
 	// Why models cannot be used.
-	unknownSource = "A preset uses a llama-server that is not in the list."
+	unknownSource = "A preset uses an llm-server that is not in the list."
 	noDefault     = "The default preset is not in the list."
-	badAddress    = "A llama-server’s address is not a web address, as http://127.0.0.1:8080."
-	twice         = "Two llama-servers or two presets have the same name."
+	badAddress    = "An llm-server’s address is not a web address, as http://127.0.0.1:8080."
+	twice         = "Two llm-servers or two presets have the same name."
 )
 
-// FromConfig is the settings file's llama-server as a source, and a preset of its models: the models a daemon uses
+// FromConfig is the settings file's llm-server as a source, and a preset of its models: the models a daemon uses
 // until they are saved once.
 func FromConfig(settings config.Config) protocol.ModelSettings {
 	source := protocol.LlmSource{
-		APIKey: settings.LlamaAPIKey, ID: settingsSource, Name: hostOf(settings.LlamaURL),
-		SlotShare: shareText(settings.LlamaSlotShare), URL: settings.LlamaURL,
+		APIKey: settings.LlamaAPIKey, ID: settingsSource, Name: hostOf(settings.LlamaURL), URL: settings.LlamaURL,
 	}
 	preset := protocol.Preset{
 		ID: settingsPreset, Main: protocol.ModelRef{Model: settings.LlamaModel, Source: settingsSource}, Name: settingsPresetName,
@@ -55,22 +53,12 @@ func hostOf(address string) string {
 	return parsed.Hostname()
 }
 
-func shareText(share config.SlotShare) string {
-	if share == config.WholeShare {
-		return ""
-	}
-	return strconv.Itoa(share.Part) + "/" + strconv.Itoa(share.Parts)
-}
-
 // Problem is why the models cannot be used, if they cannot: each name given once, addresses that read, each preset's
 // models on a source of the list, and the default preset among the presets.
 func Problem(settings protocol.ModelSettings) string {
 	sources := []string{}
 	names := []string{}
 	for _, source := range settings.Sources {
-		if _, problem := config.ParseSlotShare(source.SlotShare); problem != "" {
-			return source.Name + ": " + problem + "."
-		}
 		if !isWebAddress(source.URL) {
 			return badAddress
 		}
@@ -135,7 +123,7 @@ func (s *Store) Save(settings protocol.ModelSettings) error {
 	return os.WriteFile(s.file, data, ownerOnly)
 }
 
-// Service is the models in use: it gives the sources to the llama-servers, picks a preset's models for each turn,
+// Service is the models in use: it gives the sources to the llm-servers, picks a preset's models for each turn,
 // says where each source and preset stands, and tells every open app when the presets change.
 type Service struct {
 	mu        sync.Mutex
@@ -222,7 +210,7 @@ func (s *Service) presetOf(id string) (protocol.Preset, bool) {
 func (s *Service) Choose(ctx context.Context, presetID string) (llm.Choice, llm.Choice) {
 	preset, _ := s.presetOf(presetID)
 	main := s.mainOf(ctx, preset)
-	workers := llm.Choice{Model: preset.Workers.Model, Source: preset.Workers.Source}
+	workers := llm.Choice{ContextTokens: preset.Workers.ContextTokens, Model: preset.Workers.Model, Source: preset.Workers.Source}
 	server, found := s.servers.Server(workers.Source)
 	if !found {
 		return main, workers
@@ -233,12 +221,27 @@ func (s *Service) Choose(ctx context.Context, presetID string) (llm.Choice, llm.
 	if workers.Model == "" {
 		workers.Model = server.Status.FirstLoaded(ctx, "")
 	}
-	workers.ContextTokens = server.Status.ContextOf(ctx, workers.Model)
+	workers.ContextTokens = contextFor(server.Status.ContextOf(ctx, workers.Model), preset.Workers.ContextTokens)
 	return main, workers
 }
 
+// contextFor is how many tokens a model's conversation holds: what its server says, else what the preset asks; a
+// preset may ask fewer than the server says, never more. 0 when neither says.
+func contextFor(served, asked int) int {
+	if served > 0 && asked > 0 {
+		return min(served, asked)
+	}
+	return max(served, asked)
+}
+
+// SubagentLimit is how many subagents a turn of the preset may start: nil for as many as the agent likes.
+func (s *Service) SubagentLimit(presetID string) *protocol.SubagentLimit {
+	preset, _ := s.presetOf(presetID)
+	return preset.SubagentLimit
+}
+
 func (s *Service) mainOf(ctx context.Context, preset protocol.Preset) llm.Choice {
-	main := llm.Choice{Model: preset.Main.Model, Source: preset.Main.Source}
+	main := llm.Choice{ContextTokens: preset.Main.ContextTokens, Model: preset.Main.Model, Source: preset.Main.Source}
 	server, found := s.servers.Server(main.Source)
 	if !found {
 		return main
@@ -250,7 +253,7 @@ func (s *Service) mainOf(ctx context.Context, preset protocol.Preset) llm.Choice
 		}
 		main.Model = server.Status.FirstLoaded(ctx, avoid)
 	}
-	main.ContextTokens = server.Status.ContextOf(ctx, main.Model)
+	main.ContextTokens = contextFor(server.Status.ContextOf(ctx, main.Model), preset.Main.ContextTokens)
 	main.Vision = server.Status.VisionOf(ctx, main.Model)
 	return main
 }
@@ -284,7 +287,7 @@ func (s *Service) Status(ctx context.Context) protocol.StatusLlama {
 	return protocol.StatusLlama{Presets: presets, Sources: sources}
 }
 
-// shownModel names the model asked: a single-model llama-server's, asked for by no name, is the one it lists.
+// shownModel names the model asked: a single-model llm-server's, asked for by no name, is the one it lists.
 func shownModel(asked string, served []string) string {
 	if asked != "" || len(served) == 0 {
 		return asked

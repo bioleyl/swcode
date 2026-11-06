@@ -45,8 +45,6 @@ export const withoutPreset = (settings: ModelSettings, id: string): ModelSetting
 export const presetUsing = (settings: ModelSettings, source: string): Preset | undefined =>
   settings.presets.find((preset) => preset.main.source === source || preset.workers.source === source);
 
-/** A source in a few words: "http://gmktec:8080 · share 2/2 · with a key". */
+/** A source in a few words: "http://gmktec:8080 · with a key". */
 export const sourceDescription = (source: LlmSource): string =>
-  [source.url, source.slotShare ? `share ${source.slotShare}` : '', source.apiKey ? 'with a key' : '']
-    .filter((part) => part !== '')
-    .join(' · ');
+  [source.url, source.apiKey ? 'with a key' : ''].filter((part) => part !== '').join(' · ');

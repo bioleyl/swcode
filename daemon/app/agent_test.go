@@ -359,7 +359,7 @@ func TestATurnFailsWithLlamaServersOwnMessage(t *testing.T) {
 	test := Start(t, Options{Replies: []fakellama.Reply{{FailWith: 500, Text: "tools param requires --jinja flag"}}})
 	sessionID := prompt(t, test, "Hi")
 	test.UntilIdle(sessionID)
-	Expect(t, last(test.Events(sessionID)), `{"message":"llama-server answered 500: tools param requires --jinja flag","outcome":"failed"}`)
+	Expect(t, last(test.Events(sessionID)), `{"message":"llm-server answered 500: tools param requires --jinja flag","outcome":"failed"}`)
 }
 
 func TestSessionsAreNamedAfterTheirFirstMessageAndFoundAgainAfterARestart(t *testing.T) {

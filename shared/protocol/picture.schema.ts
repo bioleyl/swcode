@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-/** What llama-server reads (stb_image: no WebP), and so what the app sends. */
+/** What llm-server reads (stb_image: no WebP), and so what the app sends. */
 export const PICTURE_TYPES = ['image/jpeg', 'image/png'] as const;
 export const PictureTypeSchema = z.enum(PICTURE_TYPES);
 export type PictureType = z.infer<typeof PictureTypeSchema>;

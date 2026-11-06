@@ -50,6 +50,9 @@ const GAME_FLOW = {
   replies: [{ delayMs: GAME_TURN_MS, text: 'Done.' }],
 };
 
+// Long enough to see a session at work, and to leave it for another page before its turn ends.
+const LIGHT_TURN_MS = 3_000;
+
 // Far more than a window's height of paragraphs, and a turn of the wheel up through them.
 const PARAGRAPHS = 80;
 const LONG_REPLY = Array.from({ length: PARAGRAPHS }, (_, index) => `Paragraph ${index + 1}.`).join('\n\n');
@@ -103,6 +106,8 @@ const fakeDesktopApp = (current = 'local', others: readonly object[] = []): stri
 // Run in the page: the tests are typed for Node, and these few expressions need no more.
 const PAGE_OVERFLOW = 'document.documentElement.scrollWidth - window.innerWidth';
 const BODY_BACKGROUND = 'getComputedStyle(document.body).backgroundColor';
+// Whether the page kept a token of its own, which a pairing code is traded for.
+const KEPT_TOKEN = "localStorage.getItem('swcode.token') !== null";
 
 /** How much wider than the screen the page is: nothing should ever scroll sideways. */
 const overflow = (page: Page) => page.evaluate(PAGE_OVERFLOW);
@@ -114,6 +119,13 @@ const cutShort = (node: { clientWidth: number; scrollWidth: number }): boolean =
 /** An item of the navigation down the side, by its label. */
 const navItem = (page: Page, label: string) =>
   page.locator('sc-nav jl-side-nav').getByText(label, { exact: true });
+
+/** The settings' cog, at the foot of the navigation. */
+const settingsLink = (page: Page) => page.locator('sc-nav .settings');
+
+/** The style of the first shape of a navigation item's icon, by the start of its id: its light's fill, or none. */
+const navIconFill = (page: Page, id: string) =>
+  page.locator(`sc-nav .item[data-id^="${id}"] svg > *`).first().getAttribute('style');
 
 /** A topic's tab on the settings page, by its label; `selected` the one shown. */
 const topicTab = (page: Page, label: string, selected?: boolean) =>
@@ -252,18 +264,14 @@ describe('the plan', () => {
 });
 
 describe('token economy', () => {
-  it('asks the model to be concise after each message, which the conversation shows as written', async () => {
+  it('is on for a new session, asking the model to be concise after each message, shown as written', async () => {
     const rig = await start({ replies: [{ text: 'Short.' }] });
     const page = await rig.browser.newPage({ viewport: PHONE });
     await page.goto(rig.link);
     const composer = page.locator('home-page sc-composer');
-    await composer.locator('.choices').click();
-    await settle(page);
-    await composer.locator('sc-session-choices jl-switch').getByRole('switch').click();
-    await settle(page);
+    await composer.locator('textarea').waitFor();
     expect(await composer.locator('.summary').textContent()).toContain('Token economy');
     expect(await overflow(page)).toBe(0);
-    await page.keyboard.press('Escape');
     await composer.locator('textarea').fill('Explain the plan');
     await composer.locator('textarea').press('Enter');
     await page.getByText('Short.').waitFor();
@@ -364,7 +372,7 @@ describe('projects', () => {
     });
     const page = await rig.browser.newPage({ viewport: DESKTOP });
     await page.goto(rig.link);
-    await navItem(page, 'New project').click();
+    await page.locator('home-page .new-project').click();
     await settle(page);
     await page.locator('sc-folder-browser li button', { hasText: 'src' }).click();
     await settle(page);
@@ -485,7 +493,7 @@ describe('the composer', () => {
     await vim.getByText('Paused').waitFor();
   });
 
-  it('turns the spinners while a turn runs, in the side nav and the session’s header', async () => {
+  it('turns the header’s spinner while a turn runs, the side nav filling the session’s bubble instead', async () => {
     const rig = await start(WORKING_FLOW);
     const page = await rig.browser.newPage({ viewport: LAPTOP });
     await page.goto(rig.link);
@@ -495,9 +503,10 @@ describe('the composer', () => {
     const before = JSON.parse(String(await page.evaluate(TURNING_SHAPES)));
     await page.waitForTimeout(TURN_SAMPLE_MS);
     const after = JSON.parse(String(await page.evaluate(TURNING_SHAPES)));
-    // One in the side nav, one in the header's status.
-    expect(before.length).toBeGreaterThanOrEqual(2);
+    // The header's status; the side nav lights its icon, without a spinner.
+    expect(before.length).toBeGreaterThanOrEqual(1);
     expect(after).not.toEqual(before);
+    expect(await navIconFill(page, 'session:')).toContain('--jl-accent');
   });
 
   it('keeps them there on a phone, the model and the context count left out', async () => {
@@ -526,7 +535,11 @@ describe('skills', () => {
     const rig = await start({ replies: [] });
     const page = await rig.browser.newPage({ viewport: DESKTOP });
     await page.goto(rig.link);
-    await navItem(page, 'Skills').click();
+    await settingsLink(page).click();
+    await settle(page);
+    // The Startup tab leaves once the daemon says it cannot start with this computer, moving the tabs after it.
+    await topicTab(page, 'Startup').waitFor({ state: 'detached' });
+    await topicTab(page, 'Skills').click();
     await settle(page);
     await topicTab(page, 'Skills', true).waitFor();
     await expect.poll(() => skillNames(page)).toEqual(['coding-style', 'jadis']);
@@ -596,23 +609,46 @@ describe('settings', () => {
     const rig = await start({ replies: [] });
     const page = await rig.browser.newPage({ viewport: DESKTOP });
     await page.goto(rig.link);
-    await navItem(page, 'Settings').click();
+    await settingsLink(page).click();
     await settle(page);
     await topicTab(page, 'Models', true).waitFor();
-    await topicTab(page, 'Projects').click();
+    await topicTab(page, 'Pictures').click();
     await settle(page);
-    await page.locator('#setting-SWCODE_SSH_ENDPOINTS input').fill('gmktec');
+    await page.locator('#setting-SWCODE_IMAGE_URL input').fill('http://garfield:8090');
     await topicTab(page, 'Network').click();
     await settle(page);
-    expect(await page.locator('#setting-SWCODE_SSH_ENDPOINTS').isHidden()).toBe(true);
+    expect(await page.locator('#setting-SWCODE_IMAGE_URL').isHidden()).toBe(true);
     expect(await page.locator('#setting-SWCODE_PORT').isVisible()).toBe(true);
     expect(page.url()).toContain('#/settings/network');
-    await topicTab(page, 'Projects').click();
+    await topicTab(page, 'Pictures').click();
     await settle(page);
-    expect(await page.locator('#setting-SWCODE_SSH_ENDPOINTS input').inputValue()).toBe('gmktec');
+    expect(await page.locator('#setting-SWCODE_IMAGE_URL input').inputValue()).toBe('http://garfield:8090');
   });
 
-  it('add a llama-server and a preset of its models, which a new session then picks in its composer', async () => {
+  it('list the SSH hosts, a new one added from its dialog and saved at once', async () => {
+    const rig = await start({ replies: [] });
+    const page = await rig.browser.newPage({ viewport: DESKTOP });
+    await page.goto(rig.link);
+    await settingsLink(page).click();
+    await settle(page);
+    await topicTab(page, 'SSH').click();
+    await settle(page);
+    const hosts = page.locator('sc-ssh-hosts');
+    await hosts.getByText('No SSH host yet', { exact: false }).waitFor();
+    expect(await page.locator('settings-page jl-page > jl-button.save').isHidden()).toBe(true);
+
+    await hosts.locator('.add').click();
+    await settle(page);
+    await page.locator('sc-ssh-host-dialog .host input').fill('me@build box');
+    await page.locator('sc-ssh-host-dialog .save').click();
+    await page.locator('sc-ssh-host-dialog').getByText('One host, without spaces or commas.').waitFor();
+    await page.locator('sc-ssh-host-dialog .host input').fill('me@build-box');
+    await page.locator('sc-ssh-host-dialog .save').click();
+    await hosts.locator('.hosts jl-list-item', { hasText: 'me@build-box' }).waitFor();
+    await hosts.locator('jl-alert').getByText('Saved', { exact: false }).waitFor();
+  });
+
+  it('add an llm-server and a preset of its models, which a new session then picks in its composer', async () => {
     const rig = await start({ replies: [{ text: 'Done.' }] });
     const page = await rig.browser.newPage({ viewport: DESKTOP });
     await page.goto(`${rig.link}#/settings/models`);
@@ -865,18 +901,21 @@ describe('pairing a phone', () => {
     const rig = await start({ replies: [] });
     const computer = await rig.browser.newPage({ viewport: DESKTOP });
     await computer.goto(rig.link);
-    await navItem(computer, 'Phone').click();
+    await settingsLink(computer).click();
     await settle(computer);
+    await topicTab(computer, 'Phone').click();
+    await settle(computer);
+    expect(computer.url()).toContain('#/settings/phone');
     const link = computer.locator('sc-phone .link');
     await expect.poll(async () => (await link.textContent()) ?? '').toContain('pair=');
     const shown = new URL((await link.textContent()) ?? '');
     expect(shown.searchParams.has('token')).toBe(false);
-    // The dialog shows the address a phone on the network reaches; the test's daemon listens here only.
+    // The page shows the address a phone on the network reaches; the test's daemon listens here only.
     const pairing = new URL(`/?pair=${shown.searchParams.get('pair')}`, rig.link).toString();
 
     const phone = await rig.browser.newPage({ deviceScaleFactor: 2, viewport: PHONE });
     await phone.goto(pairing);
-    await phone.locator('sc-nav .status[data-tone="ok"]').waitFor({ state: 'attached' });
+    await expect.poll(() => phone.evaluate(KEPT_TOKEN)).toBe(true);
     expect(phone.url()).not.toContain('pair=');
 
     const stranger = await rig.browser.newPage({ deviceScaleFactor: 2, viewport: PHONE });
@@ -907,7 +946,7 @@ describe('a long conversation', () => {
 });
 
 describe('the side panel', () => {
-  it('leaves the header’s buttons on its row beside a long title, and shows the build at its bottom', async () => {
+  it('leaves the header’s buttons on its row beside a long title, and shows llm-server and the build', async () => {
     const rig = await start({ replies: [{ text: 'Hello there.' }] });
     const page = await rig.browser.newPage({ viewport: LAPTOP });
     await page.goto(rig.link);
@@ -928,6 +967,9 @@ describe('the side panel', () => {
     const path = await page.locator('session-page header .chip').boundingBox();
     expect((title?.x ?? 0) + (title?.width ?? 0)).toBeLessThanOrEqual(path?.x ?? 0);
     expect(await page.locator('session-page sc-side-panel .version').textContent()).toBe('swcode dev');
+    const server = page.locator('session-page sc-side-panel .server');
+    await server.locator('.state', { hasText: 'Connected' }).waitFor();
+    expect(await server.count()).toBe(1);
   });
 
   it('hides and shows again from the session’s header, and stays as it was left', async () => {
@@ -950,6 +992,53 @@ describe('the side panel', () => {
     await page.getByRole('button', { name: 'Show the side panel' }).click();
     await settle(page);
     expect(await panel.isVisible()).toBe(true);
+  });
+});
+
+describe('a peek', () => {
+  it('answers beside a session above the composer, and stays out of the conversation', async () => {
+    const rig = await start({ replies: [{ text: 'Hello there.' }, { text: 'I said hello.' }] });
+    const page = await rig.browser.newPage({ viewport: DESKTOP });
+    await page.goto(rig.link);
+    await page.locator('home-page textarea').fill('Hi');
+    await page.locator('home-page textarea').press('Enter');
+    await page.getByText('Hello there.').waitFor();
+
+    const composer = page.locator('session-page sc-composer');
+    await composer.locator('textarea').fill('/peek what did you say?');
+    await composer.locator('textarea').press('Enter');
+    const card = page.locator('session-page sc-peek');
+    await card.getByText('I said hello.').waitFor();
+    expect(await card.locator('.question').textContent()).toBe('what did you say?');
+    expect(await page.locator('session-page sc-conversation').getByText('I said hello.').count()).toBe(0);
+    expect(JSON.stringify(rig.llama.requests[1])).toContain('what did you say?');
+
+    await card.locator('.close').click();
+    await settle(page);
+    expect(await card.isHidden()).toBe(true);
+  });
+});
+
+describe('the navigation', () => {
+  it('fills a session’s bubble and its project’s icon while it works, then done until seen, and empties them', async () => {
+    const rig = await start({ replies: [{ delayMs: LIGHT_TURN_MS, text: 'Done.' }] });
+    const page = await rig.browser.newPage({ viewport: DESKTOP });
+    await page.goto(rig.link);
+    await page.locator('home-page textarea').fill('Hi');
+    await page.locator('home-page textarea').press('Enter');
+    await expect.poll(() => navIconFill(page, 'session:')).toContain('--jl-accent');
+    expect(await navIconFill(page, 'project:')).toContain('--jl-accent');
+
+    await settingsLink(page).click();
+    await settle(page);
+    await expect.poll(() => navIconFill(page, 'session:'), { timeout: LIGHT_TURN_MS * 2 }).toContain('--jl-ok');
+    expect(await navIconFill(page, 'project:')).toContain('--jl-ok');
+
+    await page.locator('sc-nav .item[data-id^="session:"]').click();
+    await settle(page);
+    await page.getByText('Done.').waitFor();
+    await expect.poll(() => navIconFill(page, 'session:')).toBeNull();
+    expect(await navIconFill(page, 'project:')).toBeNull();
   });
 });
 

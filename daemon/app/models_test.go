@@ -142,7 +142,7 @@ func TestTheMainAgentAndItsSubagentsAreServedTheirOwnModels(t *testing.T) {
 	}
 }
 
-// twoServers is the test's llama-server, and a second one serving a bigger model, as presets mixing them.
+// twoServers is the test's llm-server, and a second one serving a bigger model, as presets mixing them.
 func twoServers(test *App, second *fakellama.Server) protocol.ModelSettings {
 	return protocol.ModelSettings{
 		DefaultPreset: "default",
@@ -207,10 +207,29 @@ func TestModelsThatCannotWorkAreRefused(t *testing.T) {
 	settings := twoServers(test, &fakellama.Server{URL: "http://127.0.0.1:1"})
 	settings.Presets[1].Main.Source = "gone"
 	status, body := test.Call("PUT", protocol.EndpointModels, settings)
-	Expect(t, body, map[string]any{"ok": false, "problem": "A preset uses a llama-server that is not in the list."})
+	Expect(t, body, map[string]any{"ok": false, "problem": "A preset uses an llm-server that is not in the list."})
 	if status != 400 {
 		t.Fatalf("status %d", status)
 	}
 	_, saved := test.Call("GET", protocol.EndpointModels, nil)
 	Expect(t, saved, map[string]any{"defaultPreset": "default", "sources": []any{map[string]any{"url": test.Llama.URL}}})
+}
+
+func TestAPresetsContextIsUsedUpToTheOneItsServerSays(t *testing.T) {
+	test := Start(t, Options{ContextTokens: 65_536})
+	contextOfStatus := func(asked int) any {
+		settings := test.App.Models.Settings()
+		settings.Presets[0].Main.ContextTokens = asked
+		if status, body := test.Call("PUT", protocol.EndpointModels, settings); status != 200 {
+			t.Fatalf("status %d: %v", status, body)
+		}
+		_, status := test.Call("GET", protocol.EndpointStatus, nil)
+		return status.(map[string]any)["llama"].(map[string]any)["presets"].([]any)[0].(map[string]any)["contextTokens"]
+	}
+	if got := contextOfStatus(32_768); got != float64(32_768) {
+		t.Fatalf("a smaller one: %v", got)
+	}
+	if got := contextOfStatus(131_072); got != float64(65_536) {
+		t.Fatalf("a larger one: %v", got)
+	}
 }

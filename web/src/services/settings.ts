@@ -27,7 +27,7 @@ export async function saveSettings(values: SettingValues): Promise<SettingsSaved
   return parsed.success ? parsed.data : { ok: false, problem: UNREACHABLE };
 }
 
-/** The models a llama-server serves, at an address not saved yet. */
+/** The models an llm-server serves, at an address not saved yet. */
 export async function modelsAt(url: string, apiKey: string): Promise<ModelsAnswer> {
   const parsed = ModelsAnswerSchema.safeParse(
     await jsonOf(await request('POST', ENDPOINTS.settingsModels, { apiKey, url }))

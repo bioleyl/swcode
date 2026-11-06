@@ -4,6 +4,7 @@ import { JlButton, JlIcon, JlPopover } from '@syware/jlib';
 import { MAX_PICTURES } from '../../../shared/protocol/picture.schema';
 import { ScElement } from '../base/sc-element';
 import { MODE_LABELS } from '../lib/mode-labels';
+import { peekQuestion } from '../lib/peek';
 import { isPicture, pictureUrl, shrinkPicture } from '../lib/pictures';
 import { presetOf } from '../lib/presets';
 import { THINKING_LABELS } from '../lib/thinking-labels';
@@ -35,6 +36,8 @@ export class ScComposer extends ScElement {
 
   readonly events = this.useEvents<{
     send: PromptDraft;
+    /** A question beside the session: the composer's text after /peek. */
+    peek: string;
     stop: undefined;
     play: undefined;
     preset: string;
@@ -44,6 +47,8 @@ export class ScComposer extends ScElement {
   }>();
 
   // While a turn runs, a message waits for the next one: send stays, stop comes beside it, and a game to pass the time.
+  /** Whether there is a session to peek at: /peek beside a session only; elsewhere it is words. */
+  peeks = false;
   readonly working = this.useChange(false, (value) => {
     this._refs.stop.hidden = !value;
     this._refs.play.hidden = !value;
@@ -209,6 +214,11 @@ export class ScComposer extends ScElement {
 
   private submit(): void {
     const text = this._refs.text.value.trim();
+    const question = this.peeks ? peekQuestion(text) : undefined;
+    if (question !== undefined) {
+      this.peek(question);
+      return;
+    }
     if (text === '' && this._pictures.length === 0) {
       return;
     }
@@ -217,6 +227,15 @@ export class ScComposer extends ScElement {
     this._pictures = [];
     this.renderPictures();
     this.events.emit('send', draft);
+  }
+
+  /** A question beside the session goes, the pictures waiting stay for the next message. */
+  private peek(question: string): void {
+    if (question === '') {
+      return;
+    }
+    this._refs.text.value = '';
+    this.events.emit('peek', question);
   }
 
   /** The chip's words, the panel's choices: the preset shown is the one the daemon uses, the default when unknown. */

@@ -1,5 +1,5 @@
 // Package remote runs the daemon on another machine over SSH: this very program copied there when it lacks it,
-// started with its port forwarded here, and llama-server forwarded there.
+// started with its port forwarded here, and llm-server forwarded there.
 package remote
 
 import (
@@ -23,7 +23,7 @@ const (
 	// Folder is where swcode lives on a remote machine; ssh runs commands from the home folder.
 	Folder = ".swcode/bin"
 	Binary = Folder + "/swcode"
-	// The remote daemon's port, and the one llama-server comes through, on the remote machine.
+	// The remote daemon's port, and the one llm-server comes through, on the remote machine.
 	remoteDaemonPort = 4500
 	remoteLlamaPort  = 18080
 	loopback         = "127.0.0.1"
@@ -99,10 +99,6 @@ func Environment(command cli.Command, settings config.Config) map[string]string 
 		environment["SWCODE_WORKSPACE"] = command.Workspace
 	}
 	optional := map[string]string{"LLAMA_API_KEY": settings.LlamaAPIKey, "LLAMA_MODEL": settings.LlamaModel, "LLAMA_SUBAGENT_MODEL": settings.LlamaSubagentModel}
-	// The whole of the slots is the remote daemon's default: only a part needs saying.
-	if settings.LlamaSlotShare.Parts > 1 {
-		optional["LLAMA_SLOT_SHARE"] = fmt.Sprintf("%d/%d", settings.LlamaSlotShare.Part, settings.LlamaSlotShare.Parts)
-	}
 	for name, value := range optional {
 		if value != "" {
 			environment[name] = value
@@ -126,7 +122,7 @@ func ServeCommand(environment map[string]string) string {
 }
 
 // SSHServeArguments is the ssh command that runs the remote daemon: its port forwarded here, and, unless the
-// remote reaches llama-server itself, llama-server forwarded there. A terminal is asked for so that stopping here
+// remote reaches llm-server itself, llm-server forwarded there. A terminal is asked for so that stopping here
 // stops it there.
 func SSHServeArguments(command cli.Command, settings config.Config) []string {
 	host, port := llamaEndpoint(settings.LlamaURL)

@@ -6,7 +6,7 @@ import type { ModelSettings, ModelsSaved } from '../../../shared/protocol/models
 
 const UNREACHABLE = 'The daemon did not answer.';
 
-/** The llama-servers and the presets, with the servers' keys. */
+/** The llm-servers and the presets, with the servers' keys. */
 export async function loadModels(): Promise<ModelSettings | undefined> {
   const parsed = ModelSettingsSchema.safeParse(await jsonOf(await request('GET', ENDPOINTS.models)));
   return parsed.success ? parsed.data : undefined;

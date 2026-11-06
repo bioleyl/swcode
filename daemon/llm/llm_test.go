@@ -8,14 +8,13 @@ import (
 	"testing"
 	"time"
 
-	"swcode/daemon/config"
 	"swcode/daemon/protocol"
 )
 
 const testModel = "qwen3-coder-30b"
 
 func schedulerWith(slots int) *Scheduler {
-	return NewScheduler(func(context.Context, string) int { return slots }, config.WholeShare)
+	return NewScheduler(func(context.Context, string) int { return slots })
 }
 
 func acquire(t *testing.T, slots *Scheduler, model, agent string) *Lease {
@@ -27,43 +26,18 @@ func acquire(t *testing.T, slots *Scheduler, model, agent string) *Lease {
 	return lease
 }
 
-func TestSharedSlotsSplitsTheSlotsBetweenTheDaemons(t *testing.T) {
-	cases := []struct {
-		total int
-		share config.SlotShare
-		want  []int
-	}{
-		{4, config.SlotShare{Part: 1, Parts: 2}, []int{0, 1}},
-		{4, config.SlotShare{Part: 2, Parts: 2}, []int{2, 3}},
-		{3, config.SlotShare{Part: 2, Parts: 2}, []int{1, 2}},
-		{6, config.WholeShare, []int{0, 1, 2, 3, 4, 5}},
-		// Every share gets a slot, sharing one when there are fewer slots than shares.
-		{1, config.SlotShare{Part: 1, Parts: 2}, []int{0}},
-		{1, config.SlotShare{Part: 2, Parts: 2}, []int{0}},
-	}
-	for _, each := range cases {
-		if got := SharedSlots(each.total, each.share); !reflect.DeepEqual(got, each.want) {
-			t.Errorf("%d %v: got %v", each.total, each.share, got)
-		}
-	}
-}
-
-func TestTheSchedulerHandsOutItsShareOnlyThenMakesRequestsWait(t *testing.T) {
-	slots := NewScheduler(func(context.Context, string) int { return 4 }, config.SlotShare{Part: 2, Parts: 2})
+func TestTheSchedulerHandsOutTheSlotsThenMakesRequestsWait(t *testing.T) {
+	slots := schedulerWith(2)
 	first := acquire(t, slots, testModel, "main")
 	second := acquire(t, slots, testModel, "explore-1")
-	if first.Slot != 2 || second.Slot != 3 {
+	if first.Slot != 0 || second.Slot != 1 {
 		t.Fatalf("slots %d %d", first.Slot, second.Slot)
-	}
-	want := []protocol.SlotUsage{{Busy: []int{2, 3}, Model: testModel, Own: []int{2, 3}, Total: 4}}
-	if got := slots.Usage(); !reflect.DeepEqual(got, want) {
-		t.Fatalf("usage %+v", got)
 	}
 	third := make(chan *Lease)
 	go func() { third <- acquire(t, slots, testModel, "explore-2") }()
 	time.Sleep(20 * time.Millisecond)
 	first.Release()
-	if lease := <-third; lease.Slot != 2 {
+	if lease := <-third; lease.Slot != 0 {
 		t.Fatalf("slot %d", lease.Slot)
 	}
 }
@@ -130,22 +104,20 @@ func TestTheSchedulerKeepsTheModelsApart(t *testing.T) {
 	}
 }
 
-func TestTheSchedulerAsksAgainOnceAGuessedPoolIsIdle(t *testing.T) {
-	answers := []int{0, 4}
+func TestAServerThatDoesNotSayItsSlotsGetsTheRequestsAsTheyComeAndIsAskedAgain(t *testing.T) {
+	answers := []int{0, 0, 4}
 	slots := NewScheduler(func(context.Context, string) int {
 		answer := answers[0]
 		answers = answers[1:]
 		return answer
-	}, config.WholeShare)
-	acquire(t, slots, testModel, "main").Release()
-	want := []protocol.SlotUsage{{Busy: []int{}, Model: testModel, Own: []int{0}, Total: 1}}
-	if got := slots.Usage(); !reflect.DeepEqual(got, want) {
-		t.Fatalf("usage %+v", got)
+	})
+	first := acquire(t, slots, testModel, "main")
+	second := acquire(t, slots, testModel, "explore-1")
+	if first.Slot != NoSlot || second.Slot != NoSlot {
+		t.Fatalf("slots %d %d", first.Slot, second.Slot)
 	}
-	acquire(t, slots, testModel, "main")
-	want = []protocol.SlotUsage{{Busy: []int{0}, Model: testModel, Own: []int{0, 1, 2, 3}, Total: 4}}
-	if got := slots.Usage(); !reflect.DeepEqual(got, want) {
-		t.Fatalf("usage %+v", got)
+	if got := acquire(t, slots, testModel, "explore-2").Slot; got != 0 {
+		t.Fatalf("slot %d", got)
 	}
 }
 
@@ -155,9 +127,11 @@ func TestTheSchedulerCountsAReleaseOnce(t *testing.T) {
 	acquire(t, slots, testModel, "explore-1")
 	lease.Release()
 	lease.Release()
-	want := []protocol.SlotUsage{{Busy: []int{1}, Model: testModel, Own: []int{0, 1}, Total: 2}}
-	if got := slots.Usage(); !reflect.DeepEqual(got, want) {
-		t.Fatalf("usage %+v", got)
+	acquire(t, slots, testModel, "explore-2")
+	ctx, stop := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer stop()
+	if _, err := slots.Acquire(ctx, testModel, "explore-3"); !errors.Is(err, ErrStopped) {
+		t.Fatalf("got %v", err)
 	}
 }
 
@@ -228,7 +202,7 @@ func TestTheReplyBuilderGivesACallWithoutAnIDOneAndKeepsTheUsage(t *testing.T) {
 
 func TestARefusalTellsAFullContextApart(t *testing.T) {
 	refusal := refusalOf(400, []byte(`{"error":{"message":"the request exceeds the available context size","type":"exceed_context_size_error"}}`), "Bad Request")
-	if !refusal.ContextFull || refusal.Message != "llama-server answered 400: the request exceeds the available context size" {
+	if !refusal.ContextFull || refusal.Message != "llm-server answered 400: the request exceeds the available context size" {
 		t.Fatalf("got %+v", refusal)
 	}
 	if refusalOf(500, []byte(`{"error":"boom"}`), "").ContextFull {

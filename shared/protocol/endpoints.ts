@@ -11,7 +11,7 @@ export const ENDPOINTS = {
   health: '/api/health',
   // GET /api/images/<session>/<file>: a picture the agent made, as the daemon keeps it to show.
   images: '/api/images',
-  // GET the llama-servers and the presets, with their keys; PUT them all, in use at once.
+  // GET the llm-servers and the presets, with their keys; PUT them all, in use at once.
   models: '/api/models',
   // POST a pairing code, without a token: the phone gets its own. Open to anyone, the code being the secret.
   pairing: '/api/pairing',
@@ -19,7 +19,7 @@ export const ENDPOINTS = {
   pairingCode: '/api/pairing/code',
   // GET the settings in use, PUT new ones (the daemon restarts).
   settings: '/api/settings',
-  // POST a llama-server's address: the models it serves.
+  // POST an llm-server's address: the models it serves.
   settingsModels: '/api/settings/models',
   // GET the skills, POST a new one; GET, PUT (a new name renames it) or DELETE /api/skills/<name>.
   skills: '/api/skills',
