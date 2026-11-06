@@ -149,6 +149,9 @@ export const SessionEventSchema = z.discriminatedUnion('kind', [
     kind: z.literal('assistantMessage'),
     // What the model thought before it answered, when it says (gpt-oss, Qwen3 with thinking on).
     reasoning: z.string().optional(),
+    // The reply as OpenAI's Responses API wrote it, its output items in JSON: sent back as they are at the next
+    // steps, so the model goes on from its own encrypted reasoning.
+    responseItems: z.string().optional(),
     text: z.string(),
     toolCalls: z.array(ToolCallSchema),
     // The tokens of this reply: its prompt is the conversation so far, so it tells how full the context is.

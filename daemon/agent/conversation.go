@@ -136,7 +136,10 @@ func replyMessages(reply protocol.SessionEventAssistantMessage, results map[stri
 	if IsEmptyReply(reply.Text, reply.ToolCalls) {
 		return nil
 	}
-	messages := []llm.Message{{Content: reply.Text, Reasoning: reply.Reasoning, Role: llm.RoleAssistant, ToolCalls: reply.ToolCalls}}
+	messages := []llm.Message{{
+		Content: reply.Text, Items: reply.ResponseItems, Reasoning: reply.Reasoning, Role: llm.RoleAssistant,
+		ToolCalls: reply.ToolCalls,
+	}}
 	shown := []protocol.PictureRef{}
 	for _, call := range reply.ToolCalls {
 		result, ran := results[call.ID]

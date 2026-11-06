@@ -178,7 +178,8 @@ func complete(ctx context.Context, host TurnHost, setup Setup) (llm.Reply, error
 		return llm.Reply{}, err
 	}
 	host.Record(protocol.SessionEventAssistantMessage{
-		ID: messageID, Reasoning: reply.Reasoning, Text: reply.Text, ToolCalls: reply.ToolCalls, Usage: reply.Usage,
+		ID: messageID, Reasoning: reply.Reasoning, ResponseItems: reply.Items, Text: reply.Text, ToolCalls: reply.ToolCalls,
+		Usage: reply.Usage,
 	})
 	return reply, nil
 }

@@ -146,6 +146,19 @@ Without `--parallel`, llm-server answers 4 conversations at once, sharing the `-
 them; with `--parallel 4`, each gets a quarter. With `--host 0.0.0.0` llm-server is reachable from the network, hence
 `--api-key`.
 
+Another server of the Chat Completions API works too (vLLM, a hosted one), its key in the source. llama.cpp's own
+fields (`cache_prompt`, `id_slot`, `chat_template_kwargs`, `reasoning_content`) go with each request; a server that
+refuses one of them, naming it, gets the request again without them, and its next requests go without them from the
+start.
+
+OpenAI's own server (`https://api.openai.com`) is asked through its Responses API (`/v1/responses`): its newer
+models take tools and thinking together only there. The thinking mode is the reasoning effort (Off is `none`), a
+summary of the reasoning streams in as the thinking, and nothing is stored on OpenAI's side: each reply's items,
+its reasoning encrypted, are kept with the reply in the session (`responseItems`) and go back with the next
+requests, so the model goes on from its own reasoning. A model that refuses those settings (one that does not
+think, or an organization without reasoning summaries) gets fewer, and keeps to them. OpenAI's API says no model's
+context size: set it in the preset.
+
 ### A smaller model for the subagents
 
 In router mode, llm-server serves several models, each with its own settings from a presets file (the keys are
@@ -513,7 +526,8 @@ top, for one command; the page shows those as set in the environment.
 - **Context**: before each request the daemon estimates how full the context is, from the last reply's token
   count (llm-server's `usage`) plus what came since. Past 80% of the model's context, the model summarizes the
   conversation and goes on from the summary. The context is what the server says (llama.cpp's `n_ctx` in `/props`,
-  vLLM's `max_model_len` in `/v1/models`), or the preset's when it sets one, the server's at most: a server that says
+  vLLM's `max_model_len` in `/v1/models`, or a hosted API's `context_length`, `context_window` or
+  `max_context_length` there), or the preset's when it sets one, the server's at most: a server that says
   none needs the preset's to compact in time. When llm-server finds the prompt too long all the same, the model
   compacts and tries once more. The app shows where that happened, with the summary.
 - **Thinking**: what a reasoning model (gpt-oss, Qwen3) thinks before it answers streams into the conversation and

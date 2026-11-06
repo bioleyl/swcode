@@ -1209,12 +1209,13 @@ func (v SessionEventUserMessage) MarshalJSON() ([]byte, error) {
 }
 
 type SessionEventAssistantMessage struct {
-	At        string     `json:"at"`
-	ID        string     `json:"id"`
-	Reasoning string     `json:"reasoning,omitempty"`
-	Text      string     `json:"text"`
-	ToolCalls []ToolCall `json:"toolCalls"`
-	Usage     *Usage     `json:"usage,omitempty"`
+	At            string     `json:"at"`
+	ID            string     `json:"id"`
+	Reasoning     string     `json:"reasoning,omitempty"`
+	ResponseItems string     `json:"responseItems,omitempty"`
+	Text          string     `json:"text"`
+	ToolCalls     []ToolCall `json:"toolCalls"`
+	Usage         *Usage     `json:"usage,omitempty"`
 }
 
 func (v SessionEventAssistantMessage) MarshalJSON() ([]byte, error) {

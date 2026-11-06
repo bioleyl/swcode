@@ -54,8 +54,17 @@ func sameServer(known, source protocol.LlmSource) bool {
 func (s *Servers) start(source protocol.LlmSource) *Server {
 	options := Options{APIKey: source.APIKey, HTTP: s.http, URL: source.URL}
 	status := NewStatusReader(options)
-	model := NewScheduledModel(NewClient(options), NewScheduler(status.SlotsOf))
+	model := NewScheduledModel(clientFor(options), NewScheduler(status.SlotsOf))
 	return &Server{Status: status, model: model, source: source}
+}
+
+// clientFor is the API a server is asked through: OpenAI's Responses API for OpenAI's own, Chat Completions
+// otherwise.
+func clientFor(options Options) Model {
+	if UsesResponses(options.URL) {
+		return NewResponsesClient(options)
+	}
+	return NewClient(options)
 }
 
 // Server is the llm-server of a source, when the settings have it.

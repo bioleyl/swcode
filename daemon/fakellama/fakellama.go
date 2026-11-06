@@ -17,9 +17,13 @@ import (
 )
 
 const (
-	noMoreReplies    = "The fake model has no more replies."
-	noModel          = "model name is missing from the request"
-	completionTokens = 40
+	noMoreReplies = "The fake model has no more replies."
+	noModel       = "model name is missing from the request"
+	// unknownParameter is how OpenAI's API refuses a field it does not know.
+	unknownParameter = "Unknown parameter: '%s'."
+	// EncryptedReasoning is the encrypted content of the reasoning items the fake writes through the Responses API.
+	EncryptedReasoning = "fake-encrypted-reasoning"
+	completionTokens   = 40
 	// charsPerToken: its token count is four characters a token of the messages, close enough for tests of the
 	// context budget.
 	charsPerToken = 4
@@ -70,6 +74,9 @@ type Options struct {
 	Vision bool
 	// Router answers as a router serving these models: each has its own /props, and requests must name one.
 	Router []RouterModel
+	// Refuses is fields the server does not know, as OpenAI's API refuses llama.cpp's: a request that has one,
+	// itself or in a message, gets a 400 that names it.
+	Refuses []string
 }
 
 // Server is a running fake llm-server.
@@ -133,7 +140,9 @@ func (s *Server) serve(response http.ResponseWriter, request *http.Request) {
 		s.mu.Unlock()
 		answer(response, http.StatusOK, s.props(request.URL.Query().Get("model")))
 	case path == "/v1/chat/completions":
-		s.complete(request.Context(), response, body)
+		s.complete(request.Context(), response, body, stream)
+	case path == "/v1/responses":
+		s.complete(request.Context(), response, body, streamResponses)
 	default:
 		answer(response, http.StatusNotFound, map[string]any{"error": map[string]any{"message": "Not found"}})
 	}
@@ -184,12 +193,19 @@ func (s *Server) props(model string) any {
 	return map[string]any{"default_generation_settings": map[string]any{"n_ctx": 0}, "role": "router"}
 }
 
-func (s *Server) complete(ctx context.Context, response http.ResponseWriter, body map[string]any) {
+// complete answers a request with the next reply, streamed as its API does.
+func (s *Server) complete(ctx context.Context, response http.ResponseWriter, body map[string]any, write func(http.ResponseWriter, Reply, int)) {
 	s.mu.Lock()
 	s.requests = append(s.requests, body)
 	s.mu.Unlock()
 	if _, named := body["model"].(string); s.options.Router != nil && !named {
 		answer(response, http.StatusBadRequest, map[string]any{"error": map[string]any{"message": noModel, "type": "invalid_request_error"}})
+		return
+	}
+	if field := s.refused(body); field != "" {
+		answer(response, http.StatusBadRequest, map[string]any{"error": map[string]any{
+			"message": fmt.Sprintf(unknownParameter, field), "param": field, "type": "invalid_request_error",
+		}})
 		return
 	}
 	reply := s.next(body)
@@ -207,7 +223,23 @@ func (s *Server) complete(ctx context.Context, response http.ResponseWriter, bod
 		answer(response, reply.FailWith, map[string]any{"error": map[string]any{"message": message, "type": reply.ErrorType}})
 		return
 	}
-	stream(response, reply, promptTokensOf(body))
+	write(response, reply, promptTokensOf(body))
+}
+
+// refused is the first field of the request the server does not know, itself or in one of its messages.
+func (s *Server) refused(body map[string]any) string {
+	messages, _ := body["messages"].([]any)
+	for _, field := range s.options.Refuses {
+		if _, found := body[field]; found {
+			return field
+		}
+		for _, message := range messages {
+			if fields, _ := message.(map[string]any); fields[field] != nil {
+				return field
+			}
+		}
+	}
+	return ""
 }
 
 func (s *Server) next(body map[string]any) Reply {
@@ -263,7 +295,7 @@ func FirstUserMessage(body map[string]any) string {
 
 // Messages is a request's messages, as maps.
 func Messages(body map[string]any) []map[string]any {
-	list, _ := body["messages"].([]any)
+	list, _ := conversationOf(body).([]any)
 	messages := []map[string]any{}
 	for _, each := range list {
 		if message, ok := each.(map[string]any); ok {
@@ -282,8 +314,16 @@ func JSONText(value any) string {
 	return strings.TrimSuffix(buffer.String(), "\n")
 }
 
+// conversationOf is a request's messages, or its input items through the Responses API.
+func conversationOf(body map[string]any) any {
+	if messages, found := body["messages"]; found {
+		return messages
+	}
+	return body["input"]
+}
+
 func promptTokensOf(body map[string]any) int {
-	messages := body["messages"]
+	messages := conversationOf(body)
 	if messages == nil {
 		messages = []any{}
 	}
@@ -351,4 +391,64 @@ func stream(response http.ResponseWriter, reply Reply, promptTokens int) {
 		time.Sleep(reply.ChunkDelay)
 	}
 	fmt.Fprint(response, "data: [DONE]\n\n")
+}
+
+// responsesEventsOf is the events a reply streams in through OpenAI's Responses API: its reasoning summary, its
+// text, each call named then its arguments, and the last event with the reply's items, the reasoning encrypted.
+func responsesEventsOf(reply Reply, promptTokens int) []map[string]any {
+	events := []map[string]any{}
+	output := []any{}
+	added := func(item map[string]any) {
+		events = append(events, map[string]any{"item": item, "output_index": len(output), "type": "response.output_item.added"})
+	}
+	deltas := func(kind, text string) {
+		for _, part := range halves(text) {
+			events = append(events, map[string]any{"delta": part, "output_index": len(output), "type": kind})
+		}
+	}
+	if reply.Reasoning != "" {
+		added(map[string]any{"id": "rs_0", "summary": []any{}, "type": "reasoning"})
+		events = append(events, map[string]any{"output_index": 0, "summary_index": 0, "type": "response.reasoning_summary_part.added"})
+		deltas("response.reasoning_summary_text.delta", reply.Reasoning)
+		output = append(output, map[string]any{
+			"encrypted_content": EncryptedReasoning, "id": "rs_0",
+			"summary": []any{map[string]any{"text": reply.Reasoning, "type": "summary_text"}}, "type": "reasoning",
+		})
+	}
+	if reply.Text != "" {
+		added(map[string]any{"content": []any{}, "id": "msg_0", "role": "assistant", "type": "message"})
+		deltas("response.output_text.delta", reply.Text)
+		output = append(output, map[string]any{
+			"content": []any{map[string]any{"annotations": []any{}, "text": reply.Text, "type": "output_text"}},
+			"id":      "msg_0", "role": "assistant", "status": "completed", "type": "message",
+		})
+	}
+	for index, call := range reply.ToolCalls {
+		text, isText := call.Arguments.(string)
+		if !isText {
+			text = JSONText(call.Arguments)
+		}
+		item := map[string]any{"arguments": "", "call_id": fmt.Sprintf("call-%d", index), "id": fmt.Sprintf("fc_%d", index), "name": call.Name, "type": "function_call"}
+		added(item)
+		deltas("response.function_call_arguments.delta", text)
+		item["arguments"], item["status"] = text, "completed"
+		output = append(output, item)
+	}
+	return append(events, map[string]any{"response": map[string]any{
+		"output": output, "status": "completed",
+		"usage": map[string]any{"input_tokens": promptTokens, "output_tokens": completionTokens},
+	}, "type": "response.completed"})
+}
+
+func streamResponses(response http.ResponseWriter, reply Reply, promptTokens int) {
+	response.Header().Set("content-type", "text/event-stream")
+	response.WriteHeader(http.StatusOK)
+	flusher, _ := response.(http.Flusher)
+	for _, event := range responsesEventsOf(reply, promptTokens) {
+		fmt.Fprintf(response, "event: %s\ndata: %s\n\n", event["type"], JSONText(event))
+		if flusher != nil {
+			flusher.Flush()
+		}
+		time.Sleep(reply.ChunkDelay)
+	}
 }
