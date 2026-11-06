@@ -1,5 +1,5 @@
 import type { StatusLook } from '@syware/jlib';
-import type { SessionStatus } from '../../../shared/protocol/session.schema';
+import type { SessionStatus, SessionSummary } from '../../../shared/protocol/session.schema';
 
 /** How each state of a session shows, the same in every view: a new state does not compile until it is here. */
 export const SESSION_STATUS_LOOKS: Readonly<Record<SessionStatus, StatusLook>> = {
@@ -10,8 +10,15 @@ export const SESSION_STATUS_LOOKS: Readonly<Record<SessionStatus, StatusLook>> =
     label: 'Needs you',
     tone: 'warn',
   },
-  working: { hint: 'Its turn runs.', icon: 'loader', label: 'Working', tone: 'accent' },
+  working: { hint: 'Its turn runs, or its subagents do.', icon: 'loader', label: 'Working', tone: 'accent' },
 };
+
+/**
+ * A session's state as every view shows it: working while its subagents work in the background, though its own turn
+ * ended. Its turn's state is the composer's: a message then starts a turn at once.
+ */
+export const liveStatus = (session: Pick<SessionSummary, 'status' | 'subagents'>): SessionStatus =>
+  session.status === 'idle' && session.subagents > 0 ? 'working' : session.status;
 
 /** The icon of a session in the search palette, by its state; the navigation lights its bubble instead. */
 export const SESSION_STATUS_ICONS: Readonly<Record<SessionStatus, string>> = {

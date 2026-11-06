@@ -1,6 +1,7 @@
 import { Folder, MessageSquare, Server, Terminal } from 'lucide';
 
 import { HOST_ICONS } from './hosts';
+import { liveStatus } from './session-status';
 
 import type { IconNode } from 'lucide';
 import type { HostRef } from '../../../shared/protocol/project.schema';
@@ -64,9 +65,9 @@ export const LIT_ICONS: Readonly<Record<string, IconNode>> = Object.fromEntries(
 
 /** A session's light: done once its turn ended, until the person saw it as it is now (its last activity, `seenAt`). */
 export const sessionLight = (
-  session: Pick<SessionSummary, 'status' | 'updatedAt'>,
+  session: Pick<SessionSummary, 'status' | 'subagents' | 'updatedAt'>,
   seenAt: string | undefined
-): SessionLight => LIGHTS[session.status](seenAt === session.updatedAt);
+): SessionLight => LIGHTS[liveStatus(session)](seenAt === session.updatedAt);
 
 /** A project's light: the first of its sessions' in `SESSION_LIGHTS`' order, seen when it has none. */
 export const projectLight = (lights: readonly SessionLight[]): SessionLight =>

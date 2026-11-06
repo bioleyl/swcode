@@ -11,13 +11,13 @@ func TestThePromptSaysOfSubagentsWhatThePresetAllows(t *testing.T) {
 	prompt := func(limit *protocol.SubagentLimit) string {
 		return SystemPrompt("/w", "/s", "linux", Servers{}, limit)
 	}
-	if !strings.Contains(prompt(nil), subagentLine) || strings.Contains(prompt(nil), "at most") {
+	if !strings.Contains(prompt(nil), subagentLine) || strings.Contains(prompt(nil), "work at once:") {
 		t.Fatal("no limit")
 	}
-	if strings.Contains(prompt(&protocol.SubagentLimit{PerTurn: 0}), "subagent") {
+	if strings.Contains(prompt(&protocol.SubagentLimit{AtOnce: 0}), "subagent") {
 		t.Fatal("none allowed, yet told of them")
 	}
-	if !strings.Contains(prompt(&protocol.SubagentLimit{PerTurn: 2}), "You may start 2 in a turn at most.") {
+	if !strings.Contains(prompt(&protocol.SubagentLimit{AtOnce: 2}), "2 work at once: swcode starts the others by itself as those report.") {
 		t.Fatal("the limit is not said")
 	}
 }

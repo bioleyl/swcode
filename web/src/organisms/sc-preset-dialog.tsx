@@ -77,8 +77,8 @@ export class ScPresetDialog extends ScElement {
             <JlInput class="subagents-context" autocomplete="off" placeholder={CONTEXT_EMPTY} />
           </JlField>
           <JlField
-            label="Subagents per turn"
-            hint="How many the main agent may start in a turn. With none, it is not told they exist.">
+            label="Subagents at once"
+            hint="How many work at the same time; the others wait their turn. Keep it below the slots of their llm-server (--parallel) when the main agent uses it too, so that it answers meanwhile. With none, the main agent is not told they exist.">
             <JlSelect class="subagent-limit" options={[...SUBAGENT_LIMIT_OPTIONS]} />
           </JlField>
           <JlAlert tone="danger" hidden />

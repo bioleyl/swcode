@@ -122,3 +122,16 @@ func next(t *testing.T, notices <-chan watch.Notice) watch.Notice {
 		return watch.Notice{}
 	}
 }
+
+func TestATurnThatEndsWhileSubagentsWorkTellsNothingTheNextOneDoes(t *testing.T) {
+	tracker := watch.NewTracker()
+	working := protocol.SessionSummary{ID: "s1", Subagents: 2, Title: "Review"}
+	tracker.Take(protocol.ServerMessage{Value: protocol.ServerMessageSessions{Sessions: []protocol.SessionSummary{working}}})
+	if _, told := tracker.Take(eventMessage("s1", protocol.SessionEventTurnFinished{Outcome: protocol.TurnOutcomeDone})); told {
+		t.Fatal("told while its subagents work")
+	}
+	tracker.Take(sessionsMessage("s1", "Review"))
+	if found, told := tracker.Take(eventMessage("s1", protocol.SessionEventTurnFinished{Outcome: protocol.TurnOutcomeDone})); !told || found.Kind != watch.Finished {
+		t.Fatalf("found %+v", found)
+	}
+}

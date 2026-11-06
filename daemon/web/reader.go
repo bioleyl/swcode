@@ -31,12 +31,15 @@ func pageMessage(page Page, question string) string {
 
 // AskPage has the reading model answer a question from a page, with no tools: the page cannot make it do anything.
 func AskPage(ctx context.Context, page Page, question string, reader Reader) (string, error) {
+	agent := llm.Identity{AgentID: reader.NewID(), Model: reader.ModelName, Source: reader.Source, Thinking: reader.Thinking}
+	// One request, and done: its slot goes to the next agent, before the main agent's.
+	defer llm.AgentDone(reader.Model, agent)
 	reply, err := reader.Model.Complete(ctx, llm.Request{
 		Messages: []llm.Message{
 			{Content: readerPrompt, Role: llm.RoleSystem},
 			{Content: pageMessage(page, question), Role: llm.RoleUser},
 		},
-		Target: llm.Target{Identity: llm.Identity{AgentID: reader.NewID(), Model: reader.ModelName, Source: reader.Source, Thinking: reader.Thinking}, Slot: llm.NoSlot},
+		Target: llm.Target{Identity: agent, Slot: llm.NoSlot},
 	}, func(llm.Part) {
 		// Nobody watches the reader: its answer goes back whole.
 	})

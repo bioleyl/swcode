@@ -2,7 +2,7 @@ import type { HostRef } from '../../../shared/protocol/project.schema';
 import type { SessionEvent, SessionSummary, ToolDisplay, ToolName } from '../../../shared/protocol/session.schema';
 
 /** Where a tool call stands: announced, waiting for a person, running, or finished either way. */
-export type ToolRowState = 'pending' | 'waiting' | 'running' | 'done' | 'failed';
+export type ToolRowState = 'pending' | 'waiting' | 'queued' | 'running' | 'done' | 'failed';
 
 export type Tone = 'muted' | 'accent' | 'danger';
 
@@ -49,7 +49,7 @@ export interface SubagentLine {
   meta: string | undefined;
 }
 
-export type AgentState = 'working' | 'done' | 'failed';
+export type AgentState = 'waiting' | 'working' | 'done' | 'failed';
 
 /** A subagent as the side panel lists it: what it was asked, on which model, and what it does now. */
 export interface AgentView {

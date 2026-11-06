@@ -61,6 +61,34 @@ func TestTheSchedulerKeepsASlotWhoseCacheAnotherAgentWillWant(t *testing.T) {
 	}
 }
 
+func TestTheSchedulerGivesANewcomerTheSlotLetGoLongestAgo(t *testing.T) {
+	slots := schedulerWith(3)
+	first := acquire(t, slots, testModel, "explore-1")
+	second := acquire(t, slots, testModel, "explore-2")
+	main := acquire(t, slots, testModel, "main")
+	second.Release()
+	first.Release()
+	main.Release()
+	if got := acquire(t, slots, testModel, "explore-3").Slot; got != second.Slot {
+		t.Fatalf("slot %d", got)
+	}
+}
+
+func TestTheSchedulerHandsTheSlotOfAnAgentDoneForGoodFirst(t *testing.T) {
+	slots := schedulerWith(2)
+	main := acquire(t, slots, testModel, "main")
+	main.Release()
+	done := acquire(t, slots, testModel, "explore-1")
+	done.Release()
+	slots.Forget("explore-1")
+	if got := acquire(t, slots, testModel, "explore-2").Slot; got != done.Slot {
+		t.Fatalf("slot %d", got)
+	}
+	if got := acquire(t, slots, testModel, "main").Slot; got != main.Slot {
+		t.Fatalf("the main agent's slot %d", got)
+	}
+}
+
 func TestTheSchedulerServesWaitingRequestsFirstComeFirstServed(t *testing.T) {
 	slots := schedulerWith(1)
 	holding := acquire(t, slots, testModel, "main")

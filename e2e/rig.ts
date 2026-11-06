@@ -96,7 +96,8 @@ export async function startRig(options: E2eOptions): Promise<E2eRig> {
     contextTokens: CONTEXT_TOKENS,
     models: [model],
     replies: options.replies,
-    slots: SLOTS,
+    ...(options.scripts ? { scripts: options.scripts } : {}),
+    slots: options.slots ?? SLOTS,
     vision: options.vision ?? false,
   });
   const port = await freePort();

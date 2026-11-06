@@ -54,7 +54,7 @@ func TestThinkingChangesFromTheNextRequestOn(t *testing.T) {
 func TestThinkingIsBriefForSubagents(t *testing.T) {
 	test := Start(t, Options{
 		Replies: []fakellama.Reply{call("agent", map[string]any{"description": "Look", "prompt": "TASK: look"}), text("Done.")},
-		Scripts: map[string][]fakellama.Reply{"TASK": {text("Found it.")}},
+		Scripts: map[string][]fakellama.Reply{"TASK": {slowly(text("Found it."))}},
 	})
 	session := test.NewSession(sessions.Request{Prompt: "Go"})
 	test.UntilIdle(session.ID)
@@ -127,17 +127,19 @@ func TestTheMainAgentAndItsSubagentsAreServedTheirOwnModels(t *testing.T) {
 	test := Start(t, Options{
 		Replies:       []fakellama.Reply{call("agent", map[string]any{"description": "Find it", "prompt": "TASK: where?"}), text("It is in src/a.ts.")},
 		Router:        router,
-		Scripts:       map[string][]fakellama.Reply{"TASK": {text("src/a.ts:1")}},
+		Scripts:       map[string][]fakellama.Reply{"TASK": {slowly(text("src/a.ts:1"))}},
 		SubagentModel: smallModel,
 	})
 	session := test.NewSession(sessions.Request{})
 	test.App.Sessions.SendPrompt(session.ID, "Where is it?", nil)
-	Expect(t, test.WaitForEvent("turnFinished", 1), `{"outcome":"done"}`)
-	models := []any{}
+	Expect(t, test.WaitForEvent("turnFinished", 2), `{"outcome":"done"}`)
+	// The subagent asks beside the main agent: its request may come before the main agent's next one, or after.
+	models := []string{}
 	for _, request := range test.Requests() {
-		models = append(models, request["model"])
+		models = append(models, request["model"].(string))
 	}
-	if !reflect.DeepEqual(models, []any{mainModel, smallModel, mainModel}) {
+	slices.Sort(models)
+	if !reflect.DeepEqual(models, []string{smallModel, mainModel, mainModel}) {
 		t.Fatalf("models %v", models)
 	}
 }
@@ -155,7 +157,7 @@ func twoServers(test *App, second *fakellama.Server) protocol.ModelSettings {
 }
 
 func TestASessionsMainAgentAndWorkersAskTheLlamaServersOfItsPreset(t *testing.T) {
-	test := Start(t, Options{Scripts: map[string][]fakellama.Reply{"TASK": {text("src/a.ts:1")}}})
+	test := Start(t, Options{Scripts: map[string][]fakellama.Reply{"TASK": {slowly(text("src/a.ts:1"))}}})
 	second := fakellama.Start(fakellama.Options{Models: []string{"big"}, Replies: []fakellama.Reply{
 		call("agent", map[string]any{"description": "Find it", "prompt": "TASK: where?"}), text("It is in src/a.ts."),
 	}})

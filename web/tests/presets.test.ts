@@ -62,21 +62,21 @@ describe('presets', () => {
     expect(presetDescription(choices, local)).toBe('its model on gmktec');
   });
 
-  it('say how many subagents a turn may start, or that it starts none', () => {
-    expect(presetDescription(choices, { ...big, subagentLimit: { perTurn: 2 } })).toBe(
-      'qwen3.8-flash-next on garfield · subagents: qwen3.5-9b on gmktec, 2 a turn'
+  it('say how many subagents work at once, or that it starts none', () => {
+    expect(presetDescription(choices, { ...big, subagentLimit: { atOnce: 2 } })).toBe(
+      'qwen3.8-flash-next on garfield · subagents: qwen3.5-9b on gmktec, 2 at once'
     );
-    expect(presetDescription(choices, { ...local, subagentLimit: { perTurn: 3 } })).toBe(
-      'its model on gmktec · subagents: 3 a turn'
+    expect(presetDescription(choices, { ...local, subagentLimit: { atOnce: 3 } })).toBe(
+      'its model on gmktec · subagents: 3 at once'
     );
-    expect(presetDescription(choices, { ...big, subagentLimit: { perTurn: 0 } })).toBe(
+    expect(presetDescription(choices, { ...big, subagentLimit: { atOnce: 0 } })).toBe(
       'qwen3.8-flash-next on garfield · no subagents'
     );
   });
 
   it('read the select’s choice of a limit back, no limit as none', () => {
-    expect(subagentLimitOf(subagentLimitChoice({ perTurn: 0 }))).toEqual({ perTurn: 0 });
-    expect(subagentLimitOf(subagentLimitChoice({ perTurn: 7 }))).toEqual({ perTurn: 7 });
+    expect(subagentLimitOf(subagentLimitChoice({ atOnce: 0 }))).toEqual({ atOnce: 0 });
+    expect(subagentLimitOf(subagentLimitChoice({ atOnce: 7 }))).toEqual({ atOnce: 7 });
     expect(subagentLimitOf(subagentLimitChoice(undefined))).toBeUndefined();
   });
 });

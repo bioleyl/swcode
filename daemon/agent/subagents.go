@@ -34,27 +34,25 @@ type SubagentDeps struct {
 	MaxSteps  int
 	Now       func() time.Time
 	NewID     func() string
-	// Record records an event in the main session: the subagent's start, a line for each call it made, its end.
+	// Record records an event in the main session: a line for each call the subagent made.
 	Record func(event protocol.SessionEventVariant)
 	Web    *web.Port
 }
 
-func answeredOutcome(result TaskResult) tools.Outcome {
-	output := result.Answer
-	if output == "" {
-		output = noAnswer
+func answered(result TaskResult) string {
+	if result.Answer == "" {
+		return noAnswer
 	}
-	return tools.Outcome{Display: tools.Text(output), OK: result.Answer != "", Output: output}
+	return result.Answer
 }
 
-func cutShort(note string) func(TaskResult) tools.Outcome {
-	return func(result TaskResult) tools.Outcome {
+func cutShort(note string) func(TaskResult) string {
+	return func(result TaskResult) string {
 		why := result.Ending.Message
 		if why == "" {
 			why = note
 		}
-		output := strings.Join(nonEmpty(result.Answer, "["+why+"]"), "\n")
-		return tools.Outcome{Display: tools.Text(output), Meta: strings.ToLower(note), Output: output}
+		return strings.Join(nonEmpty(result.Answer, "["+why+"]"), "\n")
 	}
 }
 
@@ -68,12 +66,18 @@ func nonEmpty(parts ...string) []string {
 	return kept
 }
 
-// outcomes is what the main agent reads back: the answer, and why it is short when the subagent did not finish.
-var outcomes = map[protocol.TurnOutcome]func(TaskResult) tools.Outcome{
-	protocol.TurnOutcomeDone:    answeredOutcome,
+// reports is what the main agent reads: the answer, and why it is short when the subagent did not finish.
+var reports = map[protocol.TurnOutcome]func(TaskResult) string{
+	protocol.TurnOutcomeDone:    answered,
 	protocol.TurnOutcomeFailed:  cutShort("Failed"),
 	protocol.TurnOutcomeLimit:   cutShort("Too many steps"),
 	protocol.TurnOutcomeStopped: cutShort("Stopped"),
+}
+
+// Report is what a subagent gives its main agent: how it ended, and what it found or why it stopped short.
+type Report struct {
+	Outcome protocol.TurnOutcome
+	Text    string
 }
 
 type subagentCall struct {
@@ -127,6 +131,9 @@ func (h *subagentHost) AskPermission(context.Context, PermissionAsk) protocol.Pe
 // TakeMessages is none: the person talks to the main agent only.
 func (h *subagentHost) TakeMessages() *PromptMessage { return nil }
 
+// TakeReports is none: a subagent starts none of its own.
+func (h *subagentHost) TakeReports() []protocol.SessionEventSubagentReport { return nil }
+
 // UseModel: a subagent's requests take no peek, and wait for none.
 func (h *subagentHost) UseModel(use func()) { use() }
 
@@ -142,10 +149,9 @@ func (h *subagentHost) report(event protocol.SessionEventVariant) {
 	}
 }
 
-// RunSubagent runs one explore subagent to its answer, which becomes the agent call's result.
-func RunSubagent(ctx context.Context, task tools.SubagentTask, deps SubagentDeps) tools.Outcome {
-	agentID := deps.NewID()
-	deps.Record(protocol.SessionEventSubagentStarted{AgentID: agentID, CallID: task.CallID, Description: task.Description, Model: deps.ModelName})
+// RunSubagent runs one explore subagent to its report. Its start and its end are its session's to record: the
+// session hands the report to the main agent.
+func RunSubagent(ctx context.Context, agentID string, task tools.SubagentTask, deps SubagentDeps) Report {
 	host := &subagentHost{
 		agentID: agentID,
 		calls:   map[string]subagentCall{},
@@ -163,6 +169,7 @@ func RunSubagent(ctx context.Context, task tools.SubagentTask, deps SubagentDeps
 		Tools:         deps.Tools,
 	}
 	result := RunTask(ctx, task.Prompt, host, setup)
-	deps.Record(protocol.SessionEventSubagentFinished{AgentID: agentID, Outcome: result.Ending.Outcome})
-	return outcomes[result.Ending.Outcome](result)
+	// Its conversation ends here: its slot goes to the next agent, before its main agent's.
+	llm.AgentDone(deps.Model, setup.Agent)
+	return Report{Outcome: result.Ending.Outcome, Text: reports[result.Ending.Outcome](result)}
 }

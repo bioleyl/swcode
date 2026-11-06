@@ -1,6 +1,6 @@
 import { HOST_ICONS, placeText } from './hosts';
 import { sessionPlace, sessionPlaceName } from './session-kinds';
-import { SESSION_STATUS_ICONS, SESSION_STATUS_LOOKS } from './session-status';
+import { liveStatus, SESSION_STATUS_ICONS, SESSION_STATUS_LOOKS } from './session-status';
 import { SETTINGS_TOPIC_LABELS } from './settings-topics';
 
 import type { PaletteCommand } from '@syware/jlib';
@@ -74,9 +74,9 @@ const ACTIONS: readonly PaletteCommand[] = [
 const isAction = (id: string): id is PaletteAction => Object.values<string>(PALETTE_ACTION).includes(id);
 
 const sessionCommand = (session: SessionSummary): PaletteCommand => ({
-  description: `${SESSION_STATUS_LOOKS[session.status].label} · ${sessionPlace(session)}`,
+  description: `${SESSION_STATUS_LOOKS[liveStatus(session)].label} · ${sessionPlace(session)}`,
   group: GROUP.sessions,
-  icon: SESSION_STATUS_ICONS[session.status],
+  icon: SESSION_STATUS_ICONS[liveStatus(session)],
   id: `${SESSION_PREFIX}${session.id}`,
   label: session.title,
 });
@@ -84,7 +84,7 @@ const sessionCommand = (session: SessionSummary): PaletteCommand => ({
 const matchCommand = (session: SessionSummary, match: SessionMatch): PaletteCommand => ({
   description: `${sessionPlaceName(session)} · ${match.snippet}`,
   group: GROUP.conversations,
-  icon: SESSION_STATUS_ICONS[session.status],
+  icon: SESSION_STATUS_ICONS[liveStatus(session)],
   id: `${MATCH_PREFIX}${session.id}`,
   label: session.title,
   result: true,

@@ -1103,6 +1103,59 @@ describe('chats', () => {
   });
 });
 
+// How long each subagent of a test thinks: the person talks with the main agent meanwhile, on the model's third slot.
+const SUBAGENT_MS = 6_000;
+const SUBAGENT_SLOTS = 3;
+const subagentCall = (description: string, prompt: string) => ({
+  arguments: { description, prompt },
+  name: 'agent',
+});
+
+describe('subagents', () => {
+  it('work in the background, shown at once and closed, the person talking with the agent meanwhile, then report', async () => {
+    const rig = await start({
+      replies: [
+        {
+          toolCalls: [
+            subagentCall('Find the store', 'TASK-A: where?'),
+            subagentCall('Find the tools', 'TASK-B: where?'),
+          ],
+        },
+        { text: 'Still looking, nothing yet.' },
+        { text: 'The store is in src/store.ts, the tools in src/tools.ts.' },
+      ],
+      scripts: {
+        'TASK-A': [{ delayMs: SUBAGENT_MS, text: 'src/store.ts saves them.' }],
+        'TASK-B': [{ delayMs: SUBAGENT_MS, text: 'src/tools.ts lists them.' }],
+      },
+      slots: SUBAGENT_SLOTS,
+    });
+    const page = await rig.browser.newPage({ viewport: DESKTOP });
+    await page.goto(rig.link);
+    await page.locator('home-page textarea').fill('Where are the store and the tools?');
+    await page.locator('home-page textarea').press('Enter');
+    // The reply that started them ended the turn: their reports wake the agent.
+    await page.getByText("Waiting for the subagents' reports").waitFor();
+    const running = page.locator('session-page sc-tool-row[state="running"]');
+    expect(await running.count()).toBe(2);
+    expect(await page.locator('session-page sc-tool-row[open]').count()).toBe(0);
+    await page.locator('sc-side-panel').getByText('Find the tools').waitFor();
+    expect(await page.locator('session-page sc-composer .stop').isVisible()).toBe(true);
+
+    const composer = page.locator('session-page sc-composer textarea');
+    await composer.fill('How is it going?');
+    await composer.press('Enter');
+    await page.getByText('Still looking, nothing yet.').waitFor();
+    expect(await running.count()).toBe(2);
+
+    await page.getByText('The store is in src/store.ts').waitFor({ timeout: SUBAGENT_MS * 2 });
+    expect(await running.count()).toBe(0);
+    expect(await page.locator('session-page sc-tool-row[open]').count()).toBe(0);
+    await page.getByText('Report of “Find the store”, given to the agent').waitFor();
+    expect(JSON.stringify(rig.llama.requests.at(-1))).toContain('src/tools.ts lists them.');
+  });
+});
+
 describe('the theme', () => {
   it('follows a dark system, the mark’s ink turning light', async () => {
     const rig = await start({ replies: [] });

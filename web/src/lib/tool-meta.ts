@@ -18,6 +18,8 @@ const META: Readonly<Record<ToolRowState, (result: ToolResult | undefined) => To
   }),
   failed: (result) => ({ text: result?.meta ?? 'failed', tone: 'danger' }),
   pending: () => ({ text: '', tone: 'muted' }),
+  // A subagent past its preset's limit: it starts once one at work reports.
+  queued: () => ({ text: 'Waiting its turn', tone: 'muted' }),
   running: () => ({ text: 'Running', tone: 'accent' }),
   waiting: () => ({ text: 'Waiting for you', tone: 'accent' }),
 };

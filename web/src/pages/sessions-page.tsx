@@ -3,6 +3,7 @@ import { JlButton, JlEmpty, JlPage } from '@syware/jlib';
 
 import { SESSION_STATUSES } from '../../../shared/protocol/session.schema';
 import { ScElement } from '../base/sc-element';
+import { liveStatus } from '../lib/session-status';
 import { ScSessionRow } from '../molecules/sc-session-row';
 import { hrefOf, NEW_SESSION_PATH } from '../services/navigation';
 import { allSessions, sessionListBus } from '../services/session-list';
@@ -64,7 +65,7 @@ export class SessionsPage extends ScElement {
       ...statuses.flatMap((status) =>
         this.groupNodes(
           status,
-          sessions.filter((session) => session.status === status)
+          sessions.filter((session) => liveStatus(session) === status)
         )
       )
     );

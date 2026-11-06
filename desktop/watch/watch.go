@@ -59,15 +59,18 @@ type Notice struct {
 }
 
 // Tracker turns what a daemon's socket says into notices. It keeps what words them: the sessions' titles, their
-// last answers, and their calls, which an approval names.
+// last answers, and their calls, which an approval names; and how many subagents each has at work.
 type Tracker struct {
-	titles  map[string]string
-	replies map[string]string
-	calls   map[string]map[string]string
+	titles    map[string]string
+	replies   map[string]string
+	calls     map[string]map[string]string
+	subagents map[string]int
 }
 
 func NewTracker() *Tracker {
-	return &Tracker{titles: map[string]string{}, replies: map[string]string{}, calls: map[string]map[string]string{}}
+	return &Tracker{
+		calls: map[string]map[string]string{}, replies: map[string]string{}, subagents: map[string]int{}, titles: map[string]string{},
+	}
 }
 
 // Take reads one message of the socket: a notice, when it is one.
@@ -76,6 +79,7 @@ func (t *Tracker) Take(message protocol.ServerMessage) (Notice, bool) {
 	case protocol.ServerMessageSessions:
 		for _, session := range value.Sessions {
 			t.titles[session.ID] = session.Title
+			t.subagents[session.ID] = session.Subagents
 		}
 	case protocol.ServerMessageSessionEvent:
 		return t.event(value.SessionID, value.Event)
@@ -124,13 +128,14 @@ func (t *Tracker) keepReply(sessionID, text string) {
 	t.replies[sessionID] = text
 }
 
-// finished is the notice a turn's end makes; what the tracker kept of that turn goes with it.
+// finished is the notice a turn's end makes; what the tracker kept of that turn goes with it. A turn that ended
+// while subagents work makes none: their reports wake the agent, whose next turn tells.
 func (t *Tracker) finished(notice Notice, turn protocol.SessionEventTurnFinished) (Notice, bool) {
 	reply := t.replies[notice.SessionID]
 	delete(t.replies, notice.SessionID)
 	delete(t.calls, notice.SessionID)
 	kind, told := outcomes[turn.Outcome]
-	if !told {
+	if !told || (kind == Finished && t.subagents[notice.SessionID] > 0) {
 		return Notice{}, false
 	}
 	notice.Kind, notice.Text = kind, clipped(endingText(kind, reply, turn.Message))

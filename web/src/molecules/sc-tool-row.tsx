@@ -32,6 +32,7 @@ const STATE_ICONS: Readonly<Record<ToolRowState, string>> = {
   done: 'check',
   failed: 'x',
   pending: '',
+  queued: '',
   running: '',
   waiting: '',
 };
@@ -125,7 +126,10 @@ export class ScToolRow extends ScElement {
     this._refs.stateIcon.hidden = STATE_ICONS[state] === '';
   }
 
-  /** A change to a file, a picture, or a subagent at work, shows at once; printed text waits for a click. */
+  /**
+   * A change to a file or a picture shows at once; printed text, and a subagent's calls and report, wait for a click:
+   * several subagents at work would fill the conversation.
+   */
   private renderDisplay(display: ToolDisplay | undefined): void {
     this._refs.diff.hidden = display?.kind !== 'diff';
     this._refs.plan.hidden = display?.kind !== 'plan';
@@ -135,7 +139,7 @@ export class ScToolRow extends ScElement {
     this._refs.output.textContent = display?.kind === 'text' ? display.text : '';
     this.renderPicture(display?.kind === 'image' ? display : undefined);
     this.refreshHead();
-    this.toggle(display?.kind === 'diff' || display?.kind === 'image' || this.activity.get().length > 0);
+    this.toggle(display?.kind === 'diff' || display?.kind === 'image');
   }
 
   /** A picture the agent made, from the daemon's copy: a click opens it whole in a tab. */
@@ -154,11 +158,6 @@ export class ScToolRow extends ScElement {
     this._refs.calls.hidden = lines.length === 0;
     this._refs.calls.replaceChildren(...lines.map(callNode));
     this.refreshHead();
-    // The first call of a subagent opens the row: its work shows as it happens.
-    if (lines.length !== 1) {
-      return;
-    }
-    this.toggle(true);
   }
 
   private refreshHead(): void {

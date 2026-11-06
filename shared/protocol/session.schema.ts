@@ -213,7 +213,18 @@ export const SessionEventSchema = z.discriminatedUnion('kind', [
     // Pictures the model reads back too, after the result: a screenshot it asked to see.
     pictures: z.array(PictureRefSchema).optional(),
   }),
-  // A subagent the main agent started with the agent tool: its own calls show under that call, in a line each.
+  // A subagent the main agent started past its preset's limit: it waits its turn, shown under its call, and starts
+  // (subagentStarted) once one at work reports.
+  z.object({
+    agentId: z.string(),
+    at,
+    callId: z.string(),
+    description: z.string(),
+    kind: z.literal('subagentQueued'),
+    model: z.string().optional(),
+  }),
+  // A subagent the main agent started with the agent tool: it works in the background, beside the main agent and the
+  // other subagents, its own calls under that call, in a line each.
   z.object({
     agentId: z.string(),
     at,
@@ -231,7 +242,26 @@ export const SessionEventSchema = z.discriminatedUnion('kind', [
     summary: z.string(),
     tool: ToolNameSchema.optional(),
   }),
-  z.object({ agentId: z.string(), at, kind: z.literal('subagentFinished'), outcome: TurnOutcomeSchema }),
+  // report: what it found, or why it stopped short, as the main agent reads it (none from before subagents worked in
+  // the background: the agent call's result held it).
+  z.object({
+    agentId: z.string(),
+    at,
+    kind: z.literal('subagentFinished'),
+    outcome: TurnOutcomeSchema,
+    report: z.string().optional(),
+  }),
+  // A finished subagent's report, given to the main agent between two of its steps: the model reads it as a message.
+  // note: after the last report given at once, which subagents still work, or that all have reported.
+  z.object({
+    agentId: z.string(),
+    at,
+    description: z.string(),
+    id: z.string(),
+    kind: z.literal('subagentReport'),
+    note: z.string().optional(),
+    text: z.string(),
+  }),
   z.object({
     at,
     id: z.string(),
@@ -261,6 +291,8 @@ export const SessionSummarySchema = z.object({
   // The person asked for them now: they go to the model at the turn's next step instead.
   queuedNow: z.boolean().default(false),
   status: SessionStatusSchema,
+  // Subagents at work in the background: the session works while they do, whether its turn ended or not.
+  subagents: z.number().int().min(0).default(0),
   thinking: ThinkingModeSchema,
   title: z.string(),
   updatedAt: at,

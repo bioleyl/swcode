@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 const NAME_LENGTH = 40;
 // The most subagents a preset lets the main agent start in a turn, short of no limit.
-export const MAX_SUBAGENTS_PER_TURN = 20;
+export const MAX_SUBAGENTS_AT_ONCE = 20;
 // The most tokens a preset can say a conversation holds.
 export const MAX_CONTEXT_TOKENS = 10_000_000;
 
@@ -29,19 +29,22 @@ export const ModelRefSchema = z.object({
 });
 export type ModelRef = z.infer<typeof ModelRefSchema>;
 
-/** How many subagents the main agent may start in a turn: none at 0. */
-export const SubagentLimitSchema = z.object({ perTurn: z.number().int().min(0).max(MAX_SUBAGENTS_PER_TURN) });
+/**
+ * How many subagents of a session work at once: the main agent starts as many as it likes, the others wait their
+ * turn. None at 0: the main agent has no agent tool then.
+ */
+export const SubagentLimitSchema = z.object({ atOnce: z.number().int().min(0).max(MAX_SUBAGENTS_AT_ONCE) });
 export type SubagentLimit = z.infer<typeof SubagentLimitSchema>;
 
 /**
  * The models a session works with, picked together by name: the main agent's, and the subagents' (`workers`, which
- * reads web pages too), with how many subagents a turn may start.
+ * reads web pages too), with how many subagents work at once.
  */
 export const PresetSchema = z.object({
   id: z.string().min(1),
   main: ModelRefSchema,
   name: z.string().trim().min(1).max(NAME_LENGTH),
-  // Left out, the main agent starts as many subagents as it likes.
+  // Left out, all the subagents the main agent starts work at once.
   subagentLimit: SubagentLimitSchema.optional(),
   workers: ModelRefSchema,
 });

@@ -8,15 +8,15 @@ const LATER = '2026-11-05T12:05:00Z';
 
 describe('sessionLight', () => {
   it('shows a session at work or waiting for the person, seen or not', () => {
-    expect(sessionLight({ status: 'working', updatedAt: AT }, AT)).toBe('working');
-    expect(sessionLight({ status: 'waiting', updatedAt: AT }, AT)).toBe('waiting');
-    expect(sessionLight({ status: 'working', updatedAt: LATER }, undefined)).toBe('working');
+    expect(sessionLight({ status: 'working', subagents: 0, updatedAt: AT }, AT)).toBe('working');
+    expect(sessionLight({ status: 'waiting', subagents: 0, updatedAt: AT }, AT)).toBe('waiting');
+    expect(sessionLight({ status: 'working', subagents: 0, updatedAt: LATER }, undefined)).toBe('working');
   });
 
   it('shows a finished session done until the person saw it as it is now', () => {
-    expect(sessionLight({ status: 'idle', updatedAt: LATER }, AT)).toBe('done');
-    expect(sessionLight({ status: 'idle', updatedAt: AT }, undefined)).toBe('done');
-    expect(sessionLight({ status: 'idle', updatedAt: AT }, AT)).toBe('seen');
+    expect(sessionLight({ status: 'idle', subagents: 0, updatedAt: LATER }, AT)).toBe('done');
+    expect(sessionLight({ status: 'idle', subagents: 0, updatedAt: AT }, undefined)).toBe('done');
+    expect(sessionLight({ status: 'idle', subagents: 0, updatedAt: AT }, AT)).toBe('seen');
   });
 });
 

@@ -43,6 +43,28 @@ describe('agentsOf', () => {
     ]);
   });
 
+  it('lists a subagent waiting its turn after those at work, then at work once it starts', () => {
+    const queued: SessionEvent = {
+      agentId: 'b',
+      at: AT,
+      callId: 'call-b',
+      description: 'Find the tools',
+      kind: 'subagentQueued',
+      model: 'qwen3-coder-30b',
+    };
+    const waiting = agentsOf([started('a', 'Find the store'), queued]);
+    expect(waiting.map((agent) => [agent.id, agent.state])).toEqual([
+      ['a', 'working'],
+      ['b', 'waiting'],
+    ]);
+    const finished: SessionEvent = { agentId: 'a', at: AT, kind: 'subagentFinished', outcome: 'done' };
+    const later = agentsOf([started('a', 'Find the store'), queued, finished, started('b', 'Find the tools')]);
+    expect(later.map((agent) => [agent.id, agent.state])).toEqual([
+      ['b', 'working'],
+      ['a', 'done'],
+    ]);
+  });
+
   it('marks a subagent that did not finish its task as failed', () => {
     const events: SessionEvent[] = [
       started('a', 'Find it'),

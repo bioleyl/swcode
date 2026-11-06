@@ -4,6 +4,7 @@ package fakellama
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -132,7 +133,7 @@ func (s *Server) serve(response http.ResponseWriter, request *http.Request) {
 		s.mu.Unlock()
 		answer(response, http.StatusOK, s.props(request.URL.Query().Get("model")))
 	case path == "/v1/chat/completions":
-		s.complete(response, body)
+		s.complete(request.Context(), response, body)
 	default:
 		answer(response, http.StatusNotFound, map[string]any{"error": map[string]any{"message": "Not found"}})
 	}
@@ -183,7 +184,7 @@ func (s *Server) props(model string) any {
 	return map[string]any{"default_generation_settings": map[string]any{"n_ctx": 0}, "role": "router"}
 }
 
-func (s *Server) complete(response http.ResponseWriter, body map[string]any) {
+func (s *Server) complete(ctx context.Context, response http.ResponseWriter, body map[string]any) {
 	s.mu.Lock()
 	s.requests = append(s.requests, body)
 	s.mu.Unlock()
@@ -192,7 +193,12 @@ func (s *Server) complete(response http.ResponseWriter, body map[string]any) {
 		return
 	}
 	reply := s.next(body)
-	time.Sleep(reply.Delay)
+	// A request given up (a stopped turn) ends the thinking: the server closes at once after its test.
+	select {
+	case <-time.After(reply.Delay):
+	case <-ctx.Done():
+		return
+	}
 	if reply.FailWith != 0 {
 		message := reply.Text
 		if message == "" {

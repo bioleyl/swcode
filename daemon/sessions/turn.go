@@ -25,6 +25,15 @@ type place struct {
 	skills   catalog.Port
 }
 
+// The agent call's result: the subagent works, or waits its turn, and its report comes later in any case.
+const (
+	subagentStarted = "Started the subagent “%s” in the background."
+	subagentQueued  = "Queued the subagent “%s”: %d work at once, so it starts by itself once one of them reports (%d waiting before it)."
+	reportComes     = " Your turn ends after this reply's calls: the reports of your subagents wake you, all together once the last is done."
+	// notStartedReport is the report of a subagent stopped while it waited its turn.
+	notStartedReport = "[Stopped before it started.]"
+)
+
 // prepared is what the session's agent runs with now: its place, its models, how many subagents a turn may start,
 // and its setup.
 type prepared struct {
@@ -64,7 +73,7 @@ func (s *Service) prepare(ctx context.Context, session *live) (prepared, error) 
 }
 
 // runTurnIn runs a turn with what the session's agent runs with now.
-func (s *Service) runTurnIn(ctx context.Context, session *live, turn *runningTurn, message agent.PromptMessage) {
+func (s *Service) runTurnIn(ctx context.Context, session *live, turn *runningTurn, message *agent.PromptMessage) {
 	ready, err := s.prepare(ctx, session)
 	if err != nil {
 		s.failTurn(session, message, err)
@@ -77,18 +86,20 @@ func (s *Service) runTurnIn(ctx context.Context, session *live, turn *runningTur
 }
 
 // failTurn records a turn whose host did not answer: the person's message, and why nothing came of it.
-func (s *Service) failTurn(session *live, message agent.PromptMessage, err error) {
+func (s *Service) failTurn(session *live, message *agent.PromptMessage, err error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	turnID := s.deps.NewID()
 	s.record(session, protocol.SessionEventTurnStarted{ID: turnID})
-	s.record(session, agent.UserMessage(s.deps.NewID(), message))
+	if message != nil {
+		s.record(session, agent.UserMessage(s.deps.NewID(), *message))
+	}
 	s.record(session, protocol.SessionEventTurnFinished{ID: turnID, Message: "The host did not answer: " + err.Error(), Outcome: protocol.TurnOutcomeFailed})
 }
 
 // toolsFor is the main agent's tools: without agent when the preset allows no subagents.
 func (s *Service) toolsFor(limit *protocol.SubagentLimit) tools.Box {
-	if limit != nil && limit.PerTurn == 0 {
+	if limit != nil && limit.AtOnce == 0 {
 		return s.deps.Tools.Without(protocol.ToolNameAgent)
 	}
 	return s.deps.Tools
@@ -147,7 +158,7 @@ func (s *Service) hostFor(session *live, turn *runningTurn, ready prepared, sees
 		Scratch:     where.scratch,
 		Screenshots: s.screenshotsFor(session, main, sees),
 		Skills:      where.skills,
-		Subagents:   subagents{budget: &subagentBudget{limit: ready.subagents}, service: s, session: session, subagent: subagent, where: where},
+		Subagents:   subagents{limit: ready.subagents, service: s, session: session, subagent: subagent, where: where},
 		Web:         s.webFor(subagent),
 		Workspace:   session.meta.Workspace,
 	}
@@ -202,6 +213,10 @@ func (h *turnHost) AskPermission(ctx context.Context, ask agent.PermissionAsk) p
 }
 
 func (h *turnHost) TakeMessages() *agent.PromptMessage { return h.service.takeQueued(h.session) }
+
+func (h *turnHost) TakeReports() []protocol.SessionEventSubagentReport {
+	return h.service.takeReports(h.session)
+}
 
 func (h *turnHost) UseModel(use func()) {
 	h.session.model.Lock()
@@ -420,41 +435,44 @@ func (s *Service) webFor(subagent llm.Choice) *web.Port {
 	return &port
 }
 
-func noSubagentLeft(allowed int) string {
-	return fmt.Sprintf("No more subagents in this turn: the preset allows %d. Go on with what you found, or look yourself.", allowed)
-}
-
-// subagentBudget is how many subagents a turn started, against what its preset allows (any number without a
-// limit): the calls run one after another, so it needs no lock.
-type subagentBudget struct {
-	limit   *protocol.SubagentLimit
-	started int
-}
-
-// take counts a subagent starting: false when the turn may start no more.
-func (b *subagentBudget) take() bool {
-	if b.limit != nil && b.started >= b.limit.PerTurn {
-		return false
-	}
-	b.started++
-	return true
-}
-
-// subagents start explore subagents for a session's main agent.
+// subagents start explore subagents for a session's main agent, each in the background, as many at once as its
+// preset lets work at once; the others wait their turn.
 type subagents struct {
 	service  *Service
 	session  *live
 	subagent llm.Choice
 	where    place
-	budget   *subagentBudget
+	limit    *protocol.SubagentLimit
 }
 
-func (a subagents) Run(ctx context.Context, task tools.SubagentTask) tools.Outcome {
-	if !a.budget.take() {
-		return tools.Outcome{Meta: "refused", Output: noSubagentLeft(a.budget.limit.PerTurn)}
-	}
+// runningSubagent is a subagent at work in the background: what it was asked, and how to stop it.
+type runningSubagent struct {
+	description string
+	cancel      context.CancelFunc
+}
+
+// waitingSubagent is a subagent past its preset's limit: it starts once one at work reports.
+type waitingSubagent struct {
+	agentID     string
+	callID      string
+	description string
+	model       string
+	run         func(ctx context.Context) agent.Report
+}
+
+// roomFor tells whether one more subagent of a session may work now. A preset that came to allow none since lets one
+// work, so those waiting still end.
+func roomFor(limit *protocol.SubagentLimit, session *live) bool {
+	return limit == nil || len(session.subagents) < max(limit.AtOnce, 1)
+}
+
+// Start starts the subagent in the background when the preset lets one more work, and has it wait its turn
+// otherwise; its row shows at once, under the agent call. The call's result says which, and that the report comes
+// later.
+func (a subagents) Start(task tools.SubagentTask) tools.Outcome {
 	s := a.service
-	return agent.RunSubagent(ctx, task, agent.SubagentDeps{
+	agentID := s.deps.NewID()
+	deps := agent.SubagentDeps{
 		ContextTokens: a.subagent.ContextTokens, Host: a.where.host, MaxSteps: s.deps.MaxSubagentSteps, Model: s.deps.Model,
 		ModelName: a.subagent.Model, NewID: s.deps.NewID, Now: s.deps.Now, Platform: a.where.platform, Source: a.subagent.Source,
 		Record: func(event protocol.SessionEventVariant) {
@@ -463,7 +481,111 @@ func (a subagents) Run(ctx context.Context, task tools.SubagentTask) tools.Outco
 			s.record(a.session, event)
 		},
 		Thinking: s.deps.Thinking.Subagents, Tools: s.deps.SubagentTools, Web: s.webFor(a.subagent), Workspace: a.session.meta.Workspace,
+	}
+	subagent := waitingSubagent{
+		agentID: agentID, callID: task.CallID, description: task.Description, model: a.subagent.Model,
+		run: func(ctx context.Context) agent.Report { return agent.RunSubagent(ctx, agentID, task, deps) },
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if roomFor(a.limit, a.session) {
+		s.startSubagent(a.session, subagent)
+		return tools.Outcome{Meta: "started", OK: true, Output: fmt.Sprintf(subagentStarted, task.Description) + reportComes}
+	}
+	s.record(a.session, protocol.SessionEventSubagentQueued{AgentID: agentID, CallID: task.CallID, Description: task.Description, Model: a.subagent.Model})
+	a.session.waiting = append(a.session.waiting, subagent)
+	s.publishSessions()
+	before := len(a.session.waiting) - 1
+	return tools.Outcome{Meta: "queued", OK: true, Output: fmt.Sprintf(subagentQueued, task.Description, a.limit.AtOnce, before) + reportComes}
+}
+
+// startSubagent records a subagent's start and runs it in the background; the caller holds the lock.
+func (s *Service) startSubagent(session *live, subagent waitingSubagent) {
+	s.record(session, protocol.SessionEventSubagentStarted{AgentID: subagent.agentID, CallID: subagent.callID, Description: subagent.description, Model: subagent.model})
+	s.inBackground(session, subagent.agentID, subagent.description, subagent.run)
+}
+
+// startWaiting starts the subagents waiting their turn, first come first served, as many as the preset lets work at
+// once now; the caller holds the lock.
+func (s *Service) startWaiting(session *live) {
+	if s.stopping {
+		return
+	}
+	limit := s.deps.Models.SubagentLimit(session.meta.Preset)
+	for len(session.waiting) > 0 && roomFor(limit, session) {
+		next := session.waiting[0]
+		session.waiting = session.waiting[1:]
+		s.startSubagent(session, next)
+	}
+}
+
+// dropWaiting ends the subagents still waiting their turn, as stopped: they never started. The caller holds the lock.
+func (s *Service) dropWaiting(session *live) {
+	for _, waiting := range session.waiting {
+		s.finishSubagent(session, waiting.agentID, waiting.description, agent.Report{Outcome: protocol.TurnOutcomeStopped, Text: notStartedReport})
+	}
+	session.waiting = nil
+}
+
+// inBackground runs a subagent beside its session's turn, which may end first; the caller holds the lock. Once it is
+// done, its end is recorded with its report, which waits for the main agent, and the next waiting subagent starts.
+func (s *Service) inBackground(session *live, agentID, description string, run func(ctx context.Context) agent.Report) {
+	ctx, cancel := context.WithCancel(context.Background())
+	session.subagents[agentID] = runningSubagent{cancel: cancel, description: description}
+	s.publishSessions()
+	s.turns.Add(1)
+	go func() {
+		defer s.turns.Done()
+		defer cancel()
+		report := run(ctx)
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		delete(session.subagents, agentID)
+		s.finishSubagent(session, agentID, description, report)
+		s.startWaiting(session)
+		s.wakeForReports(session)
+		s.publishSessions()
+	}()
+}
+
+// finishSubagent records a subagent's end and keeps its report for the main agent; the caller holds the lock.
+func (s *Service) finishSubagent(session *live, agentID, description string, report agent.Report) {
+	s.record(session, protocol.SessionEventSubagentFinished{AgentID: agentID, Outcome: report.Outcome, Report: report.Text})
+	session.reports = append(session.reports, pendingReport{
+		report: protocol.SessionEventSubagentReport{AgentID: agentID, Description: description, Text: report.Text},
+		wakes:  report.Outcome != protocol.TurnOutcomeStopped,
 	})
+}
+
+// closeSubagents ends, as stopped, the subagents a restart left halfway, and keeps for the main agent the reports it
+// never got; they wake nobody, they go with the person's next message.
+func (s *Service) closeSubagents(session *live) {
+	descriptions, running, reported := map[string]string{}, map[string]bool{}, map[string]bool{}
+	finished := []protocol.SessionEventSubagentFinished{}
+	for _, event := range session.events {
+		switch value := event.Value.(type) {
+		case protocol.SessionEventSubagentQueued:
+			descriptions[value.AgentID], running[value.AgentID] = value.Description, true
+		case protocol.SessionEventSubagentStarted:
+			descriptions[value.AgentID], running[value.AgentID] = value.Description, true
+		case protocol.SessionEventSubagentFinished:
+			finished = append(finished, value)
+			delete(running, value.AgentID)
+		case protocol.SessionEventSubagentReport:
+			reported[value.AgentID] = true
+		}
+	}
+	for _, end := range finished {
+		if end.Report == "" || reported[end.AgentID] {
+			continue
+		}
+		session.reports = append(session.reports, pendingReport{report: protocol.SessionEventSubagentReport{
+			AgentID: end.AgentID, Description: descriptions[end.AgentID], Text: end.Report,
+		}})
+	}
+	for agentID := range running {
+		s.finishSubagent(session, agentID, descriptions[agentID], agent.Report{Outcome: protocol.TurnOutcomeStopped, Text: restartedReport})
+	}
 }
 
 func llmIdentity(meta Meta, main llm.Choice) llm.Identity {

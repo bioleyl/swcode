@@ -178,8 +178,10 @@ the first loaded one that its subagents do not use.
 
 Settings → Models lists the llm-servers swcode asks (a name, an address, a key) and the
 presets made of their models: each preset a name, the main agent's model and the subagents' (which reads web pages
-too), on the same llm-server or on two, and how many subagents a turn may start: with none, the main agent is not
-told they exist (no `agent` tool, no word of them in its prompt). Each model can have its context size (`128k`), the
+too), on the same llm-server or on two, and how many subagents work at once: the main agent starts as many as it
+likes, the others wait their turn; with none, it is not told they exist (no `agent` tool, no word of them in its
+prompt). A `models.json` from before, which said how many a turn could start (`perTurn`), keeps its number as how
+many work at once. Each model can have its context size (`128k`), the
 server's own at most ([Context](#how-it-works)). Each session picks its preset in its composer,
 beside its permissions and its thinking, from its next request on; one preset is the default of new sessions. They
 are kept in `~/.swcode/models.json` and in use as soon as they change, without a restart. Until they are saved once,
@@ -523,10 +525,22 @@ top, for one command; the page shows those as set in the environment.
   sends nothing. A template that adds an instruction for it at the start (DavidAU's do) makes the next step
   process the conversation again when a session changes it.
 - **Subagents**: the main agent's `agent` tool starts an explore subagent with the read-only tools (read, grep,
-  glob, websearch, webfetch) on `LLAMA_SUBAGENT_MODEL`. Several agent calls run one after another: on one GPU,
-  subagents at the same time share its speed, and more of them than the model answers at once wipe each other's
-  prompt cache. A subagent's conversation
-  stays in memory; the session keeps a line for each of its calls, and its last answer is the call's result.
+  glob, websearch, webfetch) on `LLAMA_SUBAGENT_MODEL`, in the background: the call's result says it started, and
+  the reply that starts subagents ends the main agent's turn, whatever else it does, so that it waits for their
+  reports rather than doing their work itself or starting more (models used to agent loops end every reply on a
+  call, and never stop otherwise). You keep talking to it meanwhile. Subagents work at the same time, as many
+  as the preset lets work at once: the others wait their turn, shown as waiting, and start by themselves as those
+  report; the call's result says which, so the model never starts one again. On a model the main agent uses too,
+  keep that number below its slots (llama-server's `--parallel`), so the main agent answers while they work: past
+  them, requests wait for a free slot. Each shows under its call and in the side panel; the session counts as working
+  while one works or waits. A subagent's conversation stays in memory; the session keeps
+  a line for each of its calls, then its report, which the main agent gets as a message between two of its steps;
+  after the last of the reports it gets at once, a line names the subagents that have not reported yet, or says
+  that all have. The system prompt, the call's result and that line all tell it to wait for the reports.
+  When its turn has ended, the reports wake it once the last subagent at work reports, or come with your next
+  message. Stop stops the subagents too; their reports then wake nobody, they go with your next message. A daemon
+  restarted while subagents work ends them as stopped. On one GPU, subagents at the same time share its speed, and
+  llama-server shares its context out between its slots (`--parallel`).
 - **Prompt cache**: llama.cpp says how many requests a model answers at once (`total_slots` in `/props`). The daemon
   sends each agent's requests back to the same one of them (`id_slot`), where its conversation is still cached, and
   makes a request wait while all are busy. A server that does not say gets the requests as they come, and queues and

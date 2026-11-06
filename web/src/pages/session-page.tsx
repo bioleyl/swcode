@@ -7,7 +7,7 @@ import { contextText } from '../lib/format';
 import { currentPlan } from '../lib/plan';
 import { presetOf, presetStatusOf } from '../lib/presets';
 import { sessionPlace } from '../lib/session-kinds';
-import { SESSION_STATUS_LOOKS } from '../lib/session-status';
+import { liveStatus, SESSION_STATUS_LOOKS } from '../lib/session-status';
 import { ScTitle } from '../molecules/sc-title';
 import { ScArcade } from '../organisms/sc-arcade';
 import { ScComposer } from '../organisms/sc-composer';
@@ -37,6 +37,7 @@ const PANEL_CLOSED = 'panel-closed';
 // The events that can change the plan above the composer: a new turn hides the last one, a plan call shows its own.
 const PLAN_EVENTS: ReadonlySet<SessionEventKind> = new Set(['turnStarted', 'toolFinished']);
 const SUBAGENT_EVENTS: ReadonlySet<SessionEventKind> = new Set([
+  'subagentQueued',
   'subagentStarted',
   'subagentActivity',
   'subagentFinished',
@@ -317,7 +318,7 @@ export class SessionPage extends ScElement {
     this._refs.title.fixed.set(session === undefined);
     this._refs.remove.hidden = session === undefined;
     this._refs.status.hidden = session === undefined;
-    this._refs.status.showStatus(SESSION_STATUS_LOOKS[session?.status ?? 'idle']);
+    this._refs.status.showStatus(SESSION_STATUS_LOOKS[session ? liveStatus(session) : 'idle']);
     this._refs.conversation.queued.set(session?.queued ?? []);
     this._refs.conversation.queuedNow.set(session?.queuedNow ?? false);
     this._refs.panel.jobs.set(session?.jobs ?? []);
@@ -333,6 +334,7 @@ export class SessionPage extends ScElement {
     this._refs.composer.concise.set(session?.concise ?? false);
     this.renderDaemon();
     this._refs.composer.working.set((session?.status ?? 'idle') !== 'idle');
+    this._refs.composer.background.set((session?.subagents ?? 0) > 0);
     this._refs.plan.working.set((session?.status ?? 'idle') !== 'idle');
     this._refs.panel.status.set(session?.status ?? 'idle');
     this._refs.arcade.status.set(session?.status ?? 'idle');

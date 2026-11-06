@@ -21,8 +21,9 @@ const ACTIVITY: Readonly<Record<SessionStatus, string>> = {
 // The list stays short: the working subagents, then the latest that finished.
 const MAX_AGENTS_SHOWN = 4;
 
-// What a subagent shows before its first call ends.
+// What a subagent shows before its first call ends, by its state.
 const STARTING = 'Starting';
+const WAITING = 'Waiting its turn';
 
 const agentNode = (agent: AgentView): Node => (
   <div class="agent" data-state={agent.state} title={agent.description}>
@@ -32,7 +33,7 @@ const agentNode = (agent: AgentView): Node => (
         <span class="name">{agent.description}</span>
         <span class="model">{agent.model ?? ''}</span>
       </p>
-      <p class="activity">{agent.activity || STARTING}</p>
+      <p class="activity">{agent.activity || (agent.state === 'waiting' ? WAITING : STARTING)}</p>
     </div>
   </div>
 );

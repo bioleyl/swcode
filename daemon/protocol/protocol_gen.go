@@ -51,7 +51,7 @@ var PeekStates = []PeekState{PeekStateWaiting, PeekStateAnswering, PeekStateDone
 
 const MaxContextTokens = 10000000
 
-const MaxSubagentsPerTurn = 20
+const MaxSubagentsAtOnce = 20
 
 var EditableSettings = []SettingName{SettingNameSwcodeThinking, SettingNameSwcodeSubagentThinking, SettingNameSwcodeWorkspace, SettingNameSwcodeSSHEndpoints, SettingNameSwcodeImageURL, SettingNameSwcodeHost, SettingNameSwcodePort}
 
@@ -962,11 +962,15 @@ func (SessionEventToolRunning) isSessionEvent() {}
 
 func (SessionEventToolFinished) isSessionEvent() {}
 
+func (SessionEventSubagentQueued) isSessionEvent() {}
+
 func (SessionEventSubagentStarted) isSessionEvent() {}
 
 func (SessionEventSubagentActivity) isSessionEvent() {}
 
 func (SessionEventSubagentFinished) isSessionEvent() {}
+
+func (SessionEventSubagentReport) isSessionEvent() {}
 
 func (SessionEventTurnFinished) isSessionEvent() {}
 
@@ -1063,6 +1067,12 @@ func (u *SessionEvent) UnmarshalJSON(data []byte) error {
 			return err
 		}
 		u.Value = value
+	case "\"subagentQueued\"":
+		var value SessionEventSubagentQueued
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
 	case "\"subagentStarted\"":
 		var value SessionEventSubagentStarted
 		if err := json.Unmarshal(data, &value); err != nil {
@@ -1077,6 +1087,12 @@ func (u *SessionEvent) UnmarshalJSON(data []byte) error {
 		u.Value = value
 	case "\"subagentFinished\"":
 		var value SessionEventSubagentFinished
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
+	case "\"subagentReport\"":
+		var value SessionEventSubagentReport
 		if err := json.Unmarshal(data, &value); err != nil {
 			return err
 		}
@@ -1108,9 +1124,11 @@ type SessionEventMapper[R any] interface {
 	QuestionAnswered(SessionEventQuestionAnswered) R
 	ToolRunning(SessionEventToolRunning) R
 	ToolFinished(SessionEventToolFinished) R
+	SubagentQueued(SessionEventSubagentQueued) R
 	SubagentStarted(SessionEventSubagentStarted) R
 	SubagentActivity(SessionEventSubagentActivity) R
 	SubagentFinished(SessionEventSubagentFinished) R
+	SubagentReport(SessionEventSubagentReport) R
 	TurnFinished(SessionEventTurnFinished) R
 }
 
@@ -1143,12 +1161,16 @@ func MapSessionEvent[R any](u SessionEvent, m SessionEventMapper[R]) R {
 		return m.ToolRunning(value)
 	case SessionEventToolFinished:
 		return m.ToolFinished(value)
+	case SessionEventSubagentQueued:
+		return m.SubagentQueued(value)
 	case SessionEventSubagentStarted:
 		return m.SubagentStarted(value)
 	case SessionEventSubagentActivity:
 		return m.SubagentActivity(value)
 	case SessionEventSubagentFinished:
 		return m.SubagentFinished(value)
+	case SessionEventSubagentReport:
+		return m.SubagentReport(value)
 	case SessionEventTurnFinished:
 		return m.TurnFinished(value)
 	}
@@ -1585,6 +1607,23 @@ func (v SessionEventToolFinished) MarshalJSON() ([]byte, error) {
 	}{"toolFinished", p})
 }
 
+type SessionEventSubagentQueued struct {
+	AgentID     string `json:"agentId"`
+	At          string `json:"at"`
+	CallID      string `json:"callId"`
+	Description string `json:"description"`
+	Model       string `json:"model,omitempty"`
+}
+
+func (v SessionEventSubagentQueued) MarshalJSON() ([]byte, error) {
+	type plain SessionEventSubagentQueued
+	p := plain(v)
+	return json.Marshal(struct {
+		Key string `json:"kind"`
+		plain
+	}{"subagentQueued", p})
+}
+
 type SessionEventSubagentStarted struct {
 	AgentID     string `json:"agentId"`
 	At          string `json:"at"`
@@ -1642,6 +1681,7 @@ type SessionEventSubagentFinished struct {
 	AgentID string      `json:"agentId"`
 	At      string      `json:"at"`
 	Outcome TurnOutcome `json:"outcome"`
+	Report  string      `json:"report,omitempty"`
 }
 
 func (v SessionEventSubagentFinished) MarshalJSON() ([]byte, error) {
@@ -1669,6 +1709,24 @@ func (v *SessionEventSubagentFinished) Normalize() error {
 		return fmt.Errorf("%s: unknown value %q", "outcome", v.Outcome)
 	}
 	return nil
+}
+
+type SessionEventSubagentReport struct {
+	AgentID     string `json:"agentId"`
+	At          string `json:"at"`
+	Description string `json:"description"`
+	ID          string `json:"id"`
+	Note        string `json:"note,omitempty"`
+	Text        string `json:"text"`
+}
+
+func (v SessionEventSubagentReport) MarshalJSON() ([]byte, error) {
+	type plain SessionEventSubagentReport
+	p := plain(v)
+	return json.Marshal(struct {
+		Key string `json:"kind"`
+		plain
+	}{"subagentReport", p})
 }
 
 type SessionEventTurnFinished struct {
@@ -1716,6 +1774,7 @@ type SessionSummary struct {
 	Queued    []string            `json:"queued"`
 	QueuedNow bool                `json:"queuedNow"`
 	Status    SessionStatus       `json:"status"`
+	Subagents int                 `json:"subagents"`
 	Thinking  ThinkingMode        `json:"thinking"`
 	Title     string              `json:"title"`
 	UpdatedAt string              `json:"updatedAt"`
@@ -1736,7 +1795,7 @@ func (v SessionSummary) MarshalJSON() ([]byte, error) {
 
 func (v *SessionSummary) UnmarshalJSON(data []byte) error {
 	type plain SessionSummary
-	p := plain{Concise: false, Host: HostRef{Value: HostRefLocal{}}, Jobs: []SessionSummaryJob{}, Kind: "code", QueuedNow: false}
+	p := plain{Concise: false, Host: HostRef{Value: HostRefLocal{}}, Jobs: []SessionSummaryJob{}, Kind: "code", QueuedNow: false, Subagents: 0}
 	if err := json.Unmarshal(data, &p); err != nil {
 		return err
 	}
@@ -1754,6 +1813,9 @@ func (v *SessionSummary) Normalize() error {
 	}
 	if !v.Status.Valid() {
 		return fmt.Errorf("%s: unknown value %q", "status", v.Status)
+	}
+	if v.Subagents < 0 {
+		return fmt.Errorf("%s: at least 0", "subagents")
 	}
 	if !v.Thinking.Valid() {
 		return fmt.Errorf("%s: unknown value %q", "thinking", v.Thinking)
@@ -3149,7 +3211,7 @@ func (v *ModelRef) Normalize() error {
 }
 
 type SubagentLimit struct {
-	PerTurn int `json:"perTurn"`
+	AtOnce int `json:"atOnce"`
 }
 
 func (v *SubagentLimit) UnmarshalJSON(data []byte) error {
@@ -3164,11 +3226,11 @@ func (v *SubagentLimit) UnmarshalJSON(data []byte) error {
 
 // Normalize trims and checks what the app sent, as its schema does.
 func (v *SubagentLimit) Normalize() error {
-	if v.PerTurn < 0 {
-		return fmt.Errorf("%s: at least 0", "perTurn")
+	if v.AtOnce < 0 {
+		return fmt.Errorf("%s: at least 0", "atOnce")
 	}
-	if v.PerTurn > 20 {
-		return fmt.Errorf("%s: at most 20", "perTurn")
+	if v.AtOnce > 20 {
+		return fmt.Errorf("%s: at most 20", "atOnce")
 	}
 	return nil
 }

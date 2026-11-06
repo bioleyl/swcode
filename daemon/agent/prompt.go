@@ -15,8 +15,8 @@ const (
 	chatDrawLine      = "- When the user asks for a picture, draw it with draw, describing it in full. To change one, draw again with its name as a reference."
 	chatSearchLine    = "- For what you may not know, or what may have changed since you learned it (news, prices, a version, a release), search the web with websearch, then read the pages that matter with webfetch, saying what you need from each."
 	exploreSearchLine = "- For what is not in the workspace, search the web with websearch and read pages with webfetch."
-	subagentLine      = "- For a broad search, start an explore subagent with agent: it reads for you and reports back. Subagents run one after another, so start one per question, and only as many as the task needs."
-	subagentLimitLine = " You may start %d in a turn at most."
+	subagentLine      = "- For a broad search, start explore subagents with agent: one per question, all those the task needs in one reply. Your turn ends after that reply: they work in the background, and their reports wake you, all together once the last is done. Do not look yourself into what they look into: wait for their reports, then answer from them."
+	subagentLimitLine = " %d work at once: swcode starts the others by itself as those report."
 )
 
 // Servers is which servers of the settings the main agent has: their lines join its prompt.
@@ -26,15 +26,15 @@ type Servers struct {
 }
 
 // subagentLines is what the prompt says of subagents: nothing when the preset allows none (the agent has no agent
-// tool then), and how many a turn may start when it limits them.
+// tool then), and how many work at once when it limits them.
 func subagentLines(limit *protocol.SubagentLimit) []string {
 	if limit == nil {
 		return []string{subagentLine}
 	}
-	if limit.PerTurn == 0 {
+	if limit.AtOnce == 0 {
 		return nil
 	}
-	return []string{subagentLine + fmt.Sprintf(subagentLimitLine, limit.PerTurn)}
+	return []string{subagentLine + fmt.Sprintf(subagentLimitLine, limit.AtOnce)}
 }
 
 // SystemPrompt is what the model is told before the conversation. It stays the same for the whole session (no

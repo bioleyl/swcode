@@ -106,10 +106,33 @@ func (s *Store) Load() (protocol.ModelSettings, bool, error) {
 		return protocol.ModelSettings{}, false, err
 	}
 	var settings protocol.ModelSettings
-	if err := json.Unmarshal(data, &settings); err != nil {
+	if err := json.Unmarshal(limitsAtOnce(data), &settings); err != nil {
 		return protocol.ModelSettings{}, false, errors.New(s.file + ": " + err.Error())
 	}
 	return settings, true, nil
+}
+
+// limitsAtOnce reads the presets' limits from before they said how many subagents work at once: how many a turn could
+// start (perTurn), now how many work at once. The file says it the new way at its next save.
+func limitsAtOnce(data []byte) []byte {
+	var raw map[string]any
+	if json.Unmarshal(data, &raw) != nil {
+		return data
+	}
+	presets, _ := raw["presets"].([]any)
+	for _, each := range presets {
+		preset, _ := each.(map[string]any)
+		limit, _ := preset["subagentLimit"].(map[string]any)
+		if perTurn, old := limit["perTurn"]; old {
+			limit["atOnce"] = perTurn
+			delete(limit, "perTurn")
+		}
+	}
+	migrated, err := json.Marshal(raw)
+	if err != nil {
+		return data
+	}
+	return migrated
 }
 
 func (s *Store) Save(settings protocol.ModelSettings) error {
@@ -234,7 +257,7 @@ func contextFor(served, asked int) int {
 	return max(served, asked)
 }
 
-// SubagentLimit is how many subagents a turn of the preset may start: nil for as many as the agent likes.
+// SubagentLimit is how many subagents of the preset work at once: nil for all those the agent starts.
 func (s *Service) SubagentLimit(presetID string) *protocol.SubagentLimit {
 	preset, _ := s.presetOf(presetID)
 	return preset.SubagentLimit

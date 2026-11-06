@@ -14,6 +14,7 @@ const session = (id: string, kind: SessionKind, workspace: string): SessionSumma
   queued: [],
   queuedNow: false,
   status: 'idle',
+  subagents: 0,
   thinking: 'full',
   title: id,
   updatedAt: '2026-11-06T09:00:00.000Z',

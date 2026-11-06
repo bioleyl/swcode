@@ -74,3 +74,12 @@ func (s *Servers) Complete(ctx context.Context, request Request, onPart func(Par
 	}
 	return server.model.Complete(ctx, request, onPart)
 }
+
+// Forget is an agent done for good, on the llm-server its identity names: its slot goes to the next agent first.
+func (s *Servers) Forget(agent Identity) {
+	server, found := s.Server(agent.Source)
+	if !found {
+		return
+	}
+	server.model.Forget(agent)
+}

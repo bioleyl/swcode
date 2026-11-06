@@ -1,8 +1,10 @@
 package llm
 
 import (
+	"cmp"
 	"context"
 	"errors"
+	"maps"
 	"slices"
 	"sync"
 )
@@ -15,12 +17,16 @@ type waiter struct {
 	grant   chan int
 }
 
-// pool is one model's slots: which agent holds each busy one, which agent last held each, and who waits.
+// pool is one model's slots: which agent holds each busy one, which agent last held each and when it let it go, and
+// who waits. An agent done for good holds none any more: nobody will want its cache.
 type pool struct {
 	total      int
 	busy       map[int]string
 	lastHolder map[int]string
-	waiting    []*waiter
+	// released is when each slot was let go last, by the pool's clock, a count of releases.
+	released map[int]uint64
+	clock    uint64
+	waiting  []*waiter
 }
 
 func (p *pool) free() []int {
@@ -34,9 +40,14 @@ func (p *pool) free() []int {
 }
 
 // pick is the free slot for an agent: the one it held last, where its conversation is still cached; else one no
-// other agent's cache is waiting in; else any.
+// other agent's cache is waiting in (never used, or its agent is done); else the one let go longest ago, whose
+// agent is the least likely to be back soon. A main agent lets its slot go at each step, and its subagents take
+// a slot while it waits for them: they must not take its slot, which holds its whole conversation.
 func (p *pool) pick(agentID string) (int, bool) {
 	free := p.free()
+	if len(free) == 0 {
+		return 0, false
+	}
 	for _, slot := range free {
 		if p.lastHolder[slot] == agentID {
 			return slot, true
@@ -47,10 +58,19 @@ func (p *pool) pick(agentID string) (int, bool) {
 			return slot, true
 		}
 	}
-	if len(free) > 0 {
-		return free[0], true
-	}
-	return 0, false
+	return slices.MinFunc(free, func(a, b int) int { return cmp.Compare(p.released[a], p.released[b]) }), true
+}
+
+// letGo marks a slot free, let go now.
+func (p *pool) letGo(slot int) {
+	delete(p.busy, slot)
+	p.clock++
+	p.released[slot] = p.clock
+}
+
+// forget leaves the slots an agent held to anyone: it will not be back for its cache.
+func (p *pool) forget(agentID string) {
+	maps.DeleteFunc(p.lastHolder, func(_ int, holder string) bool { return holder == agentID })
 }
 
 // sizing is a pool being sized by llm-server, which callers asking at the same time wait for together; no pool
@@ -146,7 +166,7 @@ func (s *Scheduler) poolOf(ctx context.Context, model string) *pool {
 	total := s.capacityOf(ctx, model)
 	s.mu.Lock()
 	if total > 0 {
-		known.pool = &pool{busy: map[int]string{}, lastHolder: map[int]string{}, total: total}
+		known.pool = &pool{busy: map[int]string{}, lastHolder: map[int]string{}, released: map[int]uint64{}, total: total}
 	} else {
 		delete(s.sizings, model)
 	}
@@ -169,7 +189,7 @@ func (s *Scheduler) leaseOf(found *pool, slot int) *Lease {
 // free hands a freed slot to the request that waited longest.
 func (s *Scheduler) free(found *pool, slot int) {
 	s.mu.Lock()
-	delete(found.busy, slot)
+	found.letGo(slot)
 	if len(found.waiting) == 0 {
 		s.mu.Unlock()
 		return
@@ -179,6 +199,19 @@ func (s *Scheduler) free(found *pool, slot int) {
 	s.take(found, slot, next.agentID)
 	s.mu.Unlock()
 	next.grant <- slot
+}
+
+// Forget is an agent done for good (a subagent that reported, a page read, a screenshot looked at): the slots it
+// held go to the next agents first, before those whose agents will be back.
+func (s *Scheduler) Forget(agentID string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, known := range s.sizings {
+		if known.pool == nil {
+			continue
+		}
+		known.pool.forget(agentID)
+	}
 }
 
 // ScheduledModel is a model whose requests each hold a slot while they run: the agent waits for one when all are
@@ -200,4 +233,24 @@ func (m *ScheduledModel) Complete(ctx context.Context, request Request, onPart f
 	defer lease.Release()
 	request.Target.Slot = lease.Slot
 	return m.model.Complete(ctx, request, onPart)
+}
+
+// Forget is an agent done for good: its slot goes to the next agent first.
+func (m *ScheduledModel) Forget(agent Identity) {
+	m.slots.Forget(agent.AgentID)
+}
+
+// forgetter is a model that keeps a slot's prompt cache for each agent.
+type forgetter interface {
+	Forget(agent Identity)
+}
+
+// AgentDone tells the model an agent is done for good, when it keeps a slot's cache for each agent: that slot then
+// goes to the next agent first, and the caches of the agents that will be back stay.
+func AgentDone(model Model, agent Identity) {
+	done, keepsSlots := model.(forgetter)
+	if !keepsSlots {
+		return
+	}
+	done.Forget(agent)
 }

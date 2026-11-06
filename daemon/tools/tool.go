@@ -47,9 +47,10 @@ type SubagentTask struct {
 	Prompt      string
 }
 
-// Subagents starts subagents for the main agent; a subagent itself gets none, so subagents never nest.
+// Subagents starts subagents for the main agent, in the background: the call's result says one started, its report
+// comes to the main agent later. A subagent itself gets none, so subagents never nest.
 type Subagents interface {
-	Run(ctx context.Context, task SubagentTask) Outcome
+	Start(task SubagentTask) Outcome
 }
 
 // Jobs is a session's background commands, on its host, in its workspace.
