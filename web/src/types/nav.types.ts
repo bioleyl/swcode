@@ -7,3 +7,9 @@ export interface NavLists {
   sessions: readonly SessionSummary[];
   seen: Readonly<Record<string, string>>;
 }
+
+/** The + of a project's row in the navigation: the new session it opens, and the project's name, which it says. */
+export interface ProjectStart {
+  href: string;
+  name: string;
+}

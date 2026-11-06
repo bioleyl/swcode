@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
@@ -117,6 +117,11 @@ const overflow = (page: Page) => page.evaluate(PAGE_OVERFLOW);
 /** Run on an element in the page: whether its text is longer than the room it has. */
 const cutShort = (node: { clientWidth: number; scrollWidth: number }): boolean =>
   node.scrollWidth > node.clientWidth;
+
+/** Run on an element in the page: its opacity, as drawn. */
+const opacityOf = (node: {
+  ownerDocument: { defaultView: { getComputedStyle: (node: unknown) => { opacity: string } } | null };
+}): string => node.ownerDocument.defaultView?.getComputedStyle(node).opacity ?? '';
 
 /** An item of the navigation down the side, by its label. */
 const navItem = (page: Page, label: string) =>
@@ -1136,6 +1141,29 @@ describe('the commands', () => {
 });
 
 describe('the navigation', () => {
+  it('starts a session in a project from the + of its row, shown while the row is pointed at', async () => {
+    const rig = await start({ replies: [{ text: 'Hello there.' }] });
+    const page = await rig.browser.newPage({ viewport: DESKTOP });
+    await page.goto(rig.link);
+    await page.locator('home-page textarea').fill('Hi');
+    await page.locator('home-page textarea').press('Enter');
+    await page.getByText('Hello there.').waitFor();
+
+    const row = page.locator('sc-nav .item[data-depth="0"][data-id^="project:"]');
+    const plus = page.locator('sc-nav .sc-new-session');
+    const projectId = ((await row.getAttribute('data-id')) ?? '').replace('project:', '');
+    expect(await plus.getAttribute('aria-label')).toBe(`New session in ${basename(rig.workspace)}`);
+    expect(await plus.evaluate(opacityOf)).toBe('0');
+    await row.hover();
+    await expect.poll(() => plus.evaluate(opacityOf)).toBe('1');
+
+    await plus.click();
+    await settle(page);
+    expect(new URL(page.url()).hash).toBe(`#/new/${projectId}`);
+    await page.locator('home-page textarea').waitFor();
+    expect(await page.locator('sc-nav .sc-new-session').count()).toBe(1);
+  });
+
   it('fills a session’s bubble and its project’s icon while it works, then done until seen, and empties them', async () => {
     const rig = await start({ replies: [{ delayMs: LIGHT_TURN_MS, text: 'Done.' }] });
     const page = await rig.browser.newPage({ viewport: DESKTOP });

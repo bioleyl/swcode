@@ -1,0 +1,82 @@
+/*
+ * In jlib's side nav, not in sc-nav: the + of each project row, which sc-nav adds to the rows jlib draws (jlib's items
+ * take no button of the app's). It sits beside the chevron, as that one does, and shows while the row is pointed at
+ * or focused; always on a touch screen, which points at nothing.
+ */
+.sc-new-session {
+  position: absolute;
+  top: 5px;
+  right: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--jl-radius-xs);
+  color: var(--jl-faint);
+  opacity: 0;
+}
+
+.sc-new-session:hover {
+  background: var(--jl-surface-3);
+  color: var(--jl-text);
+}
+
+.sc-new-session:focus-visible {
+  outline: none;
+  box-shadow: var(--jl-focus-ring);
+}
+
+/* A project without sessions has no chevron: the + takes its place. */
+.entry:not(:has(> .expander)) > .sc-new-session {
+  right: 6px;
+}
+
+/* The rail shows icons alone. */
+:host([rail]) .sc-new-session {
+  display: none;
+}
+
+.entry:has(
+    > .item:hover,
+    > .item:focus-visible,
+    > .expander:hover,
+    > .expander:focus-visible,
+    > .sc-new-session:hover,
+    > .sc-new-session:focus-visible
+  )
+  > .sc-new-session {
+  opacity: 1;
+}
+
+/* The label gives way to the + while it shows; the rail draws its rows otherwise. */
+:host(:not([rail]))
+  .entry:has(> .expander):has(
+    > .item:hover,
+    > .expander:hover,
+    > .sc-new-session:hover,
+    > .sc-new-session:focus-visible
+  )
+  > .item {
+  padding-right: 62px;
+}
+
+:host(:not([rail]))
+  .entry:not(:has(> .expander)):has(> .item:hover, > .sc-new-session:hover, > .sc-new-session:focus-visible)
+  > .item {
+  padding-right: 36px;
+}
+
+@media (hover: none) {
+  .sc-new-session {
+    opacity: 1;
+  }
+
+  :host(:not([rail])) .entry:has(> .sc-new-session):has(> .expander) > .item {
+    padding-right: 62px;
+  }
+
+  :host(:not([rail])) .entry:has(> .sc-new-session):not(:has(> .expander)) > .item {
+    padding-right: 36px;
+  }
+}

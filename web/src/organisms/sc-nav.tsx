@@ -1,5 +1,5 @@
 import { css } from '@jadis/core';
-import { JlButton, JlSearchButton, JlSegmented, JlSideNav, jlText, registerIcons } from '@syware/jlib';
+import { JlButton, JlIcon, JlSearchButton, JlSegmented, JlSideNav, jlText, registerIcons } from '@syware/jlib';
 import { Laptop, PanelLeftClose, PanelLeftOpen, Server } from 'lucide';
 
 import { ScBrand } from '../atoms/sc-brand';
@@ -15,6 +15,7 @@ import {
   NEW_CHAT_PATH,
   NEW_SESSION_PATH,
   newPathOf,
+  newSessionPath,
   projectPath,
   SETTINGS_PATH,
   sessionPath,
@@ -22,6 +23,7 @@ import {
 import { currentTheme, toggleTheme } from '../services/theme';
 import { BASE_STYLES } from '../styles/shared';
 import styles from './sc-nav.css?inline';
+import rowStyles from './sc-nav-rows.css?inline';
 
 import type { SegmentedOption, SideNavItem, SideNavSection } from '@syware/jlib';
 import type { Project } from '../../../shared/protocol/project.schema';
@@ -29,7 +31,7 @@ import type { SessionKind, SessionSummary } from '../../../shared/protocol/sessi
 import type { Theme } from '../services/theme';
 import type { ProjectGroup } from '../types/conversation.types';
 import type { DaemonState } from '../types/daemon.types';
-import type { NavLists } from '../types/nav.types';
+import type { NavLists, ProjectStart } from '../types/nav.types';
 
 registerIcons({
   laptop: Laptop,
@@ -51,6 +53,12 @@ const IN_DRAWER = 'in-drawer';
 const COLLAPSE_ICON = 'panel-left-close';
 const EXPAND_ICON = 'panel-left-open';
 const THEME_ICONS: Readonly<Record<Theme, string>> = { dark: 'sun', light: 'moon' };
+const PLUS_SIZE = 14;
+// What marks swcode's own nodes in jlib's side nav: its styles, and the + of each project row.
+const ROW_STYLES_CLASS = 'sc-rows';
+const NEW_SESSION_CLASS = 'sc-new-session';
+// A project's row in jlib's side nav, not one of its sessions'.
+const PROJECT_ROWS = `.item[data-depth="0"][data-id^="${PROJECT_PREFIX}"]`;
 const SETTINGS = 'Settings';
 // Chat or code, at the nav's foot: the sessions the nav lists, and the new one it starts.
 const WORK_MODES: SegmentedOption<SessionKind>[] = [
@@ -100,6 +108,26 @@ const projectItem = (group: ProjectGroup, seen: Readonly<Record<string, string>>
   id: projectNavId(group.projectId ?? group.path),
   label: group.name,
 });
+
+/** Where the + of each project row leads, by the row's id: a new session there. A folder without a project has none. */
+const projectStarts = (sections: readonly SideNavSection[]): Map<string, ProjectStart> =>
+  new Map(
+    sections
+      .flatMap((section) => section.items)
+      .filter((item) => item.id.startsWith(PROJECT_PREFIX) && item.href !== undefined)
+      .map((item) => [
+        item.id,
+        { href: hrefOf(newSessionPath(item.id.slice(PROJECT_PREFIX.length))), name: item.label },
+      ])
+  );
+
+/** swcode's styles for what it adds to jlib's side nav, once. */
+const addRowStyles = (root: ShadowRoot): void => {
+  if (root.querySelector(`style.${ROW_STYLES_CLASS}`)) {
+    return;
+  }
+  root.append(<style class={ROW_STYLES_CLASS}>{rowStyles}</style>);
+};
 
 /** What the nav lists in each mode: a new chat and the chats, or a new session and the projects with theirs. */
 const SECTIONS: Readonly<Record<SessionKind, (lists: NavLists) => SideNavSection[]>> = {
@@ -158,6 +186,9 @@ export class ScNav extends ScElement {
     },
   });
 
+  // The + of each project row: where it leads, by the row's id.
+  private _starts = new Map<string, ProjectStart>();
+
   private readonly _refs = this.useRefs((ref) => ({
     brand: ref<HTMLAnchorElement>('.brand'),
     computer: ref(ScComputerSwitch),
@@ -209,6 +240,7 @@ export class ScNav extends ScElement {
     this._refs.theme.events.register('press', () => this.switchTheme());
     this.renderTheme(currentTheme());
     this.renderSections();
+    this.watchRows();
   }
 
   /**
@@ -241,7 +273,53 @@ export class ScNav extends ScElement {
 
   private renderSections(): void {
     const lists = { projects: this.projects.get(), seen: this.seen.get(), sessions: this.sessions.get() };
-    this._refs.nav.sections.set(SECTIONS[this.mode.get()](lists));
+    const sections = SECTIONS[this.mode.get()](lists);
+    this._starts = projectStarts(sections);
+    this._refs.nav.sections.set(sections);
+  }
+
+  /**
+   * jlib's side nav takes no button of the app's on a row (0.11.1): the + that starts a session in a project is added
+   * to its row in the side nav's shadow root, with its styles, each time jlib draws the rows again (new sessions,
+   * folding, the phone's drawer). This goes once jlib's items take an action of their own.
+   */
+  private watchRows(): void {
+    const root = this._refs.nav.shadowRoot;
+    if (!root) {
+      return;
+    }
+    const observer = new MutationObserver(() => this.addProjectStarts(root));
+    observer.observe(root, { childList: true, subtree: true });
+    this.killSignal.addEventListener('abort', () => observer.disconnect(), { once: true });
+    this.addProjectStarts(root);
+  }
+
+  /** The + of each project row that has none yet, and the styles that place it. */
+  private addProjectStarts(root: ShadowRoot): void {
+    addRowStyles(root);
+    for (const row of root.querySelectorAll<HTMLElement>(PROJECT_ROWS)) {
+      this.addProjectStart(row);
+    }
+  }
+
+  /** The + beside a project's row, in its entry as jlib's chevron is: once, and for a project only. */
+  private addProjectStart(row: HTMLElement): void {
+    const start = this._starts.get(row.dataset.id ?? '');
+    const entry = row.parentElement;
+    if (!start || !entry || entry.querySelector(`:scope > .${NEW_SESSION_CLASS}`)) {
+      return;
+    }
+    entry.append(this.startLink(start));
+  }
+
+  /** A link, so the phone's drawer closes on it as on the nav's own links, and a middle click opens a tab. */
+  private startLink(start: ProjectStart): Node {
+    const label = `New session in ${start.name}`;
+    return (
+      <a class={NEW_SESSION_CLASS} href={start.href} title={label} aria-label={label}>
+        <JlIcon name="plus" size={PLUS_SIZE} />
+      </a>
+    );
   }
 
   /** The other theme, and the button that offers it back. */

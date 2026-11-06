@@ -565,6 +565,8 @@ top, for one command; the page shows those as set in the environment.
 - **Projects** are folders on the daemon's computer, kept in `projects.json` in the data folder. "New project" (on
   the home page, or Ctrl K) browses the daemon's folders: use the one shown, or name a new folder to make inside it.
   Every folder a session works in has a project; one with sessions stays, and removing one never touches its folder.
+  The `+` of a project's row in the navigation starts a session there (shown while the row is pointed at, always on
+  a touch screen: jlib's side nav takes no button of the app's, so `sc-nav` adds it to the rows jlib draws).
 - **Sessions** start from the home page: a project, and the first message. A message sent while a turn runs waits
   for the next turn; stopping the turn drops it. **Send now** hands the waiting messages to the model at the turn's
   next step instead, after the results of its current calls, without stopping the turn (as Claude Code steers). Sessions are renamed from their title and deleted from their
