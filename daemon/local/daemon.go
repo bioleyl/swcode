@@ -37,6 +37,21 @@ func IsUp(base string) bool {
 	return response.StatusCode == http.StatusOK
 }
 
+// Accepts tells whether the daemon at this address takes the token: another one there (WSL's, which Windows reaches
+// at localhost) has a token of its own.
+func Accepts(base, token string) bool {
+	ctx, cancel := context.WithTimeout(context.Background(), answerLimit)
+	defer cancel()
+	request, _ := http.NewRequestWithContext(ctx, http.MethodGet, base+protocol.EndpointStatus, nil)
+	request.Header.Set("authorization", protocol.BearerPrefix+token)
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		return false
+	}
+	response.Body.Close()
+	return response.StatusCode == http.StatusOK
+}
+
 // WaitFor asks again until the answer is yes, or the time is up.
 func WaitFor(check func() bool, limit time.Duration) bool {
 	deadline := time.Now().Add(limit)

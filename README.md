@@ -256,7 +256,9 @@ LLAMA_URL=http://gmktec:8080 LLAMA_API_KEY=… SWCODE_WORKSPACE=~/projects npm s
 prints a link with its access token: open it once, the app keeps the token.
 
 For development, `npm run dev` starts the daemon (built again and restarted when a Go file changes) and Vite (hot
-reload); the link then points at Vite, which forwards the API and the socket to the daemon.
+reload); the link then points at Vite, which forwards the API and the socket to the daemon. That daemon listens on
+port 4501 (`SWCODE_PORT` chooses another), so that it runs beside the installed app's on 4500: Windows reaches WSL's
+ports at localhost, and the desktop app refuses to open a daemon on its port that has another access token.
 
 ### A release
 

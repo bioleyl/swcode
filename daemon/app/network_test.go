@@ -1,6 +1,8 @@
 package app
 
 import (
+	"os"
+	"path/filepath"
 	"slices"
 	"testing"
 )
@@ -26,6 +28,29 @@ func expectLinks(t *testing.T, found, expected []string) {
 	t.Helper()
 	if !slices.Equal(found, expected) {
 		t.Fatalf("expected %q, found %q", expected, found)
+	}
+}
+
+func TestAccessTokenReplacesAnEmptyStoredToken(t *testing.T) {
+	dataDir := t.TempDir()
+	path := filepath.Join(dataDir, tokenFile)
+	if err := os.WriteFile(path, []byte("\n"), ownerOnly); err != nil {
+		t.Fatal(err)
+	}
+
+	created, err := AccessToken(dataDir, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(created) < tokenMinLength {
+		t.Fatalf("token length %d", len(created))
+	}
+	stored, err := AccessToken(dataDir, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored != created {
+		t.Fatalf("token changed from %q to %q", created, stored)
 	}
 }
 

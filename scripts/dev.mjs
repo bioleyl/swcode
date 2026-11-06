@@ -7,6 +7,9 @@ import { join } from 'node:path';
 
 // In development people open the Vite server, so the link the daemon prints points there.
 const VITE_URL = 'http://127.0.0.1:5173';
+// The installed app's daemon takes the default port, 4500, and Windows reaches WSL's ports at localhost: the
+// development daemon takes another, so that both run side by side. SWCODE_PORT chooses it.
+const DEV_PORT = process.env.SWCODE_PORT ?? '4501';
 const DAEMON_BINARY = join('dist', 'dev', 'swcode');
 const COMMAND_LINE = './cmd/swcode';
 // The daemon's sources: its packages, and the root package's (what the program carries).
@@ -62,6 +65,8 @@ async function startDaemon() {
   }
   state.daemon = started('server', DAEMON_BINARY, ['serve'], {
     // biome-ignore lint/style/useNamingConvention: environment variable names
+    SWCODE_PORT: DEV_PORT,
+    // biome-ignore lint/style/useNamingConvention: environment variable names
     SWCODE_PUBLIC_URL: process.env.SWCODE_PUBLIC_URL ?? VITE_URL,
   });
 }
@@ -83,7 +88,10 @@ const watchers = GO_FOLDERS.map(({ folder, recursive }) =>
     }
   })
 );
-const web = started('web', 'npm', ['run', '--silent', 'dev:web']);
+const web = started('web', 'npm', ['run', '--silent', 'dev:web'], {
+  // biome-ignore lint/style/useNamingConvention: environment variable names
+  SWCODE_DAEMON: process.env.SWCODE_DAEMON ?? `http://127.0.0.1:${DEV_PORT}`,
+});
 state.restarts = startDaemon();
 
 const stopAll = async () => {

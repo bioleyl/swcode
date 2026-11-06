@@ -32,6 +32,10 @@ const (
 	stopLimit   = 15 * time.Second
 	answerLimit = 2 * time.Second
 	bearer      = "Bearer "
+	// portTaken: another swcode answers on the port, most likely one in WSL, whose ports Windows reaches at localhost.
+	portTaken = "Another swcode answers on port %d, with an access token of its own: most likely one running in WSL, " +
+		"whose ports Windows reaches at localhost.\n\nStop it, or give one of them another port (SWCODE_PORT in its " +
+		"settings), then open swcode again."
 )
 
 // daemon is swcode's server, run inside this program: started with it, stopped with it, started again on new
@@ -89,27 +93,36 @@ func loadSettings() (config.Config, map[string]string, error) {
 
 // local is this computer's server for the window: the daemon alone when it runs already, else one run here.
 func (d *daemon) local() (*daemonRun, error) {
-	if running, found := d.attach(); found {
+	running, found, err := d.attach()
+	if err != nil {
+		return nil, err
+	}
+	if found {
 		return running, nil
 	}
 	return d.start()
 }
 
-// attach finds the daemon alone (--daemon), which answers on this computer's port with its token.
-func (d *daemon) attach() (*daemonRun, bool) {
+// attach finds the daemon alone (--daemon), which answers on this computer's port with its token. Another swcode
+// answering there is an error: the window would show a page that has no token for it.
+func (d *daemon) attach() (*daemonRun, bool, error) {
 	settings, _, err := loadSettings()
 	if err != nil {
-		return nil, false
+		return nil, false, nil
 	}
 	token, err := daemonapp.AccessToken(settings.DataDir, settings.Token)
-	if err != nil || !local.IsUp(daemonapp.ControlURL(settings.Host, settings.Port)) {
-		return nil, false
+	control := daemonapp.ControlURL(settings.Host, settings.Port)
+	if err != nil || !local.IsUp(control) {
+		return nil, false, nil
+	}
+	if !local.Accepts(control, token) {
+		return nil, false, fmt.Errorf(portTaken, settings.Port)
 	}
 	link, err := url.Parse(daemonapp.LocalURL(settings.Host, settings.Port) + "/?" + protocol.TokenParam + "=" + url.QueryEscape(token))
 	if err != nil {
-		return nil, false
+		return nil, false, nil
 	}
-	return &daemonRun{attached: true, done: make(chan struct{}), link: link, stop: make(chan struct{})}, true
+	return &daemonRun{attached: true, done: make(chan struct{}), link: link, stop: make(chan struct{})}, true, nil
 }
 
 // start runs the server on the settings saved now, and waits for its link.

@@ -12,11 +12,12 @@ import (
 )
 
 const (
-	tokenFile  = "token"
-	tokenBytes = 24
-	ownerOnly  = 0o600
-	localName  = "localhost"
-	loopback   = "127.0.0.1"
+	tokenFile      = "token"
+	tokenBytes     = 24
+	tokenMinLength = 16
+	ownerOnly      = 0o600
+	localName      = "localhost"
+	loopback       = "127.0.0.1"
 )
 
 var (
@@ -144,7 +145,10 @@ func AccessToken(dataDir, token string) (string, error) {
 	}
 	path := filepath.Join(dataDir, tokenFile)
 	if data, err := os.ReadFile(path); err == nil {
-		return strings.TrimSpace(string(data)), nil
+		stored := strings.TrimSpace(string(data))
+		if len(stored) >= tokenMinLength {
+			return stored, nil
+		}
 	}
 	secret := make([]byte, tokenBytes)
 	_, _ = rand.Read(secret)
