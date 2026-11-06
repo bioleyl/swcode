@@ -2,9 +2,12 @@ package sessions
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"path/filepath"
+	"slices"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -21,9 +24,13 @@ import (
 )
 
 const (
-	unknownSession  = "There is no such session."
-	unknownPreset   = "There is no such preset: it may have just been removed."
-	stillWorking    = "This session is working: stop it before deleting it."
+	unknownSession = "There is no such session."
+	unknownPreset  = "There is no such preset: it may have just been removed."
+	stillWorking   = "This session is working: stop it before deleting it."
+	allReported    = "All your subagents have reported."
+	othersWorking  = "Not reported yet: %s. Their reports wake you once they are done: do not look into what they look into meanwhile."
+	// restartedReport is the report of a subagent the daemon stopped by restarting.
+	restartedReport = "[The daemon restarted before this subagent finished.]"
 	projectWorking  = "A session of this project is working: stop it before removing the project."
 	blankMessage    = "Write a message or paste a picture first."
 	alreadyAnswered = "This request was already answered."
@@ -41,7 +48,7 @@ type Listener func(message protocol.ServerMessage)
 // (the default preset's when it is not there), and whether there is a preset of an id.
 type ModelsPort interface {
 	Choose(ctx context.Context, preset string) (llm.Choice, llm.Choice)
-	// SubagentLimit is how many subagents a turn of the preset may start: nil for as many as the agent likes.
+	// SubagentLimit is how many subagents of the preset work at once: nil for all those the agent starts.
 	SubagentLimit(preset string) *protocol.SubagentLimit
 	Has(preset string) bool
 }
@@ -61,6 +68,7 @@ type Deps struct {
 	Models        ModelsPort
 	Tools         tools.Box
 	SubagentTools tools.Box
+	ChatTools     tools.Box
 	// Search is the daemon's one web search, which keeps every session's searches apart in time.
 	Search web.Search
 	HTTP   *http.Client
@@ -83,8 +91,11 @@ type Deps struct {
 	LogError         func(error)
 }
 
-// Request is a new session: its folder on a host, its first message, how it asks and thinks.
+// Request is a new session: a chat, or a coding session in a folder on a host; its first message, how it asks and
+// thinks.
 type Request struct {
+	// Kind is a coding session when empty.
+	Kind      protocol.SessionKind
 	Host      *protocol.HostRef
 	Workspace string
 	Prompt    string
@@ -124,9 +135,22 @@ type live struct {
 	grants    permissions.Grants
 	readFiles *tools.ReadFiles
 	turn      *runningTurn
-	watching  bool
+	// subagents is the subagents at work in the background, to stop each: they outlive the turn that started them.
+	subagents map[string]runningSubagent
+	// waiting is the subagents past the preset's limit, in the order they start.
+	waiting []waitingSubagent
+	// reports is the finished subagents' reports, waiting for the main agent's next step.
+	reports  []pendingReport
+	watching bool
 	// model is held by the agent's requests and by the peeks: one at a time on the agent's slot.
 	model sync.Mutex
+}
+
+// pendingReport is a subagent's report waiting for the main agent; one that wakes it starts a turn when the session
+// has none, once no other subagent of it is at work. A stopped subagent's never does: the person stopped it.
+type pendingReport struct {
+	report protocol.SessionEventSubagentReport
+	wakes  bool
 }
 
 // Service is the sessions of this daemon: it starts their turns, holds their permission requests until someone
@@ -154,6 +178,7 @@ func (s *Service) Load() {
 	for _, stored := range s.deps.Store.LoadAll() {
 		session := revive(stored)
 		s.sessions[session.meta.ID] = session
+		s.closeSubagents(session)
 		if turnID := unfinishedTurn(session.events); turnID != "" {
 			s.record(session, protocol.SessionEventTurnFinished{ID: turnID, Message: restarted, Outcome: protocol.TurnOutcomeStopped})
 		}
@@ -164,7 +189,18 @@ func revive(stored Stored) *live {
 	return &live{
 		events: append([]protocol.SessionEvent{}, stored.Events...), grants: permissions.Grants{Programs: map[string]bool{}},
 		jobs: []protocol.SessionSummaryJob{}, meta: stored.Meta, readFiles: tools.NewReadFiles(),
+		subagents: map[string]runningSubagent{},
 	}
+}
+
+// working tells whether a session's agent works: its turn, or subagents in the background, at work or waiting.
+func working(session *live) bool {
+	return session.turn != nil || subagentsLeft(session) > 0
+}
+
+// subagentsLeft is how many subagents of a session have not reported yet: at work, or waiting their turn.
+func subagentsLeft(session *live) int {
+	return len(session.subagents) + len(session.waiting)
 }
 
 // Subscribe adds a listener of every message for the apps, until the returned function is called.
@@ -207,7 +243,7 @@ func (s *Service) RemoveIn(path string, host protocol.HostRef) string {
 		}
 	}
 	for _, session := range found {
-		if session.turn != nil {
+		if working(session) {
 			return projectWorking
 		}
 	}
@@ -218,24 +254,16 @@ func (s *Service) RemoveIn(path string, host protocol.HostRef) string {
 	return ""
 }
 
-// Create makes a new session, in the daemon's workspace or the folder asked for, started on its first message if
-// given.
+// Create makes a new session, started on its first message if given: a chat, or a coding session in the daemon's
+// workspace or the folder asked for.
 func (s *Service) Create(ctx context.Context, request Request) (protocol.SessionSummary, string) {
-	hostRef := protocol.LocalHost()
-	if request.Host != nil {
-		hostRef = *request.Host
-	}
-	fallback := ""
-	if hosts.IsLocal(hostRef) {
-		fallback = s.deps.Workspace
-	}
-	workspace, problem := hosts.ChooseFolder(ctx, s.deps.Hosts.HostOf(hostRef), request.Workspace, fallback)
+	kind := orKind(request.Kind)
+	hostRef, workspace, problem := s.placeOf(ctx, kind, request)
 	if problem != "" {
 		return protocol.SessionSummary{}, problem
 	}
-	s.deps.OnWorkspace(workspace, hostRef)
 	meta := Meta{
-		CreatedAt: protocol.Timestamp(s.deps.Now()), Host: hostRef, ID: s.deps.NewID(), Mode: orMode(request.Mode),
+		CreatedAt: protocol.Timestamp(s.deps.Now()), Host: hostRef, ID: s.deps.NewID(), Kind: kind, Mode: orMode(request.Mode),
 		Concise: request.Concise, Preset: request.Preset, Thinking: orThinking(request.Thinking, s.deps.Thinking.Session), Title: Untitled,
 		Workspace: workspace,
 	}
@@ -250,6 +278,35 @@ func (s *Service) Create(ctx context.Context, request Request) (protocol.Session
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return summaryOf(session), ""
+}
+
+// placeOf is where a new session works: a chat in no folder, on this computer; a coding session in the folder asked
+// for, or the daemon's on this computer, which then has a project. The problem when the folder is not there.
+func (s *Service) placeOf(ctx context.Context, kind protocol.SessionKind, request Request) (protocol.HostRef, string, string) {
+	hostRef := protocol.LocalHost()
+	if kind == protocol.SessionKindChat {
+		return hostRef, "", ""
+	}
+	if request.Host != nil {
+		hostRef = *request.Host
+	}
+	fallback := ""
+	if hosts.IsLocal(hostRef) {
+		fallback = s.deps.Workspace
+	}
+	workspace, problem := hosts.ChooseFolder(ctx, s.deps.Hosts.HostOf(hostRef), request.Workspace, fallback)
+	if problem != "" {
+		return hostRef, "", problem
+	}
+	s.deps.OnWorkspace(workspace, hostRef)
+	return hostRef, workspace, ""
+}
+
+func orKind(kind protocol.SessionKind) protocol.SessionKind {
+	if kind == "" {
+		return protocol.SessionKindCode
+	}
+	return kind
 }
 
 func orMode(mode protocol.PermissionMode) protocol.PermissionMode {
@@ -294,7 +351,7 @@ func (s *Service) Rename(sessionID, title string) string {
 
 func (s *Service) Remove(sessionID string) string {
 	return s.withSession(sessionID, func(session *live) string {
-		if session.turn != nil {
+		if working(session) {
 			return stillWorking
 		}
 		s.forget(session)
@@ -385,7 +442,7 @@ func (s *Service) SendPrompt(sessionID, text string, uploads []protocol.PictureU
 			s.publishSessions()
 			return ""
 		}
-		s.startTurn(session, message)
+		s.startTurn(session, &message)
 		return ""
 	})
 }
@@ -411,11 +468,20 @@ func (s *Service) AnswerQuestion(sessionID, requestID string, answers []string) 
 }
 
 // Stop stops the running turn; what was queued for after it goes too, since people stop to think again.
+// Stop stops a session's turn and its subagents; the reports waiting no longer wake the agent, it gets them with
+// the person's next message.
 func (s *Service) Stop(sessionID string) string {
 	return s.withSession(sessionID, func(session *live) string {
 		session.queue, session.queueNow = nil, false
 		if session.turn != nil {
 			session.turn.cancel()
+		}
+		for _, running := range session.subagents {
+			running.cancel()
+		}
+		s.dropWaiting(session)
+		for index := range session.reports {
+			session.reports[index].wakes = false
 		}
 		s.publishSessions()
 		return ""
@@ -472,20 +538,27 @@ func (s *Service) StopAll() {
 		if session.turn != nil {
 			session.turn.cancel()
 		}
+		for _, running := range session.subagents {
+			running.cancel()
+		}
+		// Those waiting their turn are closed as stopped at the next start, with the others the restart stopped.
+		session.waiting = nil
 	}
 	s.mu.Unlock()
 	s.turns.Wait()
 }
 
 // startTurn runs a turn in its own goroutine; the caller holds the lock.
-func (s *Service) startTurn(session *live, message agent.PromptMessage) {
+// startTurn starts a turn on the person's message, or on none when the subagents' reports wake the agent: they
+// join at its first step.
+func (s *Service) startTurn(session *live, message *agent.PromptMessage) {
 	if s.stopping {
 		return
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	turn := &runningTurn{cancel: cancel}
 	session.turn = turn
-	if session.meta.Title == Untitled {
+	if message != nil && session.meta.Title == Untitled {
 		session.meta.Title = TitleFrom(message.Text)
 		s.saveMeta(session.meta)
 	}
@@ -518,13 +591,59 @@ func (s *Service) takeQueued(session *live) *agent.PromptMessage {
 
 // startQueued starts the next turn with the messages queued during a turn, together, as one message; the caller
 // holds the lock.
+// startQueued starts the next turn once one ends: on the messages that waited, else on the reports that wake the
+// agent.
 func (s *Service) startQueued(session *live) {
-	if _, exists := s.sessions[session.meta.ID]; !exists || len(session.queue) == 0 {
+	if _, exists := s.sessions[session.meta.ID]; !exists {
+		return
+	}
+	if len(session.queue) == 0 {
+		s.wakeForReports(session)
 		return
 	}
 	message := joinMessages(session.queue)
 	session.queue, session.queueNow = nil, false
-	s.startTurn(session, message)
+	s.startTurn(session, &message)
+}
+
+// wakeForReports starts a turn for the reports waiting, when one of them wakes the agent, the session has no turn
+// (its next step takes them) and no other subagent is at work: the agent gets the reports together.
+func (s *Service) wakeForReports(session *live) {
+	if session.turn != nil || subagentsLeft(session) > 0 || !slices.ContainsFunc(session.reports, func(pending pendingReport) bool { return pending.wakes }) {
+		return
+	}
+	s.startTurn(session, nil)
+}
+
+// takeReports is the reports waiting, handed to the main agent's next step; the last says what is still to come.
+func (s *Service) takeReports(session *live) []protocol.SessionEventSubagentReport {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	taken := []protocol.SessionEventSubagentReport{}
+	for _, pending := range session.reports {
+		taken = append(taken, pending.report)
+	}
+	session.reports = nil
+	if len(taken) > 0 {
+		taken[len(taken)-1].Note = stillToCome(session)
+	}
+	return taken
+}
+
+// stillToCome tells the main agent which subagents have not reported yet, or that all have.
+func stillToCome(session *live) string {
+	left := []string{}
+	for _, running := range session.subagents {
+		left = append(left, "“"+running.description+"”")
+	}
+	sort.Strings(left)
+	for _, waiting := range session.waiting {
+		left = append(left, "“"+waiting.description+"”")
+	}
+	if len(left) == 0 {
+		return allReported
+	}
+	return fmt.Sprintf(othersWorking, strings.Join(left, ", "))
 }
 
 func summaryOf(session *live) protocol.SessionSummary {
@@ -540,9 +659,10 @@ func summaryOf(session *live) protocol.SessionSummary {
 		}
 	}
 	return protocol.SessionSummary{
-		Host: session.meta.Host, ID: session.meta.ID, Jobs: append([]protocol.SessionSummaryJob{}, session.jobs...),
+		Host: session.meta.Host, ID: session.meta.ID, Jobs: append([]protocol.SessionSummaryJob{}, session.jobs...), Kind: session.meta.Kind,
 		Concise: session.meta.Concise, Mode: session.meta.Mode, Preset: session.meta.Preset, Queued: queued, QueuedNow: session.queueNow, Status: status,
-		Thinking: session.meta.Thinking, Title: session.meta.Title, UpdatedAt: lastActivity(session.meta, session.events),
+		Subagents: subagentsLeft(session),
+		Thinking:  session.meta.Thinking, Title: session.meta.Title, UpdatedAt: lastActivity(session.meta, session.events),
 		Workspace: session.meta.Workspace,
 	}
 }

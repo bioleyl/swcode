@@ -48,6 +48,8 @@ type TurnHost interface {
 	AskPermission(ctx context.Context, ask PermissionAsk) protocol.PermissionDecision
 	// TakeMessages is what the person sent to come in now, during the turn: once, then it is the turn's.
 	TakeMessages() *PromptMessage
+	// TakeReports is the reports of the subagents that finished since: once, then they are the turn's.
+	TakeReports() []protocol.SessionEventSubagentReport
 	// UseModel runs use while the agent has its model to itself: a peek waits for it to end, then goes on the
 	// agent's slot, where its conversation is cached.
 	UseModel(use func())

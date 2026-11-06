@@ -43,6 +43,14 @@ const skillsLine = (skills: readonly SkillSummary[]): string =>
     ? 'The agent was told there are no skills now'
     : `Skills the agent was told of: ${skills.map((skill) => skill.name).join(', ')}`;
 
+// What a subagent's row says beside its report, by how it ended.
+const REPORT_METAS: Readonly<Record<TurnOutcome, string | undefined>> = {
+  done: undefined,
+  failed: 'failed',
+  limit: 'too many steps',
+  stopped: 'stopped',
+};
+
 const ENDINGS: Readonly<Record<TurnOutcome, string>> = {
   done: '',
   failed: 'The turn failed.',
@@ -83,6 +91,8 @@ export class ScConversation extends ScElement {
   private readonly _requests = new Map<string, ScPermission | ScQuestion>();
   // Which agent call started each subagent: its calls show under that row.
   private readonly _subagents = new Map<string, string>();
+  // The agent calls whose subagent works in the background: their rows run until its report, past the call's result.
+  private readonly _working = new Set<string>();
   // What the agent does now, for the line under the conversation; set at every streamed token, so not a useChange.
   private _activity: Activity = { kind: 'working' };
 
@@ -129,9 +139,26 @@ export class ScConversation extends ScElement {
       const line = { meta: event.meta, ok: event.ok, summary: event.summary, tool: event.tool };
       this.subagentRow(event.agentId)?.activity.set((lines) => [...lines, line]);
     },
-    // Its answer comes as the agent call's own result.
-    subagentFinished: () => undefined,
-    subagentStarted: (event) => this._subagents.set(event.agentId, event.callId),
+    subagentFinished: (event) => this.finishSubagent(event),
+    // What the main agent read, where it read it: the report itself shows in its subagent's row.
+    subagentQueued: (event) => {
+      this._subagents.set(event.agentId, event.callId);
+      this._working.add(event.callId);
+      this._rows.get(event.callId)?.state.set('queued');
+    },
+    subagentReport: (event) =>
+      this.add(
+        <details class="compaction">
+          <summary>{`Report of “${event.description}”, given to the agent`}</summary>
+          <p>{event.text}</p>
+          {event.note === undefined ? null : <p>{event.note}</p>}
+        </details>
+      ),
+    subagentStarted: (event) => {
+      this._subagents.set(event.agentId, event.callId);
+      this._working.add(event.callId);
+      this._rows.get(event.callId)?.state.set('running');
+    },
     toolCall: (event) => {
       const row: ScToolRow = <ScToolRow tool={event.tool} summary={event.summary} />;
       this._rows.set(event.callId, row);
@@ -139,6 +166,10 @@ export class ScConversation extends ScElement {
       this.doing({ kind: 'running', summary: event.summary, tool: event.tool });
     },
     toolFinished: (event) => {
+      if (this._working.has(event.callId)) {
+        this.doing({ kind: 'working' });
+        return;
+      }
       const row = this._rows.get(event.callId);
       row?.result.set({ display: event.display, meta: event.meta, ok: event.ok });
       row?.state.set(event.ok ? 'done' : 'failed');
@@ -215,6 +246,7 @@ export class ScConversation extends ScElement {
     this._rows.clear();
     this._requests.clear();
     this._subagents.clear();
+    this._working.clear();
     this._refs.items.replaceChildren();
     this.working(false);
     for (const event of events) {
@@ -261,6 +293,29 @@ export class ScConversation extends ScElement {
     }
     row.state.set('running');
     this.doing({ kind: 'running', summary: row.summary.get(), tool: row.tool.get() });
+  }
+
+  /**
+   * A subagent's end: its row shows its report, and how it ended. One from before subagents worked in the background
+   * has none: the agent call's own result, which follows, holds its answer.
+   */
+  private finishSubagent(event: SessionEventMap['subagentFinished']): void {
+    const callId = this._subagents.get(event.agentId);
+    if (callId === undefined) {
+      return;
+    }
+    this._working.delete(callId);
+    if (event.report === undefined) {
+      return;
+    }
+    const row = this._rows.get(callId);
+    const done = event.outcome === 'done';
+    row?.result.set({
+      display: { kind: 'text', text: event.report },
+      meta: REPORT_METAS[event.outcome],
+      ok: done,
+    });
+    row?.state.set(done ? 'done' : 'failed');
   }
 
   private subagentRow(agentId: string): ScToolRow | undefined {

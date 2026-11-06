@@ -787,6 +787,27 @@ describe('the command palette', () => {
     await settle(page);
     await page.locator('session-page').getByText('Tidied.').waitFor();
   });
+
+  it('finds a session by what its conversation says, the words around shown under its title', async () => {
+    const rig = await start({ replies: [{ text: 'The badge now reads green on main.' }] });
+    const page = await rig.browser.newPage({ viewport: DESKTOP });
+    await page.goto(rig.link);
+    await page.locator('home-page textarea').fill('Tidy the README');
+    await page.locator('home-page textarea').press('Enter');
+    await page.getByText('The badge now reads green').waitFor();
+    await navItem(page, 'New session').click();
+    await settle(page);
+
+    await page.keyboard.press('Control+k');
+    const palette = page.locator('jl-command-palette');
+    await palette.getByRole('combobox').fill('badge green');
+    const found = palette.getByRole('option', { name: /Tidy the README/ });
+    await found.waitFor();
+    expect(await found.textContent()).toMatch(/swcode-e2e-workspace-\w+ · The badge now reads green on main\./);
+    await page.keyboard.press('Enter');
+    await settle(page);
+    await page.locator('session-page').getByText('The badge now reads green').waitFor();
+  });
 });
 
 describe('the computer', () => {
@@ -1039,6 +1060,99 @@ describe('the navigation', () => {
     await page.getByText('Done.').waitFor();
     await expect.poll(() => navIconFill(page, 'session:')).toBeNull();
     expect(await navIconFill(page, 'project:')).toBeNull();
+  });
+});
+
+/** Chat or Code, at the nav's foot. */
+const modeRadio = (page: Page, name: string): Locator =>
+  page.locator('sc-nav jl-segmented').getByRole('radio', { name });
+
+describe('chats', () => {
+  it('start from Chat at the nav’s foot, listed apart from the projects, the model reading the web alone', async () => {
+    const rig = await start({ replies: [{ text: 'Paris.' }] });
+    const page = await rig.browser.newPage({ viewport: DESKTOP });
+    await page.goto(rig.link);
+    await page.locator('home-page textarea').waitFor();
+    await modeRadio(page, 'Chat').click();
+    await page.evaluate('0');
+    const composer = page.locator('new-chat-page sc-composer');
+    await composer.locator('textarea').waitFor();
+    expect(await composer.locator('textarea').getAttribute('placeholder')).toBe('Ask anything');
+    await composer.locator('textarea').fill('What is the capital of France?');
+    await composer.locator('textarea').press('Enter');
+    await page.getByText('Paris.').waitFor();
+    const request = JSON.stringify(rig.llama.requests[0]);
+    expect(request).toContain('"name":"websearch"');
+    expect(request).not.toContain('"name":"bash"');
+    expect(await page.locator('session-page header > .chip').isHidden()).toBe(true);
+    expect(await page.locator('sc-nav .item[data-id^="session:"]').count()).toBe(1);
+    expect(await page.locator('sc-nav .item[data-id^="project:"]').count()).toBe(0);
+
+    // swcode's link opens as the person left it: in Chat, on the new chat page.
+    await page.goto(rig.link);
+    await page.locator('new-chat-page textarea').waitFor();
+    expect(await modeRadio(page, 'Chat').getAttribute('aria-checked')).toBe('true');
+
+    await modeRadio(page, 'Code').click();
+    await page.evaluate('0');
+    await page.locator('home-page textarea').waitFor();
+    expect(await page.locator('sc-nav .item[data-id^="session:"]').count()).toBe(0);
+    await page.reload();
+    await page.locator('home-page textarea').waitFor();
+    expect(await modeRadio(page, 'Code').getAttribute('aria-checked')).toBe('true');
+  });
+});
+
+// How long each subagent of a test thinks: the person talks with the main agent meanwhile, on the model's third slot.
+const SUBAGENT_MS = 6_000;
+const SUBAGENT_SLOTS = 3;
+const subagentCall = (description: string, prompt: string) => ({
+  arguments: { description, prompt },
+  name: 'agent',
+});
+
+describe('subagents', () => {
+  it('work in the background, shown at once and closed, the person talking with the agent meanwhile, then report', async () => {
+    const rig = await start({
+      replies: [
+        {
+          toolCalls: [
+            subagentCall('Find the store', 'TASK-A: where?'),
+            subagentCall('Find the tools', 'TASK-B: where?'),
+          ],
+        },
+        { text: 'Still looking, nothing yet.' },
+        { text: 'The store is in src/store.ts, the tools in src/tools.ts.' },
+      ],
+      scripts: {
+        'TASK-A': [{ delayMs: SUBAGENT_MS, text: 'src/store.ts saves them.' }],
+        'TASK-B': [{ delayMs: SUBAGENT_MS, text: 'src/tools.ts lists them.' }],
+      },
+      slots: SUBAGENT_SLOTS,
+    });
+    const page = await rig.browser.newPage({ viewport: DESKTOP });
+    await page.goto(rig.link);
+    await page.locator('home-page textarea').fill('Where are the store and the tools?');
+    await page.locator('home-page textarea').press('Enter');
+    // The reply that started them ended the turn: their reports wake the agent.
+    await page.getByText("Waiting for the subagents' reports").waitFor();
+    const running = page.locator('session-page sc-tool-row[state="running"]');
+    expect(await running.count()).toBe(2);
+    expect(await page.locator('session-page sc-tool-row[open]').count()).toBe(0);
+    await page.locator('sc-side-panel').getByText('Find the tools').waitFor();
+    expect(await page.locator('session-page sc-composer .stop').isVisible()).toBe(true);
+
+    const composer = page.locator('session-page sc-composer textarea');
+    await composer.fill('How is it going?');
+    await composer.press('Enter');
+    await page.getByText('Still looking, nothing yet.').waitFor();
+    expect(await running.count()).toBe(2);
+
+    await page.getByText('The store is in src/store.ts').waitFor({ timeout: SUBAGENT_MS * 2 });
+    expect(await running.count()).toBe(0);
+    expect(await page.locator('session-page sc-tool-row[open]').count()).toBe(0);
+    await page.getByText('Report of “Find the store”, given to the agent').waitFor();
+    expect(JSON.stringify(rig.llama.requests.at(-1))).toContain('src/tools.ts lists them.');
   });
 });
 

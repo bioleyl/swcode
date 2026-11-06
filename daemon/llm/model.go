@@ -1,5 +1,5 @@
-// Package llm talks to llm-server: the Chat Completions API streamed, its status, and its slots shared out
-// between the agents.
+// Package llm talks to llm-server: the Chat Completions API streamed (OpenAI's Responses API for OpenAI's own
+// server), its status, and its slots shared out between the agents.
 package llm
 
 import (
@@ -34,6 +34,8 @@ type Message struct {
 	ToolCalls []protocol.ToolCall
 	// Reasoning is what the model thought before an assistant message.
 	Reasoning string
+	// Items is an assistant message as OpenAI's Responses API wrote it (JSON), sent back as is to that API.
+	Items string
 	// ToolCallID is the call a tool message answers.
 	ToolCallID string
 }
@@ -100,6 +102,9 @@ type Reply struct {
 	Reasoning string
 	ToolCalls []protocol.ToolCall
 	Usage     *protocol.Usage
+	// Items is the reply as OpenAI's Responses API wrote it, its output items in JSON: its encrypted reasoning
+	// goes back with it at the next steps. Empty from another API.
+	Items string
 }
 
 // Model answers a conversation, streaming its reply.

@@ -9,7 +9,7 @@ import (
 
 // all is every tool, by name: a new tool name does not get offered until it is here.
 var all = map[protocol.ToolName]Tool{
-	protocol.ToolNameAgent: agentTool, protocol.ToolNameBash: bashTool, protocol.ToolNameEdit: editTool,
+	protocol.ToolNameAgent: agentTool, protocol.ToolNameBash: bashTool, protocol.ToolNameDraw: drawTool, protocol.ToolNameEdit: editTool,
 	protocol.ToolNameGlob: globTool, protocol.ToolNameGrep: grepTool, protocol.ToolNameImage: imageTool,
 	protocol.ToolNameKill: killTool, protocol.ToolNameOutput: outputTool, protocol.ToolNamePlan: planTool,
 	protocol.ToolNameQuestion: questionTool, protocol.ToolNameRead: readTool, protocol.ToolNameSaveskill: saveSkillTool,
@@ -22,8 +22,12 @@ var (
 	exploreTools = []protocol.ToolName{
 		protocol.ToolNameRead, protocol.ToolNameGrep, protocol.ToolNameGlob, protocol.ToolNameWebsearch, protocol.ToolNameWebfetch,
 	}
+	// chatTools: a chat reads the web and draws, nothing else.
+	chatTools = []protocol.ToolName{protocol.ToolNameWebsearch, protocol.ToolNameWebfetch, protocol.ToolNameDraw}
+	// chatOnlyTools are a chat's alone: the agent saves its pictures in the workspace with image.
+	chatOnlyTools = []protocol.ToolName{protocol.ToolNameDraw}
 	// imageTools need a picture server of the settings.
-	imageTools = []protocol.ToolName{protocol.ToolNameImage}
+	imageTools = []protocol.ToolName{protocol.ToolNameImage, protocol.ToolNameDraw}
 	// browserTools need a browser.
 	browserTools = []protocol.ToolName{protocol.ToolNameScreenshot}
 )
@@ -61,8 +65,8 @@ type Servers struct {
 	Browser bool
 }
 
-// Boxes is the main agent's and the subagents' tools, without those whose server is not set up.
-func Boxes(servers Servers) (Box, Box) {
+// Boxes is the main agent's, the subagents' and a chat's tools, without those whose server is not set up.
+func Boxes(servers Servers) (Box, Box, Box) {
 	missing := []protocol.ToolName{}
 	if !servers.Images {
 		missing = append(missing, imageTools...)
@@ -79,11 +83,16 @@ func Boxes(servers Servers) (Box, Box) {
 		}
 		return Box{names: kept}
 	}
-	return available(protocol.ToolNames), available(exploreTools)
+	return available(mainTools), available(exploreTools), available(chatTools)
 }
 
-// Main is every tool: the main agent's, with all servers.
-var Main = Box{names: protocol.ToolNames}
+// mainTools is every tool but a chat's own.
+var mainTools = slices.DeleteFunc(slices.Clone(protocol.ToolNames), func(name protocol.ToolName) bool {
+	return slices.Contains(chatOnlyTools, name)
+})
+
+// Main is the main agent's tools, with all servers.
+var Main = Box{names: mainTools}
 
 // Explore is an explore subagent's tools: reading and searching only.
 var Explore = Box{names: exploreTools}

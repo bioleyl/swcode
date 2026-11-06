@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 
 	"swcode/daemon/llm"
 	"swcode/daemon/protocol"
@@ -12,9 +13,11 @@ import (
 )
 
 const (
-	declinedOutput   = "The user declined this call. Wait for their instructions."
-	declinedMessage  = "Stopped: a call was declined. Say how to go on."
-	rawSummaryLength = 80
+	// waitingForReports ends a turn whose last reply started subagents: their reports wake the agent.
+	waitingForReports = "Waiting for the subagents' reports: they wake the agent."
+	declinedOutput    = "The user declined this call. Wait for their instructions."
+	declinedMessage   = "Stopped: a call was declined. Say how to go on."
+	rawSummaryLength  = 80
 	// answerRequest: a small model can end with its findings left in its thoughts, and is asked once to give them.
 	answerRequest = "Your last reply was empty. Give your answer now, in a few lines, with file paths."
 	// emptyReplyRetries: a thinking model can end its turn inside its thoughts (the Qwen3.8 Coder at low effort did
@@ -175,7 +178,8 @@ func complete(ctx context.Context, host TurnHost, setup Setup) (llm.Reply, error
 		return llm.Reply{}, err
 	}
 	host.Record(protocol.SessionEventAssistantMessage{
-		ID: messageID, Reasoning: reply.Reasoning, Text: reply.Text, ToolCalls: reply.ToolCalls, Usage: reply.Usage,
+		ID: messageID, Reasoning: reply.Reasoning, ResponseItems: reply.Items, Text: reply.Text, ToolCalls: reply.ToolCalls,
+		Usage: reply.Usage,
 	})
 	return reply, nil
 }
@@ -212,15 +216,53 @@ func askModelAlone(ctx context.Context, host TurnHost, setup Setup) (reply llm.R
 	return reply, err
 }
 
-// takeInMessages has what the person sent to come in now join the conversation between two steps, after the
-// results of the last calls: the model reads it with its next request.
+// takeInMessages has the reports of the subagents that finished, then what the person sent to come in now, join
+// the conversation between two steps, after the results of the last calls: the model reads them with its next
+// request. Whether anything came.
 func takeInMessages(host TurnHost, setup Setup) bool {
-	message := host.TakeMessages()
-	if message == nil {
-		return false
+	reports := host.TakeReports()
+	for _, report := range reports {
+		report.ID = setup.NewID()
+		host.Record(report)
 	}
-	host.Record(UserMessage(setup.NewID(), *message))
-	return true
+	message := host.TakeMessages()
+	if message != nil {
+		host.Record(UserMessage(setup.NewID(), *message))
+	}
+	return len(reports) > 0 || message != nil
+}
+
+// delegates tells whether a reply's calls started subagents, at work or waiting their turn: the agent's turn then ends
+// after them, for their reports to wake it, rather than it doing their work meanwhile or starting more.
+func delegates(events []protocol.SessionEvent, calls []protocol.ToolCall) bool {
+	ids := map[string]bool{}
+	for _, call := range calls {
+		ids[call.ID] = true
+	}
+	return slices.ContainsFunc(events, func(event protocol.SessionEvent) bool {
+		switch value := event.Value.(type) {
+		case protocol.SessionEventSubagentStarted:
+			return ids[value.CallID]
+		case protocol.SessionEventSubagentQueued:
+			return ids[value.CallID]
+		}
+		return false
+	})
+}
+
+// subagentsWorking tells whether subagents the agent started are still at work: it may end its turn to wait for
+// their reports, which wake it.
+func subagentsWorking(events []protocol.SessionEvent) bool {
+	working := map[string]bool{}
+	for _, event := range events {
+		switch value := event.Value.(type) {
+		case protocol.SessionEventSubagentStarted:
+			working[value.AgentID] = true
+		case protocol.SessionEventSubagentFinished:
+			delete(working, value.AgentID)
+		}
+	}
+	return len(working) > 0
 }
 
 func runSteps(ctx context.Context, host TurnHost, setup Setup) (Ending, error) {
@@ -237,14 +279,18 @@ func runSteps(ctx context.Context, host TurnHost, setup Setup) (Ending, error) {
 			if !runCalls(ctx, reply.ToolCalls, host, setup) {
 				return declinedEnding(ctx), nil
 			}
+			if delegates(host.History(), reply.ToolCalls) {
+				return Ending{Message: waitingForReports, Outcome: protocol.TurnOutcomeDone}, nil
+			}
 			continue
 		}
 		// A message that came while the model wrote its answer gets an answer in this turn.
 		if takeInMessages(host, setup) {
 			continue
 		}
-		reminder := PlanReminder(host.History())
-		if reminder == "" {
+		history := host.History()
+		reminder := PlanReminder(history)
+		if reminder == "" || subagentsWorking(history) {
 			return Ending{Outcome: protocol.TurnOutcomeDone}, nil
 		}
 		host.Record(protocol.SessionEventReminder{ID: setup.NewID(), Reason: protocol.ReminderReasonPlan, Text: reminder})
@@ -303,12 +349,14 @@ func taskStep(ctx context.Context, text string, host TurnHost, setup Setup) Task
 	return TaskResult{Answer: lastAnswer(host.History()), Ending: ending}
 }
 
-// RunTurn runs one turn: the person's message, then the model and its tools in turns until it answers without a
-// tool call.
-func RunTurn(ctx context.Context, message PromptMessage, host TurnHost, setup Setup) {
+// RunTurn runs one turn: the person's message, or none when the subagents' reports woke the agent, then the model
+// and its tools in turns until it answers without a tool call.
+func RunTurn(ctx context.Context, message *PromptMessage, host TurnHost, setup Setup) {
 	turnID := setup.NewID()
 	host.Record(protocol.SessionEventTurnStarted{ID: turnID})
-	host.Record(UserMessage(setup.NewID(), message))
+	if message != nil {
+		host.Record(UserMessage(setup.NewID(), *message))
+	}
 	ListSkills(ctx, host, setup)
 	ending := steps(ctx, host, setup)
 	host.Record(protocol.SessionEventTurnFinished{ID: turnID, Message: ending.Message, Outcome: ending.Outcome})

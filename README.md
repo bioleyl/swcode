@@ -146,6 +146,19 @@ Without `--parallel`, llm-server answers 4 conversations at once, sharing the `-
 them; with `--parallel 4`, each gets a quarter. With `--host 0.0.0.0` llm-server is reachable from the network, hence
 `--api-key`.
 
+Another server of the Chat Completions API works too (vLLM, a hosted one), its key in the source. llama.cpp's own
+fields (`cache_prompt`, `id_slot`, `chat_template_kwargs`, `reasoning_content`) go with each request; a server that
+refuses one of them, naming it, gets the request again without them, and its next requests go without them from the
+start.
+
+OpenAI's own server (`https://api.openai.com`) is asked through its Responses API (`/v1/responses`): its newer
+models take tools and thinking together only there. The thinking mode is the reasoning effort (Off is `none`), a
+summary of the reasoning streams in as the thinking, and nothing is stored on OpenAI's side: each reply's items,
+its reasoning encrypted, are kept with the reply in the session (`responseItems`) and go back with the next
+requests, so the model goes on from its own reasoning. A model that refuses those settings (one that does not
+think, or an organization without reasoning summaries) gets fewer, and keeps to them. OpenAI's API says no model's
+context size: set it in the preset.
+
 ### A smaller model for the subagents
 
 In router mode, llm-server serves several models, each with its own settings from a presets file (the keys are
@@ -178,8 +191,10 @@ the first loaded one that its subagents do not use.
 
 Settings → Models lists the llm-servers swcode asks (a name, an address, a key) and the
 presets made of their models: each preset a name, the main agent's model and the subagents' (which reads web pages
-too), on the same llm-server or on two, and how many subagents a turn may start: with none, the main agent is not
-told they exist (no `agent` tool, no word of them in its prompt). Each model can have its context size (`128k`), the
+too), on the same llm-server or on two, and how many subagents work at once: the main agent starts as many as it
+likes, the others wait their turn; with none, it is not told they exist (no `agent` tool, no word of them in its
+prompt). A `models.json` from before, which said how many a turn could start (`perTurn`), keeps its number as how
+many work at once. Each model can have its context size (`128k`), the
 server's own at most ([Context](#how-it-works)). Each session picks its preset in its composer,
 beside its permissions and its thinking, from its next request on; one preset is the default of new sessions. They
 are kept in `~/.swcode/models.json` and in use as soon as they change, without a restart. Until they are saved once,
@@ -394,14 +409,24 @@ top, for one command; the page shows those as set in the environment.
 ## How it works
 
 - **The app** is built from jlib's components and works as SyWare's apps do: the navigation down the side (where
-  swcode works, a new session, the projects with their sessions, each icon filled while a session works (blue),
-  waits for you or is done and not seen yet, and at its foot the fold button, Chat or Code, the settings' cog and the
-  theme), folding into a rail; on a phone a top bar, the navigation in a drawer and tabs
-  (New, Sessions, Settings). A project has its page, with its sessions; Sessions lists them all, what needs you
+  swcode works; in Code a new session and the projects with their sessions, in Chat a new chat and the chats; each
+  icon filled while a session works (blue), waits for you or is done and not seen yet; and at its foot the fold
+  button, Chat or Code, the settings' cog and the theme), folding into a rail; on a phone a top bar, the navigation
+  in a drawer and tabs (New, Sessions, Settings). A project has its page, with its sessions; Sessions lists them all, what needs you
   first. Beside a session, the side panel shows its agents, the commands left running, the llm-servers and whether
-  they answer, and how full the context is. Ctrl K (⌘K) searches the sessions, projects, settings and actions. A
+  they answer, and how full the context is. Ctrl K (⌘K) searches the sessions, projects, settings and actions, and
+  what the sessions say: the daemon looks through the conversations it holds (your messages, the model's answers,
+  the summaries, the files and commands of the tool calls; not the tools' results) for the sessions that say every
+  word typed, and lists the newest 20, the words around under each title. A
   problem of the daemon or of llm-server shows over every page.
-- **Sessions** are kept as two files in the data folder: `<id>.json` (title, workspace, permission mode) and
+- **Chat or Code**, at the navigation's foot: Code is the agent at work in a project; Chat is a conversation with
+  the preset's model, as Claude's chat is, in no project. A chat's model reads the web (`websearch`, `webfetch`) and,
+  with a picture server, draws (`draw`): no files, no commands, no subagents, so no permissions to choose; its system
+  prompt is its own, as stable as the agent's. A chat has no folder: what it draws is kept in the data folder, in
+  `images/<the chat's id>/` beside the pictures pasted in it, shown in the conversation, and changed by drawing again
+  from its name; deleting the chat deletes them. Opening a session switches to its mode, and the device keeps the last one; Sessions and
+  the palette list both kinds.
+- **Sessions** are kept as two files in the data folder: `<id>.json` (title, kind, workspace, permission mode) and
   `<id>.jsonl`, one event a line. The model's messages are rebuilt from the events at every step, appended only,
   and the system prompt never changes, so llm-server's prompt cache (`cache_prompt`) is reused from step to step.
   The model knows the date from the messages: each one goes to it with the local time it was sent
@@ -501,7 +526,8 @@ top, for one command; the page shows those as set in the environment.
 - **Context**: before each request the daemon estimates how full the context is, from the last reply's token
   count (llm-server's `usage`) plus what came since. Past 80% of the model's context, the model summarizes the
   conversation and goes on from the summary. The context is what the server says (llama.cpp's `n_ctx` in `/props`,
-  vLLM's `max_model_len` in `/v1/models`), or the preset's when it sets one, the server's at most: a server that says
+  vLLM's `max_model_len` in `/v1/models`, or a hosted API's `context_length`, `context_window` or
+  `max_context_length` there), or the preset's when it sets one, the server's at most: a server that says
   none needs the preset's to compact in time. When llm-server finds the prompt too long all the same, the model
   compacts and tries once more. The app shows where that happened, with the summary.
 - **Thinking**: what a reasoning model (gpt-oss, Qwen3) thinks before it answers streams into the conversation and
@@ -513,10 +539,22 @@ top, for one command; the page shows those as set in the environment.
   sends nothing. A template that adds an instruction for it at the start (DavidAU's do) makes the next step
   process the conversation again when a session changes it.
 - **Subagents**: the main agent's `agent` tool starts an explore subagent with the read-only tools (read, grep,
-  glob, websearch, webfetch) on `LLAMA_SUBAGENT_MODEL`. Several agent calls run one after another: on one GPU,
-  subagents at the same time share its speed, and more of them than the model answers at once wipe each other's
-  prompt cache. A subagent's conversation
-  stays in memory; the session keeps a line for each of its calls, and its last answer is the call's result.
+  glob, websearch, webfetch) on `LLAMA_SUBAGENT_MODEL`, in the background: the call's result says it started, and
+  the reply that starts subagents ends the main agent's turn, whatever else it does, so that it waits for their
+  reports rather than doing their work itself or starting more (models used to agent loops end every reply on a
+  call, and never stop otherwise). You keep talking to it meanwhile. Subagents work at the same time, as many
+  as the preset lets work at once: the others wait their turn, shown as waiting, and start by themselves as those
+  report; the call's result says which, so the model never starts one again. On a model the main agent uses too,
+  keep that number below its slots (llama-server's `--parallel`), so the main agent answers while they work: past
+  them, requests wait for a free slot. Each shows under its call and in the side panel; the session counts as working
+  while one works or waits. A subagent's conversation stays in memory; the session keeps
+  a line for each of its calls, then its report, which the main agent gets as a message between two of its steps;
+  after the last of the reports it gets at once, a line names the subagents that have not reported yet, or says
+  that all have. The system prompt, the call's result and that line all tell it to wait for the reports.
+  When its turn has ended, the reports wake it once the last subagent at work reports, or come with your next
+  message. Stop stops the subagents too; their reports then wake nobody, they go with your next message. A daemon
+  restarted while subagents work ends them as stopped. On one GPU, subagents at the same time share its speed, and
+  llama-server shares its context out between its slots (`--parallel`).
 - **Prompt cache**: llama.cpp says how many requests a model answers at once (`total_slots` in `/props`). The daemon
   sends each agent's requests back to the same one of them (`id_slot`), where its conversation is still cached, and
   makes a request wait while all are busy. A server that does not say gets the requests as they come, and queues and

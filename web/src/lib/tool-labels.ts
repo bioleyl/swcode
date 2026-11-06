@@ -18,6 +18,13 @@ const TOOL_LABELS: Readonly<Record<ToolName, ToolLabel>> = {
     question: 'Run this command?',
     writing: 'Writing a command',
   },
+  draw: {
+    doing: 'Drawing',
+    icon: 'image',
+    name: 'Draw',
+    question: 'Draw this picture?',
+    writing: 'Describing a picture',
+  },
   edit: {
     doing: 'Editing',
     icon: 'pencil',
@@ -147,6 +154,7 @@ const programsGrant = (command: string): string | undefined => {
 const SESSION_GRANTS: Readonly<Record<ToolName, (summary: string) => string | undefined>> = {
   agent: never,
   bash: programsGrant,
+  draw: never,
   edit: () => ALL_EDITS,
   glob: never,
   grep: never,

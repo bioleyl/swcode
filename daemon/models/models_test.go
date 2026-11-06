@@ -1,6 +1,8 @@
 package models
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"swcode/daemon/config"
@@ -56,5 +58,20 @@ func TestAPresetsContextIsTheServersAtMostAndItsOwnWhenTheServerSaysNone(t *test
 		if got := contextFor(each.served, each.asked); got != each.want {
 			t.Errorf("served %d, asked %d: got %d", each.served, each.asked, got)
 		}
+	}
+}
+
+func TestAPresetFromBeforeLimitsAtOnceKeepsItsNumberAsHowManyWorkAtOnce(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "models.json")
+	old := `{"defaultPreset":"p1","presets":[{"id":"p1","main":{"model":"","source":"s1"},"name":"Default","subagentLimit":{"perTurn":3},"workers":{"model":"","source":"s1"}}],"sources":[{"id":"s1","name":"s1","url":"http://localhost:8080"}]}`
+	if err := os.WriteFile(file, []byte(old), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	settings, found, err := NewStore(file).Load()
+	if err != nil || !found {
+		t.Fatalf("found %v, %v", found, err)
+	}
+	if limit := settings.Presets[0].SubagentLimit; limit == nil || limit.AtOnce != 3 {
+		t.Fatalf("limit %+v", limit)
 	}
 }

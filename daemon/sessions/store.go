@@ -23,6 +23,7 @@ type Meta struct {
 	CreatedAt string                  `json:"createdAt"`
 	Host      protocol.HostRef        `json:"host"`
 	ID        string                  `json:"id"`
+	Kind      protocol.SessionKind    `json:"kind"`
 	Mode      protocol.PermissionMode `json:"mode"`
 	Preset    string                  `json:"preset,omitempty"`
 	Thinking  protocol.ThinkingMode   `json:"thinking"`
@@ -30,11 +31,11 @@ type Meta struct {
 	Workspace string                  `json:"workspace"`
 }
 
-// UnmarshalJSON reads sessions from before hosts as on this computer, and from before the choice as thinking as the
-// model does by itself.
+// UnmarshalJSON reads sessions from before hosts as on this computer, from before the choice as thinking as the
+// model does by itself, and from before chats as coding sessions.
 func (m *Meta) UnmarshalJSON(data []byte) error {
 	type plain Meta
-	read := plain{Host: protocol.LocalHost(), Thinking: protocol.ThinkingModeFull}
+	read := plain{Host: protocol.LocalHost(), Kind: protocol.SessionKindCode, Thinking: protocol.ThinkingModeFull}
 	if err := json.Unmarshal(data, &read); err != nil {
 		return err
 	}

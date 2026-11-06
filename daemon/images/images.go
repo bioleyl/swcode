@@ -60,6 +60,8 @@ type Port interface {
 	Draw(ctx context.Context, request DrawRequest) DrawOutcome
 	// Keep keeps a copy of a picture, and gives the address the app shows it from.
 	Keep(png []byte) (string, error)
+	// Kept is a picture kept for the session, by its file name: a chat changes the pictures it drew.
+	Kept(name string) ([]byte, error)
 }
 
 type port struct {
@@ -89,6 +91,13 @@ func (p port) Keep(png []byte) (string, error) {
 		return "", err
 	}
 	return protocol.EndpointImages + "/" + p.sessionID + "/" + name, nil
+}
+
+func (p port) Kept(name string) ([]byte, error) {
+	if name != filepath.Base(name) || strings.HasPrefix(name, ".") {
+		return nil, fmt.Errorf("%s is not the name of a picture of this session", name)
+	}
+	return os.ReadFile(filepath.Join(p.folder, p.sessionID, name))
 }
 
 // Remove forgets a session's pictures, with the session.

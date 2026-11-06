@@ -7,15 +7,16 @@ import type { AgentView } from '../types/conversation.types';
 export const lineText = (tool: ToolName | undefined, summary: string): string =>
   `${toolLabel(tool).name} ${summary}`;
 
-/** How one event changes the subagents: one starts, does something, or ends. */
+/** How one event changes the subagents: one waits its turn, starts, does something, or ends. */
 function applyEvent(agents: Map<string, AgentView>, event: SessionEvent): void {
-  if (event.kind === 'subagentStarted') {
+  if (event.kind === 'subagentQueued' || event.kind === 'subagentStarted') {
+    // One that waited keeps its place in the list: a map keeps a key where it was first set.
     agents.set(event.agentId, {
       activity: '',
       description: event.description,
       id: event.agentId,
       model: event.model,
-      state: 'working',
+      state: event.kind === 'subagentQueued' ? 'waiting' : 'working',
     });
     return;
   }
@@ -32,7 +33,7 @@ function applyEvent(agents: Map<string, AgentView>, event: SessionEvent): void {
   }
 }
 
-/** The session's subagents, from its events: the working ones first, then the latest that finished. */
+/** The session's subagents, from its events: the working ones first, then those waiting, then the latest that finished. */
 export function agentsOf(events: readonly SessionEvent[]): AgentView[] {
   const agents = new Map<string, AgentView>();
   for (const event of events) {
@@ -41,6 +42,7 @@ export function agentsOf(events: readonly SessionEvent[]): AgentView[] {
   const all = [...agents.values()].reverse();
   return [
     ...all.filter((agent) => agent.state === 'working'),
-    ...all.filter((agent) => agent.state !== 'working'),
+    ...all.filter((agent) => agent.state === 'waiting'),
+    ...all.filter((agent) => agent.state !== 'working' && agent.state !== 'waiting'),
   ];
 }

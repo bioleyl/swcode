@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"path"
 	"regexp"
 	"strconv"
 	"strings"
@@ -26,6 +27,7 @@ const (
 	bytesPerKB    = 1024
 	pngExtension  = ".png"
 	noServer      = "No picture server is set up (SWCODE_IMAGE_URL)."
+	notDrawn      = "%s is not a picture of this chat: give the name a draw result said."
 	notPNG        = "The picture is saved as a PNG: give a path ending in .png."
 	shotTimeout   = 30 * time.Second
 	noBrowser     = "No browser to draw pages with here."
@@ -131,6 +133,74 @@ func drawPicture(ctx context.Context, tc *Context, input imageInput, path string
 		Output:  fmt.Sprintf("%s %s: a %s picture (%d kB). The user sees it.", verb, label, size, int(math.Round(float64(len(picture.PNG))/bytesPerKB))),
 	}
 }
+
+type drawInput struct {
+	Prompt     string   `json:"prompt"`
+	References []string `json:"references"`
+	Size       string   `json:"size"`
+}
+
+// keptReferences is the pictures of the chat a drawing starts from, by the names the draw results gave.
+func keptReferences(tc *Context, names []string) ([]images.Reference, string) {
+	references := []images.Reference{}
+	for _, name := range names {
+		data, err := tc.Images.Kept(name)
+		if err != nil {
+			return nil, fmt.Sprintf(notDrawn, name)
+		}
+		references = append(references, images.Reference{Data: data, Name: name, Type: pictureTypes[pngExtension]})
+	}
+	return references, ""
+}
+
+func drawInChat(ctx context.Context, tc *Context, input drawInput, references []images.Reference) Outcome {
+	size := input.Size
+	if size == "" {
+		size = defaultPictureSize
+	}
+	picture := tc.Images.Draw(ctx, images.DrawRequest{Prompt: input.Prompt, References: references, Size: size})
+	if !picture.OK {
+		return Failure(picture.Problem, "failed")
+	}
+	address, err := tc.Images.Keep(picture.PNG)
+	if err != nil {
+		return Failure(err.Error(), "failed")
+	}
+	name := path.Base(address)
+	return Outcome{
+		Display: &protocol.ToolDisplay{Value: protocol.ToolDisplayImage{Path: name, URL: address}},
+		Meta:    size,
+		OK:      true,
+		Output:  fmt.Sprintf("Drew %s: a %s picture (%d kB). The user sees it in the chat; give its name as a reference to change it.", name, size, int(math.Round(float64(len(picture.PNG))/bytesPerKB))),
+	}
+}
+
+// drawTool makes a picture in a chat with the picture server of the settings: a chat has no workspace, so the picture
+// stays with the chat's pictures, where the app shows it from. It changes the pictures it drew before, by their names.
+var drawTool = Define(Spec[drawInput]{
+	Check: func(_ context.Context, input drawInput, tc *Context) Check {
+		if tc.Images == nil {
+			return Refuse(noServer)
+		}
+		if input.Size != "" && !fitsServer(input.Size) {
+			return Refuse(fmt.Sprintf("size: each side from %d to %d pixels, in steps of %d", minSide, maxSide, sideStep))
+		}
+		references, problem := keptReferences(tc, input.References)
+		if problem != "" {
+			return Refuse(problem)
+		}
+		return Ready(func(ctx context.Context) Outcome { return drawInChat(ctx, tc, input, references) }, nil)
+	},
+	Description: "Draws a picture (an illustration, an icon, a photo, a diagram) with the picture server and shows it to the user in the chat. With references, it changes pictures you drew before or draws from them. Takes about a minute. The user sees the picture; you do not.",
+	Input: Object(
+		Required("prompt", String().Trimmed().Min(1).Describe(`The picture in full: subject, composition, style, colours, light, and any text it shows, word for word. With references, what to change or draw from them, naming them by number ("picture 1 is the logo").`)),
+		Optional("references", Array(String().Min(1)).Max(maxReferences).Describe("Pictures you drew before in this chat, by the name the draw result gave, in the order the prompt numbers them.")),
+		Optional("size", String().Matching(`^(\d+)x(\d+)$`).Describe(fmt.Sprintf("WIDTHxHEIGHT in pixels: %s when left out; 768x1024 for a portrait, 1280x768 for a wide one.", defaultPictureSize))),
+	),
+	Name:      protocol.ToolNameDraw,
+	Subject:   reads[drawInput],
+	Summarize: func(input drawInput) string { return input.Prompt },
+})
 
 // imageTool makes a picture with the picture server of the settings and saves it in the workspace, as a PNG: from
 // a prompt, or from pictures of the workspace and a prompt. The daemon keeps a copy for the app to show.

@@ -56,12 +56,15 @@ func (s *Screenshots) Keep(shot Shot) (protocol.PictureRef, string, error) {
 }
 
 func (s *Screenshots) Ask(ctx context.Context, picture protocol.PictureRef, question, about string) (string, error) {
+	agent := llm.Identity{AgentID: s.NewID(), Model: s.ModelName, Source: s.Source, Thinking: s.Thinking}
+	// One request, and done: its slot goes to the next agent, before the main agent's.
+	defer llm.AgentDone(s.Model, agent)
 	reply, err := s.Model.Complete(ctx, llm.Request{
 		Messages: []llm.Message{
 			{Content: lookerPrompt, Role: llm.RoleSystem},
 			{Content: "Question: " + question + "\n\n" + about, Pictures: []llm.Picture{{Path: filepath.Join(s.Folder, picture.File), Type: string(picture.Type)}}, Role: llm.RoleUser},
 		},
-		Target: llm.Target{Identity: llm.Identity{AgentID: s.NewID(), Model: s.ModelName, Source: s.Source, Thinking: s.Thinking}, Slot: llm.NoSlot},
+		Target: llm.Target{Identity: agent, Slot: llm.NoSlot},
 	}, func(llm.Part) {
 		// Nobody watches the looker: its answer goes back whole.
 	})

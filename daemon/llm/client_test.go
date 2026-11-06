@@ -66,6 +66,42 @@ func TestTheClientTellsAFullContextFromOtherRefusals(t *testing.T) {
 	}
 }
 
+func TestAServerThatRefusesLlamaCppsFieldsGetsRequestsWithoutThem(t *testing.T) {
+	fake := fakellama.Start(fakellama.Options{
+		Refuses: []string{"cache_prompt", "id_slot", "chat_template_kwargs", "reasoning_content"},
+		Replies: []fakellama.Reply{{Text: "First."}, {Text: "Second."}},
+	})
+	defer fake.Stop()
+	client := NewClient(Options{URL: fake.URL})
+	request := Request{
+		Messages: []Message{
+			{Content: "hello", Role: RoleUser},
+			{Content: "Hi.", Reasoning: "Greet back", Role: RoleAssistant},
+			{Content: "again", Role: RoleUser},
+		},
+		Target: Target{Identity: Identity{Model: "gpt-5", Thinking: protocol.ThinkingModeOff}, Slot: 1},
+	}
+	for _, want := range []string{"First.", "Second."} {
+		reply, err := client.Complete(context.Background(), request, func(Part) {})
+		if err != nil || reply.Text != want {
+			t.Fatalf("reply %+v, %v", reply, err)
+		}
+	}
+	// The first request is refused and sent again plain; the next one goes plain at once.
+	requests := fake.Requests()
+	if len(requests) != 3 || requests[0]["cache_prompt"] != true {
+		t.Fatalf("requests %v", requests)
+	}
+	for _, body := range requests[1:] {
+		messages, _ := body["messages"].([]any)
+		reply, _ := messages[1].(map[string]any)
+		if body["cache_prompt"] != nil || body["id_slot"] != nil || body["chat_template_kwargs"] != nil ||
+			reply["reasoning_content"] != nil || body["model"] != "gpt-5" {
+			t.Fatalf("body %v", body)
+		}
+	}
+}
+
 func TestTheStatusReadsARoutersLoadedModelsAndNeverAsksForAnUnloadedOne(t *testing.T) {
 	fake := fakellama.Start(fakellama.Options{Router: []fakellama.RouterModel{
 		{ContextTokens: 65_536, ID: "a-small", Loaded: true, Slots: 6},
@@ -136,5 +172,27 @@ func TestTheContextOfAServerWithoutPropsIsReadFromItsModelsList(t *testing.T) {
 	ctx := context.Background()
 	if status.ContextOf(ctx, "qwen3-coder") != 32_768 || status.ContextOf(ctx, "") != 32_768 || status.ContextOf(ctx, "other") != 0 {
 		t.Fatal("context")
+	}
+}
+
+func TestTheContextIsReadAsHostedAPIsListIt(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != "/v1/models" {
+			http.NotFound(response, request)
+			return
+		}
+		_, _ = response.Write([]byte(`{"data":[
+			{"id":"router","context_length":200000},
+			{"id":"groq","context_window":131072},
+			{"id":"mistral","max_context_length":128000},
+			{"id":"gpt-5","object":"model","owned_by":"openai"}
+		]}`))
+	}))
+	defer server.Close()
+	status := NewStatusReader(Options{URL: server.URL})
+	ctx := context.Background()
+	got := []int{status.ContextOf(ctx, "router"), status.ContextOf(ctx, "groq"), status.ContextOf(ctx, "mistral"), status.ContextOf(ctx, "gpt-5")}
+	if !reflect.DeepEqual(got, []int{200_000, 131_072, 128_000, 0}) {
+		t.Fatalf("contexts %v", got)
 	}
 }

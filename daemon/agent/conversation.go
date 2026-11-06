@@ -1,8 +1,10 @@
 package agent
 
 import (
+	"fmt"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"swcode/daemon/llm"
@@ -12,6 +14,8 @@ import (
 const (
 	notRun        = "Not run: the turn stopped before this call."
 	summaryHeader = "The conversation so far was summarized to save context. The summary:"
+	// reportHeader opens a subagent's report, which comes as a message once the subagent is done.
+	reportHeader  = "The report of your subagent “%s”:"
 	userSeparator = "\n\n"
 	// shownNote: the screenshots a model asked to see follow the results of its calls, a tool result is text only.
 	shownNote = "[The screenshots you asked to see, in the order of your calls.]"
@@ -110,10 +114,21 @@ func messagesOf(event protocol.SessionEvent, results map[string]callResult, pict
 		return []llm.Message{{Content: value.Text, Role: llm.RoleUser}}
 	case protocol.SessionEventSkillsListed:
 		return []llm.Message{{Content: SkillsText(value.Skills), Role: llm.RoleUser}}
+	case protocol.SessionEventSubagentReport:
+		return []llm.Message{{Content: reportOf(value), Role: llm.RoleUser}}
 	case protocol.SessionEventAssistantMessage:
 		return replyMessages(value, results, pictures)
 	}
 	return nil
+}
+
+// reportOf is a subagent's report as the main agent reads it: whose it is, what it says, then what is still to come.
+func reportOf(report protocol.SessionEventSubagentReport) string {
+	parts := []string{fmt.Sprintf(reportHeader, report.Description), report.Text}
+	if report.Note != "" {
+		parts = append(parts, report.Note)
+	}
+	return strings.Join(parts, userSeparator)
 }
 
 // replyMessages is a reply, then each of its calls' results, then the screenshots they showed.
@@ -121,7 +136,10 @@ func replyMessages(reply protocol.SessionEventAssistantMessage, results map[stri
 	if IsEmptyReply(reply.Text, reply.ToolCalls) {
 		return nil
 	}
-	messages := []llm.Message{{Content: reply.Text, Reasoning: reply.Reasoning, Role: llm.RoleAssistant, ToolCalls: reply.ToolCalls}}
+	messages := []llm.Message{{
+		Content: reply.Text, Items: reply.ResponseItems, Reasoning: reply.Reasoning, Role: llm.RoleAssistant,
+		ToolCalls: reply.ToolCalls,
+	}}
 	shown := []protocol.PictureRef{}
 	for _, call := range reply.ToolCalls {
 		result, ran := results[call.ID]

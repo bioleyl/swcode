@@ -37,11 +37,13 @@ var PlanStepStatuses = []PlanStepStatus{PlanStepStatusPending, PlanStepStatusInP
 
 var ReminderReasons = []ReminderReason{ReminderReasonPlan, ReminderReasonStepLimit}
 
+var SessionKinds = []SessionKind{SessionKindCode, SessionKindChat}
+
 var SessionStatuses = []SessionStatus{SessionStatusIdle, SessionStatusWorking, SessionStatusWaiting}
 
 var ThinkingModes = []ThinkingMode{ThinkingModeFull, ThinkingModeMedium, ThinkingModeLow, ThinkingModeOff}
 
-var ToolNames = []ToolName{ToolNameRead, ToolNameWrite, ToolNameEdit, ToolNameBash, ToolNameGrep, ToolNameGlob, ToolNameAgent, ToolNamePlan, ToolNameQuestion, ToolNameWebsearch, ToolNameWebfetch, ToolNameImage, ToolNameOutput, ToolNameKill, ToolNameSkill, ToolNameSaveskill, ToolNameScreenshot}
+var ToolNames = []ToolName{ToolNameRead, ToolNameWrite, ToolNameEdit, ToolNameBash, ToolNameGrep, ToolNameGlob, ToolNameAgent, ToolNamePlan, ToolNameQuestion, ToolNameWebsearch, ToolNameWebfetch, ToolNameImage, ToolNameDraw, ToolNameOutput, ToolNameKill, ToolNameSkill, ToolNameSaveskill, ToolNameScreenshot}
 
 var TurnOutcomes = []TurnOutcome{TurnOutcomeDone, TurnOutcomeStopped, TurnOutcomeFailed, TurnOutcomeLimit}
 
@@ -49,7 +51,7 @@ var PeekStates = []PeekState{PeekStateWaiting, PeekStateAnswering, PeekStateDone
 
 const MaxContextTokens = 10000000
 
-const MaxSubagentsPerTurn = 20
+const MaxSubagentsAtOnce = 20
 
 var EditableSettings = []SettingName{SettingNameSwcodeThinking, SettingNameSwcodeSubagentThinking, SettingNameSwcodeWorkspace, SettingNameSwcodeSSHEndpoints, SettingNameSwcodeImageURL, SettingNameSwcodeHost, SettingNameSwcodePort}
 
@@ -141,6 +143,22 @@ func (v PermissionMode) Valid() bool {
 	return false
 }
 
+type SessionKind string
+
+const (
+	SessionKindCode SessionKind = "code"
+	SessionKindChat SessionKind = "chat"
+)
+
+// Valid tells whether v is one of the SessionKind values.
+func (v SessionKind) Valid() bool {
+	switch v {
+	case SessionKindCode, SessionKindChat:
+		return true
+	}
+	return false
+}
+
 type SessionStatus string
 
 const (
@@ -191,6 +209,7 @@ const (
 	ToolNameWebsearch  ToolName = "websearch"
 	ToolNameWebfetch   ToolName = "webfetch"
 	ToolNameImage      ToolName = "image"
+	ToolNameDraw       ToolName = "draw"
 	ToolNameOutput     ToolName = "output"
 	ToolNameKill       ToolName = "kill"
 	ToolNameSkill      ToolName = "skill"
@@ -201,7 +220,7 @@ const (
 // Valid tells whether v is one of the ToolName values.
 func (v ToolName) Valid() bool {
 	switch v {
-	case ToolNameRead, ToolNameWrite, ToolNameEdit, ToolNameBash, ToolNameGrep, ToolNameGlob, ToolNameAgent, ToolNamePlan, ToolNameQuestion, ToolNameWebsearch, ToolNameWebfetch, ToolNameImage, ToolNameOutput, ToolNameKill, ToolNameSkill, ToolNameSaveskill, ToolNameScreenshot:
+	case ToolNameRead, ToolNameWrite, ToolNameEdit, ToolNameBash, ToolNameGrep, ToolNameGlob, ToolNameAgent, ToolNamePlan, ToolNameQuestion, ToolNameWebsearch, ToolNameWebfetch, ToolNameImage, ToolNameDraw, ToolNameOutput, ToolNameKill, ToolNameSkill, ToolNameSaveskill, ToolNameScreenshot:
 		return true
 	}
 	return false
@@ -943,11 +962,15 @@ func (SessionEventToolRunning) isSessionEvent() {}
 
 func (SessionEventToolFinished) isSessionEvent() {}
 
+func (SessionEventSubagentQueued) isSessionEvent() {}
+
 func (SessionEventSubagentStarted) isSessionEvent() {}
 
 func (SessionEventSubagentActivity) isSessionEvent() {}
 
 func (SessionEventSubagentFinished) isSessionEvent() {}
+
+func (SessionEventSubagentReport) isSessionEvent() {}
 
 func (SessionEventTurnFinished) isSessionEvent() {}
 
@@ -1044,6 +1067,12 @@ func (u *SessionEvent) UnmarshalJSON(data []byte) error {
 			return err
 		}
 		u.Value = value
+	case "\"subagentQueued\"":
+		var value SessionEventSubagentQueued
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
 	case "\"subagentStarted\"":
 		var value SessionEventSubagentStarted
 		if err := json.Unmarshal(data, &value); err != nil {
@@ -1058,6 +1087,12 @@ func (u *SessionEvent) UnmarshalJSON(data []byte) error {
 		u.Value = value
 	case "\"subagentFinished\"":
 		var value SessionEventSubagentFinished
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
+	case "\"subagentReport\"":
+		var value SessionEventSubagentReport
 		if err := json.Unmarshal(data, &value); err != nil {
 			return err
 		}
@@ -1089,9 +1124,11 @@ type SessionEventMapper[R any] interface {
 	QuestionAnswered(SessionEventQuestionAnswered) R
 	ToolRunning(SessionEventToolRunning) R
 	ToolFinished(SessionEventToolFinished) R
+	SubagentQueued(SessionEventSubagentQueued) R
 	SubagentStarted(SessionEventSubagentStarted) R
 	SubagentActivity(SessionEventSubagentActivity) R
 	SubagentFinished(SessionEventSubagentFinished) R
+	SubagentReport(SessionEventSubagentReport) R
 	TurnFinished(SessionEventTurnFinished) R
 }
 
@@ -1124,12 +1161,16 @@ func MapSessionEvent[R any](u SessionEvent, m SessionEventMapper[R]) R {
 		return m.ToolRunning(value)
 	case SessionEventToolFinished:
 		return m.ToolFinished(value)
+	case SessionEventSubagentQueued:
+		return m.SubagentQueued(value)
 	case SessionEventSubagentStarted:
 		return m.SubagentStarted(value)
 	case SessionEventSubagentActivity:
 		return m.SubagentActivity(value)
 	case SessionEventSubagentFinished:
 		return m.SubagentFinished(value)
+	case SessionEventSubagentReport:
+		return m.SubagentReport(value)
 	case SessionEventTurnFinished:
 		return m.TurnFinished(value)
 	}
@@ -1168,12 +1209,13 @@ func (v SessionEventUserMessage) MarshalJSON() ([]byte, error) {
 }
 
 type SessionEventAssistantMessage struct {
-	At        string     `json:"at"`
-	ID        string     `json:"id"`
-	Reasoning string     `json:"reasoning,omitempty"`
-	Text      string     `json:"text"`
-	ToolCalls []ToolCall `json:"toolCalls"`
-	Usage     *Usage     `json:"usage,omitempty"`
+	At            string     `json:"at"`
+	ID            string     `json:"id"`
+	Reasoning     string     `json:"reasoning,omitempty"`
+	ResponseItems string     `json:"responseItems,omitempty"`
+	Text          string     `json:"text"`
+	ToolCalls     []ToolCall `json:"toolCalls"`
+	Usage         *Usage     `json:"usage,omitempty"`
 }
 
 func (v SessionEventAssistantMessage) MarshalJSON() ([]byte, error) {
@@ -1566,6 +1608,23 @@ func (v SessionEventToolFinished) MarshalJSON() ([]byte, error) {
 	}{"toolFinished", p})
 }
 
+type SessionEventSubagentQueued struct {
+	AgentID     string `json:"agentId"`
+	At          string `json:"at"`
+	CallID      string `json:"callId"`
+	Description string `json:"description"`
+	Model       string `json:"model,omitempty"`
+}
+
+func (v SessionEventSubagentQueued) MarshalJSON() ([]byte, error) {
+	type plain SessionEventSubagentQueued
+	p := plain(v)
+	return json.Marshal(struct {
+		Key string `json:"kind"`
+		plain
+	}{"subagentQueued", p})
+}
+
 type SessionEventSubagentStarted struct {
 	AgentID     string `json:"agentId"`
 	At          string `json:"at"`
@@ -1623,6 +1682,7 @@ type SessionEventSubagentFinished struct {
 	AgentID string      `json:"agentId"`
 	At      string      `json:"at"`
 	Outcome TurnOutcome `json:"outcome"`
+	Report  string      `json:"report,omitempty"`
 }
 
 func (v SessionEventSubagentFinished) MarshalJSON() ([]byte, error) {
@@ -1650,6 +1710,24 @@ func (v *SessionEventSubagentFinished) Normalize() error {
 		return fmt.Errorf("%s: unknown value %q", "outcome", v.Outcome)
 	}
 	return nil
+}
+
+type SessionEventSubagentReport struct {
+	AgentID     string `json:"agentId"`
+	At          string `json:"at"`
+	Description string `json:"description"`
+	ID          string `json:"id"`
+	Note        string `json:"note,omitempty"`
+	Text        string `json:"text"`
+}
+
+func (v SessionEventSubagentReport) MarshalJSON() ([]byte, error) {
+	type plain SessionEventSubagentReport
+	p := plain(v)
+	return json.Marshal(struct {
+		Key string `json:"kind"`
+		plain
+	}{"subagentReport", p})
 }
 
 type SessionEventTurnFinished struct {
@@ -1691,11 +1769,13 @@ type SessionSummary struct {
 	Host      HostRef             `json:"host"`
 	ID        string              `json:"id"`
 	Jobs      []SessionSummaryJob `json:"jobs"`
+	Kind      SessionKind         `json:"kind"`
 	Mode      PermissionMode      `json:"mode"`
 	Preset    string              `json:"preset,omitempty"`
 	Queued    []string            `json:"queued"`
 	QueuedNow bool                `json:"queuedNow"`
 	Status    SessionStatus       `json:"status"`
+	Subagents int                 `json:"subagents"`
 	Thinking  ThinkingMode        `json:"thinking"`
 	Title     string              `json:"title"`
 	UpdatedAt string              `json:"updatedAt"`
@@ -1716,7 +1796,7 @@ func (v SessionSummary) MarshalJSON() ([]byte, error) {
 
 func (v *SessionSummary) UnmarshalJSON(data []byte) error {
 	type plain SessionSummary
-	p := plain{Concise: false, Host: HostRef{Value: HostRefLocal{}}, Jobs: []SessionSummaryJob{}, QueuedNow: false}
+	p := plain{Concise: false, Host: HostRef{Value: HostRefLocal{}}, Jobs: []SessionSummaryJob{}, Kind: "code", QueuedNow: false, Subagents: 0}
 	if err := json.Unmarshal(data, &p); err != nil {
 		return err
 	}
@@ -1726,11 +1806,17 @@ func (v *SessionSummary) UnmarshalJSON(data []byte) error {
 
 // Normalize trims and checks what the app sent, as its schema does.
 func (v *SessionSummary) Normalize() error {
+	if !v.Kind.Valid() {
+		return fmt.Errorf("%s: unknown value %q", "kind", v.Kind)
+	}
 	if !v.Mode.Valid() {
 		return fmt.Errorf("%s: unknown value %q", "mode", v.Mode)
 	}
 	if !v.Status.Valid() {
 		return fmt.Errorf("%s: unknown value %q", "status", v.Status)
+	}
+	if v.Subagents < 0 {
+		return fmt.Errorf("%s: at least 0", "subagents")
 	}
 	if !v.Thinking.Valid() {
 		return fmt.Errorf("%s: unknown value %q", "thinking", v.Thinking)
@@ -1771,6 +1857,8 @@ func (ClientMessageAnswerPermission) isClientMessage() {}
 func (ClientMessageAnswerQuestion) isClientMessage() {}
 
 func (ClientMessageStopTurn) isClientMessage() {}
+
+func (ClientMessageSearchSessions) isClientMessage() {}
 
 func (ClientMessagePeek) isClientMessage() {}
 
@@ -1867,6 +1955,12 @@ func (u *ClientMessage) UnmarshalJSON(data []byte) error {
 			return err
 		}
 		u.Value = value
+	case "\"searchSessions\"":
+		var value ClientMessageSearchSessions
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
 	case "\"peek\"":
 		var value ClientMessagePeek
 		if err := json.Unmarshal(data, &value); err != nil {
@@ -1945,6 +2039,7 @@ type ClientMessageMapper[R any] interface {
 	AnswerPermission(ClientMessageAnswerPermission) R
 	AnswerQuestion(ClientMessageAnswerQuestion) R
 	StopTurn(ClientMessageStopTurn) R
+	SearchSessions(ClientMessageSearchSessions) R
 	Peek(ClientMessagePeek) R
 	StopJob(ClientMessageStopJob) R
 	SetMode(ClientMessageSetMode) R
@@ -1980,6 +2075,8 @@ func MapClientMessage[R any](u ClientMessage, m ClientMessageMapper[R]) R {
 		return m.AnswerQuestion(value)
 	case ClientMessageStopTurn:
 		return m.StopTurn(value)
+	case ClientMessageSearchSessions:
+		return m.SearchSessions(value)
 	case ClientMessagePeek:
 		return m.Peek(value)
 	case ClientMessageStopJob:
@@ -2007,6 +2104,7 @@ func MapClientMessage[R any](u ClientMessage, m ClientMessageMapper[R]) R {
 type ClientMessageCreateSession struct {
 	Concise   bool            `json:"concise,omitempty"`
 	Host      *HostRef        `json:"host,omitempty"`
+	Kind      SessionKind     `json:"kind,omitempty"`
 	Mode      PermissionMode  `json:"mode,omitempty"`
 	Pictures  []PictureUpload `json:"pictures,omitempty"`
 	Preset    string          `json:"preset,omitempty"`
@@ -2036,6 +2134,9 @@ func (v *ClientMessageCreateSession) UnmarshalJSON(data []byte) error {
 
 // Normalize trims and checks what the app sent, as its schema does.
 func (v *ClientMessageCreateSession) Normalize() error {
+	if v.Kind != "" && !v.Kind.Valid() {
+		return fmt.Errorf("%s: unknown value %q", "kind", v.Kind)
+	}
 	if v.Mode != "" && !v.Mode.Valid() {
 		return fmt.Errorf("%s: unknown value %q", "mode", v.Mode)
 	}
@@ -2261,6 +2362,38 @@ func (v ClientMessageStopTurn) MarshalJSON() ([]byte, error) {
 		Key string `json:"type"`
 		plain
 	}{"stopTurn", p})
+}
+
+type ClientMessageSearchSessions struct {
+	Query string `json:"query"`
+}
+
+func (v ClientMessageSearchSessions) MarshalJSON() ([]byte, error) {
+	type plain ClientMessageSearchSessions
+	p := plain(v)
+	return json.Marshal(struct {
+		Key string `json:"type"`
+		plain
+	}{"searchSessions", p})
+}
+
+func (v *ClientMessageSearchSessions) UnmarshalJSON(data []byte) error {
+	type plain ClientMessageSearchSessions
+	p := plain{}
+	if err := json.Unmarshal(data, &p); err != nil {
+		return err
+	}
+	*v = ClientMessageSearchSessions(p)
+	return v.Normalize()
+}
+
+// Normalize trims and checks what the app sent, as its schema does.
+func (v *ClientMessageSearchSessions) Normalize() error {
+	v.Query = strings.TrimSpace(v.Query)
+	if utf8.RuneCountInString(v.Query) < 1 {
+		return fmt.Errorf("%s: must not be empty", "query")
+	}
+	return nil
 }
 
 type ClientMessagePeek struct {
@@ -2539,6 +2672,8 @@ func (ServerMessageSessions) isServerMessage() {}
 
 func (ServerMessageSessionCreated) isServerMessage() {}
 
+func (ServerMessageSessionMatches) isServerMessage() {}
+
 func (ServerMessageSessionHistory) isServerMessage() {}
 
 func (ServerMessageSessionEvent) isServerMessage() {}
@@ -2590,6 +2725,12 @@ func (u *ServerMessage) UnmarshalJSON(data []byte) error {
 		u.Value = value
 	case "\"sessionCreated\"":
 		var value ServerMessageSessionCreated
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
+	case "\"sessionMatches\"":
+		var value ServerMessageSessionMatches
 		if err := json.Unmarshal(data, &value); err != nil {
 			return err
 		}
@@ -2688,6 +2829,7 @@ func (u *ServerMessage) UnmarshalJSON(data []byte) error {
 type ServerMessageMapper[R any] interface {
 	Sessions(ServerMessageSessions) R
 	SessionCreated(ServerMessageSessionCreated) R
+	SessionMatches(ServerMessageSessionMatches) R
 	SessionHistory(ServerMessageSessionHistory) R
 	SessionEvent(ServerMessageSessionEvent) R
 	AssistantDelta(ServerMessageAssistantDelta) R
@@ -2711,6 +2853,8 @@ func MapServerMessage[R any](u ServerMessage, m ServerMessageMapper[R]) R {
 		return m.Sessions(value)
 	case ServerMessageSessionCreated:
 		return m.SessionCreated(value)
+	case ServerMessageSessionMatches:
+		return m.SessionMatches(value)
 	case ServerMessageSessionHistory:
 		return m.SessionHistory(value)
 	case ServerMessageSessionEvent:
@@ -2770,6 +2914,28 @@ func (v ServerMessageSessionCreated) MarshalJSON() ([]byte, error) {
 		Key string `json:"type"`
 		plain
 	}{"sessionCreated", p})
+}
+
+type ServerMessageSessionMatches struct {
+	Matches []SessionMatch `json:"matches"`
+	Query   string         `json:"query"`
+}
+
+func (v ServerMessageSessionMatches) MarshalJSON() ([]byte, error) {
+	type plain ServerMessageSessionMatches
+	p := plain(v)
+	if p.Matches == nil {
+		p.Matches = []SessionMatch{}
+	}
+	return json.Marshal(struct {
+		Key string `json:"type"`
+		plain
+	}{"sessionMatches", p})
+}
+
+type SessionMatch struct {
+	SessionID string `json:"sessionId"`
+	Snippet   string `json:"snippet"`
 }
 
 type ServerMessageSessionHistory struct {
@@ -3046,7 +3212,7 @@ func (v *ModelRef) Normalize() error {
 }
 
 type SubagentLimit struct {
-	PerTurn int `json:"perTurn"`
+	AtOnce int `json:"atOnce"`
 }
 
 func (v *SubagentLimit) UnmarshalJSON(data []byte) error {
@@ -3061,11 +3227,11 @@ func (v *SubagentLimit) UnmarshalJSON(data []byte) error {
 
 // Normalize trims and checks what the app sent, as its schema does.
 func (v *SubagentLimit) Normalize() error {
-	if v.PerTurn < 0 {
-		return fmt.Errorf("%s: at least 0", "perTurn")
+	if v.AtOnce < 0 {
+		return fmt.Errorf("%s: at least 0", "atOnce")
 	}
-	if v.PerTurn > 20 {
-		return fmt.Errorf("%s: at most 20", "perTurn")
+	if v.AtOnce > 20 {
+		return fmt.Errorf("%s: at most 20", "atOnce")
 	}
 	return nil
 }

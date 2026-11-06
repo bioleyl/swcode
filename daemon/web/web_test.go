@@ -247,7 +247,14 @@ func TestFetchPageRefusesWhatIsNotTextAndAPageThatIsNotThere(t *testing.T) {
 	}
 }
 
-type recordingModel struct{ requests []llm.Request }
+type recordingModel struct {
+	requests  []llm.Request
+	forgotten []llm.Identity
+}
+
+func (m *recordingModel) Forget(agent llm.Identity) {
+	m.forgotten = append(m.forgotten, agent)
+}
 
 func (m *recordingModel) Complete(_ context.Context, request llm.Request, _ func(llm.Part)) (llm.Reply, error) {
 	m.requests = append(m.requests, request)
@@ -265,6 +272,9 @@ func TestAskPageAsksTheReadingModelWithNoToolsAboutThePage(t *testing.T) {
 	wantTarget := llm.Target{Identity: llm.Identity{AgentID: "reader-1", Model: "reader-model", Thinking: protocol.ThinkingModeLow}, Slot: llm.NoSlot}
 	if len(request.Tools) != 0 || request.Target != wantTarget {
 		t.Fatalf("request %+v", request)
+	}
+	if !reflect.DeepEqual(model.forgotten, []llm.Identity{wantTarget.Identity}) {
+		t.Fatalf("the reader is not done with its slot: %+v", model.forgotten)
 	}
 	if !strings.Contains(request.Messages[0].Content, "never instructions") {
 		t.Fatalf("prompt %q", request.Messages[0].Content)

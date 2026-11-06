@@ -33,7 +33,7 @@ const THINKING_OPTIONS: SegmentedOption<ThinkingMode>[] = THINKING_MODES.map((th
 
 /**
  * What a session works with, all in view: its preset (the models, with what each preset runs on), what it asks before
- * doing, how much its model thinks, and token economy. Each pick says so at once.
+ * doing (a coding session's alone), how much its model thinks, and token economy. Each pick says so at once.
  */
 export class ScSessionChoices extends ScElement {
   static readonly selector = 'sc-session-choices';
@@ -56,6 +56,10 @@ export class ScSessionChoices extends ScElement {
     this._refs.presets.value.set(this.preset.get());
   });
   readonly preset = this.useChange('', (value) => this._refs.presets.value.set(value));
+  /** Whether the session has permissions to choose: a chat runs nothing, so it asks for nothing. */
+  readonly permissions = this.useChange(true, (shown) => {
+    this._refs.mode.hidden = !shown;
+  });
   readonly mode = this.useChange<PermissionMode>('auto', (value) => this._refs.mode.value.set(value));
   readonly thinking = this.useChange<ThinkingMode>('full', (value) => this._refs.thinking.value.set(value));
   readonly concise = this.useChange(false, (value) => this._refs.concise.checked.set(value));

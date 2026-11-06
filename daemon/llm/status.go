@@ -20,12 +20,17 @@ const (
 )
 
 // servedModels is /v1/models; in router mode, each model also says whether it is loaded, and what it takes in,
-// loaded or not (pictures when it has a vision projector, --mmproj). vLLM says how long a conversation can be.
+// loaded or not (pictures when it has a vision projector, --mmproj). vLLM says how long a conversation can be, as
+// some hosted APIs do under names of their own; OpenAI's does not.
 type servedModels struct {
 	Data []struct {
 		ID          string `json:"id"`
 		MaxModelLen int    `json:"max_model_len"`
-		Status      *struct {
+		// ContextLength is OpenRouter's, ContextWindow Groq's, MaxContextLength Mistral's.
+		ContextLength    int `json:"context_length"`
+		ContextWindow    int `json:"context_window"`
+		MaxContextLength int `json:"max_context_length"`
+		Status           *struct {
 			Value string `json:"value"`
 		} `json:"status"`
 		Architecture *struct {
@@ -34,11 +39,12 @@ type servedModels struct {
 	} `json:"data"`
 }
 
-// lengthOf is the longest conversation a model takes, as vLLM lists it: the only model's when none is named.
+// lengthOf is the longest conversation a model takes, as vLLM or a hosted API lists it: the only model's when none
+// is named.
 func (m servedModels) lengthOf(model string) int {
 	for _, served := range m.Data {
 		if served.ID == model || (model == "" && len(m.Data) == 1) {
-			return served.MaxModelLen
+			return max(served.MaxModelLen, served.ContextLength, served.ContextWindow, served.MaxContextLength)
 		}
 	}
 	return 0

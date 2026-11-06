@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -55,7 +56,8 @@ type result struct {
 // call prepares and runs a call as the agent loop does, without anyone to ask: the input as the model writes it.
 func (f *fixture) call(name, input string) result {
 	f.t.Helper()
-	tool, ok := Main.Find(name)
+	// Any tool, a chat's too: which agent has it is the boxes' business.
+	tool, ok := all[protocol.ToolName(name)]
 	if !ok {
 		f.t.Fatalf("no tool %s", name)
 	}
@@ -290,6 +292,14 @@ func (f *fakeImages) Draw(_ context.Context, request images.DrawRequest) images.
 
 func (f *fakeImages) Keep([]byte) (string, error) { return "/api/images/s1/p1.png", nil }
 
+// Kept knows the picture the chat drew before, p0.png.
+func (f *fakeImages) Kept(name string) ([]byte, error) {
+	if name != "p0.png" {
+		return nil, os.ErrNotExist
+	}
+	return []byte("P0"), nil
+}
+
 func TestImageSavesThePictureInTheWorkspaceAndShowsTheDaemonsCopy(t *testing.T) {
 	f := setUp(t)
 	drawer := &fakeImages{}
@@ -485,7 +495,7 @@ func TestTheToolSchemasAreWhatTheModelReads(t *testing.T) {
 	if string(data) != want {
 		t.Fatalf("got %s", data)
 	}
-	main, explore := Boxes(Servers{})
+	main, explore, chat := Boxes(Servers{})
 	names := func(box Box) []string {
 		list := []string{}
 		for _, definition := range box.Definitions() {
@@ -498,5 +508,43 @@ func TestTheToolSchemasAreWhatTheModelReads(t *testing.T) {
 	}
 	if got := names(main); strings.Contains(strings.Join(got, " "), "image") || strings.Contains(strings.Join(got, " "), "screenshot") {
 		t.Fatalf("main %v", got)
+	}
+	if got := names(chat); !reflect.DeepEqual(got, []string{"websearch", "webfetch"}) {
+		t.Fatalf("chat %v", got)
+	}
+	main, _, chat = Boxes(Servers{Images: true})
+	if got := names(chat); !reflect.DeepEqual(got, []string{"websearch", "webfetch", "draw"}) {
+		t.Fatalf("chat with pictures %v", got)
+	}
+	if got := names(main); slices.Contains(got, "draw") || !slices.Contains(got, "image") {
+		t.Fatalf("main with pictures %v", got)
+	}
+}
+
+func TestDrawShowsThePictureInTheChatAndChangesOneItDrewByItsName(t *testing.T) {
+	f := setUp(t)
+	drawer := &fakeImages{}
+	f.tc.Images = drawer
+	got := f.call("draw", `{"prompt":"the fox, in blue","references":["p0.png"],"size":"768x1024"}`)
+	image, _ := got.Display.Value.(protocol.ToolDisplayImage)
+	if !got.OK || got.Meta != "768x1024" || image.URL != "/api/images/s1/p1.png" || image.Path != "p1.png" || !strings.HasPrefix(got.Output, "Drew p1.png: a 768x1024 picture") {
+		t.Fatalf("got %+v", got)
+	}
+	want := []images.DrawRequest{{Prompt: "the fox, in blue", References: []images.Reference{{Data: []byte("P0"), Name: "p0.png", Type: "image/png"}}, Size: "768x1024"}}
+	if !reflect.DeepEqual(drawer.asked, want) {
+		t.Fatalf("asked %+v", drawer.asked)
+	}
+}
+
+func TestDrawRefusesAPictureItDidNotDrawBeforeAskingTheServer(t *testing.T) {
+	f := setUp(t)
+	drawer := &fakeImages{}
+	f.tc.Images = drawer
+	f.refused("draw", `{"prompt":"x","references":["../secret.png"]}`, `not a picture of this chat`)
+	f.refused("draw", `{"prompt":"x","size":"1000x1000"}`, `steps of 64`)
+	f.tc.Images = nil
+	f.refused("draw", `{"prompt":"x"}`, `SWCODE_IMAGE_URL`)
+	if len(drawer.asked) != 0 {
+		t.Fatal("the server was asked")
 	}
 }

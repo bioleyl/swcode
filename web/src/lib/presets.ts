@@ -26,7 +26,7 @@ const KILO = 1024;
 const NO_LIMIT = 'any';
 const LIMITS_OFFERED = [1, 2, 3, 4, 5, 10];
 
-/** The choices of how many subagents a turn may start: none, a few, or no limit. */
+/** The choices of how many subagents work at once: none, a few, or all those the main agent starts. */
 export const SUBAGENT_LIMIT_OPTIONS: readonly SelectOption[] = [
   { label: 'None: the main agent works alone', value: '0' },
   ...LIMITS_OFFERED.map((count) => ({ label: String(count), value: String(count) })),
@@ -35,11 +35,11 @@ export const SUBAGENT_LIMIT_OPTIONS: readonly SelectOption[] = [
 
 /** A limit as the select shows it. */
 export const subagentLimitChoice = (limit: SubagentLimit | undefined): string =>
-  limit === undefined ? NO_LIMIT : String(limit.perTurn);
+  limit === undefined ? NO_LIMIT : String(limit.atOnce);
 
 /** The limit a select's choice stands for: none for no limit. */
 export const subagentLimitOf = (choice: string): SubagentLimit | undefined =>
-  choice === NO_LIMIT || choice === '' ? undefined : { perTurn: Number(choice) };
+  choice === NO_LIMIT || choice === '' ? undefined : { atOnce: Number(choice) };
 
 /** The preset a session works with, as the daemon picks it: its own, else the default one. */
 export const presetOf = (choices: PresetChoices, id: string | undefined): Preset | undefined =>
@@ -81,15 +81,15 @@ const subagentsShareMain = (preset: Preset): boolean =>
   preset.workers.source === preset.main.source
   && (preset.workers.model === '' || preset.workers.model === preset.main.model);
 
-/** What a preset's subagents are in words, when it says more than the main agent: their model, how many a turn. */
+/** What a preset's subagents are in words, when it says more than the main agent: their model, how many at once. */
 const subagentText = (choices: PresetChoices, preset: Preset): string => {
-  const limit = preset.subagentLimit?.perTurn;
+  const limit = preset.subagentLimit?.atOnce;
   if (limit === 0) {
     return NO_SUBAGENTS;
   }
   const parts = [
     subagentsShareMain(preset) ? '' : modelText(choices, preset.workers),
-    limit === undefined ? '' : `${limit} a turn`,
+    limit === undefined ? '' : `${limit} at once`,
   ].filter((part) => part !== '');
   return parts.length === 0 ? '' : `subagents: ${parts.join(', ')}`;
 };

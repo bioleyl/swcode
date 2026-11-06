@@ -183,7 +183,7 @@ func New(settings config.Config, options Options) (*App, error) {
 	})
 	registry := hosts.NewRegistry(local, options.ConnectHost)
 	found := options.browser()
-	mainTools, exploreTools := tools.Boxes(tools.Servers{Browser: found != nil, Images: settings.ImageURL != ""})
+	mainTools, exploreTools, chatTools := tools.Boxes(tools.Servers{Browser: found != nil, Images: settings.ImageURL != ""})
 	store := skills.NewStore(filepath.Join(settings.DataDir, skillsFolder))
 	if err := store.Seed(options.DefaultSkills); err != nil {
 		return nil, err
@@ -216,13 +216,16 @@ func New(settings config.Config, options Options) (*App, error) {
 			return web.SearchWeb(ctx, query, options.HTTP)
 		}, web.SearchGap),
 		Skills: skillCatalog, Store: sessions.NewStore(filepath.Join(settings.DataDir, sessionsFolder)),
-		SubagentTools: exploreTools, Thinking: sessions.Thinking{Session: settings.Thinking, Subagents: settings.SubagentThinking},
+		ChatTools: chatTools, SubagentTools: exploreTools, Thinking: sessions.Thinking{Session: settings.Thinking, Subagents: settings.SubagentThinking},
 		Tools: mainTools, Workspace: workspace,
 	})
 	app.Sessions = service
 	service.Load()
-	// Sessions from before projects, or whose project was lost, get one.
+	// Sessions from before projects, or whose project was lost, get one; a chat works in no folder.
 	for _, session := range service.List() {
+		if session.Kind == protocol.SessionKindChat {
+			continue
+		}
 		app.Projects.Ensure(session.Workspace, session.Host)
 	}
 	if app.options.Busy == nil {

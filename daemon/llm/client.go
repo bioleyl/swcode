@@ -14,7 +14,9 @@ import (
 	"net/http"
 	"os"
 	"regexp"
+	"slices"
 	"strings"
+	"sync/atomic"
 
 	"swcode/daemon/protocol"
 )
@@ -25,11 +27,16 @@ const (
 	callIDBytes    = 16
 	maxStreamLine  = 16 << 20
 	missingPicture = "[A pasted picture that is no longer there.]"
-	// How llm-server says the prompt does not fit in the slot's context.
+	// How llm-server says the prompt does not fit in the slot's context, and how OpenAI's API says it.
 	contextFullType = "exceed_context_size_error"
+	contextFullCode = "context_length_exceeded"
 )
 
-var contextFullMessage = regexp.MustCompile(`(?i)exceeds? the available context size`)
+var contextFullMessage = regexp.MustCompile(`(?i)exceeds? the (available context size|context window)`)
+
+// llamaFields are llama.cpp's own fields of a request, beyond the Chat Completions API: OpenAI's API and others
+// refuse them ("Unknown parameter: 'cache_prompt'").
+var llamaFields = []string{"cache_prompt", "id_slot", "chat_template_kwargs", "reasoning_content"}
 
 // templateKwargs is what each thinking mode asks the chat template, through llm-server's chat_template_kwargs:
 // nothing for the model's own default, a level the Qwen 3.8 and gpt-oss templates know, or no thinking at all,
@@ -127,45 +134,63 @@ func (w wireChunk) chunk() StreamChunk {
 	return chunk
 }
 
-// errorBody is how llm-server explains a refusal: a message, or an object with a message and a type.
+// errorBody is how llm-server explains a refusal: a message, or an object with a message, a type and a code.
 type errorBody struct {
 	Error json.RawMessage `json:"error"`
 }
 
-func (b errorBody) message() (string, string) {
+// errorDetail is a refusal's message, and what kind it is: llama.cpp says it in its type, OpenAI's API in its code.
+type errorDetail struct {
+	Message string `json:"message"`
+	Type    string `json:"type"`
+	Code    string `json:"code"`
+}
+
+func (b errorBody) detail() errorDetail {
 	var text string
 	if json.Unmarshal(b.Error, &text) == nil {
-		return text, ""
+		return errorDetail{Message: text}
 	}
-	var detail struct {
-		Message string `json:"message"`
-		Type    string `json:"type"`
-	}
-	if json.Unmarshal(b.Error, &detail) == nil {
-		return detail.Message, detail.Type
-	}
-	return "", ""
+	var detail errorDetail
+	_ = json.Unmarshal(b.Error, &detail)
+	return detail
+}
+
+func (b errorBody) message() string {
+	return b.detail().Message
+}
+
+// contextFull tells a refusal for a prompt too long for the model's context.
+func (d errorDetail) contextFull() bool {
+	return d.Type == contextFullType || d.Code == contextFullCode || contextFullMessage.MatchString(d.Message)
 }
 
 // refusalOf is the error for a refused request: a full context is told apart, the turn can compact and go on.
 func refusalOf(status int, body []byte, statusText string) *ModelError {
 	var parsed errorBody
 	_ = json.Unmarshal(body, &parsed)
-	detail, kind := parsed.message()
-	detail = firstNonEmpty(detail, statusText)
+	detail := parsed.detail()
 	return &ModelError{
-		ContextFull: kind == contextFullType || contextFullMessage.MatchString(detail),
-		Message:     fmt.Sprintf("llm-server answered %d: %s", status, detail),
+		ContextFull: detail.contextFull(),
+		Message:     fmt.Sprintf("llm-server answered %d: %s", status, firstNonEmpty(detail.Message, statusText)),
 	}
+}
+
+// pictureURL is a picture inline, as a data URL; false once it is gone from the disk.
+func pictureURL(picture Picture) (string, bool) {
+	data, err := os.ReadFile(picture.Path)
+	if err != nil {
+		return "", false
+	}
+	return "data:" + picture.Type + ";base64," + base64.StdEncoding.EncodeToString(data), true
 }
 
 // pictureContent is a picture as the Chat Completions API takes it inline; one gone from the disk is said to be gone.
 func pictureContent(picture Picture) map[string]any {
-	data, err := os.ReadFile(picture.Path)
-	if err != nil {
+	url, found := pictureURL(picture)
+	if !found {
 		return map[string]any{"text": missingPicture, "type": "text"}
 	}
-	url := "data:" + picture.Type + ";base64," + base64.StdEncoding.EncodeToString(data)
 	return map[string]any{"image_url": map[string]any{"url": url}, "type": "image_url"}
 }
 
@@ -181,7 +206,7 @@ func wireContent(message Message) any {
 	return content
 }
 
-func wireMessage(message Message) map[string]any {
+func wireMessage(message Message, plain bool) map[string]any {
 	wire := map[string]any{"content": wireContent(message), "role": message.Role}
 	if message.Role == RoleAssistant && len(message.ToolCalls) > 0 {
 		calls := []map[string]any{}
@@ -197,7 +222,7 @@ func wireMessage(message Message) map[string]any {
 	if message.Role == RoleTool {
 		wire["tool_call_id"] = message.ToolCallID
 	}
-	if message.Role == RoleAssistant && message.Reasoning != "" {
+	if !plain && message.Role == RoleAssistant && message.Reasoning != "" {
 		wire["reasoning_content"] = message.Reasoning
 	}
 	return wire
@@ -207,20 +232,21 @@ func wireMessage(message Message) map[string]any {
 // fast.
 type Client struct {
 	options Options
+	// plain: the server refused llama.cpp's own fields, as OpenAI's API does; its requests go without them.
+	plain atomic.Bool
 }
 
 func NewClient(options Options) *Client {
 	return &Client{options: options}
 }
 
-func (c *Client) bodyOf(request Request) map[string]any {
+// bodyOf is the request as the API takes it: with llama.cpp's own fields, unless plain.
+func bodyOf(request Request, model string, plain bool) map[string]any {
 	messages := []map[string]any{}
 	for _, message := range request.Messages {
-		messages = append(messages, wireMessage(message))
+		messages = append(messages, wireMessage(message, plain))
 	}
 	body := map[string]any{
-		// Reuses the KV cache of the conversation's earlier turns: only what is new gets processed.
-		"cache_prompt":   true,
 		"messages":       messages,
 		"stream":         true,
 		"stream_options": map[string]any{"include_usage": true},
@@ -233,9 +259,14 @@ func (c *Client) bodyOf(request Request) map[string]any {
 		}
 		body["tools"] = tools
 	}
-	if model := firstNonEmpty(request.Target.Model, c.options.Model); model != "" {
+	if model := firstNonEmpty(request.Target.Model, model); model != "" {
 		body["model"] = model
 	}
+	if plain {
+		return body
+	}
+	// Reuses the KV cache of the conversation's earlier turns: only what is new gets processed.
+	body["cache_prompt"] = true
 	// Each agent keeps to its slot, where its conversation is still cached.
 	if request.Target.Slot != NoSlot {
 		body["id_slot"] = request.Target.Slot
@@ -246,22 +277,54 @@ func (c *Client) bodyOf(request Request) map[string]any {
 	return body
 }
 
-func (c *Client) Complete(ctx context.Context, request Request, onPart func(Part)) (Reply, error) {
-	body, err := json.Marshal(c.bodyOf(request))
+// namesLlamaField tells a refusal that names one of llama.cpp's own fields: the server does not know it.
+func namesLlamaField(refusal []byte) bool {
+	return slices.ContainsFunc(llamaFields, func(field string) bool { return bytes.Contains(refusal, []byte(field)) })
+}
+
+// send posts the request once, with llama.cpp's own fields unless plain.
+func (c *Client) send(ctx context.Context, request Request, plain bool) (*http.Response, error) {
+	body, err := json.Marshal(bodyOf(request, c.options.Model, plain))
 	if err != nil {
-		return Reply{}, err
+		return nil, err
 	}
 	httpRequest, err := c.options.newRequest(ctx, http.MethodPost, chatPath, bytes.NewReader(body))
 	if err != nil {
-		return Reply{}, err
+		return nil, err
 	}
 	response, err := c.options.client().Do(httpRequest)
 	if err != nil {
 		// Stopping the turn ends the request: that is not llm-server's fault.
 		if ctx.Err() != nil {
-			return Reply{}, ctx.Err()
+			return nil, ctx.Err()
 		}
-		return Reply{}, &ModelError{Message: fmt.Sprintf("llm-server at %s does not answer.", c.options.URL)}
+		return nil, &ModelError{Message: fmt.Sprintf("llm-server at %s does not answer.", c.options.URL)}
+	}
+	return response, nil
+}
+
+// post sends the request, and once more without llama.cpp's own fields when the server refuses one of them, as
+// OpenAI's API does: the client remembers it, and the server's next requests go without them at once.
+func (c *Client) post(ctx context.Context, request Request) (*http.Response, error) {
+	plain := c.plain.Load()
+	response, err := c.send(ctx, request, plain)
+	if err != nil || plain || response.StatusCode != http.StatusBadRequest {
+		return response, err
+	}
+	refusal, _ := io.ReadAll(response.Body)
+	response.Body.Close()
+	if !namesLlamaField(refusal) {
+		response.Body = io.NopCloser(bytes.NewReader(refusal))
+		return response, nil
+	}
+	c.plain.Store(true)
+	return c.send(ctx, request, true)
+}
+
+func (c *Client) Complete(ctx context.Context, request Request, onPart func(Part)) (Reply, error) {
+	response, err := c.post(ctx, request)
+	if err != nil {
+		return Reply{}, err
 	}
 	defer response.Body.Close()
 	if response.StatusCode >= http.StatusBadRequest {
@@ -298,8 +361,7 @@ func readLine(line string, builder *ReplyBuilder, onPart func(Part)) error {
 	if sse.Kind == SSEError {
 		var body errorBody
 		_ = json.Unmarshal([]byte(sse.Data), &body)
-		message, _ := body.message()
-		return &ModelError{Message: firstNonEmpty(message, sse.Data)}
+		return &ModelError{Message: firstNonEmpty(body.message(), sse.Data)}
 	}
 	var chunk wireChunk
 	if json.Unmarshal([]byte(sse.Data), &chunk) != nil {

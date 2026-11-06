@@ -4,10 +4,10 @@ import { confirmDialog, JlAlert, JlBadge, JlButton, JlIcon } from '@syware/jlib'
 import { ScElement } from '../base/sc-element';
 import { agentsOf } from '../lib/agents';
 import { contextText } from '../lib/format';
-import { placeText } from '../lib/hosts';
 import { currentPlan } from '../lib/plan';
 import { presetOf, presetStatusOf } from '../lib/presets';
-import { SESSION_STATUS_LOOKS } from '../lib/session-status';
+import { sessionPlace } from '../lib/session-kinds';
+import { liveStatus, SESSION_STATUS_LOOKS } from '../lib/session-status';
 import { ScTitle } from '../molecules/sc-title';
 import { ScArcade } from '../organisms/sc-arcade';
 import { ScComposer } from '../organisms/sc-composer';
@@ -17,7 +17,7 @@ import { ScPlan } from '../organisms/sc-plan';
 import { ScSidePanel } from '../organisms/sc-side-panel';
 import { daemon, daemonBus } from '../services/daemon';
 import { daemonState, daemonStatusBus } from '../services/daemon-status';
-import { HOME_PATH, navigate } from '../services/navigation';
+import { navigate, newPathOf } from '../services/navigation';
 import { presetChoices, presetsBus } from '../services/presets';
 import { markSeen } from '../services/seen-sessions';
 import { findSession, sessionListBus } from '../services/session-list';
@@ -26,7 +26,7 @@ import { BASE_STYLES } from '../styles/shared';
 import styles from './session-page.css?inline';
 
 import type { ServerMessage } from '../../../shared/protocol/messages.schema';
-import type { SessionEvent, SessionEventKind } from '../../../shared/protocol/session.schema';
+import type { SessionEvent, SessionEventKind, SessionKind } from '../../../shared/protocol/session.schema';
 import type { PromptDraft } from '../types/composer.types';
 import type { ServerHandlers, ServerMessageMap } from '../types/page.types';
 
@@ -37,10 +37,17 @@ const PANEL_CLOSED = 'panel-closed';
 // The events that can change the plan above the composer: a new turn hides the last one, a plan call shows its own.
 const PLAN_EVENTS: ReadonlySet<SessionEventKind> = new Set(['turnStarted', 'toolFinished']);
 const SUBAGENT_EVENTS: ReadonlySet<SessionEventKind> = new Set([
+  'subagentQueued',
   'subagentStarted',
   'subagentActivity',
   'subagentFinished',
 ]);
+
+/** What deleting a session takes, said in the dialog that asks first: a coding session leaves its project behind. */
+const DELETE_CONSEQUENCES: Readonly<Record<SessionKind, string>> = {
+  chat: 'Its conversation and its pictures go for good.',
+  code: 'Its conversation goes for good. Its project and files stay.',
+};
 
 /** The prompt tokens of the last reply, plus its own: how much of the context the conversation fills. */
 const usedTokens = (events: readonly SessionEvent[]): number => {
@@ -50,7 +57,10 @@ const usedTokens = (events: readonly SessionEvent[]): number => {
     : 0;
 };
 
-/** One session: its conversation, the composer under it, and on a wide screen what the agent runs on. */
+/**
+ * One session: its conversation, the composer under it, and on a wide screen what the agent runs on. A chat shows no
+ * folder, and has no /peek: its turns are short.
+ */
 export class SessionPage extends ScElement {
   static readonly selector = 'session-page';
 
@@ -100,6 +110,8 @@ export class SessionPage extends ScElement {
         this._refs.plan.show(currentPlan(this._events));
         this.showUsage(usedTokens(message.events));
       }),
+    // The palette's search hears its answers through the search service.
+    sessionMatches: () => undefined,
     // The list itself comes through the session list service.
     sessions: () => undefined,
     toolCallWriting: (message) =>
@@ -114,6 +126,7 @@ export class SessionPage extends ScElement {
     panelToggle: ref<JlButton>('.panel-toggle'),
     path: ref('.path'),
     peek: ref(ScPeek),
+    place: ref('.chip'),
     plan: ref(ScPlan),
     problem: ref(JlAlert),
     remove: ref<JlButton>('.delete'),
@@ -263,20 +276,21 @@ export class SessionPage extends ScElement {
     this.renderDaemon();
   }
 
-  /** Deletes the session once the person confirms: its conversation goes for good. */
+  /** Deletes the session once the person confirms, its conversation for good; a new one of its kind shows then. */
   private async deleteSession(): Promise<void> {
-    const title = findSession(this._sessionId)?.title ?? '';
+    const session = findSession(this._sessionId);
+    const kind = session?.kind ?? 'code';
     const confirmed = await confirmDialog({
       confirmLabel: 'Delete',
-      heading: `Delete “${title}”?`,
-      text: 'Its conversation goes for good. Its project and files stay.',
+      heading: `Delete “${session?.title ?? ''}”?`,
+      text: DELETE_CONSEQUENCES[kind],
       tone: 'danger',
     });
     if (!confirmed) {
       return;
     }
     daemon.send({ sessionId: this._sessionId, type: 'deleteSession' });
-    navigate(HOME_PATH);
+    navigate(newPathOf(kind));
   }
 
   /** What the daemon refused, over the composer: nothing once a new message goes. */
@@ -304,18 +318,23 @@ export class SessionPage extends ScElement {
     this._refs.title.fixed.set(session === undefined);
     this._refs.remove.hidden = session === undefined;
     this._refs.status.hidden = session === undefined;
-    this._refs.status.showStatus(SESSION_STATUS_LOOKS[session?.status ?? 'idle']);
+    this._refs.status.showStatus(SESSION_STATUS_LOOKS[session ? liveStatus(session) : 'idle']);
     this._refs.conversation.queued.set(session?.queued ?? []);
     this._refs.conversation.queuedNow.set(session?.queuedNow ?? false);
     this._refs.panel.jobs.set(session?.jobs ?? []);
-    this._refs.path.textContent = session ? placeText(session.host, session.workspace) : '';
+    const kind = session?.kind ?? 'code';
+    this._refs.place.hidden = kind === 'chat';
+    this._refs.path.textContent = session ? sessionPlace(session) : '';
     this._refs.conversation.workspace.set(session?.workspace ?? '');
+    this._refs.composer.kind.set(kind);
+    this._refs.composer.peeks = kind === 'code';
     this._refs.composer.mode.set(session?.mode ?? 'auto');
     this._refs.composer.thinking.set(session?.thinking ?? 'full');
     this._refs.composer.preset.set(session?.preset ?? '');
     this._refs.composer.concise.set(session?.concise ?? false);
     this.renderDaemon();
     this._refs.composer.working.set((session?.status ?? 'idle') !== 'idle');
+    this._refs.composer.background.set((session?.subagents ?? 0) > 0);
     this._refs.plan.working.set((session?.status ?? 'idle') !== 'idle');
     this._refs.panel.status.set(session?.status ?? 'idle');
     this._refs.arcade.status.set(session?.status ?? 'idle');

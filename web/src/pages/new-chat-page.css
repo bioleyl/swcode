@@ -1,0 +1,16 @@
+:host {
+  display: block;
+}
+
+/* As wide as the page's column: the composer's own room around it is for the session page. */
+sc-composer {
+  padding: 0;
+}
+
+jl-alert {
+  margin-top: var(--jl-space-4);
+}
+
+[hidden] {
+  display: none;
+}

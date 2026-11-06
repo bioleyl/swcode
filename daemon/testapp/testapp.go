@@ -195,12 +195,13 @@ func (a *App) Until(what string, found func() bool) {
 }
 
 // UntilIdle waits for the session to have no running turn.
+// UntilIdle waits for a session to rest: no turn, and no subagent at work, whose report would wake its agent.
 func (a *App) UntilIdle(sessionID string) {
 	a.t.Helper()
 	a.Until("the session to be idle", func() bool {
 		for _, session := range a.App.Sessions.List() {
 			if session.ID == sessionID {
-				return session.Status == protocol.SessionStatusIdle
+				return session.Status == protocol.SessionStatusIdle && session.Subagents == 0
 			}
 		}
 		return false

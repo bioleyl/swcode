@@ -54,8 +54,17 @@ func sameServer(known, source protocol.LlmSource) bool {
 func (s *Servers) start(source protocol.LlmSource) *Server {
 	options := Options{APIKey: source.APIKey, HTTP: s.http, URL: source.URL}
 	status := NewStatusReader(options)
-	model := NewScheduledModel(NewClient(options), NewScheduler(status.SlotsOf))
+	model := NewScheduledModel(clientFor(options), NewScheduler(status.SlotsOf))
 	return &Server{Status: status, model: model, source: source}
+}
+
+// clientFor is the API a server is asked through: OpenAI's Responses API for OpenAI's own, Chat Completions
+// otherwise.
+func clientFor(options Options) Model {
+	if UsesResponses(options.URL) {
+		return NewResponsesClient(options)
+	}
+	return NewClient(options)
 }
 
 // Server is the llm-server of a source, when the settings have it.
@@ -73,4 +82,13 @@ func (s *Servers) Complete(ctx context.Context, request Request, onPart func(Par
 		return Reply{}, fmt.Errorf("No llm-server %q in the settings: pick another preset.", request.Target.Source)
 	}
 	return server.model.Complete(ctx, request, onPart)
+}
+
+// Forget is an agent done for good, on the llm-server its identity names: its slot goes to the next agent first.
+func (s *Servers) Forget(agent Identity) {
+	server, found := s.Server(agent.Source)
+	if !found {
+		return
+	}
+	server.model.Forget(agent)
 }

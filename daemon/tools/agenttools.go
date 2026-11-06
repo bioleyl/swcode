@@ -247,11 +247,11 @@ var agentTool = Define(Spec[agentInput]{
 		if tc.Subagents == nil {
 			return Refuse("A subagent cannot start subagents of its own.")
 		}
-		return Ready(func(ctx context.Context) Outcome {
-			return tc.Subagents.Run(ctx, SubagentTask{CallID: tc.CallID, Description: input.Description, Prompt: input.Prompt})
+		return Ready(func(context.Context) Outcome {
+			return tc.Subagents.Start(SubagentTask{CallID: tc.CallID, Description: input.Description, Prompt: input.Prompt})
 		}, nil)
 	},
-	Description: "Starts an explore subagent: it searches and reads the workspace, and the web, on its own and reports what it found, so its reading stays out of your context. It cannot change files or run commands. Several agent calls run one after another.",
+	Description: "Starts an explore subagent in the background: it searches and reads the workspace, and the web, on its own, so its reading stays out of your context. It cannot change files or run commands. Start all those the task needs in one reply: your turn ends after it, and their reports wake you, all together once the last is done. swcode runs as many at once as the preset allows, the others wait their turn.",
 	Input: Object(
 		Required("description", String().Min(1).Describe(`The task in a few words, for the person watching: "Find where sessions are saved".`)),
 		Required("prompt", String().Min(1).Describe("The whole task: what to look for, where, and what to report. The subagent sees nothing of this conversation.")),

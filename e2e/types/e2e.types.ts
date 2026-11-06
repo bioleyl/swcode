@@ -16,6 +16,10 @@ export interface E2eRig {
 
 export interface E2eOptions {
   replies: readonly ScriptedReply[];
+  /** How many requests the model answers at once, 2 when left out. */
+  slots?: number;
+  /** Replies for the conversations whose first message says the key: a subagent's task. */
+  scripts?: Readonly<Record<string, readonly ScriptedReply[]>>;
   files?: Readonly<Record<string, string>>;
   /** Files of the daemon's home folder, by path: Claude Code's skills and plugins in .claude. */
   homeFiles?: Readonly<Record<string, string>>;
