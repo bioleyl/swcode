@@ -189,6 +189,10 @@ func (h handlers) StopTurn(message protocol.ClientMessageStopTurn) struct{} {
 	return h.problem(h.app.Sessions.Stop(message.SessionID))
 }
 
+func (h handlers) CompactSession(message protocol.ClientMessageCompactSession) struct{} {
+	return h.problem(h.app.Sessions.Compact(message.SessionID))
+}
+
 // socket is the socket the app talks to the daemon through: commands one way, everything that happens the other.
 func (a *App) socket(response http.ResponseWriter, request *http.Request) {
 	connection, err := websocket.Accept(response, request, &websocket.AcceptOptions{InsecureSkipVerify: true})

@@ -5,6 +5,7 @@
 
 .box {
   container: composer / inline-size;
+  position: relative;
   display: flex;
   flex-direction: column;
   max-width: 760px;
@@ -174,5 +175,106 @@ jl-popover {
 }
 
 .picture-note:empty {
+  display: none;
+}
+
+/* The commands matching what is typed, over what is above the box, as wide as it. */
+.command-menu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 6px);
+  left: 0;
+  z-index: 2;
+  padding: 6px;
+  border: 1px solid var(--jl-line);
+  border-radius: var(--jl-radius-lg);
+  background: var(--jl-surface);
+  box-shadow: var(--jl-shadow-lg);
+}
+
+.options {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* One row each: the icon, the command, what it does; the pointer and the arrows choose alike. */
+.option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 8px 10px;
+  border-radius: var(--jl-radius);
+  color: var(--jl-text-2);
+  cursor: pointer;
+}
+
+.option[aria-selected="true"] {
+  background: var(--jl-accent-soft);
+  color: var(--jl-text);
+}
+
+.option jl-icon {
+  flex: none;
+  color: var(--jl-muted);
+}
+
+.option[aria-selected="true"] jl-icon {
+  color: var(--jl-accent);
+}
+
+.option .name {
+  flex: none;
+  font-family: var(--jl-font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--jl-text);
+}
+
+.option .argument {
+  font-weight: 400;
+  color: var(--jl-muted);
+}
+
+.option .description {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 13px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* The keys the list takes, under it: a phone has none of them. */
+.keys {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin: 6px 0 0;
+  padding: 6px 10px 2px;
+  border-top: 1px solid var(--jl-line);
+  font-size: 12px;
+  color: var(--jl-muted);
+}
+
+@container composer (max-width: 480px) {
+  .keys {
+    display: none;
+  }
+
+  .option {
+    flex-wrap: wrap;
+    row-gap: 2px;
+  }
+
+  .option .description {
+    flex-basis: 100%;
+    padding-left: 26px;
+    white-space: normal;
+  }
+}
+
+[hidden] {
   display: none;
 }

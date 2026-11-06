@@ -34,8 +34,11 @@ const (
 	projectWorking  = "A session of this project is working: stop it before removing the project."
 	blankMessage    = "Write a message or paste a picture first."
 	alreadyAnswered = "This request was already answered."
-	restarted       = "The daemon restarted before the turn ended."
-	defaultMode     = protocol.PermissionModeAuto
+	// compactWorking: a turn compacts by itself when the context fills.
+	compactWorking   = "This session is working: wait for its turn to end, or stop it, before compacting."
+	nothingToCompact = "There is nothing new to summarize."
+	restarted        = "The daemon restarted before the turn ended."
+	defaultMode      = protocol.PermissionModeAuto
 	// jobWatch is how often the jobs of a session are looked at, for the list to drop the ones that ended.
 	jobWatch = 5 * time.Second
 )
@@ -548,26 +551,46 @@ func (s *Service) StopAll() {
 	s.turns.Wait()
 }
 
-// startTurn runs a turn in its own goroutine; the caller holds the lock.
+// Compact summarizes the session's conversation now, at the person's word, in a turn of its own: the next request
+// starts from the summary. Not while a turn runs, which compacts by itself when the context fills.
+func (s *Service) Compact(sessionID string) string {
+	return s.withSession(sessionID, func(session *live) string {
+		if session.turn != nil {
+			return compactWorking
+		}
+		if !agent.HasConversation(session.events) {
+			return nothingToCompact
+		}
+		s.inTurn(session, func(ctx context.Context, turn *runningTurn) { s.compactIn(ctx, session, turn) })
+		return ""
+	})
+}
+
 // startTurn starts a turn on the person's message, or on none when the subagents' reports wake the agent: they
-// join at its first step.
+// join at its first step. The caller holds the lock.
 func (s *Service) startTurn(session *live, message *agent.PromptMessage) {
+	if message != nil && session.meta.Title == Untitled {
+		session.meta.Title = TitleFrom(message.Text)
+		s.saveMeta(session.meta)
+	}
+	s.inTurn(session, func(ctx context.Context, turn *runningTurn) { s.runTurnIn(ctx, session, turn, message) })
+}
+
+// inTurn runs work as the session's turn, in its own goroutine: the session works until it ends, then the messages
+// that waited start the next one. The caller holds the lock.
+func (s *Service) inTurn(session *live, work func(ctx context.Context, turn *runningTurn)) {
 	if s.stopping {
 		return
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	turn := &runningTurn{cancel: cancel}
 	session.turn = turn
-	if message != nil && session.meta.Title == Untitled {
-		session.meta.Title = TitleFrom(message.Text)
-		s.saveMeta(session.meta)
-	}
 	s.publishSessions()
 	s.turns.Add(1)
 	go func() {
 		defer s.turns.Done()
 		defer cancel()
-		s.runTurnIn(ctx, session, turn, message)
+		work(ctx, turn)
 		s.mu.Lock()
 		defer s.mu.Unlock()
 		session.turn = nil

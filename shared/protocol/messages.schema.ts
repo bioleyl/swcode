@@ -75,6 +75,8 @@ export const ClientMessageSchema = z.discriminatedUnion('type', [
     type: z.literal('answerQuestion'),
   }),
   z.object({ sessionId: z.string(), type: z.literal('stopTurn') }),
+  // Summarizes the conversation now (/compact), in a turn of its own: refused while a turn runs.
+  z.object({ sessionId: z.string(), type: z.literal('compactSession') }),
   // The conversations that say every word typed in the palette's search; the answer goes to this socket alone.
   z.object({ query: z.string().trim().min(1), type: z.literal('searchSessions') }),
   // A question beside the session (/peek): answered from the conversation as it is, never kept in it. The app names

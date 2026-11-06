@@ -531,7 +531,8 @@ top, for one command; the page shows those as set in the environment.
   vLLM's `max_model_len` in `/v1/models`, or a hosted API's `context_length`, `context_window` or
   `max_context_length` there), or the preset's when it sets one, the server's at most: a server that says
   none needs the preset's to compact in time. When llm-server finds the prompt too long all the same, the model
-  compacts and tries once more. The app shows where that happened, with the summary.
+  compacts and tries once more. The app shows where that happened, with the summary. `/compact` summarizes at once,
+  in a turn of its own that can be stopped, between two turns only.
 - **Thinking**: what a reasoning model (gpt-oss, Qwen3) thinks before it answers streams into the conversation and
   folds away once the answer comes. It is kept with the reply and sent back with it (`reasoning_content`): Qwen's
   templates show past thoughts (preserved thinking), so the model goes on from its plan instead of working it out
@@ -568,6 +569,12 @@ top, for one command; the page shows those as set in the environment.
   for the next turn; stopping the turn drops it. **Send now** hands the waiting messages to the model at the turn's
   next step instead, after the results of its current calls, without stopping the turn (as Claude Code steers). Sessions are renamed from their title and deleted from their
   header.
+- **Commands**: a message that starts with `/` in a session's composer lists the commands, narrowed as the name is
+  typed: the arrows choose, Enter runs the one chosen (or completes one that takes words), Tab completes it, Escape
+  closes the list. `/new` starts a new session with the same settings (its folder, preset, permissions, thinking and
+  token economy), `/compact` summarizes the conversation now, `/peek` asks beside the agent's work (a coding session's
+  only), `/help` shows them all and the field's keys. A command that takes no words runs alone: with words after it,
+  the message is a message.
 - **Peek**: `/peek` and a question in a session's composer asks the agent beside its work. The answer
   shows above the composer, to whoever asked, and never enters the conversation: the agent does not see it after.
   It goes to the agent's model with the agent's own prompt, the question after it, as soon as the agent's own request

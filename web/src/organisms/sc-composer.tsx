@@ -1,13 +1,14 @@
 import { createElement, css } from '@jadis/core';
-import { JlButton, JlIcon, JlPopover } from '@syware/jlib';
+import { JlButton, JlIcon, JlKbd, JlPopover } from '@syware/jlib';
 
 import { MAX_PICTURES } from '../../../shared/protocol/picture.schema';
 import { ScElement } from '../base/sc-element';
+import { COMMAND_PREFIX, COMMANDS, commandLine, commandsMatching, commandText, stepIn } from '../lib/commands';
 import { MODE_LABELS } from '../lib/mode-labels';
-import { peekQuestion } from '../lib/peek';
 import { isPicture, pictureUrl, shrinkPicture } from '../lib/pictures';
 import { presetOf } from '../lib/presets';
 import { THINKING_LABELS } from '../lib/thinking-labels';
+import { ScCommandHelp } from '../molecules/sc-command-help';
 import { ScSessionChoices } from '../molecules/sc-session-choices';
 import { presetChoices, presetsBus } from '../services/presets';
 import { BASE_STYLES } from '../styles/shared';
@@ -15,6 +16,8 @@ import styles from './sc-composer.css?inline';
 
 import type { PictureUpload } from '../../../shared/protocol/picture.schema';
 import type { PermissionMode, SessionKind, ThinkingMode } from '../../../shared/protocol/session.schema';
+import type { CommandName } from '../lib/commands';
+import type { CommandLine } from '../types/commands.types';
 import type { PromptDraft } from '../types/composer.types';
 
 const ENTER = 'Enter';
@@ -29,12 +32,20 @@ const UNREADABLE_PICTURE = 'That picture could not be read: paste a PNG, a JPEG 
 const CHOICES_ICON_SIZE = 14;
 const SUMMARY_SEPARATOR = ' · ';
 const CONCISE_LABEL = 'Token economy';
+const COMMAND_ICON_SIZE = 16;
+// The list's id and each option's, for the field to say which one is chosen (`aria-activedescendant`).
+const COMMAND_LIST_ID = 'command-list';
+const OPTION_ID_PREFIX = 'command-';
 
 /**
  * Where the person writes: the message and the pictures pasted or dropped with it, and send, or stop while the agent
  * works. One chip says what the session works with (its preset, its permissions, how much its model thinks, token
  * economy) and opens them all in a panel; a chat has no permissions, since it runs nothing. A picture is made small as
  * it comes in.
+ *
+ * A message that starts with a slash lists the commands available here, narrowed as the name is typed: the arrows
+ * move through them, Enter runs the one chosen (or completes one that takes words), Tab completes it, Escape closes
+ * the list. The list is drawn in the field's own shadow root, for the field to name the option chosen.
  */
 export class ScComposer extends ScElement {
   static readonly selector = 'sc-composer';
@@ -43,6 +54,10 @@ export class ScComposer extends ScElement {
     send: PromptDraft;
     /** A question beside the session: the composer's text after /peek. */
     peek: string;
+    /** /new: a new session with this one's settings. */
+    newSession: undefined;
+    /** /compact: the conversation summarized now. */
+    compact: undefined;
     stop: undefined;
     play: undefined;
     preset: string;
@@ -52,8 +67,11 @@ export class ScComposer extends ScElement {
   }>();
 
   // While a turn runs, a message waits for the next one: send stays, stop comes beside it, and a game to pass the time.
-  /** Whether there is a session to peek at: /peek beside a session only; elsewhere it is words. */
-  peeks = false;
+  /** The commands available here: none where there is no session yet, where a slash is only a word. */
+  readonly commands = this.useChange<CommandName[]>([], (names) => {
+    this._refs.help.commands.set(names);
+    this.renderMenu();
+  });
   readonly working = this.useChange(false, (value) => {
     this._refs.play.hidden = !value;
     this.renderStop();
@@ -85,12 +103,36 @@ export class ScComposer extends ScElement {
 
   // The pictures waiting to go with the message, made small already.
   private _pictures: PictureUpload[] = [];
+  // The commands listed for what is typed, and the one chosen among them.
+  private _matches: CommandName[] = [];
+  private _chosen = 0;
+  // The text the list was closed on (Escape, or the field left): it stays closed until the text changes.
+  private _dismissed: string | undefined;
+
+  private readonly _runs: Readonly<Record<CommandName, (argument: string) => void>> = {
+    compact: () => this.emitCommand('compact'),
+    help: () => this.showHelp(),
+    new: () => this.emitCommand('newSession'),
+    peek: (question) => this.peek(question),
+  };
+
+  // The keys of the field while the list shows, by their `key`; any other key types as usual.
+  private readonly _listKeys: ReadonlyMap<string, () => void> = new Map([
+    ['ArrowDown', () => this.step(1)],
+    ['ArrowUp', () => this.step(-1)],
+    ['Enter', () => this.choose()],
+    ['Escape', () => this.dismiss()],
+    ['Tab', () => this.complete(this._matches[this._chosen])],
+  ]);
 
   private readonly _refs = this.useRefs((ref) => ({
     box: ref<HTMLFormElement>('form'),
     choices: ref(ScSessionChoices),
     choicesChip: ref<HTMLButtonElement>('.choices'),
+    commandList: ref('.command-menu'),
+    commandOptions: ref('.options'),
     context: ref('.context'),
+    help: ref(ScCommandHelp),
     pictureNote: ref('.picture-note'),
     pictures: ref('.pictures'),
     play: ref<JlButton>('.play'),
@@ -108,6 +150,14 @@ export class ScComposer extends ScElement {
   templateHtml(): Node {
     return (
       <form class="box">
+        <div class="command-menu" hidden>
+          <div class="options" role="listbox" id={COMMAND_LIST_ID} aria-label="Commands" />
+          <p class="keys" aria-hidden="true">
+            <JlKbd keys="up" />
+            <JlKbd keys="down" /> to choose · <JlKbd keys="enter" /> to run · <JlKbd keys="tab" /> to complete ·{' '}
+            <JlKbd keys="esc" /> to close
+          </p>
+        </div>
         <div class="pictures" hidden>
           <div class="thumbs" />
           <p class="picture-note" role="status" />
@@ -115,7 +165,7 @@ export class ScComposer extends ScElement {
         <label class="sr-only" htmlFor="prompt">
           Message swcode
         </label>
-        <textarea id="prompt" rows={2} />
+        <textarea id="prompt" rows={2} aria-autocomplete="list" />
         <div class="bar">
           <JlPopover placement="top-start" heading="This session">
             <button slot="trigger" type="button" class="chip choices">
@@ -130,6 +180,7 @@ export class ScComposer extends ScElement {
           <JlButton class="stop" icon="stop" hint="Stop" hidden />
           <JlButton class="send" variant="primary" icon="arrow-up" hint="Send" />
         </div>
+        <ScCommandHelp />
       </form>
     );
   }
@@ -143,6 +194,13 @@ export class ScComposer extends ScElement {
     this._refs.stop.events.register('press', () => this.events.emit('stop'));
     this._refs.play.events.register('press', () => this.events.emit('play'));
     this.on(this._refs.text, 'keydown', (event) => this.keyDown(event));
+    this.on(this._refs.text, 'input', () => this.typed());
+    this.on(this._refs.text, 'blur', () => this.dismiss());
+    this.on(this._refs.text, 'focus', () => this.reopen());
+    // A press on the list keeps the field focused, so it never closes before its click.
+    this.on(this._refs.commandOptions, 'mousedown', (event) => event.preventDefault());
+    this.on(this._refs.commandOptions, 'click', (event) => this.optionClicked(event));
+    this.on(this._refs.commandOptions, 'mousemove', (event) => this.optionHovered(event));
     this.on(this._refs.text, 'paste', (event) => this.take(event, event.clipboardData));
     this.on(this._refs.box, 'dragover', (event) => event.preventDefault());
     this.on(this._refs.box, 'drop', (event) => this.take(event, event.dataTransfer));
@@ -169,11 +227,151 @@ export class ScComposer extends ScElement {
 
   private keyDown(event: KeyboardEvent): void {
     // Enter sends, Shift+Enter starts a new line; an input method still composing keeps its Enter.
-    if (event.key !== ENTER || event.shiftKey || event.isComposing) {
+    if (event.isComposing || this.listKey(event)) {
+      return;
+    }
+    if (event.key !== ENTER || event.shiftKey) {
       return;
     }
     event.preventDefault();
     this.submit();
+  }
+
+  /** A key the list takes while it shows: whether it took it. With a modifier, a key does what it usually does. */
+  private listKey(event: KeyboardEvent): boolean {
+    const action = this._listKeys.get(event.key);
+    const modified = event.shiftKey || event.altKey || event.ctrlKey || event.metaKey;
+    if (action === undefined || modified || this._matches.length === 0) {
+      return false;
+    }
+    event.preventDefault();
+    action();
+    return true;
+  }
+
+  /** What is typed changed: the list follows it, its first command chosen. */
+  private typed(): void {
+    this._chosen = 0;
+    this.renderMenu();
+  }
+
+  private step(step: number): void {
+    this.markChosen(stepIn(this._chosen, step, this._matches.length));
+  }
+
+  /** The list closes on the text as it is, and opens again once the text changes or the field is back in focus. */
+  private dismiss(): void {
+    this._dismissed = this._refs.text.value;
+    this.renderMenu();
+  }
+
+  private reopen(): void {
+    this._dismissed = undefined;
+    this.renderMenu();
+  }
+
+  /** Runs the command chosen, or completes it when it takes words: the person writes them next. */
+  private choose(name = this._matches[this._chosen]): void {
+    if (name === undefined) {
+      return;
+    }
+    if (COMMANDS[name].argument !== undefined) {
+      this.complete(name);
+      return;
+    }
+    this.run({ argument: '', name });
+  }
+
+  /** The command chosen in the field, the caret after it. */
+  private complete(name: CommandName | undefined): void {
+    if (name === undefined) {
+      return;
+    }
+    const text = commandText(name);
+    this._refs.text.value = text;
+    this._refs.text.setSelectionRange(text.length, text.length);
+    this.typed();
+  }
+
+  /** The row of the option an event happened on: -1 off the options. */
+  private optionIndex(event: Event): number {
+    const option = event.target instanceof Element ? event.target.closest('[data-index]') : null;
+    return option ? Number(option.getAttribute('data-index')) : -1;
+  }
+
+  private optionClicked(event: Event): void {
+    this.choose(this._matches[this.optionIndex(event)]);
+  }
+
+  /** The pointer chooses the option it is over, as the arrows would. */
+  private optionHovered(event: Event): void {
+    const index = this.optionIndex(event);
+    if (index < 0 || index === this._chosen) {
+      return;
+    }
+    this.markChosen(index);
+  }
+
+  /** A command typed whole, or chosen in the list, runs; the field empties, the pictures waiting stay. */
+  private run(command: CommandLine): void {
+    this._runs[command.name](command.argument);
+  }
+
+  private emitCommand(event: 'compact' | 'newSession'): void {
+    this.clearText();
+    this.events.emit(event);
+  }
+
+  private showHelp(): void {
+    this.clearText();
+    this._refs.help.show();
+  }
+
+  private clearText(): void {
+    this._refs.text.value = '';
+    this.typed();
+  }
+
+  /** The commands matching what is typed, the list hidden when none does. */
+  private renderMenu(): void {
+    const text = this._refs.text.value;
+    this._matches = text === this._dismissed ? [] : commandsMatching(text, this.commands.get());
+    this._refs.commandList.hidden = this._matches.length === 0;
+    this._refs.commandOptions.replaceChildren(...this._matches.map((name, index) => this.optionNode(name, index)));
+    this.markChosen(Math.min(this._chosen, Math.max(this._matches.length - 1, 0)));
+  }
+
+  /** Marks the option chosen in place, for the pointer and for screen readers, which the field tells which it is. */
+  private markChosen(index: number): void {
+    this._chosen = index;
+    for (const option of this._refs.commandOptions.children) {
+      option.setAttribute('aria-selected', String(option.getAttribute('data-index') === String(index)));
+    }
+    const field = this._refs.text;
+    const chosen = this._matches[index];
+    if (chosen === undefined) {
+      field.removeAttribute('aria-controls');
+      field.removeAttribute('aria-activedescendant');
+      return;
+    }
+    field.setAttribute('aria-controls', COMMAND_LIST_ID);
+    field.setAttribute('aria-activedescendant', `${OPTION_ID_PREFIX}${chosen}`);
+  }
+
+  private optionNode(name: CommandName, index: number): Node {
+    const { argument, description, icon } = COMMANDS[name];
+    return (
+      // Focus stays in the field, which names the option chosen: an option is focusable by script only.
+      <div role="option" id={`${OPTION_ID_PREFIX}${name}`} class="option" data-index={String(index)} tabIndex={-1}>
+        <JlIcon name={icon} size={COMMAND_ICON_SIZE} />
+        <span class="name">
+          {COMMAND_PREFIX}
+          {name}
+          {argument === undefined ? null : <span class="argument">{` ‹${argument}›`}</span>}
+        </span>
+        <span class="description">{description}</span>
+      </div>
+    );
   }
 
   /** Pictures pasted or dropped: they join the message; anything else is pasted as usual. */
@@ -230,16 +428,16 @@ export class ScComposer extends ScElement {
 
   private submit(): void {
     const text = this._refs.text.value.trim();
-    const question = this.peeks ? peekQuestion(text) : undefined;
-    if (question !== undefined) {
-      this.peek(question);
+    const command = commandLine(text, this.commands.get());
+    if (command !== undefined) {
+      this.run(command);
       return;
     }
     if (text === '' && this._pictures.length === 0) {
       return;
     }
     const draft = { pictures: this._pictures, text };
-    this._refs.text.value = '';
+    this.clearText();
     this._pictures = [];
     this.renderPictures();
     this.events.emit('send', draft);
@@ -250,7 +448,7 @@ export class ScComposer extends ScElement {
     if (question === '') {
       return;
     }
-    this._refs.text.value = '';
+    this.clearText();
     this.events.emit('peek', question);
   }
 

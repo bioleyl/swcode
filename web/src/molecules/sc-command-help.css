@@ -1,0 +1,68 @@
+:host {
+  display: contents;
+}
+
+/* Two columns shared by every row of a list: the command or the keys, then what it does; one over the other on a
+   phone. Both lists take the same first column, so they line up. */
+dl {
+  display: grid;
+  grid-template-columns: 10rem 1fr;
+  align-items: start;
+  gap: 8px 16px;
+  margin: 0;
+}
+
+.row {
+  display: contents;
+}
+
+.commands {
+  margin-bottom: var(--jl-space-6);
+}
+
+.label {
+  margin: 0 0 10px;
+}
+
+dt {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  min-height: 22px;
+}
+
+dt jl-icon {
+  flex: none;
+  color: var(--jl-muted);
+}
+
+code {
+  font-family: var(--jl-font-mono);
+  font-size: 13px;
+  line-height: 22px;
+  white-space: nowrap;
+  color: var(--jl-text);
+}
+
+.argument {
+  color: var(--jl-muted);
+}
+
+dd {
+  margin: 0;
+  font-size: 14px;
+  line-height: 22px;
+  color: var(--jl-text-2);
+}
+
+@media (max-width: 480px) {
+  dl {
+    grid-template-columns: 1fr;
+    row-gap: 0;
+  }
+
+  dd {
+    margin-bottom: 8px;
+  }
+}

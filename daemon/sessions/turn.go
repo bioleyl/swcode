@@ -85,6 +85,19 @@ func (s *Service) runTurnIn(ctx context.Context, session *live, turn *runningTur
 	agent.RunTurn(ctx, message, s.hostFor(session, turn, ready, ready.main.Vision), ready.setup)
 }
 
+// compactIn summarizes the conversation with what the session's agent runs with now, its model and its skills.
+func (s *Service) compactIn(ctx context.Context, session *live, turn *runningTurn) {
+	ready, err := s.prepare(ctx, session)
+	if err != nil {
+		s.failTurn(session, nil, err)
+		return
+	}
+	s.mu.Lock()
+	turn.setup = &ready.setup
+	s.mu.Unlock()
+	agent.CompactTurn(ctx, s.hostFor(session, turn, ready, ready.main.Vision), ready.setup)
+}
+
 // failTurn records a turn whose host did not answer: the person's message, and why nothing came of it.
 func (s *Service) failTurn(session *live, message *agent.PromptMessage, err error) {
 	s.mu.Lock()

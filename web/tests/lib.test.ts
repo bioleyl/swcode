@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
 import { activityLine } from '../src/lib/activity';
+import { commandLine, commandsMatching, commandText, SESSION_COMMANDS, stepIn } from '../src/lib/commands';
 import { daemonLine } from '../src/lib/daemon-lines';
 import { childPath } from '../src/lib/folders';
 import { keepingEnd } from '../src/lib/follow-end';
 import { ago, contextText, folderName, percent, tokens } from '../src/lib/format';
 import { blocksOf } from '../src/lib/markdown';
 import { matchCommands, paletteCommands, paletteTarget } from '../src/lib/palette';
-import { peekQuestion } from '../src/lib/peek';
 import { groupByProject, preferredProject, removalConsequence } from '../src/lib/project-groups';
 import { SESSION_STATUS_ICONS } from '../src/lib/session-status';
 import { sshHostProblem, sshHostsLine, sshHostsOf } from '../src/lib/ssh-hosts';
@@ -323,13 +323,44 @@ describe('the command palette', () => {
   });
 });
 
-describe('peekQuestion', () => {
-  it('reads the question of a /peek line, and nothing of a message', () => {
-    expect(peekQuestion('/peek what are you doing?')).toBe('what are you doing?');
-    expect(peekQuestion('  /peek\nwhy that file?  ')).toBe('why that file?');
-    expect(peekQuestion('/peek')).toBe('');
-    expect(peekQuestion('/peeking at it')).toBeUndefined();
-    expect(peekQuestion('please /peek')).toBeUndefined();
+describe('commands', () => {
+  const code = SESSION_COMMANDS.code;
+
+  it('read the question of a /peek line, and nothing of a message', () => {
+    expect(commandLine('/peek what are you doing?', code)).toEqual({
+      argument: 'what are you doing?',
+      name: 'peek',
+    });
+    expect(commandLine('  /peek\nwhy that file?  ', code)).toEqual({ argument: 'why that file?', name: 'peek' });
+    expect(commandLine('/peek', code)).toEqual({ argument: '', name: 'peek' });
+    expect(commandLine('/peeking at it', code)).toBeUndefined();
+    expect(commandLine('please /peek', code)).toBeUndefined();
+  });
+
+  it('run a command that takes no words alone, and leave one that is not available here as words', () => {
+    expect(commandLine('/compact', code)).toEqual({ argument: '', name: 'compact' });
+    expect(commandLine('/New ', code)).toEqual({ argument: '', name: 'new' });
+    expect(commandLine('/compact the tests first', code)).toBeUndefined();
+    expect(commandLine('/peek why?', SESSION_COMMANDS.chat)).toBeUndefined();
+    expect(commandLine('/etc/hosts is broken', code)).toBeUndefined();
+  });
+
+  it('list those starting as typed while a name is typed, in their order', () => {
+    expect(commandsMatching('/', code)).toEqual(['new', 'compact', 'peek', 'help']);
+    expect(commandsMatching('/', SESSION_COMMANDS.chat)).toEqual(['new', 'compact', 'help']);
+    expect(commandsMatching('/C', code)).toEqual(['compact']);
+    expect(commandsMatching('/peek ', code)).toEqual([]);
+    expect(commandsMatching('/x', code)).toEqual([]);
+    expect(commandsMatching('hello /', code)).toEqual([]);
+    expect(commandsMatching('/', [])).toEqual([]);
+  });
+
+  it('complete a command with a space when words follow it, and step round the list', () => {
+    expect(commandText('peek')).toBe('/peek ');
+    expect(commandText('compact')).toBe('/compact');
+    expect(stepIn(3, 1, 4)).toBe(0);
+    expect(stepIn(0, -1, 4)).toBe(3);
+    expect(stepIn(0, 1, 0)).toBe(0);
   });
 });
 

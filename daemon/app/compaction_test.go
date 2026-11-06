@@ -3,6 +3,7 @@ package app_test
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"swcode/daemon/agent"
 	"swcode/daemon/fakellama"
@@ -109,4 +110,45 @@ func TestReasoningStreamsApartFromTheAnswerAndStaysWithTheReply(t *testing.T) {
 		t.Fatalf("streamed %q", streamed)
 	}
 	Expect(t, OfKind(test.Events(session.ID), "assistantMessage"), `[{"reasoning":"The user greets me.","text":"Hello!"}]`)
+}
+
+func TestCompactSummarizesAtThePersonsWordInATurnOfItsOwnAndTheNextTurnGoesOnFromIt(t *testing.T) {
+	test := Start(t, Options{
+		Replies: []fakellama.Reply{text("It holds lines of x."), text("Going on.")},
+		Scripts: map[string][]fakellama.Reply{summaryRequest: {{Text: summary}}},
+	})
+	session := test.NewSession(sessions.Request{})
+	if problem := test.App.Sessions.Compact(session.ID); problem != "There is nothing new to summarize." {
+		t.Fatalf("an empty session compacted: %q", problem)
+	}
+	test.App.Sessions.SendPrompt(session.ID, "What does big.txt hold?", nil)
+	test.UntilIdle(session.ID)
+	if problem := test.App.Sessions.Compact(session.ID); problem != "" {
+		t.Fatal(problem)
+	}
+	test.WaitForEvent("turnFinished", 2)
+	test.UntilIdle(session.ID)
+	Expect(t, Kinds(test.Events(session.ID))[4:], []any{"turnStarted", "contextCompacted", "turnFinished"})
+	Expect(t, last(test.Events(session.ID)), `{"outcome":"done"}`)
+	if problem := test.App.Sessions.Compact(session.ID); problem != "There is nothing new to summarize." {
+		t.Fatalf("compacted the summary again: %q", problem)
+	}
+
+	test.App.Sessions.SendPrompt(session.ID, "Go on", nil)
+	test.WaitForEvent("turnFinished", 3)
+	requests := test.Requests()
+	final := RequestText(map[string]any{"messages": requests[len(requests)-1]["messages"]})
+	if !strings.Contains(final, summary) || strings.Contains(final, "It holds lines of x.") {
+		t.Fatalf("the next turn did not go on from the summary: %s", final)
+	}
+}
+
+func TestCompactWaitsForNoTurn(t *testing.T) {
+	test := Start(t, Options{Replies: []fakellama.Reply{{Delay: 300 * time.Millisecond, Text: "Done."}}})
+	session := test.NewSession(sessions.Request{})
+	test.App.Sessions.SendPrompt(session.ID, "Hi", nil)
+	if problem := test.App.Sessions.Compact(session.ID); !strings.HasPrefix(problem, "This session is working") {
+		t.Fatalf("compacted during a turn: %q", problem)
+	}
+	test.UntilIdle(session.ID)
 }

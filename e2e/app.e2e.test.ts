@@ -52,6 +52,8 @@ const GAME_FLOW = {
 
 // Long enough to see a session at work, and to leave it for another page before its turn ends.
 const LIGHT_TURN_MS = 3_000;
+// What the daemon asks to have the conversation summarized.
+const SUMMARY_REQUEST = 'Summarize the conversation below';
 
 // Far more than a window's height of paragraphs, and a turn of the wheel up through them.
 const PARAGRAPHS = 80;
@@ -1037,6 +1039,99 @@ describe('a peek', () => {
     await card.locator('.close').click();
     await settle(page);
     expect(await card.isHidden()).toBe(true);
+  });
+});
+
+describe('the commands', () => {
+  it('list as a slash is typed, the arrows choosing, and /help shows those of the session', async () => {
+    const rig = await start({ replies: [{ text: 'Hello there.' }] });
+    const page = await rig.browser.newPage({ viewport: DESKTOP });
+    await page.goto(rig.link);
+    await page.locator('home-page textarea').fill('/');
+    await settle(page);
+    expect(await page.locator('home-page sc-composer .command-menu').isHidden()).toBe(true);
+    await page.locator('home-page textarea').fill('Hi');
+    await page.locator('home-page textarea').press('Enter');
+    await page.getByText('Hello there.').waitFor();
+
+    const composer = page.locator('session-page sc-composer');
+    const field = composer.locator('textarea');
+    await field.pressSequentially('/');
+    const options = composer.locator('.command-menu [role="option"]');
+    await options.first().waitFor();
+    expect(await options.locator('.name').allTextContents()).toEqual([
+      '/new',
+      '/compact',
+      '/peek ‹question›',
+      '/help',
+    ]);
+    expect(await field.getAttribute('aria-activedescendant')).toBe('command-new');
+    await field.press('ArrowUp');
+    expect(await field.getAttribute('aria-activedescendant')).toBe('command-help');
+    expect(await composer.locator('[aria-selected="true"] .name').textContent()).toBe('/help');
+    await field.press('Escape');
+    expect(await composer.locator('.command-menu').isHidden()).toBe(true);
+    await field.pressSequentially('h');
+    expect(await options.count()).toBe(1);
+    await field.press('Enter');
+    const help = composer.locator('sc-command-help jl-dialog');
+    await help.getByText('/compact', { exact: true }).waitFor();
+    expect(await help.locator('.commands code').allTextContents()).toEqual([
+      '/new',
+      '/compact',
+      '/peek ‹question›',
+      '/help',
+    ]);
+    expect(await field.inputValue()).toBe('');
+    expect(rig.llama.requests.length).toBe(1);
+  });
+
+  it('/compact summarizes the conversation now, and Tab completes /peek for its question', async () => {
+    const rig = await start({
+      replies: [{ text: 'Hello there.' }],
+      scripts: { [SUMMARY_REQUEST]: [{ text: 'The user greeted the agent.' }] },
+    });
+    const page = await rig.browser.newPage({ viewport: DESKTOP });
+    await page.goto(rig.link);
+    await page.locator('home-page textarea').fill('Hi');
+    await page.locator('home-page textarea').press('Enter');
+    await page.getByText('Hello there.').waitFor();
+
+    const composer = page.locator('session-page sc-composer');
+    const field = composer.locator('textarea');
+    await field.pressSequentially('/pe');
+    await field.press('Tab');
+    expect(await field.inputValue()).toBe('/peek ');
+    expect(await composer.locator('.command-menu').isHidden()).toBe(true);
+
+    await field.fill('');
+    await field.pressSequentially('/co');
+    await composer.locator('.command-menu [role="option"]').first().waitFor();
+    await field.press('Enter');
+    const conversation = page.locator('session-page sc-conversation');
+    await conversation.getByText('Earlier messages were summarized to save context').waitFor();
+    expect(JSON.stringify(rig.llama.requests.at(-1))).toContain(SUMMARY_REQUEST);
+    expect(rig.events().filter((event) => event.kind === 'contextCompacted')).toHaveLength(1);
+  });
+
+  it('/new opens a new session with the same settings', async () => {
+    const rig = await start({ replies: [{ text: 'Hello there.' }] });
+    const page = await rig.browser.newPage({ viewport: DESKTOP });
+    await page.goto(rig.link);
+    await page.locator('home-page textarea').fill('Hi');
+    await page.locator('home-page textarea').press('Enter');
+    await page.getByText('Hello there.').waitFor();
+    const first = page.url();
+    const summary = page.locator('session-page sc-composer .summary');
+    const settings = await summary.textContent();
+
+    const field = page.locator('session-page sc-composer textarea');
+    await field.fill('/new');
+    await field.press('Enter');
+    await expect.poll(() => page.url()).not.toBe(first);
+    await settle(page);
+    expect(await page.locator('session-page sc-conversation').getByText('Hello there.').count()).toBe(0);
+    expect(await summary.textContent()).toBe(settings);
   });
 });
 

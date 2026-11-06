@@ -1858,6 +1858,8 @@ func (ClientMessageAnswerQuestion) isClientMessage() {}
 
 func (ClientMessageStopTurn) isClientMessage() {}
 
+func (ClientMessageCompactSession) isClientMessage() {}
+
 func (ClientMessageSearchSessions) isClientMessage() {}
 
 func (ClientMessagePeek) isClientMessage() {}
@@ -1955,6 +1957,12 @@ func (u *ClientMessage) UnmarshalJSON(data []byte) error {
 			return err
 		}
 		u.Value = value
+	case "\"compactSession\"":
+		var value ClientMessageCompactSession
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
 	case "\"searchSessions\"":
 		var value ClientMessageSearchSessions
 		if err := json.Unmarshal(data, &value); err != nil {
@@ -2039,6 +2047,7 @@ type ClientMessageMapper[R any] interface {
 	AnswerPermission(ClientMessageAnswerPermission) R
 	AnswerQuestion(ClientMessageAnswerQuestion) R
 	StopTurn(ClientMessageStopTurn) R
+	CompactSession(ClientMessageCompactSession) R
 	SearchSessions(ClientMessageSearchSessions) R
 	Peek(ClientMessagePeek) R
 	StopJob(ClientMessageStopJob) R
@@ -2075,6 +2084,8 @@ func MapClientMessage[R any](u ClientMessage, m ClientMessageMapper[R]) R {
 		return m.AnswerQuestion(value)
 	case ClientMessageStopTurn:
 		return m.StopTurn(value)
+	case ClientMessageCompactSession:
+		return m.CompactSession(value)
 	case ClientMessageSearchSessions:
 		return m.SearchSessions(value)
 	case ClientMessagePeek:
@@ -2362,6 +2373,19 @@ func (v ClientMessageStopTurn) MarshalJSON() ([]byte, error) {
 		Key string `json:"type"`
 		plain
 	}{"stopTurn", p})
+}
+
+type ClientMessageCompactSession struct {
+	SessionID string `json:"sessionId"`
+}
+
+func (v ClientMessageCompactSession) MarshalJSON() ([]byte, error) {
+	type plain ClientMessageCompactSession
+	p := plain(v)
+	return json.Marshal(struct {
+		Key string `json:"type"`
+		plain
+	}{"compactSession", p})
 }
 
 type ClientMessageSearchSessions struct {

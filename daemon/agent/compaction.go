@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 
 	"swcode/daemon/llm"
@@ -119,4 +120,35 @@ func Compact(ctx context.Context, host TurnHost, setup Setup) error {
 	// The skills were listed before the summary, which the model no longer sees.
 	ListSkills(ctx, host, setup)
 	return nil
+}
+
+// HasConversation tells whether there is anything to summarize: a message of the person's or of the model's since
+// the last summary.
+func HasConversation(events []protocol.SessionEvent) bool {
+	return slices.ContainsFunc(SinceCompaction(events), func(event protocol.SessionEvent) bool {
+		switch event.Value.(type) {
+		case protocol.SessionEventUserMessage, protocol.SessionEventAssistantMessage:
+			return true
+		}
+		return false
+	})
+}
+
+// CompactTurn summarizes the conversation at the person's word (/compact), in a turn of its own, which shows it at
+// work and can be stopped: the next turn starts from the summary.
+func CompactTurn(ctx context.Context, host TurnHost, setup Setup) {
+	turnID := setup.NewID()
+	host.Record(protocol.SessionEventTurnStarted{ID: turnID})
+	var err error
+	// On the agent's slot, as its own compactions are: a peek waits for it.
+	host.UseModel(func() { err = Compact(ctx, host, setup) })
+	ending := compactionEnding(ctx, err)
+	host.Record(protocol.SessionEventTurnFinished{ID: turnID, Message: ending.Message, Outcome: ending.Outcome})
+}
+
+func compactionEnding(ctx context.Context, err error) Ending {
+	if err != nil {
+		return endingOfError(ctx, err)
+	}
+	return Ending{Outcome: protocol.TurnOutcomeDone}
 }

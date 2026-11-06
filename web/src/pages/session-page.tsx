@@ -3,6 +3,7 @@ import { confirmDialog, JlAlert, JlBadge, JlButton, JlIcon } from '@syware/jlib'
 
 import { ScElement } from '../base/sc-element';
 import { agentsOf } from '../lib/agents';
+import { SESSION_COMMANDS } from '../lib/commands';
 import { contextText } from '../lib/format';
 import { currentPlan } from '../lib/plan';
 import { presetOf, presetStatusOf } from '../lib/presets';
@@ -25,8 +26,13 @@ import { setSidePanelOpen, sidePanelOpen } from '../services/side-panel';
 import { BASE_STYLES } from '../styles/shared';
 import styles from './session-page.css?inline';
 
-import type { ServerMessage } from '../../../shared/protocol/messages.schema';
-import type { SessionEvent, SessionEventKind, SessionKind } from '../../../shared/protocol/session.schema';
+import type { ClientMessage, ServerMessage } from '../../../shared/protocol/messages.schema';
+import type {
+  SessionEvent,
+  SessionEventKind,
+  SessionKind,
+  SessionSummary,
+} from '../../../shared/protocol/session.schema';
 import type { PromptDraft } from '../types/composer.types';
 import type { ServerHandlers, ServerMessageMap } from '../types/page.types';
 
@@ -49,13 +55,29 @@ const DELETE_CONSEQUENCES: Readonly<Record<SessionKind, string>> = {
   code: 'Its conversation goes for good. Its project and files stay.',
 };
 
-/** The prompt tokens of the last reply, plus its own: how much of the context the conversation fills. */
+/**
+ * The prompt tokens of the last reply, plus its own: how much of the context the conversation fills. None after a
+ * summary, until the next reply counts again.
+ */
 const usedTokens = (events: readonly SessionEvent[]): number => {
-  const last = events.findLast((event) => event.kind === 'assistantMessage' && event.usage !== undefined);
+  const last = events.findLast(
+    (event) =>
+      event.kind === 'contextCompacted' || (event.kind === 'assistantMessage' && event.usage !== undefined)
+  );
   return last?.kind === 'assistantMessage' && last.usage
     ? last.usage.promptTokens + last.usage.completionTokens
     : 0;
 };
+
+/** The settings a session made by /new takes from the one it was typed in: a chat's place and permissions are none. */
+const sameSettings = (session: SessionSummary): ClientMessage => ({
+  concise: session.concise,
+  kind: session.kind,
+  thinking: session.thinking,
+  type: 'createSession',
+  ...(session.preset === '' ? {} : { preset: session.preset }),
+  ...(session.kind === 'code' ? { host: session.host, mode: session.mode, workspace: session.workspace } : {}),
+});
 
 /**
  * One session: its conversation, the composer under it, and on a wide screen what the agent runs on. A chat shows no
@@ -152,7 +174,7 @@ export class SessionPage extends ScElement {
           <JlAlert tone="danger" hidden />
           <ScPlan hidden />
           <ScPeek hidden />
-          <ScComposer peeks />
+          <ScComposer />
         </div>
         <ScSidePanel />
         <ScArcade />
@@ -177,6 +199,11 @@ export class SessionPage extends ScElement {
     );
     composer.events.register('send', (draft) => this.send(draft));
     composer.events.register('peek', (question) => this.peek(question));
+    composer.events.register('newSession', () => this.startNew());
+    composer.events.register('compact', () => {
+      this.showProblem('');
+      daemon.send({ sessionId: this._sessionId, type: 'compactSession' });
+    });
     conversation.events.register('question', ({ answers, requestId }) =>
       daemon.send({ answers, requestId, sessionId: this._sessionId, type: 'answerQuestion' })
     );
@@ -246,6 +273,16 @@ export class SessionPage extends ScElement {
     });
   }
 
+  /** A new session with this one's settings: the app opens it once the daemon made it. */
+  private startNew(): void {
+    const session = findSession(this._sessionId);
+    if (!session) {
+      return;
+    }
+    this.showProblem('');
+    daemon.send(sameSettings(session));
+  }
+
   /** A question beside the session: its answer shows above the composer, never in the conversation. */
   private peek(question: string): void {
     this._peeks += 1;
@@ -262,6 +299,11 @@ export class SessionPage extends ScElement {
     }
     if (SUBAGENT_EVENTS.has(event.kind)) {
       this._refs.panel.agents.set(agentsOf(this._events));
+      return;
+    }
+    // A summary empties the context: its count comes back with the next reply.
+    if (event.kind === 'contextCompacted') {
+      this.showUsage(0);
       return;
     }
     if (event.kind !== 'assistantMessage' || !event.usage) {
@@ -327,7 +369,7 @@ export class SessionPage extends ScElement {
     this._refs.path.textContent = session ? sessionPlace(session) : '';
     this._refs.conversation.workspace.set(session?.workspace ?? '');
     this._refs.composer.kind.set(kind);
-    this._refs.composer.peeks = kind === 'code';
+    this._refs.composer.commands.set([...SESSION_COMMANDS[kind]]);
     this._refs.composer.mode.set(session?.mode ?? 'auto');
     this._refs.composer.thinking.set(session?.thinking ?? 'full');
     this._refs.composer.preset.set(session?.preset ?? '');
