@@ -1042,6 +1042,46 @@ describe('the navigation', () => {
   });
 });
 
+/** Chat or Code, at the nav's foot. */
+const modeRadio = (page: Page, name: string): Locator =>
+  page.locator('sc-nav jl-segmented').getByRole('radio', { name });
+
+describe('chats', () => {
+  it('start from Chat at the nav’s foot, listed apart from the projects, the model reading the web alone', async () => {
+    const rig = await start({ replies: [{ text: 'Paris.' }] });
+    const page = await rig.browser.newPage({ viewport: DESKTOP });
+    await page.goto(rig.link);
+    await page.locator('home-page textarea').waitFor();
+    await modeRadio(page, 'Chat').click();
+    await page.evaluate('0');
+    const composer = page.locator('new-chat-page sc-composer');
+    await composer.locator('textarea').waitFor();
+    expect(await composer.locator('textarea').getAttribute('placeholder')).toBe('Ask anything');
+    await composer.locator('textarea').fill('What is the capital of France?');
+    await composer.locator('textarea').press('Enter');
+    await page.getByText('Paris.').waitFor();
+    const request = JSON.stringify(rig.llama.requests[0]);
+    expect(request).toContain('"name":"websearch"');
+    expect(request).not.toContain('"name":"bash"');
+    expect(await page.locator('session-page header > .chip').isHidden()).toBe(true);
+    expect(await page.locator('sc-nav .item[data-id^="session:"]').count()).toBe(1);
+    expect(await page.locator('sc-nav .item[data-id^="project:"]').count()).toBe(0);
+
+    // swcode's link opens as the person left it: in Chat, on the new chat page.
+    await page.goto(rig.link);
+    await page.locator('new-chat-page textarea').waitFor();
+    expect(await modeRadio(page, 'Chat').getAttribute('aria-checked')).toBe('true');
+
+    await modeRadio(page, 'Code').click();
+    await page.evaluate('0');
+    await page.locator('home-page textarea').waitFor();
+    expect(await page.locator('sc-nav .item[data-id^="session:"]').count()).toBe(0);
+    await page.reload();
+    await page.locator('home-page textarea').waitFor();
+    expect(await modeRadio(page, 'Code').getAttribute('aria-checked')).toBe('true');
+  });
+});
+
 describe('the theme', () => {
   it('follows a dark system, the mark’s ink turning light', async () => {
     const rig = await start({ replies: [] });

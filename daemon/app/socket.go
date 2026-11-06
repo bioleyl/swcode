@@ -94,7 +94,7 @@ func (h handlers) CreateProject(message protocol.ClientMessageCreateProject) str
 func (h handlers) CreateSession(message protocol.ClientMessageCreateSession) struct{} {
 	go func() {
 		session, refused := h.app.Sessions.Create(h.ctx, sessions.Request{
-			Concise: message.Concise, Host: message.Host, Mode: message.Mode, Pictures: message.Pictures, Preset: message.Preset,
+			Concise: message.Concise, Host: message.Host, Kind: message.Kind, Mode: message.Mode, Pictures: message.Pictures, Preset: message.Preset,
 			Prompt: message.Prompt, Thinking: message.Thinking, Workspace: message.Workspace,
 		})
 		if refused != "" {

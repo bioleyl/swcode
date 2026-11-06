@@ -1,9 +1,9 @@
 import { css } from '@jadis/core';
 import { JlBadge, JlListItem } from '@syware/jlib';
 
-import { hostLabel } from '../../../shared/hosts/host-key';
 import { ScElement } from '../base/sc-element';
 import { ago } from '../lib/format';
+import { sessionHost } from '../lib/session-kinds';
 import { SESSION_STATUS_LOOKS } from '../lib/session-status';
 import { hrefOf, sessionPath } from '../services/navigation';
 import { BASE_STYLES } from '../styles/shared';
@@ -36,7 +36,7 @@ export class ScSessionRow extends ScElement {
       return;
     }
     this._refs.row.heading.set(session.title);
-    this._refs.row.description.set(`${hostLabel(session.host)} · ${ago(session.updatedAt, new Date())}`);
+    this._refs.row.description.set(`${sessionHost(session)} · ${ago(session.updatedAt, new Date())}`);
     this._refs.row.href.set(hrefOf(sessionPath(session.id)));
     this._refs.badge.showStatus(SESSION_STATUS_LOOKS[session.status]);
   }

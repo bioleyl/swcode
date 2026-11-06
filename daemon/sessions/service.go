@@ -61,6 +61,7 @@ type Deps struct {
 	Models        ModelsPort
 	Tools         tools.Box
 	SubagentTools tools.Box
+	ChatTools     tools.Box
 	// Search is the daemon's one web search, which keeps every session's searches apart in time.
 	Search web.Search
 	HTTP   *http.Client
@@ -83,8 +84,11 @@ type Deps struct {
 	LogError         func(error)
 }
 
-// Request is a new session: its folder on a host, its first message, how it asks and thinks.
+// Request is a new session: a chat, or a coding session in a folder on a host; its first message, how it asks and
+// thinks.
 type Request struct {
+	// Kind is a coding session when empty.
+	Kind      protocol.SessionKind
 	Host      *protocol.HostRef
 	Workspace string
 	Prompt    string
@@ -218,24 +222,16 @@ func (s *Service) RemoveIn(path string, host protocol.HostRef) string {
 	return ""
 }
 
-// Create makes a new session, in the daemon's workspace or the folder asked for, started on its first message if
-// given.
+// Create makes a new session, started on its first message if given: a chat, or a coding session in the daemon's
+// workspace or the folder asked for.
 func (s *Service) Create(ctx context.Context, request Request) (protocol.SessionSummary, string) {
-	hostRef := protocol.LocalHost()
-	if request.Host != nil {
-		hostRef = *request.Host
-	}
-	fallback := ""
-	if hosts.IsLocal(hostRef) {
-		fallback = s.deps.Workspace
-	}
-	workspace, problem := hosts.ChooseFolder(ctx, s.deps.Hosts.HostOf(hostRef), request.Workspace, fallback)
+	kind := orKind(request.Kind)
+	hostRef, workspace, problem := s.placeOf(ctx, kind, request)
 	if problem != "" {
 		return protocol.SessionSummary{}, problem
 	}
-	s.deps.OnWorkspace(workspace, hostRef)
 	meta := Meta{
-		CreatedAt: protocol.Timestamp(s.deps.Now()), Host: hostRef, ID: s.deps.NewID(), Mode: orMode(request.Mode),
+		CreatedAt: protocol.Timestamp(s.deps.Now()), Host: hostRef, ID: s.deps.NewID(), Kind: kind, Mode: orMode(request.Mode),
 		Concise: request.Concise, Preset: request.Preset, Thinking: orThinking(request.Thinking, s.deps.Thinking.Session), Title: Untitled,
 		Workspace: workspace,
 	}
@@ -250,6 +246,35 @@ func (s *Service) Create(ctx context.Context, request Request) (protocol.Session
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return summaryOf(session), ""
+}
+
+// placeOf is where a new session works: a chat in no folder, on this computer; a coding session in the folder asked
+// for, or the daemon's on this computer, which then has a project. The problem when the folder is not there.
+func (s *Service) placeOf(ctx context.Context, kind protocol.SessionKind, request Request) (protocol.HostRef, string, string) {
+	hostRef := protocol.LocalHost()
+	if kind == protocol.SessionKindChat {
+		return hostRef, "", ""
+	}
+	if request.Host != nil {
+		hostRef = *request.Host
+	}
+	fallback := ""
+	if hosts.IsLocal(hostRef) {
+		fallback = s.deps.Workspace
+	}
+	workspace, problem := hosts.ChooseFolder(ctx, s.deps.Hosts.HostOf(hostRef), request.Workspace, fallback)
+	if problem != "" {
+		return hostRef, "", problem
+	}
+	s.deps.OnWorkspace(workspace, hostRef)
+	return hostRef, workspace, ""
+}
+
+func orKind(kind protocol.SessionKind) protocol.SessionKind {
+	if kind == "" {
+		return protocol.SessionKindCode
+	}
+	return kind
 }
 
 func orMode(mode protocol.PermissionMode) protocol.PermissionMode {
@@ -540,7 +565,7 @@ func summaryOf(session *live) protocol.SessionSummary {
 		}
 	}
 	return protocol.SessionSummary{
-		Host: session.meta.Host, ID: session.meta.ID, Jobs: append([]protocol.SessionSummaryJob{}, session.jobs...),
+		Host: session.meta.Host, ID: session.meta.ID, Jobs: append([]protocol.SessionSummaryJob{}, session.jobs...), Kind: session.meta.Kind,
 		Concise: session.meta.Concise, Mode: session.meta.Mode, Preset: session.meta.Preset, Queued: queued, QueuedNow: session.queueNow, Status: status,
 		Thinking: session.meta.Thinking, Title: session.meta.Title, UpdatedAt: lastActivity(session.meta, session.events),
 		Workspace: session.meta.Workspace,

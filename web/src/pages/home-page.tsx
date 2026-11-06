@@ -4,8 +4,10 @@ import { JlAlert, JlButton, JlField, JlPage, JlSelect } from '@syware/jlib';
 import { hostLabel } from '../../../shared/hosts/host-key';
 import { ScElement } from '../base/sc-element';
 import { folderName } from '../lib/format';
+import { CONCISE_AT_FIRST } from '../lib/new-session';
 import { presetOf, presetStatusOf } from '../lib/presets';
 import { preferredProject } from '../lib/project-groups';
+import { sessionsOf } from '../lib/session-kinds';
 import { ScComposer } from '../organisms/sc-composer';
 import { daemon, daemonBus } from '../services/daemon';
 import { daemonState, daemonStatusBus } from '../services/daemon-status';
@@ -24,8 +26,6 @@ const APP_NAME = 'swcode';
 // Without a project yet, a session goes in the daemon's folder, which then becomes one. jlib's select takes an empty
 // value for nothing chosen: this choice has a value of its own.
 const DAEMON_FOLDER = 'daemon-folder';
-// A new session starts in token economy: the person turns it off in the composer's choices.
-const CONCISE_AT_FIRST = true;
 
 /** A project in the picker: its name, and its host when it is not this computer. */
 const projectLabel = (project: Project): string =>
@@ -135,7 +135,7 @@ export class HomePage extends ScElement {
   private renderProjects(): void {
     const state = daemonState();
     const projects = allProjects();
-    const selected = preferredProject(projects, allSessions(), this._chosen);
+    const selected = preferredProject(projects, sessionsOf('code', allSessions()), this._chosen);
     const daemonFolder = state.kind === 'ready' ? folderName(state.status.workspace) : 'the daemon’s folder';
     this._refs.project.options.set(
       projects.length === 0 ? [{ label: daemonFolder, value: DAEMON_FOLDER }] : projects.map(projectOption)

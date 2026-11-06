@@ -7,6 +7,7 @@ import {
   PermissionDecisionSchema,
   PermissionModeSchema,
   SessionEventSchema,
+  SessionKindSchema,
   SessionSummarySchema,
   ThinkingModeSchema,
   ToolNameSchema,
@@ -22,12 +23,14 @@ export type PeekState = z.infer<typeof PeekStateSchema>;
 
 /** What the app sends the daemon over the socket. */
 export const ClientMessageSchema = z.discriminatedUnion('type', [
-  // A folder of its own, and the first message to start on at once, both optional.
+  // A folder of its own (a coding session's), and the first message to start on at once, both optional.
   z.object({
     // Token economy from the first message on.
     concise: z.boolean().optional(),
     // This computer when left out.
     host: HostRefSchema.optional(),
+    // A coding session when left out; a chat takes no folder, host or permissions.
+    kind: SessionKindSchema.optional(),
     mode: PermissionModeSchema.optional(),
     // The first message's pictures; a message may be pictures alone.
     pictures: z.array(PictureUploadSchema).max(MAX_PICTURES).optional(),

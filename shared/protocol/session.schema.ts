@@ -18,6 +18,8 @@ export const TOOL_NAMES = [
   'websearch',
   'webfetch',
   'image',
+  // A chat's: it draws a picture and shows it in the chat, where the agent's image saves it in the workspace.
+  'draw',
   'output',
   'kill',
   'skill',
@@ -47,6 +49,14 @@ export type PermissionMode = z.infer<typeof PermissionModeSchema>;
 export const THINKING_MODES = ['full', 'medium', 'low', 'off'] as const;
 export const ThinkingModeSchema = z.enum(THINKING_MODES);
 export type ThinkingMode = z.infer<typeof ThinkingModeSchema>;
+
+/**
+ * What a session is: an agent at work in a project (`code`), or a conversation with the model, which reads the web
+ * and nothing else (`chat`).
+ */
+export const SESSION_KINDS = ['code', 'chat'] as const;
+export const SessionKindSchema = z.enum(SESSION_KINDS);
+export type SessionKind = z.infer<typeof SessionKindSchema>;
 
 export const SESSION_STATUSES = ['idle', 'working', 'waiting'] as const;
 export const SessionStatusSchema = z.enum(SESSION_STATUSES);
@@ -241,6 +251,8 @@ export const SessionSummarySchema = z.object({
   id: z.string(),
   // Commands the agent left running in the background (servers, watchers), until they end or are stopped.
   jobs: z.array(z.object({ command: z.string(), id: z.string() })).default([]),
+  // A chat works in no folder: its workspace is empty, its host this computer.
+  kind: SessionKindSchema.default('code'),
   mode: PermissionModeSchema,
   // The preset whose models the session works with; the default preset when left out, or when this one was removed.
   preset: z.string().optional(),

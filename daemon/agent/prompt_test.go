@@ -21,3 +21,9 @@ func TestThePromptSaysOfSubagentsWhatThePresetAllows(t *testing.T) {
 		t.Fatal("the limit is not said")
 	}
 }
+
+func TestAChatDrawsOnlyWhenThereIsAPictureServer(t *testing.T) {
+	if strings.Contains(ChatPrompt(false), "draw") || !strings.Contains(ChatPrompt(true), chatDrawLine) {
+		t.Fatal("the chat's prompt tells of draw without a picture server, or not with one")
+	}
+}

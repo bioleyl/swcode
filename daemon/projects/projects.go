@@ -7,6 +7,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -84,10 +85,12 @@ func NewService(deps Deps) *Service {
 	return &Service{deps: deps, listeners: map[int]Listener{}, projects: []protocol.Project{}}
 }
 
+// Load reads the projects kept on disk, but those without a folder: chats made them at a start, before a start told
+// them apart from coding sessions. The file loses them at the next change.
 func (s *Service) Load() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.projects = s.deps.Store.Load()
+	s.projects = slices.DeleteFunc(s.deps.Store.Load(), func(project protocol.Project) bool { return project.Path == "" })
 }
 
 func (s *Service) Subscribe(listener Listener) func() {

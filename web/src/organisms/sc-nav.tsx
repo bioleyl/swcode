@@ -6,13 +6,15 @@ import { ScBrand } from '../atoms/sc-brand';
 import { ScElement } from '../base/sc-element';
 import { HOST_ICONS } from '../lib/hosts';
 import { groupByProject } from '../lib/project-groups';
+import { sessionsOf } from '../lib/session-kinds';
 import { LIT_ICONS, litIcon, projectLight, SESSION_ICON, sessionLight } from '../lib/session-lights';
 import { waitingCount } from '../lib/session-status';
 import { ScComputerSwitch } from '../molecules/sc-computer-switch';
 import {
-  HOME_PATH,
   hrefOf,
+  NEW_CHAT_PATH,
   NEW_SESSION_PATH,
+  newPathOf,
   projectPath,
   SETTINGS_PATH,
   sessionPath,
@@ -23,11 +25,11 @@ import styles from './sc-nav.css?inline';
 
 import type { SegmentedOption, SideNavItem, SideNavSection } from '@syware/jlib';
 import type { Project } from '../../../shared/protocol/project.schema';
-import type { SessionSummary } from '../../../shared/protocol/session.schema';
+import type { SessionKind, SessionSummary } from '../../../shared/protocol/session.schema';
 import type { Theme } from '../services/theme';
 import type { ProjectGroup } from '../types/conversation.types';
 import type { DaemonState } from '../types/daemon.types';
-import type { WorkMode } from '../types/nav.types';
+import type { NavLists } from '../types/nav.types';
 
 registerIcons({
   laptop: Laptop,
@@ -37,8 +39,8 @@ registerIcons({
   ...LIT_ICONS,
 });
 
-/** The navigation's own item; a project's and a session's ids carry theirs (`project:…`, `session:…`). */
-export const NAV_ID = { newSession: 'new' } as const;
+/** The navigation's own items; a project's and a session's ids carry theirs (`project:…`, `session:…`). */
+export const NAV_ID = { newChat: 'new-chat', newSession: 'new' } as const;
 const PROJECT_PREFIX = 'project:';
 const SESSION_PREFIX = 'session:';
 const FOLDED_KEY = 'swcode.nav.folded';
@@ -50,12 +52,11 @@ const COLLAPSE_ICON = 'panel-left-close';
 const EXPAND_ICON = 'panel-left-open';
 const THEME_ICONS: Readonly<Record<Theme, string>> = { dark: 'sun', light: 'moon' };
 const SETTINGS = 'Settings';
-// Chat or code, at the nav's foot: it chooses nothing yet.
-const WORK_MODES: SegmentedOption<WorkMode>[] = [
+// Chat or code, at the nav's foot: the sessions the nav lists, and the new one it starts.
+const WORK_MODES: SegmentedOption<SessionKind>[] = [
   { label: 'Chat', value: 'chat' },
   { label: 'Code', value: 'code' },
 ];
-const DEFAULT_WORK_MODE: WorkMode = 'code';
 
 export const projectNavId = (id: string): string => `${PROJECT_PREFIX}${id}`;
 export const sessionNavId = (id: string): string => `${SESSION_PREFIX}${id}`;
@@ -100,26 +101,43 @@ const projectItem = (group: ProjectGroup, seen: Readonly<Record<string, string>>
   label: group.name,
 });
 
-const sectionsOf = (
-  projects: readonly Project[],
-  sessions: readonly SessionSummary[],
-  seen: Readonly<Record<string, string>>
-): SideNavSection[] => [
-  { items: [{ href: hrefOf(NEW_SESSION_PATH), icon: 'plus', id: NAV_ID.newSession, label: 'New session' }] },
-  { items: groupByProject(projects, sessions).map((group) => projectItem(group, seen)), label: 'Projects' },
-];
+/** What the nav lists in each mode: a new chat and the chats, or a new session and the projects with theirs. */
+const SECTIONS: Readonly<Record<SessionKind, (lists: NavLists) => SideNavSection[]>> = {
+  chat: ({ sessions, seen }) => [
+    { items: [{ href: hrefOf(NEW_CHAT_PATH), icon: 'plus', id: NAV_ID.newChat, label: 'New chat' }] },
+    { items: sessionsOf('chat', sessions).map((session) => sessionItem(session, seen)), label: 'Chats' },
+  ],
+  code: ({ projects, sessions, seen }) => [
+    { items: [{ href: hrefOf(NEW_SESSION_PATH), icon: 'plus', id: NAV_ID.newSession, label: 'New session' }] },
+    {
+      items: groupByProject(projects, sessionsOf('code', sessions)).map((group) => projectItem(group, seen)),
+      label: 'Projects',
+    },
+  ],
+};
 
 /**
- * The side of every page: swcode and where it works, a new session, the projects with their sessions (what needs
- * the person counted beside each), and at the foot the fold button, chat or code (which chooses nothing yet), the
- * settings and the theme. It folds into a rail, as the person left it last on this device, its foot keeping the fold
- * button alone.
+ * The side of every page: swcode and where it works; in Code, a new session and the projects with their sessions
+ * (what needs the person counted beside each), in Chat a new chat and the chats; at the foot the fold button, chat or
+ * code, the settings and the theme. It folds into a rail, as the person left it last on this device, its foot keeping
+ * the fold button alone.
  */
 export class ScNav extends ScElement {
   static readonly selector = 'sc-nav';
 
-  /** `settings`: its link pressed, which a phone's drawer closes for. */
-  readonly events = this.useEvents<{ search: undefined; settings: undefined }>();
+  /** `settings`: its link pressed, which a phone's drawer closes for; `mode`: chat or code picked at its foot. */
+  readonly events = this.useEvents<{ mode: SessionKind; search: undefined; settings: undefined }>();
+
+  /** Chat or code: the sessions listed, and where swcode's name leads, the new one of that kind. */
+  readonly mode = this.useChange<SessionKind>(
+    'code',
+    (mode) => {
+      this._refs.modes.value.set(mode);
+      this._refs.brand.href = hrefOf(newPathOf(mode));
+      this.renderSections();
+    },
+    { immediate: true }
+  );
 
   readonly projects = this.useChange<Project[]>([], () => this.renderSections());
   readonly sessions = this.useChange<SessionSummary[]>([], () => this.renderSections());
@@ -141,8 +159,10 @@ export class ScNav extends ScElement {
   });
 
   private readonly _refs = this.useRefs((ref) => ({
+    brand: ref<HTMLAnchorElement>('.brand'),
     computer: ref(ScComputerSwitch),
     fold: ref<JlButton>('.fold'),
+    modes: ref<JlSegmented<SessionKind>>('.mode'),
     nav: ref(JlSideNav),
     search: ref(JlSearchButton),
     settings: ref<JlButton>('.settings'),
@@ -153,7 +173,7 @@ export class ScNav extends ScElement {
     return (
       <JlSideNav label="swcode" collapsed={storedFold()}>
         <div slot="header" class="header">
-          <a class="brand" href={hrefOf(HOME_PATH)}>
+          <a class="brand">
             <ScBrand />
           </a>
           <JlSearchButton label="Search" />
@@ -161,14 +181,7 @@ export class ScNav extends ScElement {
         </div>
         <div slot="footer" class="footer">
           <JlButton class="fold" variant="ghost" size="sm" />
-          <JlSegmented<WorkMode>
-            class="mode"
-            size="sm"
-            block
-            label="Work in"
-            options={WORK_MODES}
-            value={DEFAULT_WORK_MODE}
-          />
+          <JlSegmented<SessionKind> class="mode" size="sm" block label="Work in" options={WORK_MODES} />
           <JlButton
             class="settings"
             variant="ghost"
@@ -189,6 +202,7 @@ export class ScNav extends ScElement {
 
   onConnect(): void {
     this._refs.fold.events.register('press', () => this.fold());
+    this._refs.modes.events.register('change', (mode) => this.events.emit('mode', mode));
     this.followRail();
     this._refs.search.events.register('press', () => this.events.emit('search'));
     this._refs.settings.events.register('press', () => this.events.emit('settings'));
@@ -226,7 +240,8 @@ export class ScNav extends ScElement {
   }
 
   private renderSections(): void {
-    this._refs.nav.sections.set(sectionsOf(this.projects.get(), this.sessions.get(), this.seen.get()));
+    const lists = { projects: this.projects.get(), seen: this.seen.get(), sessions: this.sessions.get() };
+    this._refs.nav.sections.set(SECTIONS[this.mode.get()](lists));
   }
 
   /** The other theme, and the button that offers it back. */

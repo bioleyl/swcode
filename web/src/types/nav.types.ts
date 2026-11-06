@@ -1,2 +1,9 @@
-/** How the person works in swcode, chosen at the navigation's foot: a chat, or code. */
-export type WorkMode = 'chat' | 'code';
+import type { Project } from '../../../shared/protocol/project.schema';
+import type { SessionSummary } from '../../../shared/protocol/session.schema';
+
+/** What the navigation lists from: the projects, the sessions, and when the person last saw each session. */
+export interface NavLists {
+  projects: readonly Project[];
+  sessions: readonly SessionSummary[];
+  seen: Readonly<Record<string, string>>;
+}

@@ -394,14 +394,21 @@ top, for one command; the page shows those as set in the environment.
 ## How it works
 
 - **The app** is built from jlib's components and works as SyWare's apps do: the navigation down the side (where
-  swcode works, a new session, the projects with their sessions, each icon filled while a session works (blue),
-  waits for you or is done and not seen yet, and at its foot the fold button, Chat or Code, the settings' cog and the
-  theme), folding into a rail; on a phone a top bar, the navigation in a drawer and tabs
-  (New, Sessions, Settings). A project has its page, with its sessions; Sessions lists them all, what needs you
+  swcode works; in Code a new session and the projects with their sessions, in Chat a new chat and the chats; each
+  icon filled while a session works (blue), waits for you or is done and not seen yet; and at its foot the fold
+  button, Chat or Code, the settings' cog and the theme), folding into a rail; on a phone a top bar, the navigation
+  in a drawer and tabs (New, Sessions, Settings). A project has its page, with its sessions; Sessions lists them all, what needs you
   first. Beside a session, the side panel shows its agents, the commands left running, the llm-servers and whether
   they answer, and how full the context is. Ctrl K (⌘K) searches the sessions, projects, settings and actions. A
   problem of the daemon or of llm-server shows over every page.
-- **Sessions** are kept as two files in the data folder: `<id>.json` (title, workspace, permission mode) and
+- **Chat or Code**, at the navigation's foot: Code is the agent at work in a project; Chat is a conversation with
+  the preset's model, as Claude's chat is, in no project. A chat's model reads the web (`websearch`, `webfetch`) and,
+  with a picture server, draws (`draw`): no files, no commands, no subagents, so no permissions to choose; its system
+  prompt is its own, as stable as the agent's. A chat has no folder: what it draws is kept in the data folder, in
+  `images/<the chat's id>/` beside the pictures pasted in it, shown in the conversation, and changed by drawing again
+  from its name; deleting the chat deletes them. Opening a session switches to its mode, and the device keeps the last one; Sessions and
+  the palette list both kinds.
+- **Sessions** are kept as two files in the data folder: `<id>.json` (title, kind, workspace, permission mode) and
   `<id>.jsonl`, one event a line. The model's messages are rebuilt from the events at every step, appended only,
   and the system prompt never changes, so llm-server's prompt cache (`cache_prompt`) is reused from step to step.
   The model knows the date from the messages: each one goes to it with the local time it was sent

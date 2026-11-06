@@ -36,12 +36,15 @@ type prepared struct {
 }
 
 // prepare finds the models and context sizes llm-server gives now (a model may have been reloaded with another
-// one, or a router may serve others), and where the session works.
+// one, or a router may serve others), and where the session works: a chat works nowhere.
 func (s *Service) prepare(ctx context.Context, session *live) (prepared, error) {
 	s.mu.Lock()
 	meta := session.meta
 	s.mu.Unlock()
 	main, subagent := s.deps.Models.Choose(ctx, meta.Preset)
+	if meta.Kind == protocol.SessionKindChat {
+		return prepared{main: main, setup: s.chatSetup(session, meta, main), subagent: subagent}, nil
+	}
 	limit := s.deps.Models.SubagentLimit(meta.Preset)
 	host := s.deps.Hosts.HostOf(meta.Host)
 	scratch, err := host.ScratchFolder(ctx, meta.ID)
@@ -104,6 +107,21 @@ func (s *Service) setupFor(session *live, meta Meta, main llm.Choice, where plac
 			Browser: s.deps.Browser != nil && sees, Images: s.deps.ImageURL != "",
 		}, limit),
 		Tools: s.toolsFor(limit),
+	}
+}
+
+// chatSetup is a chat's: its own prompt, the web tools and drawing alone, and no skills. The subagent model reads the
+// pages.
+func (s *Service) chatSetup(session *live, meta Meta, main llm.Choice) agent.Setup {
+	return agent.Setup{
+		Agent:         llmIdentity(meta, main),
+		ContextTokens: main.ContextTokens,
+		MaxSteps:      s.deps.MaxSteps,
+		Model:         s.deps.Model,
+		NewID:         s.deps.NewID,
+		Pictures:      &agent.PictureView{Folder: s.picturesFolderOf(session), Seen: main.Vision},
+		SystemPrompt:  agent.ChatPrompt(s.deps.ImageURL != ""),
+		Tools:         s.deps.ChatTools,
 	}
 }
 

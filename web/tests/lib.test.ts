@@ -134,6 +134,7 @@ describe('groupByProject', () => {
     host: { kind: 'local' },
     id,
     jobs: [],
+    kind: 'code',
     mode: 'auto',
     queued: [],
     queuedNow: false,
@@ -266,6 +267,7 @@ describe('the command palette', () => {
     host: { kind: 'local' },
     id,
     jobs: [],
+    kind: 'code',
     mode: 'auto',
     queued: [],
     queuedNow: false,
@@ -280,6 +282,7 @@ describe('the command palette', () => {
     const commands = paletteCommands([project], [session('a', 'idle'), session('b', 'waiting')], ['models']);
     expect(commands.map((command) => command.id)).toEqual([
       'new-session',
+      'new-chat',
       'new-project',
       'phone',
       'theme',

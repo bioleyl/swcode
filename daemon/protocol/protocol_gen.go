@@ -37,11 +37,13 @@ var PlanStepStatuses = []PlanStepStatus{PlanStepStatusPending, PlanStepStatusInP
 
 var ReminderReasons = []ReminderReason{ReminderReasonPlan, ReminderReasonStepLimit}
 
+var SessionKinds = []SessionKind{SessionKindCode, SessionKindChat}
+
 var SessionStatuses = []SessionStatus{SessionStatusIdle, SessionStatusWorking, SessionStatusWaiting}
 
 var ThinkingModes = []ThinkingMode{ThinkingModeFull, ThinkingModeMedium, ThinkingModeLow, ThinkingModeOff}
 
-var ToolNames = []ToolName{ToolNameRead, ToolNameWrite, ToolNameEdit, ToolNameBash, ToolNameGrep, ToolNameGlob, ToolNameAgent, ToolNamePlan, ToolNameQuestion, ToolNameWebsearch, ToolNameWebfetch, ToolNameImage, ToolNameOutput, ToolNameKill, ToolNameSkill, ToolNameSaveskill, ToolNameScreenshot}
+var ToolNames = []ToolName{ToolNameRead, ToolNameWrite, ToolNameEdit, ToolNameBash, ToolNameGrep, ToolNameGlob, ToolNameAgent, ToolNamePlan, ToolNameQuestion, ToolNameWebsearch, ToolNameWebfetch, ToolNameImage, ToolNameDraw, ToolNameOutput, ToolNameKill, ToolNameSkill, ToolNameSaveskill, ToolNameScreenshot}
 
 var TurnOutcomes = []TurnOutcome{TurnOutcomeDone, TurnOutcomeStopped, TurnOutcomeFailed, TurnOutcomeLimit}
 
@@ -141,6 +143,22 @@ func (v PermissionMode) Valid() bool {
 	return false
 }
 
+type SessionKind string
+
+const (
+	SessionKindCode SessionKind = "code"
+	SessionKindChat SessionKind = "chat"
+)
+
+// Valid tells whether v is one of the SessionKind values.
+func (v SessionKind) Valid() bool {
+	switch v {
+	case SessionKindCode, SessionKindChat:
+		return true
+	}
+	return false
+}
+
 type SessionStatus string
 
 const (
@@ -191,6 +209,7 @@ const (
 	ToolNameWebsearch  ToolName = "websearch"
 	ToolNameWebfetch   ToolName = "webfetch"
 	ToolNameImage      ToolName = "image"
+	ToolNameDraw       ToolName = "draw"
 	ToolNameOutput     ToolName = "output"
 	ToolNameKill       ToolName = "kill"
 	ToolNameSkill      ToolName = "skill"
@@ -201,7 +220,7 @@ const (
 // Valid tells whether v is one of the ToolName values.
 func (v ToolName) Valid() bool {
 	switch v {
-	case ToolNameRead, ToolNameWrite, ToolNameEdit, ToolNameBash, ToolNameGrep, ToolNameGlob, ToolNameAgent, ToolNamePlan, ToolNameQuestion, ToolNameWebsearch, ToolNameWebfetch, ToolNameImage, ToolNameOutput, ToolNameKill, ToolNameSkill, ToolNameSaveskill, ToolNameScreenshot:
+	case ToolNameRead, ToolNameWrite, ToolNameEdit, ToolNameBash, ToolNameGrep, ToolNameGlob, ToolNameAgent, ToolNamePlan, ToolNameQuestion, ToolNameWebsearch, ToolNameWebfetch, ToolNameImage, ToolNameDraw, ToolNameOutput, ToolNameKill, ToolNameSkill, ToolNameSaveskill, ToolNameScreenshot:
 		return true
 	}
 	return false
@@ -1691,6 +1710,7 @@ type SessionSummary struct {
 	Host      HostRef             `json:"host"`
 	ID        string              `json:"id"`
 	Jobs      []SessionSummaryJob `json:"jobs"`
+	Kind      SessionKind         `json:"kind"`
 	Mode      PermissionMode      `json:"mode"`
 	Preset    string              `json:"preset,omitempty"`
 	Queued    []string            `json:"queued"`
@@ -1716,7 +1736,7 @@ func (v SessionSummary) MarshalJSON() ([]byte, error) {
 
 func (v *SessionSummary) UnmarshalJSON(data []byte) error {
 	type plain SessionSummary
-	p := plain{Concise: false, Host: HostRef{Value: HostRefLocal{}}, Jobs: []SessionSummaryJob{}, QueuedNow: false}
+	p := plain{Concise: false, Host: HostRef{Value: HostRefLocal{}}, Jobs: []SessionSummaryJob{}, Kind: "code", QueuedNow: false}
 	if err := json.Unmarshal(data, &p); err != nil {
 		return err
 	}
@@ -1726,6 +1746,9 @@ func (v *SessionSummary) UnmarshalJSON(data []byte) error {
 
 // Normalize trims and checks what the app sent, as its schema does.
 func (v *SessionSummary) Normalize() error {
+	if !v.Kind.Valid() {
+		return fmt.Errorf("%s: unknown value %q", "kind", v.Kind)
+	}
 	if !v.Mode.Valid() {
 		return fmt.Errorf("%s: unknown value %q", "mode", v.Mode)
 	}
@@ -2007,6 +2030,7 @@ func MapClientMessage[R any](u ClientMessage, m ClientMessageMapper[R]) R {
 type ClientMessageCreateSession struct {
 	Concise   bool            `json:"concise,omitempty"`
 	Host      *HostRef        `json:"host,omitempty"`
+	Kind      SessionKind     `json:"kind,omitempty"`
 	Mode      PermissionMode  `json:"mode,omitempty"`
 	Pictures  []PictureUpload `json:"pictures,omitempty"`
 	Preset    string          `json:"preset,omitempty"`
@@ -2036,6 +2060,9 @@ func (v *ClientMessageCreateSession) UnmarshalJSON(data []byte) error {
 
 // Normalize trims and checks what the app sent, as its schema does.
 func (v *ClientMessageCreateSession) Normalize() error {
+	if v.Kind != "" && !v.Kind.Valid() {
+		return fmt.Errorf("%s: unknown value %q", "kind", v.Kind)
+	}
 	if v.Mode != "" && !v.Mode.Valid() {
 		return fmt.Errorf("%s: unknown value %q", "mode", v.Mode)
 	}

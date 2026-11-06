@@ -1,4 +1,5 @@
 import { HOST_ICONS, placeText } from './hosts';
+import { sessionPlace } from './session-kinds';
 import { SESSION_STATUS_ICONS, SESSION_STATUS_LOOKS } from './session-status';
 import { SETTINGS_TOPIC_LABELS } from './settings-topics';
 
@@ -10,6 +11,7 @@ import type { SettingsTopic } from './settings-topics';
 
 /** The palette's own actions, by id. */
 export const PALETTE_ACTION = {
+  newChat: 'new-chat',
   newProject: 'new-project',
   newSession: 'new-session',
   phone: 'phone',
@@ -29,6 +31,13 @@ const ACTIONS: readonly PaletteCommand[] = [
     id: PALETTE_ACTION.newSession,
     keywords: ['start', 'prompt'],
     label: 'New session',
+  },
+  {
+    group: GROUP.actions,
+    icon: 'message',
+    id: PALETTE_ACTION.newChat,
+    keywords: ['ask', 'question', 'web'],
+    label: 'New chat',
   },
   {
     group: GROUP.actions,
@@ -56,7 +65,7 @@ const ACTIONS: readonly PaletteCommand[] = [
 const isAction = (id: string): id is PaletteAction => Object.values<string>(PALETTE_ACTION).includes(id);
 
 const sessionCommand = (session: SessionSummary): PaletteCommand => ({
-  description: `${SESSION_STATUS_LOOKS[session.status].label} · ${placeText(session.host, session.workspace)}`,
+  description: `${SESSION_STATUS_LOOKS[session.status].label} · ${sessionPlace(session)}`,
   group: GROUP.sessions,
   icon: SESSION_STATUS_ICONS[session.status],
   id: `${SESSION_PREFIX}${session.id}`,

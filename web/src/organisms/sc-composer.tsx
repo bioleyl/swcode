@@ -14,11 +14,15 @@ import { BASE_STYLES } from '../styles/shared';
 import styles from './sc-composer.css?inline';
 
 import type { PictureUpload } from '../../../shared/protocol/picture.schema';
-import type { PermissionMode, ThinkingMode } from '../../../shared/protocol/session.schema';
+import type { PermissionMode, SessionKind, ThinkingMode } from '../../../shared/protocol/session.schema';
 import type { PromptDraft } from '../types/composer.types';
 
 const ENTER = 'Enter';
-const IDLE_PLACEHOLDER = 'Ask swcode, or describe the change you want';
+/** What the empty field asks for: a chat's question, or a coding session's change. */
+const IDLE_PLACEHOLDERS: Readonly<Record<SessionKind, string>> = {
+  chat: 'Ask anything',
+  code: 'Ask swcode, or describe the change you want',
+};
 const QUEUE_PLACEHOLDER = 'Add a message for when this turn ends';
 const UNSEEN_NOTE = 'This model cannot see pictures: it is only told they are here.';
 const UNREADABLE_PICTURE = 'That picture could not be read: paste a PNG, a JPEG or a screenshot.';
@@ -29,7 +33,8 @@ const CONCISE_LABEL = 'Token economy';
 /**
  * Where the person writes: the message and the pictures pasted or dropped with it, and send, or stop while the agent
  * works. One chip says what the session works with (its preset, its permissions, how much its model thinks, token
- * economy) and opens them all in a panel. A picture is made small as it comes in.
+ * economy) and opens them all in a panel; a chat has no permissions, since it runs nothing. A picture is made small as
+ * it comes in.
  */
 export class ScComposer extends ScElement {
   static readonly selector = 'sc-composer';
@@ -50,10 +55,21 @@ export class ScComposer extends ScElement {
   /** Whether there is a session to peek at: /peek beside a session only; elsewhere it is words. */
   peeks = false;
   readonly working = this.useChange(false, (value) => {
-    this._refs.stop.hidden = !value;
     this._refs.play.hidden = !value;
-    this._refs.text.placeholder = value ? QUEUE_PLACEHOLDER : IDLE_PLACEHOLDER;
+    this.renderStop();
+    this.renderPlaceholder();
   });
+  /** Subagents at work in the background: stop shows, to stop them, while a message still starts a turn at once. */
+  readonly background = this.useChange(false, () => this.renderStop());
+  /** A chat or a coding session: what the field asks for, and whether the session has permissions to choose. */
+  readonly kind = this.useChange<SessionKind>(
+    'code',
+    () => {
+      this.renderPlaceholder();
+      this.renderChoices();
+    },
+    { immediate: true }
+  );
   readonly mode = this.useChange<PermissionMode>('auto', () => this.renderChoices(), { immediate: true });
   readonly thinking = this.useChange<ThinkingMode>('full', () => this.renderChoices(), { immediate: true });
   /** The session's preset: the default one when empty, or when it was removed. */
@@ -99,7 +115,7 @@ export class ScComposer extends ScElement {
         <label class="sr-only" htmlFor="prompt">
           Message swcode
         </label>
-        <textarea id="prompt" rows={2} placeholder={IDLE_PLACEHOLDER} />
+        <textarea id="prompt" rows={2} />
         <div class="bar">
           <JlPopover placement="top-start" heading="This session">
             <button slot="trigger" type="button" class="chip choices">
@@ -238,13 +254,22 @@ export class ScComposer extends ScElement {
     this.events.emit('peek', question);
   }
 
+  private renderStop(): void {
+    this._refs.stop.hidden = !this.working.get() && !this.background.get();
+  }
+
+  private renderPlaceholder(): void {
+    this._refs.text.placeholder = this.working.get() ? QUEUE_PLACEHOLDER : IDLE_PLACEHOLDERS[this.kind.get()];
+  }
+
   /** The chip's words, the panel's choices: the preset shown is the one the daemon uses, the default when unknown. */
   private renderChoices(): void {
     const choices = presetChoices();
     const preset = presetOf(choices, this.preset.get());
+    const code = this.kind.get() === 'code';
     const summary = [
       preset?.name,
-      MODE_LABELS[this.mode.get()],
+      code ? MODE_LABELS[this.mode.get()] : undefined,
       THINKING_LABELS[this.thinking.get()],
       this.concise.get() ? CONCISE_LABEL : undefined,
     ]
@@ -256,6 +281,7 @@ export class ScComposer extends ScElement {
     const panel = this._refs.choices;
     panel.choices.set(choices);
     panel.preset.set(preset?.id ?? '');
+    panel.permissions.set(code);
     panel.mode.set(this.mode.get());
     panel.thinking.set(this.thinking.get());
     panel.concise.set(this.concise.get());

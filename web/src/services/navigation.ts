@@ -1,6 +1,13 @@
+import type { SessionKind } from '../../../shared/protocol/session.schema';
+
 /** Goes to a page of the app: the router follows the hash. */
 export const navigate = (path: string): void => {
   location.hash = `#${path}`;
+};
+
+/** Goes to a page in place of the one in the address, which the history forgets: an address that only leads on. */
+export const redirect = (path: string): void => {
+  location.replace(`#${path}`);
 };
 
 export const hrefOf = (path: string): string => `#${path}`;
@@ -16,6 +23,14 @@ export const projectPath = (id: string): string => `/projects/${encodeURICompone
 export const HOME_PATH = '/';
 
 export const NEW_SESSION_PATH = '/new';
+
+/** The form for a new chat. */
+export const NEW_CHAT_PATH = '/chat';
+
+const NEW_PATHS: Readonly<Record<SessionKind, string>> = { chat: NEW_CHAT_PATH, code: NEW_SESSION_PATH };
+
+/** Where a new session of a kind starts: the form for a chat, or for a coding session. */
+export const newPathOf = (kind: SessionKind): string => NEW_PATHS[kind];
 
 export const SETTINGS_PATH = '/settings';
 
