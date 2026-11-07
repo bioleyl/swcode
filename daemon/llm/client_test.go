@@ -2,12 +2,14 @@ package llm
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"swcode/daemon/fakellama"
 	"swcode/daemon/protocol"
@@ -63,6 +65,50 @@ func TestTheClientTellsAFullContextFromOtherRefusals(t *testing.T) {
 	_, err = client.Complete(context.Background(), Request{Target: Target{Slot: NoSlot}}, func(Part) {})
 	if IsContextFull(err) || !strings.Contains(err.Error(), "llm-server answered 500: boom") {
 		t.Fatalf("got %v", err)
+	}
+}
+
+// shortRetryWaits makes the waits before a request goes again short, for the test.
+func shortRetryWaits(t *testing.T, waits ...time.Duration) {
+	saved := retryWaits
+	retryWaits = waits
+	t.Cleanup(func() { retryWaits = saved })
+}
+
+func TestARequestGoesAgainWhileLlmServerIsOutOfReachForAMoment(t *testing.T) {
+	shortRetryWaits(t, time.Millisecond, time.Millisecond)
+	fake := fakellama.Start(fakellama.Options{Replies: []fakellama.Reply{
+		{FailWith: http.StatusBadGateway},
+		{FailWith: http.StatusServiceUnavailable},
+		{Text: "Back."},
+	}})
+	defer fake.Stop()
+	reply, err := NewClient(Options{URL: fake.URL}).Complete(context.Background(), Request{Target: Target{Slot: NoSlot}}, func(Part) {})
+	if err != nil || reply.Text != "Back." || len(fake.Requests()) != 3 {
+		t.Fatalf("reply %+v, %v, %d requests", reply, err, len(fake.Requests()))
+	}
+}
+
+func TestTheTurnFailsOnceTheRequestWentAgainAfterEveryWait(t *testing.T) {
+	shortRetryWaits(t, time.Millisecond, time.Millisecond)
+	gone := fakellama.Reply{FailWith: http.StatusBadGateway, Text: "Bad Gateway"}
+	fake := fakellama.Start(fakellama.Options{Replies: []fakellama.Reply{gone, gone, gone, {Text: "Too late."}}})
+	defer fake.Stop()
+	_, err := NewClient(Options{URL: fake.URL}).Complete(context.Background(), Request{Target: Target{Slot: NoSlot}}, func(Part) {})
+	if err == nil || err.Error() != "llm-server answered 502: Bad Gateway" || len(fake.Requests()) != 3 {
+		t.Fatalf("got %v, %d requests", err, len(fake.Requests()))
+	}
+}
+
+func TestStoppingTheTurnEndsTheWaitBeforeARequestGoesAgain(t *testing.T) {
+	shortRetryWaits(t, time.Hour)
+	fake := fakellama.Start(fakellama.Options{Replies: []fakellama.Reply{{FailWith: http.StatusBadGateway}, {Text: "Too late."}}})
+	defer fake.Stop()
+	ctx, stop := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer stop()
+	_, err := NewClient(Options{URL: fake.URL}).Complete(ctx, Request{Target: Target{Slot: NoSlot}}, func(Part) {})
+	if !errors.Is(err, context.DeadlineExceeded) || len(fake.Requests()) != 1 {
+		t.Fatalf("got %v, %d requests", err, len(fake.Requests()))
 	}
 }
 

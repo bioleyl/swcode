@@ -9,6 +9,10 @@ All notable changes to swcode are documented here.
 - A command on this computer that stops to ask for a password (`sudo -A`, ssh, an ssh key's passphrase) shows a card where you type it, and waits; the password is never kept in the session.
 - swcode updates itself: it looks for a newer release on GitHub every 10 minutes, asks once on a computer (never on a phone) whether to install it, then puts the checked download in place of the program and restarts on it. Settings → Updates shows the version that runs and what the newer one brings, looks now, and turns the looking off.
 
+### Fixed
+
+- A turn no longer fails at once when llm-server is out of reach for a moment (502 Bad Gateway from the proxy before it, 503 while it loads its model): the request goes again for about 15 seconds first.
+
 ## [0.3.0] - 2026-11-06
 
 ### Added

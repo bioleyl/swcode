@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -139,18 +138,7 @@ func (c *ResponsesClient) send(ctx context.Context, body map[string]any) (*http.
 	if err != nil {
 		return nil, err
 	}
-	request, err := c.options.newRequest(ctx, http.MethodPost, responsesPath, bytes.NewReader(data))
-	if err != nil {
-		return nil, err
-	}
-	response, err := c.options.client().Do(request)
-	if err != nil {
-		if ctx.Err() != nil {
-			return nil, ctx.Err()
-		}
-		return nil, &ModelError{Message: fmt.Sprintf("llm-server at %s does not answer.", c.options.URL)}
-	}
-	return response, nil
+	return c.options.post(ctx, responsesPath, data)
 }
 
 // responsesBody is the request as the Responses API takes it, with the reasoning settings the model's rule allows.

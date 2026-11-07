@@ -17,6 +17,7 @@ import (
 	"slices"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	"swcode/daemon/protocol"
 )
@@ -33,6 +34,17 @@ const (
 )
 
 var contextFullMessage = regexp.MustCompile(`(?i)exceeds? the (available context size|context window)`)
+
+// retriedStatuses are the answers of an llm-server out of reach for a moment: 502 from the proxy before it (nginx)
+// while it restarts, or when the proxy sent the request on a kept-alive connection llm-server had just closed; 503
+// while it loads its model. Nothing of the reply has come, so the request is sent again.
+var retriedStatuses = map[int]bool{
+	http.StatusBadGateway:         true,
+	http.StatusServiceUnavailable: true,
+}
+
+// retryWaits are the waits before each new try: about 15 seconds in all before the turn fails.
+var retryWaits = []time.Duration{time.Second, 2 * time.Second, 4 * time.Second, 8 * time.Second}
 
 // llamaFields are llama.cpp's own fields of a request, beyond the Chat Completions API: OpenAI's API and others
 // refuse them ("Unknown parameter: 'cache_prompt'").
@@ -78,6 +90,49 @@ func (o Options) newRequest(ctx context.Context, method, path string, body io.Re
 		request.Header.Set("authorization", protocol.BearerPrefix+o.APIKey)
 	}
 	return request, nil
+}
+
+// post sends the body to the path, and again after a wait while llm-server is out of reach for a moment.
+func (o Options) post(ctx context.Context, path string, body []byte) (*http.Response, error) {
+	for _, wait := range retryWaits {
+		response, err := o.postOnce(ctx, path, body)
+		if err != nil || !retriedStatuses[response.StatusCode] {
+			return response, err
+		}
+		response.Body.Close()
+		if err := pause(ctx, wait); err != nil {
+			return nil, err
+		}
+	}
+	return o.postOnce(ctx, path, body)
+}
+
+func (o Options) postOnce(ctx context.Context, path string, body []byte) (*http.Response, error) {
+	request, err := o.newRequest(ctx, http.MethodPost, path, bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	response, err := o.client().Do(request)
+	if err != nil {
+		// Stopping the turn ends the request: that is not llm-server's fault.
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		return nil, &ModelError{Message: fmt.Sprintf("llm-server at %s does not answer.", o.URL)}
+	}
+	return response, nil
+}
+
+// pause waits, unless the turn stops first.
+func pause(ctx context.Context, wait time.Duration) error {
+	timer := time.NewTimer(wait)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }
 
 // The API's shapes, in its snake_case.
@@ -288,19 +343,7 @@ func (c *Client) send(ctx context.Context, request Request, plain bool) (*http.R
 	if err != nil {
 		return nil, err
 	}
-	httpRequest, err := c.options.newRequest(ctx, http.MethodPost, chatPath, bytes.NewReader(body))
-	if err != nil {
-		return nil, err
-	}
-	response, err := c.options.client().Do(httpRequest)
-	if err != nil {
-		// Stopping the turn ends the request: that is not llm-server's fault.
-		if ctx.Err() != nil {
-			return nil, ctx.Err()
-		}
-		return nil, &ModelError{Message: fmt.Sprintf("llm-server at %s does not answer.", c.options.URL)}
-	}
-	return response, nil
+	return c.options.post(ctx, chatPath, body)
 }
 
 // post sends the request, and once more without llama.cpp's own fields when the server refuses one of them, as
