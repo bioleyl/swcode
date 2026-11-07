@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "skills": {
+    "jadis-official": {
+      "source": "bioleyl/jadis",
+      "sourceType": "github",
+      "skillPath": "plugins/jadis-official/skills/jadis-official/SKILL.md",
+      "computedHash": "acd51e7ba5e362a755cd34c54b8ec2a2c1259573304676e6f0bba3fae2c18982"
+    },
+    "jlib-official": {
+      "source": "bioleyl/jlib",
+      "sourceType": "github",
+      "skillPath": "plugins/jlib-official/skills/jlib-official/SKILL.md",
+      "computedHash": "1d24e02b22b8534930e16137588411db16e254af8d6f6db89a5a9af6a2126b57"
+    },
+    "syware-ux": {
+      "source": "bioleyl/jlib",
+      "sourceType": "github",
+      "skillPath": "plugins/syware-ux/skills/syware-ux/SKILL.md",
+      "computedHash": "a085159b495c60ce9bf37442c3fe1b10449116a5a1d357745789c1105c9ced19"
+    }
+  }
+}
