@@ -60,14 +60,14 @@ When the same value lives in two languages (a field name or a length limit in th
 if (attempts > 3) {
   throw new TooManyAttemptsError();
 }
-localStorage.setItem('syware.lang', lang);
+localStorage.setItem('app.lang', lang);
 ```
 
 ```ts
 // Good: login.constants.ts
 export const LOGIN_MAX_ATTEMPTS = 3;
 export const LOGIN_STORAGE_KEY = {
-  lang: 'syware.lang',
+  lang: 'app.lang',
 } as const;
 
 // Good: login.ts

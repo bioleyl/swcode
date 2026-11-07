@@ -1,6 +1,6 @@
 # Frontend: services and atomic components
 
-Details for rules 14–16. The examples use Jadis; the split is the same in any framework. They declare types inline to stay short; in real code they live in `types/`.
+Details for rules 14–16. The split is the same in any framework (React, Vue, Svelte, Angular, web components…), so the examples that touch one are pseudo code: write them in the project's own framework, the way it writes its components. The services and the rules are plain TypeScript, since they never touch a framework. Types are declared inline to stay short; in real code they live in `types/`.
 
 ## Why
 
@@ -28,40 +28,28 @@ A component may contain others from its own layer (a dialog organism around a fo
 
 An organism shows what it's given and reports what the user did. It doesn't know what happens next.
 
-```tsx
-// organisms/sw-login-form.tsx
-export class SwLoginForm extends JlElement {
-  static readonly selector = 'sw-login-form';
-
-  readonly events = this.useEvents<{ submit: Login }>();
-
-  setBusy(busy: boolean): void {
-    // …
-  }
-
-  showError(message: string): void {
-    // …
-  }
-}
+```text
+// organisms/login-form   (pseudo code: write it as the project writes its components)
+component LoginForm
+  inputs:  busy: boolean, error: string | none
+  events:  submit(login: Login)
+  shows:   a username field, a password field, a sign-in button that turns while busy, the error under them
+  when the button is pressed: emit submit({ username, password })
 ```
 
 The page connects it to the service:
 
-```tsx
-// pages/login-page.tsx
-<SwLoginForm onSubmit={(login) => void this.submit(login)} />
+```text
+// pages/login-page   (pseudo code)
+page LoginPage
+  state:  busy = false, error = none
+  shows:  LoginForm(busy, error), and on its submit: submit(login)
 
-private async submit(login: Login): Promise<void> {
-  const form = this._refs.form;
-  form.setBusy(true);
-  try {
-    await signIn(login.username, login.password);
-  } catch (error) {
-    form.showError(messageOf(error));
-  } finally {
-    form.setBusy(false);
-  }
-}
+  submit(login):
+    busy = true, error = none
+    try:     await signIn(login.username, login.password)
+    failed:  error = messageOf(the failure)
+    finally: busy = false
 ```
 
 The service holds the use case, and talks to the server only through the gateway:
@@ -71,7 +59,7 @@ The service holds the use case, and talks to the server only through the gateway
 export async function signIn(username: string, password: string): Promise<User> {
   const user = await api.auth.login({ password, username });
   state.user = user;
-  sessionBus.emit('signedIn', user);
+  sessionEvents.emit('signedIn', user);
   return user;
 }
 ```
@@ -82,8 +70,8 @@ The form can be redesigned, or replaced by a passkey button, without touching `s
 
 Organisms and pages may call services, including the gateway for a plain read or write: `api.workflows.list()` needs no wrapper, and a service that only passes the call through would be speculation (rule 13). As soon as the call needs a decision, the decision moves into a service.
 
-```tsx
-// Bad: organisms/sw-workflow-actions.tsx
+```ts
+// Bad: in organisms/workflow-actions, the component that draws the delete button
 const deletable = currentUser()?.role === 'admin' && workflow.runCount === 0;
 ```
 

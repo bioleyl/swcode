@@ -244,8 +244,8 @@ Rules: **No rules in components**, **Services hold the rules.**
 
 Asked to "add a delete button for admins", models put the whole thing in the component: the role check, the condition on the workflow, the API call, the error handling. It works, but the rule can't be tested without rendering, and the next screen with a delete button copies it or forgets it.
 
-```tsx
-// Bad: organisms/sw-workflow-actions.tsx
+```ts
+// Bad: in organisms/workflow-actions, the component that draws the delete button
 const deletable = currentUser()?.role === 'admin' && workflow.runCount === 0;
 ```
 
