@@ -92,6 +92,10 @@ func (h *LocalHost) MakeFolder(_ context.Context, parent, name string) (FolderMa
 	return localMakeFolder(parent, name, h.options.Home), nil
 }
 
+func (h *LocalHost) RemoveFolder(_ context.Context, path string) error {
+	return os.RemoveAll(path)
+}
+
 func (h *LocalHost) ScratchFolder(_ context.Context, sessionID string) (string, error) {
 	folder := filepath.Join(h.options.ScratchRoot, sessionID)
 	return folder, os.MkdirAll(folder, 0o755)

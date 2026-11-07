@@ -26,6 +26,7 @@ import (
 	"swcode/daemon/projects"
 	"swcode/daemon/protocol"
 	"swcode/daemon/sessions"
+	"swcode/daemon/swcodebase"
 	"swcode/daemon/tools"
 	"swcode/daemon/update"
 	"swcode/daemon/version"
@@ -98,8 +99,10 @@ type App struct {
 	Models *models.Service
 	// Updates looks for a newer version every 10 minutes, and installs it.
 	Updates *update.Service
-	Token   string
-	LanURLs []string
+	// SwcodeBase are the swcode-base skills the program carries, and where they are.
+	SwcodeBase *swcodebase.Service
+	Token      string
+	LanURLs    []string
 
 	config       config.Config
 	options      Options
@@ -191,6 +194,7 @@ func New(settings config.Config, options Options) (*App, error) {
 	app := &App{
 		LanURLs: LANURLs(settings.Host, settings.Port, options.Interfaces()), Token: token,
 		Models: modelService, config: settings, hosts: registry, http: options.HTTP,
+		SwcodeBase:   swcodebase.NewService(registry),
 		imagesFolder: filepath.Join(settings.DataDir, imagesFolder), logger: logger, options: options, workspace: workspace,
 		pairing: pairing.New(filepath.Join(settings.DataDir, devicesFile), options.Now, options.NewID),
 	}

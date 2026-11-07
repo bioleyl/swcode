@@ -87,9 +87,9 @@ func exists(ctx context.Context, host hosts.Host, path string) bool {
 	return err == nil && info.Kind != hosts.KindMissing
 }
 
-// projectFolders is the project's folder, then its parents up to the repository's root (its .git, a folder or a
+// ProjectFolders is the project's folder, then its parents up to the repository's root (its .git, a folder or a
 // worktree's file); outside a repository, the project's folder alone.
-func projectFolders(ctx context.Context, host hosts.Host, workspace string) []string {
+func ProjectFolders(ctx context.Context, host hosts.Host, workspace string) []string {
 	chain := ancestors(host.Paths(), workspace)
 	for index, folder := range chain {
 		if exists(ctx, host, host.Paths().Join(folder, gitFolder)) {
@@ -111,7 +111,7 @@ func Find(ctx context.Context, host hosts.Host, workspace string) ([]HostSkill, 
 		return all, ctx.Err()
 	}
 	project := shelf{ctx: ctx, host: host, origin: protocol.SkillOriginProject}
-	for _, folder := range projectFolders(ctx, host, workspace) {
+	for _, folder := range ProjectFolders(ctx, host, workspace) {
 		all = append(all, project.skillsUnder(folder)...)
 	}
 	return all, ctx.Err()

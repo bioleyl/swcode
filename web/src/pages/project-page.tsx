@@ -1,11 +1,12 @@
 import { createElement, css } from '@jadis/core';
-import { JlButton, JlCard, JlEmpty, JlLoadState, JlPage, JlSwitch } from '@syware/jlib';
+import { confirmDialog, JlButton, JlCard, JlEmpty, JlLoadState, JlPage, JlSwitch, toast } from '@syware/jlib';
 
 import { ScElement } from '../base/sc-element';
 import { placeText } from '../lib/hosts';
 import { appDefaults } from '../lib/new-session';
 import { presetOf } from '../lib/presets';
 import { isSkillOn, SKILL_ORIGIN_LABELS } from '../lib/project-skills';
+import { isSwcodeBaseIn } from '../lib/swcode-base';
 import { ScSessionChoices } from '../molecules/sc-session-choices';
 import { ScSessionRow } from '../molecules/sc-session-row';
 import { daemon } from '../services/daemon';
@@ -16,13 +17,15 @@ import { askToRemoveProject, findProject, projectListBus } from '../services/pro
 import { foundSkills, readProjectSkills, setProjectSkill } from '../services/project-skills';
 import { deleteSession } from '../services/session-delete';
 import { allSessions, sessionListBus } from '../services/session-list';
+import { installSwcodeBase, readSwcodeBase, removeSwcodeBase, swcodeBaseBus } from '../services/swcode-base';
 import { BASE_STYLES } from '../styles/shared';
 import styles from './project-page.css?inline';
 
 import type { SessionDefaults } from '../../../shared/protocol/choices.schema';
 import type { Project } from '../../../shared/protocol/project.schema';
 import type { SessionSummary } from '../../../shared/protocol/session.schema';
-import type { ProjectSkill } from '../../../shared/protocol/skill.schema';
+import type { ProjectSkill, SwcodeBaseStatus } from '../../../shared/protocol/skill.schema';
+import type { SwcodeBasePlace, SwcodeBaseRead } from '../types/swcode-base.types';
 
 const APP_NAME = 'swcode';
 const NOT_FOUND = 'This project is not on the daemon';
@@ -32,6 +35,35 @@ const DEFAULTS_APP =
   'The app’s defaults, until you pick otherwise here. The composer still changes them for one session.';
 const SKILLS_NOTE =
   'Read in your ~/.agents/skills and the project’s .agents/skills. The agent is told of those on, and each is a / command in the composer.';
+// The card of the skill swcode comes with: what it says, each place's button, as swcode-base is there or not, and
+// what the person agrees to before it leaves a place.
+const SWCODE_BASE_NOTE =
+  'The skill swcode comes with. A project finds it in its own .agents/skills, or in your ~/.agents/skills, where every project does.';
+const SWCODE_BASE_BUTTONS: Readonly<
+  Record<SwcodeBasePlace, Record<'absent' | 'present', { icon: string; label: string }>>
+> = {
+  home: {
+    absent: { icon: 'download', label: 'Install for all projects' },
+    present: { icon: 'trash', label: 'Remove from your home' },
+  },
+  project: {
+    absent: { icon: 'download', label: 'Install in this project' },
+    present: { icon: 'trash', label: 'Remove from this project' },
+  },
+};
+const SWCODE_BASE_REMOVAL: Readonly<Record<SwcodeBasePlace, { confirm: string; heading: string; text: string }>> =
+  {
+    home: {
+      confirm: 'Remove',
+      heading: 'Remove swcode-base from your home?',
+      text: 'Its folder is deleted from ~/.agents/skills, which every project reads. A project’s own copy stays.',
+    },
+    project: {
+      confirm: 'Remove',
+      heading: 'Remove swcode-base from this project?',
+      text: 'Its folder is deleted from the project’s .agents/skills. The copy in your home stays.',
+    },
+  };
 const UNREACHABLE = 'The daemon did not answer.';
 // A skill's line under its name: where it is, then the start of what it is for.
 const MAX_SKILL_LINE = 100;
@@ -46,13 +78,13 @@ const skillLineOf = (skill: ProjectSkill): string =>
     .filter((part) => part !== '')
     .join(LINE_SEPARATOR);
 
-/** A failed read, as the skills' load state tells it. */
-class SkillsUnread extends Error {}
+/** A failed read, as the skills' or the swcode-base load state tells it. */
+class Unread extends Error {}
 
 /**
  * A project: where its folder is, its sessions, the newest first, each with its delete button, what its new sessions
- * start with (its preset, permissions, thinking and token economy), saved as they are picked, and the skills its
- * sessions find, each turned on or off for them with its switch.
+ * start with (its preset, permissions, thinking and token economy), saved as they are picked, the skills its
+ * sessions find, each turned on or off for them with its switch, and swcode-base, put in the project or in the home.
  */
 export class ProjectPage extends ScElement {
   static readonly selector = 'project-page';
@@ -61,6 +93,10 @@ export class ProjectPage extends ScElement {
 
   // The project whose skills are read, or being read: they are read again only for another one.
   private _skillsOf: string | undefined;
+  // Where swcode-base is, as the buttons last drew it, so each knows what it does; none while it is read.
+  private _swcodeBase: SwcodeBaseStatus | undefined;
+  // The card's load state, taken once its shadow is up: ref takes one component per class.
+  private _swcodeBaseState?: JlLoadState;
   // Each skill's switch, by its name, as last drawn.
   private readonly _switches = new Map<string, JlSwitch>();
 
@@ -76,6 +112,9 @@ export class ProjectPage extends ScElement {
     skillList: ref('.skill-list'),
     skills: ref<JlCard>('.skills'),
     skillsState: ref(JlLoadState),
+    swcodeBase: ref<JlCard>('.swcode-base'),
+    swcodeBaseInHome: ref<JlButton>('.swcode-base .in-home'),
+    swcodeBaseInProject: ref<JlButton>('.swcode-base .in-project'),
   }));
 
   templateHtml(): Node {
@@ -108,6 +147,14 @@ export class ProjectPage extends ScElement {
                 />
               </JlLoadState>
             </JlCard>
+            <JlCard class="swcode-base" heading="swcode-base" description={SWCODE_BASE_NOTE}>
+              <JlLoadState class="base-state" skeleton="rows" count={1}>
+                <div class="base-actions">
+                  <JlButton class="in-project" variant="ghost" />
+                  <JlButton class="in-home" variant="ghost" />
+                </div>
+              </JlLoadState>
+            </JlCard>
           </div>
         </div>
       </JlPage>
@@ -123,6 +170,8 @@ export class ProjectPage extends ScElement {
     this._refs.remove.events.register('press', () => askToRemoveProject(this.route.id ?? ''));
     this._refs.reset.events.register('press', () => this.saveDefaults(undefined));
     this._refs.skillsState.events.register('retry', () => this.loadSkills(this.route.id ?? ''));
+    this._refs.swcodeBaseInProject.events.register('press', () => void this.changeSwcodeBase('project'));
+    this._refs.swcodeBaseInHome.events.register('press', () => void this.changeSwcodeBase('home'));
     choices.events.register('preset', (preset) => this.changeDefault({ preset }));
     choices.events.register('mode', (mode) => this.changeDefault({ mode }));
     choices.events.register('thinking', (thinking) => this.changeDefault({ thinking }));
@@ -131,6 +180,7 @@ export class ProjectPage extends ScElement {
     this.onBus(sessionListBus, 'changed', () => this.render());
     this.onBus(presetsBus, 'changed', () => this.render());
     this.onBus(daemonStatusBus, 'changed', () => this.render());
+    this.onBus(swcodeBaseBus, 'changed', (read) => this.redrawSwcodeBase(read));
     this.render();
   }
 
@@ -167,6 +217,7 @@ export class ProjectPage extends ScElement {
     this._refs.remove.hidden = !project;
     this._refs.defaults.hidden = !project;
     this._refs.skills.hidden = !project;
+    this._refs.swcodeBase.hidden = !project;
     const sessions = project ? allSessions().filter((session) => session.workspace === project.path) : [];
     this._refs.list.replaceChildren(...sessions.map((session) => this.rowOf(session)));
     this._refs.empty.hidden = !project || sessions.length > 0;
@@ -178,6 +229,7 @@ export class ProjectPage extends ScElement {
     if (this._skillsOf !== project.id) {
       this.forgetSkills();
       this.loadSkills(project.id);
+      this.loadSwcodeBase(project.id);
     }
   }
 
@@ -211,7 +263,7 @@ export class ProjectPage extends ScElement {
 
   private failSkills(problem: string): never {
     this._refs.skillsState.errorText.set(problem);
-    throw new SkillsUnread(problem);
+    throw new Unread(problem);
   }
 
   /** A switch each, as the project has it: a jl-* event does not bubble, so each switch has its own. */
@@ -236,6 +288,123 @@ export class ProjectPage extends ScElement {
     for (const [name, toggle] of this._switches) {
       toggle.checked.set(isSkillOn(project, name));
     }
+  }
+
+  /** The card's load state, made with the page: ref takes one component per class, and there are two here. */
+  private swcodeBaseState(): JlLoadState {
+    this._swcodeBaseState ??= this.getElement<JlLoadState>('jl-load-state.base-state');
+    return this._swcodeBaseState;
+  }
+
+  /**
+   * Reads where swcode-base is for this project: what failed shows in its card, with Try again. Another project's
+   * answer leaves at once: its buttons would act on what that one holds.
+   */
+  private loadSwcodeBase(projectId: string): void {
+    this._swcodeBase = undefined;
+    void this.swcodeBaseState().load({
+      draw: (status: SwcodeBaseStatus) => this.drawSwcodeBase(status),
+      fetch: () => this.fetchSwcodeBase(projectId),
+      isEmpty: (status: SwcodeBaseStatus) => !status.carried,
+    });
+  }
+
+  private async fetchSwcodeBase(projectId: string): Promise<SwcodeBaseStatus> {
+    const read = await readSwcodeBase(projectId);
+    if (read === undefined) {
+      return this.failSwcodeBase(UNREACHABLE);
+    }
+    if (read.problem !== undefined) {
+      return this.failSwcodeBase(read.problem);
+    }
+    return read;
+  }
+
+  private failSwcodeBase(problem: string): never {
+    this.swcodeBaseState().errorText.set(problem);
+    throw new Unread(problem);
+  }
+
+  /** Each place's button: install swcode-base where it is not, take it out where it is. */
+  private drawSwcodeBase(status: SwcodeBaseStatus): void {
+    this._swcodeBase = status;
+    this.drawSwcodeBaseButton('project', status);
+    this.drawSwcodeBaseButton('home', status);
+  }
+
+  private drawSwcodeBaseButton(place: SwcodeBasePlace, status: SwcodeBaseStatus): void {
+    const look = SWCODE_BASE_BUTTONS[place][isSwcodeBaseIn(status, place) ? 'present' : 'absent'];
+    const button = this.swcodeBaseButton(place);
+    button.label.set(look.label);
+    button.icon.set(look.icon);
+  }
+
+  private swcodeBaseButton(place: SwcodeBasePlace): JlButton {
+    const buttons: Record<SwcodeBasePlace, JlButton> = {
+      home: this._refs.swcodeBaseInHome,
+      project: this._refs.swcodeBaseInProject,
+    };
+    return buttons[place];
+  }
+
+  /**
+   * The daemon answered elsewhere. An answer for this project draws the buttons; one for this computer's home alone
+   * (the startup offer) is asked again for this project, whose home may be on another host; another project's
+   * changes nothing.
+   */
+  private redrawSwcodeBase(read: SwcodeBaseRead): void {
+    const projectId = this.route.id ?? '';
+    if (this._swcodeBase === undefined) {
+      return;
+    }
+    if (read.projectId === undefined) {
+      void readSwcodeBase(projectId);
+      return;
+    }
+    if (read.projectId === projectId) {
+      this.drawSwcodeBase(read.status);
+    }
+  }
+
+  /** A place's button pressed: swcode-base goes there, or leaves it once the person agreed. */
+  private async changeSwcodeBase(place: SwcodeBasePlace): Promise<void> {
+    const status = this._swcodeBase;
+    if (status === undefined) {
+      return;
+    }
+    const projectId = this.route.id ?? '';
+    if (!isSwcodeBaseIn(status, place)) {
+      await this.writeSwcodeBase(place, () => installSwcodeBase(place, projectId));
+      return;
+    }
+    const removal = SWCODE_BASE_REMOVAL[place];
+    if (!(await confirmDialog({ confirmLabel: removal.confirm, heading: removal.heading, text: removal.text }))) {
+      return;
+    }
+    await this.writeSwcodeBase(place, () => removeSwcodeBase(place, projectId));
+  }
+
+  /**
+   * Asks the daemon, the place's button turning meanwhile. What it did shows in place: the bus draws the buttons
+   * again, and the Skills card is read again, with swcode-base or without it. A failure is a toast.
+   */
+  private async writeSwcodeBase(
+    place: SwcodeBasePlace,
+    write: () => Promise<SwcodeBaseStatus | undefined>
+  ): Promise<void> {
+    const button = this.swcodeBaseButton(place);
+    button.loading.set(true);
+    const written = await write();
+    button.loading.set(false);
+    if (written === undefined) {
+      toast({ heading: UNREACHABLE, tone: 'danger' });
+      return;
+    }
+    if (written.problem !== undefined) {
+      toast({ heading: written.problem, tone: 'danger' });
+      return;
+    }
+    this.loadSkills(this.route.id ?? '');
   }
 
   /** A session's row, its delete button asking first: a jl-* event does not bubble, so each row has its own. */

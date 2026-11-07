@@ -119,7 +119,8 @@ func Compact(ctx context.Context, host TurnHost, setup Setup) error {
 		summary = noSummary
 	}
 	host.Record(protocol.SessionEventContextCompacted{ID: setup.NewID(), Summary: summary})
-	// The skills were listed before the summary, which the model no longer sees.
+	// The notes were read and the skills listed before the summary, which the model no longer sees.
+	ReadNotes(ctx, host, setup)
 	ListSkills(ctx, host, setup)
 	return nil
 }

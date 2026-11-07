@@ -39,7 +39,7 @@ var SessionKinds = []SessionKind{SessionKindCode, SessionKindChat}
 
 var SessionStatuses = []SessionStatus{SessionStatusIdle, SessionStatusWorking, SessionStatusWaiting}
 
-var ToolNames = []ToolName{ToolNameRead, ToolNameWrite, ToolNameEdit, ToolNameBash, ToolNameGrep, ToolNameGlob, ToolNameAgent, ToolNamePlan, ToolNameQuestion, ToolNameWebsearch, ToolNameWebfetch, ToolNameImage, ToolNameDraw, ToolNameOutput, ToolNameKill, ToolNameSkill, ToolNameSaveskill, ToolNameScreenshot}
+var ToolNames = []ToolName{ToolNameRead, ToolNameWrite, ToolNameEdit, ToolNameBash, ToolNameGrep, ToolNameGlob, ToolNameAgent, ToolNamePlan, ToolNameQuestion, ToolNameWebsearch, ToolNameWebfetch, ToolNameImage, ToolNameDraw, ToolNameOutput, ToolNameKill, ToolNameSkill, ToolNameNotes, ToolNameSaveskill, ToolNameScreenshot}
 
 var TurnOutcomes = []TurnOutcome{TurnOutcomeDone, TurnOutcomeStopped, TurnOutcomeFailed, TurnOutcomeLimit}
 
@@ -76,6 +76,8 @@ const (
 	EndpointStartup        = "/api/startup"
 	EndpointStatus         = "/api/status"
 	EndpointStop           = "/api/stop"
+	EndpointSwcodeBase     = "/api/swcode-base"
+	EndpointSwcodeBaseHome = "/api/swcode-base/home"
 	EndpointUpdate         = "/api/update"
 	EndpointUpdateCheck    = "/api/update/check"
 	EndpointUpdateInstall  = "/api/update/install"
@@ -227,6 +229,7 @@ const (
 	ToolNameOutput     ToolName = "output"
 	ToolNameKill       ToolName = "kill"
 	ToolNameSkill      ToolName = "skill"
+	ToolNameNotes      ToolName = "notes"
 	ToolNameSaveskill  ToolName = "saveskill"
 	ToolNameScreenshot ToolName = "screenshot"
 )
@@ -234,7 +237,7 @@ const (
 // Valid tells whether v is one of the ToolName values.
 func (v ToolName) Valid() bool {
 	switch v {
-	case ToolNameRead, ToolNameWrite, ToolNameEdit, ToolNameBash, ToolNameGrep, ToolNameGlob, ToolNameAgent, ToolNamePlan, ToolNameQuestion, ToolNameWebsearch, ToolNameWebfetch, ToolNameImage, ToolNameDraw, ToolNameOutput, ToolNameKill, ToolNameSkill, ToolNameSaveskill, ToolNameScreenshot:
+	case ToolNameRead, ToolNameWrite, ToolNameEdit, ToolNameBash, ToolNameGrep, ToolNameGlob, ToolNameAgent, ToolNamePlan, ToolNameQuestion, ToolNameWebsearch, ToolNameWebfetch, ToolNameImage, ToolNameDraw, ToolNameOutput, ToolNameKill, ToolNameSkill, ToolNameNotes, ToolNameSaveskill, ToolNameScreenshot:
 		return true
 	}
 	return false
@@ -711,6 +714,39 @@ type SkillSummary struct {
 	Name        string `json:"name"`
 }
 
+type SwcodeBaseStatus struct {
+	Carried   bool     `json:"carried"`
+	InHome    bool     `json:"inHome"`
+	InProject bool     `json:"inProject"`
+	Installed bool     `json:"installed"`
+	Names     []string `json:"names"`
+	Problem   string   `json:"problem,omitempty"`
+}
+
+func (v SwcodeBaseStatus) MarshalJSON() ([]byte, error) {
+	type plain SwcodeBaseStatus
+	p := plain(v)
+	if p.Names == nil {
+		p.Names = []string{}
+	}
+	return json.Marshal(p)
+}
+
+func (v *SwcodeBaseStatus) UnmarshalJSON(data []byte) error {
+	type plain SwcodeBaseStatus
+	p := plain{Carried: false, InHome: false, InProject: false, Installed: false}
+	if err := json.Unmarshal(data, &p); err != nil {
+		return err
+	}
+	*v = SwcodeBaseStatus(p)
+	return v.Normalize()
+}
+
+// Normalize trims and checks what the app sent, as its schema does.
+func (v *SwcodeBaseStatus) Normalize() error {
+	return nil
+}
+
 type DiffLine struct {
 	Kind    DiffLineKind `json:"kind"`
 	NewLine int          `json:"newLine,omitempty"`
@@ -759,6 +795,11 @@ func (v *PlanStep) Normalize() error {
 	return nil
 }
 
+type ProjectNote struct {
+	Path string `json:"path"`
+	Text string `json:"text"`
+}
+
 type Question struct {
 	Header      string           `json:"header"`
 	MultiSelect bool             `json:"multiSelect"`
@@ -800,6 +841,8 @@ func (SessionEventContextCompacted) isSessionEvent() {}
 func (SessionEventReminder) isSessionEvent() {}
 
 func (SessionEventSkillsListed) isSessionEvent() {}
+
+func (SessionEventProjectNotesRead) isSessionEvent() {}
 
 func (SessionEventSkillLoaded) isSessionEvent() {}
 
@@ -880,6 +923,12 @@ func (u *SessionEvent) UnmarshalJSON(data []byte) error {
 		u.Value = value
 	case "\"skillsListed\"":
 		var value SessionEventSkillsListed
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
+	case "\"projectNotesRead\"":
+		var value SessionEventProjectNotesRead
 		if err := json.Unmarshal(data, &value); err != nil {
 			return err
 		}
@@ -994,6 +1043,7 @@ type SessionEventMapper[R any] interface {
 	ContextCompacted(SessionEventContextCompacted) R
 	Reminder(SessionEventReminder) R
 	SkillsListed(SessionEventSkillsListed) R
+	ProjectNotesRead(SessionEventProjectNotesRead) R
 	SkillLoaded(SessionEventSkillLoaded) R
 	ToolCall(SessionEventToolCall) R
 	PermissionRequested(SessionEventPermissionRequested) R
@@ -1027,6 +1077,8 @@ func MapSessionEvent[R any](u SessionEvent, m SessionEventMapper[R]) R {
 		return m.Reminder(value)
 	case SessionEventSkillsListed:
 		return m.SkillsListed(value)
+	case SessionEventProjectNotesRead:
+		return m.ProjectNotesRead(value)
 	case SessionEventSkillLoaded:
 		return m.SkillLoaded(value)
 	case SessionEventToolCall:
@@ -1192,6 +1244,24 @@ func (v SessionEventSkillsListed) MarshalJSON() ([]byte, error) {
 		Key string `json:"kind"`
 		plain
 	}{"skillsListed", p})
+}
+
+type SessionEventProjectNotesRead struct {
+	At    string        `json:"at"`
+	ID    string        `json:"id"`
+	Notes []ProjectNote `json:"notes"`
+}
+
+func (v SessionEventProjectNotesRead) MarshalJSON() ([]byte, error) {
+	type plain SessionEventProjectNotesRead
+	p := plain(v)
+	if p.Notes == nil {
+		p.Notes = []ProjectNote{}
+	}
+	return json.Marshal(struct {
+		Key string `json:"kind"`
+		plain
+	}{"projectNotesRead", p})
 }
 
 type SessionEventSkillLoaded struct {
