@@ -2,21 +2,22 @@ import { createElement, css } from '@jadis/core';
 import { confirmDialog, JlAlert, JlButton, JlListItem } from '@syware/jlib';
 
 import { ScElement } from '../base/sc-element';
-import { SETTINGS_SAVED } from '../lib/settings-saved';
+import { RESTART_WARNING, restartsOnSave, SETTINGS_SAVED } from '../lib/settings-saved';
 import { sshHostsLine, sshHostsOf } from '../lib/ssh-hosts';
 import { daemonBus } from '../services/daemon';
 import { askHosts } from '../services/daemon-answers';
 import { refreshStatus } from '../services/daemon-status';
-import { loadSettings, saveSettings } from '../services/settings';
+import { confirmRestart, loadSettings, saveSettings } from '../services/settings';
 import { BASE_STYLES } from '../styles/shared';
 import { ScSshHostDialog } from './sc-ssh-host-dialog';
 import styles from './sc-ssh-hosts.css?inline';
 
 import type { Tone } from '@syware/jlib';
-import type { SettingName } from '../../../shared/protocol/settings.schema';
+import type { Restart, SettingName } from '../../../shared/protocol/settings.schema';
 
 const SETTING: SettingName = 'SWCODE_SSH_ENDPOINTS';
 const UNREADABLE = 'The daemon did not say its settings.';
+const REMOVED = 'New projects can no longer be made there; its projects stay as they are.';
 const NO_HOSTS = 'No SSH host yet: the hosts of ~/.ssh/config come by themselves.';
 const FROM_CONFIG = 'A Host of ~/.ssh/config';
 
@@ -29,6 +30,8 @@ export class ScSshHosts extends ScElement {
   static readonly selector = 'sc-ssh-hosts';
 
   private _hosts: string[] = [];
+  // How a change applies, from the settings loaded: whether saving asks first.
+  private _restart: Restart | undefined;
   // Set from saving until the daemon answers again on the new settings.
   private _restarting = false;
 
@@ -92,6 +95,7 @@ export class ScSshHosts extends ScElement {
       this.say(UNREADABLE, 'danger');
       return;
     }
+    this._restart = view.restart;
     this._refs.file.textContent = view.path;
     const fixed = view.environment.includes(SETTING);
     this._refs.add.hidden = fixed;
@@ -135,7 +139,11 @@ export class ScSshHosts extends ScElement {
     return '';
   }
 
+  /** A host added or changed from its dialog, which stays open if the person does not want swcode restarted. */
   private async saveHost(host: string, replaced: string): Promise<void> {
+    if (!(await confirmRestart(this._restart))) {
+      return;
+    }
     const hosts =
       replaced === '' ? [...this._hosts, host] : this._hosts.map((each) => (each === replaced ? host : each));
     const problem = await this.save(hosts);
@@ -146,12 +154,15 @@ export class ScSshHosts extends ScElement {
     this._refs.dialog.close();
   }
 
-  /** A host goes after a confirmation; its projects stay, and open again once it is back. */
+  /**
+   * A host goes after a confirmation, which also warns of the restart; its projects stay, and open again once it is
+   * back.
+   */
   private async removeHost(host: string): Promise<void> {
     const confirmed = await confirmDialog({
       confirmLabel: 'Remove',
       heading: `Remove ${host}?`,
-      text: 'New projects can no longer be made there; its projects stay as they are.',
+      text: restartsOnSave(this._restart) ? `${REMOVED} ${RESTART_WARNING}` : REMOVED,
       tone: 'danger',
     });
     if (!confirmed) {

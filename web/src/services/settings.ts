@@ -1,13 +1,17 @@
+import { confirmDialog } from '@syware/jlib';
+
 import { ENDPOINTS } from '../../../shared/protocol/endpoints';
 import {
   ModelsAnswerSchema,
   SettingsSavedSchema,
   SettingsViewSchema,
 } from '../../../shared/protocol/settings.schema';
+import { RESTART_QUESTION, restartsOnSave } from '../lib/settings-saved';
 import { jsonOf, request } from './api';
 
 import type {
   ModelsAnswer,
+  Restart,
   SettingsSaved,
   SettingsView,
   SettingValues,
@@ -25,6 +29,17 @@ export async function loadSettings(): Promise<SettingsView | undefined> {
 export async function saveSettings(values: SettingValues): Promise<SettingsSaved> {
   const parsed = SettingsSavedSchema.safeParse(await jsonOf(await request('PUT', ENDPOINTS.settings, values)));
   return parsed.success ? parsed.data : { ok: false, problem: UNREACHABLE };
+}
+
+/**
+ * Whether to go on with saving the settings file: where swcode restarts by itself on it, the sessions open now can
+ * break, so the person confirms first.
+ */
+export async function confirmRestart(restart: Restart | undefined): Promise<boolean> {
+  if (!restartsOnSave(restart)) {
+    return true;
+  }
+  return confirmDialog(RESTART_QUESTION);
 }
 
 /** The models an llm-server serves, at an address not saved yet. */

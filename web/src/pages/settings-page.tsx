@@ -21,7 +21,7 @@ import { daemonBus } from '../services/daemon';
 import { refreshStatus } from '../services/daemon-status';
 import { inDesktopApp } from '../services/desktop';
 import { hrefOf, settingsPath } from '../services/navigation';
-import { loadSettings, saveSettings } from '../services/settings';
+import { confirmRestart, loadSettings, saveSettings } from '../services/settings';
 import { loadStartup } from '../services/startup';
 import { installsUpdates } from '../services/updates';
 import { BASE_STYLES } from '../styles/shared';
@@ -297,6 +297,9 @@ export class SettingsPage extends ScElement {
   }
 
   private async save(): Promise<void> {
+    if (!(await confirmRestart(this._view?.restart))) {
+      return;
+    }
     const values = this.values();
     this.say(SETTINGS_SAVED.saving, 'info');
     this._refs.save.loading.set(true);
