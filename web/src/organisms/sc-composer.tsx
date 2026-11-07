@@ -38,7 +38,6 @@ const IDLE_PLACEHOLDERS: Readonly<Record<SessionKind, string>> = {
 };
 const QUEUE_PLACEHOLDER = 'Add a message for when this turn ends';
 const UNSEEN_NOTE = 'This model cannot see pictures: it is only told they are here.';
-const UNREADABLE_PICTURE = 'That picture could not be read: paste a PNG, a JPEG or a screenshot.';
 const CHOICES_ICON_SIZE = 14;
 const SUMMARY_SEPARATOR = ' · ';
 const CONCISE_LABEL = 'Token economy';
@@ -444,12 +443,12 @@ export class ScComposer extends ScElement {
 
   private async addPictures(files: readonly File[]): Promise<void> {
     for (const file of files.slice(0, MAX_PICTURES - this._pictures.length)) {
-      const picture = await shrinkPicture(file).catch(() => undefined);
-      if (!picture) {
-        this.renderPictures(UNREADABLE_PICTURE);
+      const picture = await shrinkPicture(file);
+      if (!picture.ok) {
+        this.renderPictures(picture.problem);
         continue;
       }
-      this._pictures = [...this._pictures, picture];
+      this._pictures = [...this._pictures, picture.answer];
       this.renderPictures();
     }
   }

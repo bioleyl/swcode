@@ -4,7 +4,7 @@ import { JlButton, JlListItem } from '@syware/jlib';
 import { ScElement } from '../base/sc-element';
 import { qrElement } from '../lib/qr';
 import { daemonState } from '../services/daemon-status';
-import { forgetDevice, newPairingCode, pairedDevices, pairingLink } from '../services/pairing';
+import { forgetDevice, NO_CODE, newPairingCode, pairedDevices, pairingLink } from '../services/pairing';
 import { BASE_STYLES } from '../styles/shared';
 import styles from './sc-phone.css?inline';
 
@@ -17,7 +17,6 @@ const QR_LABEL = 'QR code of the link that pairs a phone with swcode';
 const MS_PER_SECOND = 1000;
 // A new code comes this long before the shown one expires, so the QR code never shows a dead one.
 const RENEW_AHEAD_MS = 2000;
-const NO_CODE = 'The daemon gives no pairing code: is it running?';
 const NO_DEVICES = 'No phone is paired yet.';
 
 const isLocal = (base: string): boolean => LOCAL_HOSTS.has(new URL(base).hostname);
@@ -41,6 +40,8 @@ export class ScPhone extends ScElement {
   readonly active = this.useChange(false, (active) => (active ? this.start() : this.stopClock()));
 
   private _code: PairingCode | undefined;
+  // Why there is no code: what the daemon said, or that it does not answer.
+  private _problem = NO_CODE;
   private _renewing = false;
   private _clock: ReturnType<typeof setInterval> | undefined;
 
@@ -121,8 +122,13 @@ export class ScPhone extends ScElement {
       return;
     }
     this._renewing = true;
-    this._code = await newPairingCode();
-    this._renewing = false;
+    try {
+      const code = await newPairingCode();
+      this._code = code.ok ? code.answer : undefined;
+      this._problem = code.ok ? '' : code.problem;
+    } finally {
+      this._renewing = false;
+    }
     this.renderPairing();
   }
 
@@ -137,10 +143,11 @@ export class ScPhone extends ScElement {
     this._refs.note.textContent = LOCAL_NOTE;
   }
 
+  /** The seconds left, or why there is no code to wait for. */
   private renderExpiry(left: number): void {
     this._refs.expires.textContent = this._code
       ? `A new code in ${Math.max(0, Math.ceil((left - RENEW_AHEAD_MS) / MS_PER_SECOND))} s`
-      : NO_CODE;
+      : this._problem;
   }
 
   private async renderDevices(): Promise<void> {

@@ -98,26 +98,17 @@ export class SessionPage extends ScElement {
   private readonly _handlers: ServerHandlers = {
     assistantDelta: (message) =>
       this.forThisSession(message.sessionId, () => this._refs.conversation.delta(message.messageId, message.text)),
-    // Projects and folders come through the project list service and the project dialog.
-    folders: () => undefined,
-    hosts: () => undefined,
     peekDelta: (message) =>
       this.forThisSession(message.sessionId, () => this._refs.peek.delta(message.peekId, message.text)),
     peekState: (message) =>
       this.forThisSession(message.sessionId, () =>
         this._refs.peek.showState(message.peekId, message.state, message.message ?? '')
       ),
-    // The presets come through the presets service.
-    presets: () => undefined,
     problem: (message) => this.showProblem(message.message),
-    projectCreated: () => undefined,
-    projectRefused: () => undefined,
-    projects: () => undefined,
     reasoningDelta: (message) =>
       this.forThisSession(message.sessionId, () =>
         this._refs.conversation.reasoning(message.messageId, message.text)
       ),
-    sessionCreated: () => undefined,
     sessionEvent: (message) => this.forThisSession(message.sessionId, () => this.applyEvent(message.event)),
     sessionHistory: (message) =>
       this.forThisSession(message.sessionId, () => {
@@ -127,10 +118,6 @@ export class SessionPage extends ScElement {
         this._refs.plan.show(currentPlan(this._events));
         this.showUsage(usedTokens(message.events));
       }),
-    // The palette's search hears its answers through the search service.
-    sessionMatches: () => undefined,
-    // The list itself comes through the session list service.
-    sessions: () => undefined,
     toolCallWriting: (message) =>
       this.forThisSession(message.sessionId, () => this._refs.conversation.writingCall(message.tool)),
   };
@@ -182,7 +169,18 @@ export class SessionPage extends ScElement {
   }
 
   onConnect(): void {
-    const { composer, conversation } = this._refs;
+    this.watchDaemon();
+    this.wireConversation();
+    this.wireComposer();
+    this.wireFrame();
+    this.renderSummary();
+    this.renderDaemon();
+    daemon.send({ sessionId: this._sessionId, type: 'openSession' });
+    this._refs.composer.focusText();
+  }
+
+  /** What the daemon says, and what it says about itself: the page redraws what it shows. */
+  private watchDaemon(): void {
     this.onBus(daemonBus, 'message', (message) => this.receive(message));
     this.onBus(daemonBus, 'online', (online) => this.reopen(online));
     this.onBus(sessionListBus, 'changed', () => this.renderSummary());
@@ -191,16 +189,14 @@ export class SessionPage extends ScElement {
     this.on(document, VISIBILITY_CHANGE, () => this.noteSeen());
     this.onBus(daemonStatusBus, 'changed', () => this.renderDaemon());
     this.onBus(presetsBus, 'changed', () => this.renderDaemon());
+  }
+
+  /** The conversation's answers: each goes to the daemon as the answer to its own request. */
+  private wireConversation(): void {
+    const { conversation } = this._refs;
     conversation.events.register('answer', ({ decision, requestId }) =>
       daemon.send({ decision, requestId, sessionId: this._sessionId, type: 'answerPermission' })
     );
-    composer.events.register('send', (draft) => this.send(draft));
-    composer.events.register('peek', (question) => this.peek(question));
-    composer.events.register('newSession', () => this.startNew());
-    composer.events.register('compact', () => {
-      this.showProblem('');
-      daemon.send({ sessionId: this._sessionId, type: 'compactSession' });
-    });
     conversation.events.register('question', ({ answers, requestId }) =>
       daemon.send({ answers, requestId, sessionId: this._sessionId, type: 'answerQuestion' })
     );
@@ -213,15 +209,18 @@ export class SessionPage extends ScElement {
     conversation.events.register('sendQueueNow', () =>
       daemon.send({ sessionId: this._sessionId, type: 'sendQueueNow' })
     );
-    this._refs.title.events.register('rename', (title) =>
-      daemon.send({ sessionId: this._sessionId, title, type: 'renameSession' })
-    );
-    this._refs.remove.events.register('press', () => void this.deleteSession());
-    this._refs.panelToggle.events.register('press', () => this.showPanel(!sidePanelOpen()));
-    this._refs.panel.events.register('stopJob', (jobId) =>
-      daemon.send({ jobId, sessionId: this._sessionId, type: 'stopJob' })
-    );
-    this.renderPanel(sidePanelOpen());
+  }
+
+  /** The composer: its message, its commands, and the session settings its chip changes. */
+  private wireComposer(): void {
+    const { composer } = this._refs;
+    composer.events.register('send', (draft) => this.send(draft));
+    composer.events.register('peek', (question) => this.peek(question));
+    composer.events.register('newSession', () => this.startNew());
+    composer.events.register('compact', () => {
+      this.showProblem('');
+      daemon.send({ sessionId: this._sessionId, type: 'compactSession' });
+    });
     composer.events.register('stop', () => daemon.send({ sessionId: this._sessionId, type: 'stopTurn' }));
     composer.events.register('play', () => this._refs.arcade.open());
     composer.events.register('mode', (mode) => daemon.send({ mode, sessionId: this._sessionId, type: 'setMode' }));
@@ -234,10 +233,19 @@ export class SessionPage extends ScElement {
     composer.events.register('thinking', (thinking) =>
       daemon.send({ sessionId: this._sessionId, thinking, type: 'setThinking' })
     );
-    this.renderSummary();
-    this.renderDaemon();
-    daemon.send({ sessionId: this._sessionId, type: 'openSession' });
-    composer.focusText();
+  }
+
+  /** The page's own parts: its title, its delete button, the side panel and its stop buttons. */
+  private wireFrame(): void {
+    this._refs.title.events.register('rename', (title) =>
+      daemon.send({ sessionId: this._sessionId, title, type: 'renameSession' })
+    );
+    this._refs.remove.events.register('press', () => void this.deleteSession());
+    this._refs.panelToggle.events.register('press', () => this.showPanel(!sidePanelOpen()));
+    this._refs.panel.events.register('stopJob', (jobId) =>
+      daemon.send({ jobId, sessionId: this._sessionId, type: 'stopJob' })
+    );
+    this.renderPanel(sidePanelOpen());
   }
 
   private receive(message: ServerMessage): void {
@@ -245,7 +253,7 @@ export class SessionPage extends ScElement {
   }
 
   private handle<Type extends keyof ServerMessageMap>(type: Type, message: ServerMessageMap[Type]): void {
-    this._handlers[type](message);
+    this._handlers[type]?.(message);
   }
 
   private forThisSession(sessionId: string, action: () => void): void {
@@ -286,7 +294,8 @@ export class SessionPage extends ScElement {
   /** A question beside the session: its answer shows above the composer, never in the conversation. */
   private peek(question: string): void {
     this._peeks += 1;
-    const peekId = `${Date.now().toString(36)}-${this._peeks}`;
+    // The daemon answers a peek by its id alone: a page's own id has to be one no other page's guesses.
+    const peekId = `${this._sessionId}-${this._peeks}-${crypto.randomUUID()}`;
     this._refs.peek.ask(peekId, question);
     daemon.send({ peekId, question, sessionId: this._sessionId, type: 'peek' });
   }

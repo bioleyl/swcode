@@ -27,7 +27,18 @@ const llamaLine = (status: Status): StatusLine => {
   };
 };
 
+const PROBLEM_BODY = /"message"\s*:\s*"([^"]*)/;
+
+/** What the daemon said about a request it refused: its `message`, or the code alone when the body says nothing. */
+export const problemOf = (status: number, body: string): string =>
+  body.match(PROBLEM_BODY)?.[1] ?? `HTTP ${status}`;
+
 const LINES: { [Kind in keyof DaemonStateMap]: (state: DaemonStateMap[Kind]) => StatusLine } = {
+  badAnswer: () => ({
+    detail: 'The daemon answered, but not with its status: look at what it logs.',
+    text: 'The daemon answered badly',
+    tone: 'problem',
+  }),
   locked: ({ pairingFailed }) =>
     pairingFailed
       ? {
@@ -42,6 +53,11 @@ const LINES: { [Kind in keyof DaemonStateMap]: (state: DaemonStateMap[Kind]) => 
         },
   offline: () => ({ detail: 'Is it running?', text: 'The daemon does not answer', tone: 'problem' }),
   ready: ({ status }) => llamaLine(status),
+  refused: ({ problem }) => ({
+    detail: 'The daemon is up but refused the request: look at what it logs.',
+    text: problem,
+    tone: 'problem',
+  }),
   unknown: () => ({ detail: '', text: 'Connecting…', tone: 'quiet' }),
 };
 
