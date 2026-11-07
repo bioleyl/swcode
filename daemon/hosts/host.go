@@ -44,10 +44,19 @@ type SearchMatch struct {
 	Text string
 }
 
+// Passwords answers what a command this computer ran asked for, and gives up when the turn stops before anyone
+// does: the password typed, and whether one was (none closes the command's input).
+type Passwords interface {
+	Secret(ctx context.Context, prompt string) (text string, gave bool)
+}
+
 // CommandOptions is where a command runs and how long it may take.
 type CommandOptions struct {
 	Cwd     string
 	Timeout time.Duration
+	// Passwords answers what the command asks for when it stops to ask for a password: nil where nobody can, which
+	// is how commands on another host run, and how a subagent's do.
+	Passwords Passwords
 }
 
 // CommandResult is how a command ended: its exit code (none when a signal ended it), what it printed, and why it
@@ -104,7 +113,9 @@ type Host interface {
 	// ListFiles is the files under a folder matching a glob, up to a limit; in a git repository, the ones git shows.
 	ListFiles(ctx context.Context, base, pattern string, limit int) ([]string, error)
 	Search(ctx context.Context, request SearchRequest) ([]SearchMatch, error)
-	// Run runs a command, ended when ctx is done (Stopped) or its time is up (TimedOut).
+	// Run runs a command, ended when ctx is done (Stopped) or its time is up (TimedOut). When options.Passwords is
+	// there, what it answers goes to the command if it stops to ask for a password: only this computer's commands
+	// have an input to give.
 	Run(ctx context.Context, command string, options CommandOptions) CommandResult
 	// ListFolders is a folder's subfolders, to pick a project's folder by browsing; ~ is the home folder.
 	ListFolders(ctx context.Context, path string) (FolderListing, error)

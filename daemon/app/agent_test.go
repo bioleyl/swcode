@@ -240,6 +240,42 @@ func TestTheAgentAsksThePersonItsQuestionsWaitsAndGivesTheModelTheirAnswers(t *t
 	}
 }
 
+// TestACommandThatAsksForAPasswordWaitsForThePersonAndGetsIt: a command this computer runs that stops on a
+// password prompt asks the person, and the password they typed goes to the command, not to the session.
+func TestACommandThatAsksForAPasswordWaitsForThePersonAndGetsIt(t *testing.T) {
+	askpass := filepath.Join(t.TempDir(), "askpass.sh")
+	if err := os.WriteFile(askpass, []byte("#!/bin/sh\nprintf 'Password: '\nread -r line\necho got\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	test := Start(t, Options{Replies: []fakellama.Reply{
+		call("bash", map[string]any{"command": "sh " + askpass}), text("It took it."),
+	}})
+	session := test.NewSession(sessions.Request{})
+	if problem := test.App.Sessions.SendPrompt(session.ID, "Run the command that asks", nil); problem != "" {
+		t.Fatal(problem)
+	}
+	sessionID := session.ID
+	asked := test.WaitForEvent("passwordRequested", 1).Value.(protocol.SessionEventPasswordRequested)
+	Expect(t, asked.Prompt, "Password:")
+	// The card goes under the call whose command asked.
+	Expect(t, asked.CallID, test.WaitForEvent("toolCall", 1).Value.(protocol.SessionEventToolCall).CallID)
+	if test.App.Sessions.List()[0].Status != protocol.SessionStatusWaiting {
+		t.Fatal("not waiting")
+	}
+	if problem := test.App.Sessions.Answer(sessionID, asked.RequestID, sessions.Answers([]string{"no"})); !strings.Contains(problem, "answered") {
+		t.Fatalf("an answer of the other kind: %q", problem)
+	}
+	if problem := test.App.Sessions.Answer(sessionID, asked.RequestID, sessions.Secret("hunter2")); problem != "" {
+		t.Fatal(problem)
+	}
+	test.UntilIdle(sessionID)
+	Expect(t, OfKind(test.Events(sessionID), "passwordAnswered"), `[{"gave":true}]`)
+	// The command printed `got` once it had read a line: the password itself never reaches the model.
+	if !strings.Contains(RequestText(test.Requests()[1]), "got") {
+		t.Fatal("the command did not get the password")
+	}
+}
+
 func TestTheModelGetsNoAnswerWhenTheTurnStopsWhileItWaits(t *testing.T) {
 	test := Start(t, Options{Replies: []fakellama.Reply{{ToolCalls: []fakellama.ToolCall{questionCall}}}})
 	sessionID := prompt(t, test, "Speed up the tag lookup")

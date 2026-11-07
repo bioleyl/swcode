@@ -35,6 +35,8 @@ const (
 	scratchFolder  = "scratch"
 	// imagesFolder is the pictures the agents made, as the app shows them: a folder per session.
 	imagesFolder = "images"
+	// helpersFolder is the programs the daemon's commands run: the password prompt sudo -A and ssh ask with.
+	helpersFolder = "helpers"
 	// devicesFile is the paired phones, their tokens kept as hashes.
 	devicesFile  = "devices.json"
 	projectsFile = "projects.json"
@@ -163,7 +165,8 @@ func New(settings config.Config, options Options) (*App, error) {
 		return nil, err
 	}
 	local := hosts.NewLocalHost(hosts.LocalOptions{
-		Home: options.Home, ScratchRoot: filepath.Join(settings.DataDir, scratchFolder), Shell: localShell(options.Environment),
+		Helpers: filepath.Join(settings.DataDir, helpersFolder), Home: options.Home,
+		ScratchRoot: filepath.Join(settings.DataDir, scratchFolder), Shell: localShell(options.Environment),
 	})
 	registry := hosts.NewRegistry(local, options.ConnectHost)
 	found := options.browser()

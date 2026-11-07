@@ -810,6 +810,10 @@ func (SessionEventQuestionAsked) isSessionEvent() {}
 
 func (SessionEventQuestionAnswered) isSessionEvent() {}
 
+func (SessionEventPasswordRequested) isSessionEvent() {}
+
+func (SessionEventPasswordAnswered) isSessionEvent() {}
+
 func (SessionEventToolRunning) isSessionEvent() {}
 
 func (SessionEventToolFinished) isSessionEvent() {}
@@ -913,6 +917,18 @@ func (u *SessionEvent) UnmarshalJSON(data []byte) error {
 			return err
 		}
 		u.Value = value
+	case "\"passwordRequested\"":
+		var value SessionEventPasswordRequested
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
+	case "\"passwordAnswered\"":
+		var value SessionEventPasswordAnswered
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
 	case "\"toolRunning\"":
 		var value SessionEventToolRunning
 		if err := json.Unmarshal(data, &value); err != nil {
@@ -981,6 +997,8 @@ type SessionEventMapper[R any] interface {
 	PermissionAnswered(SessionEventPermissionAnswered) R
 	QuestionAsked(SessionEventQuestionAsked) R
 	QuestionAnswered(SessionEventQuestionAnswered) R
+	PasswordRequested(SessionEventPasswordRequested) R
+	PasswordAnswered(SessionEventPasswordAnswered) R
 	ToolRunning(SessionEventToolRunning) R
 	ToolFinished(SessionEventToolFinished) R
 	SubagentQueued(SessionEventSubagentQueued) R
@@ -1018,6 +1036,10 @@ func MapSessionEvent[R any](u SessionEvent, m SessionEventMapper[R]) R {
 		return m.QuestionAsked(value)
 	case SessionEventQuestionAnswered:
 		return m.QuestionAnswered(value)
+	case SessionEventPasswordRequested:
+		return m.PasswordRequested(value)
+	case SessionEventPasswordAnswered:
+		return m.PasswordAnswered(value)
 	case SessionEventToolRunning:
 		return m.ToolRunning(value)
 	case SessionEventToolFinished:
@@ -1452,6 +1474,37 @@ func (v SessionEventQuestionAnswered) MarshalJSON() ([]byte, error) {
 	}{"questionAnswered", p})
 }
 
+type SessionEventPasswordRequested struct {
+	At        string `json:"at"`
+	CallID    string `json:"callId"`
+	Prompt    string `json:"prompt"`
+	RequestID string `json:"requestId"`
+}
+
+func (v SessionEventPasswordRequested) MarshalJSON() ([]byte, error) {
+	type plain SessionEventPasswordRequested
+	p := plain(v)
+	return json.Marshal(struct {
+		Key string `json:"kind"`
+		plain
+	}{"passwordRequested", p})
+}
+
+type SessionEventPasswordAnswered struct {
+	At        string `json:"at"`
+	Gave      bool   `json:"gave"`
+	RequestID string `json:"requestId"`
+}
+
+func (v SessionEventPasswordAnswered) MarshalJSON() ([]byte, error) {
+	type plain SessionEventPasswordAnswered
+	p := plain(v)
+	return json.Marshal(struct {
+		Key string `json:"kind"`
+		plain
+	}{"passwordAnswered", p})
+}
+
 type SessionEventToolRunning struct {
 	At     string `json:"at"`
 	CallID string `json:"callId"`
@@ -1733,6 +1786,8 @@ func (ClientMessageAnswerPermission) isClientMessage() {}
 
 func (ClientMessageAnswerQuestion) isClientMessage() {}
 
+func (ClientMessageAnswerPassword) isClientMessage() {}
+
 func (ClientMessageStopTurn) isClientMessage() {}
 
 func (ClientMessageCompactSession) isClientMessage() {}
@@ -1828,6 +1883,12 @@ func (u *ClientMessage) UnmarshalJSON(data []byte) error {
 		u.Value = value
 	case "\"answerQuestion\"":
 		var value ClientMessageAnswerQuestion
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
+	case "\"answerPassword\"":
+		var value ClientMessageAnswerPassword
 		if err := json.Unmarshal(data, &value); err != nil {
 			return err
 		}
@@ -1939,6 +2000,7 @@ type ClientMessageMapper[R any] interface {
 	SendPrompt(ClientMessageSendPrompt) R
 	AnswerPermission(ClientMessageAnswerPermission) R
 	AnswerQuestion(ClientMessageAnswerQuestion) R
+	AnswerPassword(ClientMessageAnswerPassword) R
 	StopTurn(ClientMessageStopTurn) R
 	CompactSession(ClientMessageCompactSession) R
 	SearchSessions(ClientMessageSearchSessions) R
@@ -1977,6 +2039,8 @@ func MapClientMessage[R any](u ClientMessage, m ClientMessageMapper[R]) R {
 		return m.AnswerPermission(value)
 	case ClientMessageAnswerQuestion:
 		return m.AnswerQuestion(value)
+	case ClientMessageAnswerPassword:
+		return m.AnswerPassword(value)
 	case ClientMessageStopTurn:
 		return m.StopTurn(value)
 	case ClientMessageCompactSession:
@@ -2259,6 +2323,21 @@ func (v *ClientMessageAnswerQuestion) Normalize() error {
 		}
 	}
 	return nil
+}
+
+type ClientMessageAnswerPassword struct {
+	RequestID string `json:"requestId"`
+	Secret    string `json:"secret"`
+	SessionID string `json:"sessionId"`
+}
+
+func (v ClientMessageAnswerPassword) MarshalJSON() ([]byte, error) {
+	type plain ClientMessageAnswerPassword
+	p := plain(v)
+	return json.Marshal(struct {
+		Key string `json:"type"`
+		plain
+	}{"answerPassword", p})
 }
 
 type ClientMessageStopTurn struct {

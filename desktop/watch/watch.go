@@ -100,6 +100,9 @@ func (t *Tracker) event(sessionID string, event protocol.SessionEvent) (Notice, 
 	case protocol.SessionEventQuestionAsked:
 		notice.Kind, notice.Text = NeedsYou, clipped(firstQuestion(value.Questions))
 		return notice, true
+	case protocol.SessionEventPasswordRequested:
+		notice.Kind, notice.Text = NeedsYou, clipped(value.Prompt)
+		return notice, true
 	case protocol.SessionEventTurnFinished:
 		return t.finished(notice, value)
 	}

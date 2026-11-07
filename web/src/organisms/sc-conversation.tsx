@@ -7,6 +7,7 @@ import { activityLine } from '../lib/activity';
 import { keepingEnd } from '../lib/follow-end';
 import { folderName } from '../lib/format';
 import { ScMessage } from '../molecules/sc-message';
+import { ScPassword } from '../molecules/sc-password';
 import { ScPermission } from '../molecules/sc-permission';
 import { ScQuestion } from '../molecules/sc-question';
 import { ScThinking } from '../molecules/sc-thinking';
@@ -68,6 +69,7 @@ export class ScConversation extends ScElement {
   readonly events = this.useEvents<{
     answer: { requestId: string; decision: PermissionDecision };
     cancelQueue: undefined;
+    password: { requestId: string; secret: string };
     question: { requestId: string; answers: string[] };
     sendQueueNow: undefined;
   }>();
@@ -87,8 +89,8 @@ export class ScConversation extends ScElement {
   private readonly _messages = new Map<string, ScMessage>();
   private readonly _thoughts = new Map<string, ScThinking>();
   private readonly _rows = new Map<string, ScToolRow>();
-  // What waits for the person, by request: an approval or the agent's questions.
-  private readonly _requests = new Map<string, ScPermission | ScQuestion>();
+  // What waits for the person, by request: an approval, the agent's questions, or a password a command asked for.
+  private readonly _requests = new Map<string, ScPermission | ScQuestion | ScPassword>();
   // Which agent call started each subagent: its calls show under that row.
   private readonly _subagents = new Map<string, string>();
   // The agent calls whose subagent works in the background: their rows run until its report, past the call's result.
@@ -111,6 +113,8 @@ export class ScConversation extends ScElement {
           <p>{event.summary}</p>
         </details>
       ),
+    passwordAnswered: (event) => this.closeRequest(event.requestId),
+    passwordRequested: (event) => this.openPassword(event),
     permissionAnswered: (event) => this.closeRequest(event.requestId),
     permissionRequested: (event) => this.openRequest(event),
     questionAnswered: (event) => this.closeRequest(event.requestId),
@@ -388,6 +392,21 @@ export class ScConversation extends ScElement {
     card.events.register('answer', (decision) =>
       this.events.emit('answer', { decision, requestId: event.requestId })
     );
+    this.working(true);
+  }
+
+  /** A command of this computer stopped asking for a password: the person types it, or says none is coming. */
+  private openPassword(event: SessionEventMap['passwordRequested']): void {
+    this._rows.get(event.callId)?.state.set('waiting');
+    const card: ScPassword = (
+      <ScPassword prompt={event.prompt} where={`main agent · in ${folderName(this.workspace.get())}`} />
+    );
+    this._requests.set(event.requestId, card);
+    this.add(card);
+    card.events.register('answer', (secret) =>
+      this.events.emit('password', { requestId: event.requestId, secret })
+    );
+    card.events.register('refuse', () => this.events.emit('password', { requestId: event.requestId, secret: '' }));
     this.working(true);
   }
 

@@ -55,6 +55,8 @@ func contains(list []string, want string) bool {
 // memory is the sessions kept in memory: the store the service works through, so a test sees what would be on disk
 // without a folder of its own.
 type memory struct {
+	// mu: the service writes from its turns' goroutines while a test reads.
+	mu     sync.Mutex
 	metas  map[string]Meta
 	events map[string][]protocol.SessionEvent
 	// broken: saving what a session is fails, as on a disk that will not take it.
@@ -66,6 +68,8 @@ func newMemory() *memory {
 }
 
 func (m *memory) LoadAll() []Stored {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	stored := []Stored{}
 	for id, meta := range m.metas {
 		stored = append(stored, Stored{Events: append([]protocol.SessionEvent{}, m.events[id]...), Meta: meta})
@@ -74,6 +78,8 @@ func (m *memory) LoadAll() []Stored {
 }
 
 func (m *memory) SaveMeta(meta Meta) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	if m.broken {
 		return errors.New("the folder is not there")
 	}
@@ -82,13 +88,32 @@ func (m *memory) SaveMeta(meta Meta) error {
 }
 
 func (m *memory) Append(sessionID string, event protocol.SessionEvent) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.events[sessionID] = append(m.events[sessionID], event)
 	return nil
 }
 
 func (m *memory) Remove(sessionID string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	delete(m.metas, sessionID)
 	delete(m.events, sessionID)
+}
+
+// eventsOf is a copy of a session's events as the store holds them now.
+func (m *memory) eventsOf(sessionID string) []protocol.SessionEvent {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return append([]protocol.SessionEvent{}, m.events[sessionID]...)
+}
+
+// metaOf is what the store holds of a session now, and whether it holds it.
+func (m *memory) metaOf(sessionID string) (Meta, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	meta, ok := m.metas[sessionID]
+	return meta, ok
 }
 
 // words is a model that answers each request with the next of its texts, then fails with its problem.
@@ -241,8 +266,9 @@ func history(t *testing.T, service *Service, sessionID string) []protocol.Sessio
 
 // lastRequestID is the id of the last request event of a kind the store holds, "" when there is none yet.
 func lastRequestID(store *memory, sessionID, kind string) string {
-	for index := len(store.events[sessionID]) - 1; index >= 0; index-- {
-		event := store.events[sessionID][index]
+	events := store.eventsOf(sessionID)
+	for index := len(events) - 1; index >= 0; index-- {
+		event := events[index]
 		if protocol.Kind(event) != kind {
 			continue
 		}
@@ -276,8 +302,8 @@ func askedID(t *testing.T, store *memory, sessionID, kind string) string {
 func TestANewChatIsIdleTitledAndKept(t *testing.T) {
 	service, store, _ := chats(t, &words{})
 	sessionID := newChat(t, service)
-	if store.metas[sessionID].Kind != protocol.SessionKindChat {
-		t.Fatalf("kept as %+v", store.metas[sessionID])
+	if meta, _ := store.metaOf(sessionID); meta.Kind != protocol.SessionKindChat {
+		t.Fatalf("kept as %+v", meta)
 	}
 	summaries := service.List()
 	if len(summaries) != 1 || summaries[0].Title != Untitled || summaries[0].Status != protocol.SessionStatusIdle {
@@ -295,14 +321,14 @@ func TestTheFirstMessageNamesTheSessionAndTheTurnWritesItsEvents(t *testing.T) {
 		t.Fatal(problem)
 	}
 	until(t, service, sessionID, protocol.SessionStatusIdle)
-	if store.metas[sessionID].Title != "Fix the notes" {
-		t.Fatalf("title %q", store.metas[sessionID].Title)
+	if meta, _ := store.metaOf(sessionID); meta.Title != "Fix the notes" {
+		t.Fatalf("title %q", meta.Title)
 	}
 	want := []string{"turnStarted", "userMessage", "assistantMessage", "turnFinished"}
 	if got := kindsOf(history(t, service, sessionID)); !reflect.DeepEqual(got, want) {
 		t.Fatalf("events %v", got)
 	}
-	if got := kindsOf(store.events[sessionID]); !reflect.DeepEqual(got, want) {
+	if got := kindsOf(store.eventsOf(sessionID)); !reflect.DeepEqual(got, want) {
 		t.Fatalf("the file holds %v", got)
 	}
 	if got := service.List()[0]; got.UpdatedAt != at {
@@ -338,7 +364,7 @@ func TestWhatIsSentWhileATurnRunsWaitsForTheNextOne(t *testing.T) {
 	}
 	until(t, service, sessionID, protocol.SessionStatusIdle)
 	turns := 0
-	for _, kind := range kindsOf(store.events[sessionID]) {
+	for _, kind := range kindsOf(store.eventsOf(sessionID)) {
 		if kind == "turnStarted" {
 			turns++
 		}
@@ -388,7 +414,7 @@ func TestTheSettingsAreSavedAndToldToTheApps(t *testing.T) {
 	if problem := service.SetPreset(sessionID, "default"); problem != "" {
 		t.Fatal(problem)
 	}
-	meta := store.metas[sessionID]
+	meta, _ := store.metaOf(sessionID)
 	if meta.Mode != protocol.PermissionModeAsk || meta.Thinking != protocol.ThinkingModeLow || !meta.Concise || meta.Preset != "default" {
 		t.Fatalf("meta %+v", meta)
 	}
@@ -418,7 +444,7 @@ func TestDeletingAWorkingSessionIsRefused(t *testing.T) {
 	if problem := service.Remove(sessionID); problem != "" {
 		t.Fatal(problem)
 	}
-	if _, ok := store.metas[sessionID]; ok {
+	if _, ok := store.metaOf(sessionID); ok {
 		t.Fatal("its file stayed")
 	}
 	if len(service.List()) != 0 {
@@ -483,7 +509,7 @@ func TestCompactingNeedsAConversationAndNoTurn(t *testing.T) {
 		t.Fatal(problem)
 	}
 	until(t, service, sessionID, protocol.SessionStatusIdle)
-	if got := kindsOf(store.events[sessionID]); !contains(got, "contextCompacted") {
+	if got := kindsOf(store.eventsOf(sessionID)); !contains(got, "contextCompacted") {
 		t.Fatalf("events %v", got)
 	}
 }
@@ -493,6 +519,7 @@ func TestCompactingNeedsAConversationAndNoTurn(t *testing.T) {
 func TestTheKindOfAnAnswerOnlySettlesTheRequestOfThatKind(t *testing.T) {
 	questions := questionsAsked{callID: "c1", questions: []protocol.Question{{Header: "Approach", Question: "Map or sort?"}}}
 	permission := permissionAsk{ask: agent.PermissionAsk{CallID: "c1", Subject: permissions.Read}}
+	password := passwordAsk{callID: "c1", prompt: "Password: "}
 	for _, test := range []struct {
 		name    string
 		pending asked
@@ -504,6 +531,11 @@ func TestTheKindOfAnAnswerOnlySettlesTheRequestOfThatKind(t *testing.T) {
 		{"a permission does not settle a question", questions, Permission(protocol.PermissionDecisionAllowOnce), false},
 		{"answers do not settle a permission", permission, answer{answers: []string{"Map"}}, false},
 		{"a permission settles a permission", permission, Permission(protocol.PermissionDecisionDeny), true},
+		{"a password settles a password", password, Secret("hunter2"), true},
+		{"no password settles a password", password, Secret(""), true},
+		{"a permission does not settle a password", password, Permission(protocol.PermissionDecisionAllowOnce), false},
+		{"a password does not settle a permission", permission, Secret("hunter2"), false},
+		{"a password does not settle a question", questions, Secret("hunter2"), false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			turn := &runningTurn{pending: &pending{requestID: "r1", settle: func(answer) {}, waitsFor: test.pending.waitsFor}}
@@ -555,9 +587,51 @@ func TestAnAnswerAllowedForTheSessionGrantsWhatItLets(t *testing.T) {
 	if !session.grants.Programs["npm"] {
 		t.Fatalf("grants %+v", session.grants)
 	}
-	kinds := kindsOf(store.events[sessionID])
+	kinds := kindsOf(store.eventsOf(sessionID))
 	if !contains(kinds, "permissionRequested") || !contains(kinds, "permissionAnswered") {
 		t.Fatalf("events %v", kinds)
+	}
+	if turn.pending != nil {
+		t.Fatal("the turn still waits")
+	}
+}
+
+// TestAPasswordAnsweredThroughTheServiceReachesTheTurnAndIsNotKept: a command's password request, answered through
+// the service, lets the turn go on with the words typed, and the session keeps only that a password came.
+func TestAPasswordAnsweredThroughTheServiceReachesTheTurnAndIsNotKept(t *testing.T) {
+	service, store, _ := chats(t, &words{})
+	sessionID := newChat(t, service)
+	service.mu.Lock()
+	session := service.sessions[sessionID]
+	turn := &runningTurn{}
+	session.turn = turn
+	service.mu.Unlock()
+	asked := passwordAsk{callID: "c1", prompt: "[sudo] password for leal:", service: service}
+	got := make(chan answer, 1)
+	go func() { got <- service.ask(context.Background(), session, turn, asked) }()
+	requestID := askedID(t, store, sessionID, "passwordRequested")
+	if problem := service.Answer(sessionID, requestID, Permission(protocol.PermissionDecisionAllowOnce)); problem != alreadyAnswered {
+		t.Fatalf("an answer of the other kind: %q", problem)
+	}
+	if problem := service.Answer(sessionID, requestID, Secret("hunter2")); problem != "" {
+		t.Fatal(problem)
+	}
+	select {
+	case typed := <-got:
+		if typed.secret == nil || *typed.secret != (typedSecret{gave: true, text: "hunter2"}) {
+			t.Fatalf("answer %+v", typed)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("the turn never got its answer")
+	}
+	kinds := kindsOf(store.eventsOf(sessionID))
+	if !contains(kinds, "passwordRequested") || !contains(kinds, "passwordAnswered") {
+		t.Fatalf("events %v", kinds)
+	}
+	for _, event := range store.eventsOf(sessionID) {
+		if data, err := json.Marshal(event.Value); err == nil && strings.Contains(string(data), "hunter2") {
+			t.Fatalf("the password was kept: %s", data)
+		}
 	}
 	if turn.pending != nil {
 		t.Fatal("the turn still waits")
@@ -578,7 +652,7 @@ func TestAStoppedTurnSettlesWhatItAskedWithANo(t *testing.T) {
 	got := make(chan answer, 1)
 	go func() { got <- service.ask(ctx, session, turn, asked) }()
 	for attempt := 0; attempt < 400; attempt++ {
-		if len(store.events[sessionID]) > 0 {
+		if len(store.eventsOf(sessionID)) > 0 {
 			break
 		}
 		time.Sleep(5 * time.Millisecond)
@@ -592,7 +666,7 @@ func TestAStoppedTurnSettlesWhatItAskedWithANo(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("the stopped turn never let go")
 	}
-	if kinds := kindsOf(store.events[sessionID]); !contains(kinds, "questionAsked") || !contains(kinds, "questionAnswered") {
+	if kinds := kindsOf(store.eventsOf(sessionID)); !contains(kinds, "questionAsked") || !contains(kinds, "questionAnswered") {
 		t.Fatalf("events %v", kinds)
 	}
 	if turn.pending != nil {

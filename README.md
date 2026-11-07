@@ -444,6 +444,12 @@ top, for one command; the page shows those as set in the environment.
 - **Questions**: the main agent's `question` tool asks you 1 to 3 questions, each with 2 to 4 answers to pick (one
   or several) or your own words, for decisions that are yours to make. The turn waits as for an approval: the
   session shows "Needs you", and the answers come back to the model as the result.
+- **Passwords**: a command this computer runs that stops to ask for one (`sudo -A`, ssh's password, an ssh key's
+  passphrase, a `Password:` of its own) shows a card where you type it, and waits for you as an approval does. The
+  password goes to the command and nowhere else: the session keeps only that a password was asked for, and whether
+  one came. "No password" closes the command's input, which then fails as it would with none. sudo and ssh ask
+  through a small script the daemon writes in `~/.swcode/helpers` (not on Windows). Commands on another computer
+  (WSL, SSH) have no input at all, and neither do a subagent's.
 - **Skills**: the user's instructions for kinds of tasks, as Agent Skills have them: a folder each, with a `SKILL.md`
   (a name and a description in its frontmatter, then the instructions) and the files they name. swcode reads them
   where agents that share the convention look, on the machine the project is on (this computer, WSL, SSH), at each

@@ -5,11 +5,15 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sync"
 )
 
 // LocalOptions is what this computer's host needs.
 type LocalOptions struct {
-	Home string
+	// Helpers is where the daemon writes the programs its commands run: the password prompt sudo -A and ssh ask
+	// with, in the data folder. Empty, sudo and ssh cannot ask, though a command reading its input still can.
+	Helpers string
+	Home    string
 	// ScratchRoot is where the sessions' scratch folders go: in the data folder.
 	ScratchRoot string
 	// Shell is what commands run with: bash, unless said (Git Bash or PowerShell on Windows).
@@ -21,6 +25,8 @@ type LocalHost struct {
 	options LocalOptions
 	shell   Shell
 	jobs    *Jobs
+	// askpass is the password prompt's path, written the first time a command may ask: empty when it could not be.
+	askpass func() string
 }
 
 func NewLocalHost(options LocalOptions) *LocalHost {
@@ -28,7 +34,8 @@ func NewLocalHost(options LocalOptions) *LocalHost {
 	if options.Shell != nil {
 		shell = *options.Shell
 	}
-	return &LocalHost{jobs: NewJobs(shell), options: options, shell: shell}
+	askpass := sync.OnceValue(func() string { return WriteAskpass(options.Helpers) })
+	return &LocalHost{askpass: askpass, jobs: NewJobs(shell), options: options, shell: shell}
 }
 
 func (h *LocalHost) Paths() Paths { return NativePaths }
@@ -71,7 +78,10 @@ func (h *LocalHost) Search(ctx context.Context, request SearchRequest) ([]Search
 }
 
 func (h *LocalHost) Run(ctx context.Context, command string, options CommandOptions) CommandResult {
-	return RunCommand(ctx, command, options, h.shell)
+	if options.Passwords == nil {
+		return RunCommand(ctx, command, options, h.shell)
+	}
+	return RunCommandAsks(ctx, command, options, h.shell, h.askpass())
 }
 
 func (h *LocalHost) ListFolders(_ context.Context, path string) (FolderListing, error) {

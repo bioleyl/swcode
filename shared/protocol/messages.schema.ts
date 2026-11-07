@@ -75,6 +75,14 @@ export const ClientMessageSchema = z.discriminatedUnion('type', [
     sessionId: z.string(),
     type: z.literal('answerQuestion'),
   }),
+  // The password a command asked for, typed in its card; empty for nothing given, which closes the command's input.
+  // It is never kept in the session.
+  z.object({
+    requestId: z.string(),
+    secret: z.string(),
+    sessionId: z.string(),
+    type: z.literal('answerPassword'),
+  }),
   z.object({ sessionId: z.string(), type: z.literal('stopTurn') }),
   // Summarizes the conversation now (/compact), in a turn of its own: refused while a turn runs.
   z.object({ sessionId: z.string(), type: z.literal('compactSession') }),

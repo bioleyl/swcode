@@ -2,6 +2,12 @@
 
 All notable changes to swcode are documented here.
 
+## [Unreleased]
+
+### Added
+
+- A command on this computer that stops to ask for a password (`sudo -A`, ssh, an ssh key's passphrase) shows a card where you type it, and waits; the password is never kept in the session.
+
 ## [0.3.0] - 2026-11-06
 
 ### Added

@@ -365,6 +365,39 @@ describe('questions', () => {
   });
 });
 
+/**
+ * A command that stops to ask for a password: a script of the workspace prints its prompt and reads the answer, so
+ * the card's words reach it. The session keeps no password, so the check is on what the command printed.
+ */
+const PASSWORD_FLOW = {
+  files: { 'ask.sh': "printf 'Password: '\nread -r line\necho got-it\n" },
+  replies: [{ toolCalls: [{ arguments: { command: 'sh ask.sh' }, name: 'bash' }] }, { text: 'It took it.' }],
+};
+
+describe('passwords', () => {
+  it('are typed into the card a command asks with, and the command goes on', async () => {
+    const rig = await start(PASSWORD_FLOW);
+    const page = await rig.browser.newPage({ viewport: DESKTOP });
+    await page.goto(rig.link);
+    await page.locator('home-page textarea').fill('Run the command that asks');
+    await page.locator('home-page textarea').press('Enter');
+    const card = page.locator('sc-password');
+    await card.getByText('Password:').waitFor();
+    expect(await card.locator('.secret input').getAttribute('type')).toBe('password');
+
+    await card.locator('.secret input').fill('hunter2');
+    await card.locator('.secret input').press('Enter');
+    await settle(page);
+    await page.getByText('It took it.').waitFor();
+    expect(JSON.stringify(rig.llama.requests[1])).toContain('got-it');
+    // The password itself is never kept: not in what the model is shown, and not in the session's events.
+    expect(JSON.stringify(rig.llama.requests[1])).not.toContain('hunter2');
+    expect(JSON.stringify(rig.events())).not.toContain('hunter2');
+    expect(rig.events().some((event) => event.kind === 'passwordAnswered' && event.gave)).toBe(true);
+    expect(await overflow(page)).toBe(0);
+  });
+});
+
 describe('projects', () => {
   it('come from a folder picked in the dialog, and a session starts in one', async () => {
     const rig = await start({

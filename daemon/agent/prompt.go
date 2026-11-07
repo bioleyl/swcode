@@ -53,7 +53,7 @@ func SystemPrompt(workspace, scratch, platform string, servers Servers, subagent
 		"- Look before you change anything: search with grep and glob instead of guessing paths, and read a file before you edit it.",
 		"- Read files with read, never with cat, head or sed in bash: edit only changes a file read with read.",
 		"- Change files with edit, by exact text replacement. Use write only for a new file or a full rewrite.",
-		"- Run commands with bash, for example to run the tests after a change. Commands get no input.",
+		"- Run commands with bash, for example to run the tests after a change. Commands get no input, except a password a command asks for: the person is asked to type it.",
 		"- Start a server or a watcher (npm run dev, a file watcher) with bash and background, never with &: read what it prints with output, and stop it with kill once you are done with it.",
 	}
 	lines = append(lines, subagentLines(subagents)...)

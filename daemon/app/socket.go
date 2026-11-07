@@ -75,6 +75,10 @@ func (h handlers) AnswerQuestion(message protocol.ClientMessageAnswerQuestion) s
 	return h.problem(h.app.Sessions.Answer(message.SessionID, message.RequestID, sessions.Answers(message.Answers)))
 }
 
+func (h handlers) AnswerPassword(message protocol.ClientMessageAnswerPassword) struct{} {
+	return h.problem(h.app.Sessions.Answer(message.SessionID, message.RequestID, sessions.Secret(message.Secret)))
+}
+
 func (h handlers) ClearQueue(message protocol.ClientMessageClearQueue) struct{} {
 	return h.problem(h.app.Sessions.ClearQueue(message.SessionID))
 }

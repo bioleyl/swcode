@@ -9,8 +9,10 @@ import (
 	"time"
 )
 
+// ownGroup gives a command a session of its own, which is also its process group: it has no terminal, even when
+// the daemon has one, so sudo and ssh never stop to read a password from the daemon's.
 func ownGroup(cmd *exec.Cmd) {
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 }
 
 // killGroup stops a command and everything it started: politely, then for good a moment later.

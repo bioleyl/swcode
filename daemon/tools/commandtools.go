@@ -92,6 +92,24 @@ func commandOutcome(result hosts.CommandResult, timeoutMs int) Outcome {
 	return Outcome{Display: Text(text), Meta: commandMeta(result), OK: succeeded, Output: text}
 }
 
+// callPasswords is who the commands of one call ask for a password: the person, the card under that call.
+type callPasswords struct {
+	ask    func(ctx context.Context, callID, prompt string) (string, bool)
+	callID string
+}
+
+func (p callPasswords) Secret(ctx context.Context, prompt string) (string, bool) {
+	return p.ask(ctx, p.callID, prompt)
+}
+
+// passwordsOf is who the commands of the call being prepared ask for a password; nil where there is no one to ask.
+func passwordsOf(tc *Context) hosts.Passwords {
+	if tc.AskPassword == nil {
+		return nil
+	}
+	return callPasswords{ask: tc.AskPassword, callID: tc.CallID}
+}
+
 var bashTool = Define(Spec[bashInput]{
 	Check: func(_ context.Context, input bashInput, tc *Context) Check {
 		var preview *protocol.ToolDisplay
@@ -106,11 +124,13 @@ var bashTool = Define(Spec[bashInput]{
 		}
 		timeoutMs := whole(input.TimeoutMs, defaultTimeoutMs)
 		return Ready(func(ctx context.Context) Outcome {
-			options := hosts.CommandOptions{Cwd: tc.Workspace, Timeout: time.Duration(timeoutMs) * time.Millisecond}
+			options := hosts.CommandOptions{
+				Cwd: tc.Workspace, Passwords: passwordsOf(tc), Timeout: time.Duration(timeoutMs) * time.Millisecond,
+			}
 			return commandOutcome(tc.Host.Run(ctx, input.Command, options), timeoutMs)
 		}, preview)
 	},
-	Description: "Runs a shell command in the workspace: tests, builds, git. It gets no input, so use non-interactive flags. Give a short description. A server or a watcher runs with background, never with &: read what it prints with output, stop it with kill.",
+	Description: "Runs a shell command in the workspace: tests, builds, git. It gets no input, so use non-interactive flags. A password a command asks for is typed by the person while the command waits: run sudo as sudo -A, ssh asks by itself. Give a short description. A server or a watcher runs with background, never with &: read what it prints with output, stop it with kill.",
 	Input: Object(
 		Optional("background", Boolean().Describe("For a command that does not end by itself (a dev server, a watcher): it runs on in the background, and the call returns after a few seconds with its first output and a job id.")),
 		Required("command", String().Min(1).Describe("The command, run with bash in the workspace, without any input.")),

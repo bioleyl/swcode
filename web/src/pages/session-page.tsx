@@ -204,6 +204,9 @@ export class SessionPage extends ScElement {
     conversation.events.register('question', ({ answers, requestId }) =>
       daemon.send({ answers, requestId, sessionId: this._sessionId, type: 'answerQuestion' })
     );
+    conversation.events.register('password', ({ requestId, secret }) =>
+      daemon.send({ requestId, secret, sessionId: this._sessionId, type: 'answerPassword' })
+    );
     conversation.events.register('cancelQueue', () =>
       daemon.send({ sessionId: this._sessionId, type: 'clearQueue' })
     );

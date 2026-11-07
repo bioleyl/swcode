@@ -463,6 +463,12 @@ func Permission(decision protocol.PermissionDecision) answer { return answer{dec
 // Answers is a person's answers to the agent's questions.
 func Answers(answers []string) answer { return answer{answers: append([]string{}, answers...)} }
 
+// Secret is a person's answer to a password a command asked for: the words they typed, or empty for none, which
+// closes the command's input. It is never kept in the session.
+func Secret(secret string) answer {
+	return answer{secret: &typedSecret{gave: secret != "", text: secret}}
+}
+
 // Answer answers what the turn of a session asked a person: a permission, or the agent's questions. The turn takes
 // it through the request it holds, which records the answer and lets the turn go on.
 func (s *Service) Answer(sessionID, requestID string, answer answer) string {

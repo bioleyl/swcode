@@ -165,6 +165,10 @@ func (s *Service) hostFor(session *live, turn *runningTurn, ready prepared, sees
 		AskQuestions: func(ctx context.Context, callID string, questions []protocol.Question) []string {
 			return s.ask(ctx, session, turn, questionsAsked{callID: callID, questions: questions, service: s}).answers
 		},
+		AskPassword: func(ctx context.Context, callID, prompt string) (string, bool) {
+			got := s.ask(ctx, session, turn, passwordAsk{callID: callID, prompt: prompt, service: s}).secret
+			return got.text, got.gave
+		},
 		Host:        where.host,
 		Images:      s.imagesFor(session),
 		Jobs:        &sessionJobs{host: where.host, service: s, session: session},
@@ -244,13 +248,22 @@ type asked interface {
 	waitsFor(got answer) bool
 }
 
-// answer is what a person gives what they were asked: a permission, or answers to the agent's questions. What it
-// holds says which kind of request it answers, so a question's answer never settles a permission.
+// answer is what a person gives what they were asked: a permission, answers to the agent's questions, or the
+// password a command asked for. What it holds says which kind of request it answers, so a question's answer never
+// settles a permission.
 type answer struct {
 	// decision is a permission's answer, empty for the agent's questions.
 	decision protocol.PermissionDecision
 	// answers is the agent's questions' answers, nil for a permission.
 	answers []string
+	// secret is the password a command asked for, nil for the other kinds.
+	secret *typedSecret
+}
+
+// typedSecret is the password a person typed for a command, or that they gave none (gave false).
+type typedSecret struct {
+	text string
+	gave bool
 }
 
 // permissionAsk is a permission the agent asked for; allowed for the session, it grants what was asked for the
@@ -266,7 +279,7 @@ func (a permissionAsk) request(id string) protocol.SessionEventVariant {
 
 func (permissionAsk) no() answer { return answer{decision: protocol.PermissionDecisionDeny} }
 
-func (permissionAsk) waitsFor(got answer) bool { return got.answers == nil }
+func (permissionAsk) waitsFor(got answer) bool { return got.answers == nil && got.secret == nil }
 
 func (a permissionAsk) settled(session *live, id string, got answer) {
 	a.service.record(session, protocol.SessionEventPermissionAnswered{Decision: got.decision, RequestID: id})
@@ -293,6 +306,26 @@ func (questionsAsked) waitsFor(got answer) bool { return got.answers != nil }
 
 func (q questionsAsked) settled(session *live, id string, got answer) {
 	q.service.record(session, protocol.SessionEventQuestionAnswered{Answers: append([]string{}, got.answers...), RequestID: id})
+}
+
+// passwordAsk is the password a command this computer ran asked for: the person types it in, and it goes to the
+// command, never kept in the session. Stopping the turn before anyone answers gives the command none.
+type passwordAsk struct {
+	callID  string
+	prompt  string
+	service *Service
+}
+
+func (a passwordAsk) request(id string) protocol.SessionEventVariant {
+	return protocol.SessionEventPasswordRequested{CallID: a.callID, Prompt: a.prompt, RequestID: id}
+}
+
+func (passwordAsk) no() answer { return Secret("") }
+
+func (passwordAsk) waitsFor(got answer) bool { return got.secret != nil }
+
+func (a passwordAsk) settled(session *live, id string, got answer) {
+	a.service.record(session, protocol.SessionEventPasswordAnswered{Gave: got.secret.gave, RequestID: id})
 }
 
 // ask asks a person something and waits: it records the request, waits for the answer or the turn's stopping, and

@@ -14,6 +14,8 @@ type OutputBuffer struct {
 	head      []byte
 	tail      []byte
 	dropped   int
+	// written is all the command printed so far, kept or not: whether it printed something since a moment ago.
+	written int
 }
 
 func NewOutputBuffer(headLimit, tailLimit int) *OutputBuffer {
@@ -31,7 +33,15 @@ func (b *OutputBuffer) Write(data []byte) (int, error) {
 	overflow := max(0, len(tail)-b.tailLimit)
 	b.dropped += overflow
 	b.tail = append([]byte(nil), tail[overflow:]...)
+	b.written += len(data)
 	return len(data), nil
+}
+
+// Written is how much the command printed so far, the middle cut included.
+func (b *OutputBuffer) Written() int {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.written
 }
 
 // Text is the output kept, a note where its middle was cut.

@@ -196,6 +196,16 @@ export const SessionEventSchema = z.discriminatedUnion('kind', [
   }),
   // One answer a question, in order; none when the turn stopped first.
   z.object({ answers: z.array(z.string()), at, kind: z.literal('questionAnswered'), requestId: z.string() }),
+  // A command this computer ran asked for a password (sudo, an ssh key's passphrase): the person types it in. The
+  // words it asked with are kept, its answer never is: the passwordAnswered event says whether one came.
+  z.object({
+    at,
+    callId: z.string(),
+    kind: z.literal('passwordRequested'),
+    prompt: z.string(),
+    requestId: z.string(),
+  }),
+  z.object({ at, gave: z.boolean(), kind: z.literal('passwordAnswered'), requestId: z.string() }),
   z.object({ at, callId: z.string(), kind: z.literal('toolRunning') }),
   z.object({
     at,
