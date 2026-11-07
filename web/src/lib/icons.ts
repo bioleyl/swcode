@@ -33,6 +33,7 @@ import {
   Link,
   ListChecks,
   LoaderCircle,
+  Mic,
   Moon,
   Network,
   PanelRightClose,
@@ -121,6 +122,7 @@ const ICONS = {
   'list-checks': ListChecks,
   // What runs (a session's turn, a step of the plan) shows it.
   loader: turning(LoaderCircle),
+  mic: Mic,
   moon: Moon,
   network: Network,
   'panel-close': PanelRightClose,

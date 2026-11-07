@@ -9,6 +9,7 @@ All notable changes to swcode are documented here.
 - A command on this computer that stops to ask for a password (`sudo -A`, ssh, an ssh key's passphrase) shows a card where you type it, and waits; the password is never kept in the session.
 - The settings page sets how many times the main agent may act in one turn before it stops and reports what it did (`SWCODE_MAX_STEPS`, 150 by default, up to 1000).
 - swcode updates itself: it looks for a newer release on GitHub every 10 minutes, asks once on a computer (never on a phone) whether to install it, then puts the checked download in place of the program and restarts on it. Settings → Updates shows the version that runs and what the newer one brings, looks now, and turns the looking off.
+- A microphone in the composer dictates the message, through the browser's speech recognition and in the browser's language: the words go where the caret was as they are heard, until you press it again or stop speaking. It shows where the browser recognizes speech (Chrome, Edge, Safari) on a secure page (localhost or https), not on a phone reaching swcode over the network's plain http.
 
 ### Fixed
 

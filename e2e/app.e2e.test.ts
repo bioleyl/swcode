@@ -107,6 +107,37 @@ const fakeDesktopApp = (current = 'local', others: readonly object[] = []): stri
   };
 })();`;
 
+/**
+ * Run in the page before it loads: a speech recognizer that hears "fix the login bug" in two results, the first a
+ * guess still, and ends once stopped; or, given a failure, fails with it as it starts. It keeps the language it was
+ * asked to listen in.
+ */
+const fakeRecognizer = (failure = ''): string => `(() => {
+  // Chromium has the recognizer under both names now: the page takes the unprefixed one first.
+  window.SpeechRecognition = window.webkitSpeechRecognition = class {
+    start() {
+      window.dictationLanguage = this.lang;
+      if ('${failure}') {
+        setTimeout(() => {
+          this.onerror?.({ error: '${failure}' });
+          this.onend?.();
+        }, 10);
+        return;
+      }
+      setTimeout(() => this.onresult?.({ results: [[{ transcript: 'fix the' }]] }), 10);
+      setTimeout(() => this.onresult?.({ results: [[{ transcript: 'fix the' }], [{ transcript: ' login bug' }]] }), 20);
+    }
+    stop() {
+      setTimeout(() => this.onend?.(), 10);
+    }
+    abort() {
+      setTimeout(() => this.onend?.(), 10);
+    }
+  };
+})();`;
+
+const NO_RECOGNIZER = 'window.webkitSpeechRecognition = undefined; window.SpeechRecognition = undefined;';
+
 // Run in the page: the tests are typed for Node, and these few expressions need no more.
 const PAGE_OVERFLOW = 'document.documentElement.scrollWidth - window.innerWidth';
 const BODY_BACKGROUND = 'getComputedStyle(document.body).backgroundColor';
@@ -689,6 +720,50 @@ describe('the composer', () => {
     expect(await composer.locator('.model').isHidden()).toBe(true);
     expect(await composer.locator('.context').isHidden()).toBe(true);
     expect(await overflow(page)).toBe(0);
+  });
+});
+
+describe('dictation', () => {
+  it('writes what is said after the words typed, in the browser’s language, until the microphone is pressed again', async () => {
+    const rig = await start(EDIT_FLOW);
+    const page = await rig.browser.newPage({ viewport: LAPTOP });
+    await page.addInitScript(fakeRecognizer());
+    await page.goto(rig.link);
+    const composer = page.locator('home-page sc-composer');
+    await composer.locator('textarea').fill('Please');
+
+    await composer.getByRole('button', { name: 'Dictate' }).click();
+    await page.evaluate('0');
+    await expect.poll(() => composer.locator('textarea').inputValue()).toBe('Please fix the login bug');
+    await composer.getByRole('button', { name: 'Stop dictating' }).click();
+    await page.evaluate('0');
+    await composer.getByRole('button', { name: 'Dictate' }).waitFor();
+    expect(await page.evaluate('window.dictationLanguage')).toBe(await page.evaluate('navigator.language'));
+  });
+
+  it('says why it stopped when the microphone is refused', async () => {
+    const rig = await start(EDIT_FLOW);
+    const page = await rig.browser.newPage({ viewport: LAPTOP });
+    await page.addInitScript(fakeRecognizer('not-allowed'));
+    await page.goto(rig.link);
+    const composer = page.locator('home-page sc-composer');
+
+    await composer.getByRole('button', { name: 'Dictate' }).click();
+    await page.evaluate('0');
+    await page.getByText('The microphone is not allowed', { exact: false }).waitFor();
+    await composer.getByRole('button', { name: 'Dictate' }).waitFor();
+  });
+
+  it('has no microphone where the browser recognizes no speech', async () => {
+    const rig = await start(EDIT_FLOW);
+    const page = await rig.browser.newPage({ viewport: LAPTOP });
+    await page.addInitScript(NO_RECOGNIZER);
+    await page.goto(rig.link);
+    const composer = page.locator('home-page sc-composer');
+    // The chip's words are written as the composer connects, when it also decides on the microphone.
+    await composer.locator('.summary', { hasText: /\S/ }).waitFor();
+
+    expect(await composer.locator('.dictate').isHidden()).toBe(true);
   });
 });
 

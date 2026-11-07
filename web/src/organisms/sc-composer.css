@@ -106,6 +106,7 @@ jl-popover {
 }
 
 .play,
+.dictate,
 .stop,
 .send {
   flex: none;

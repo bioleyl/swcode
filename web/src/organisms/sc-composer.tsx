@@ -1,5 +1,5 @@
 import { createElement, css } from '@jadis/core';
-import { JlButton, JlIcon, JlKbd, JlPopover } from '@syware/jlib';
+import { JlButton, JlIcon, JlKbd, JlPopover, toast } from '@syware/jlib';
 
 import { MAX_PICTURES } from '../../../shared/protocol/picture.schema';
 import { ScElement } from '../base/sc-element';
@@ -13,12 +13,14 @@ import {
   skillText,
   stepIn,
 } from '../lib/commands';
+import { textWithSpoken } from '../lib/dictation';
 import { MODE_LABELS } from '../lib/mode-labels';
 import { isPicture, pictureUrl, shrinkPicture } from '../lib/pictures';
 import { presetOf } from '../lib/presets';
 import { THINKING_LABELS } from '../lib/thinking-labels';
 import { ScCommandHelp } from '../molecules/sc-command-help';
 import { ScSessionChoices } from '../molecules/sc-session-choices';
+import { canDictate, dictate } from '../services/dictation';
 import { presetChoices, presetsBus } from '../services/presets';
 import { BASE_STYLES } from '../styles/shared';
 import styles from './sc-composer.css?inline';
@@ -29,6 +31,7 @@ import type { SkillSummary } from '../../../shared/protocol/skill.schema';
 import type { CommandName } from '../lib/commands';
 import type { CommandLine, MenuEntry } from '../types/commands.types';
 import type { PromptDraft } from '../types/composer.types';
+import type { Dictation, TextAround } from '../types/dictation.types';
 
 const ENTER = 'Enter';
 /** What the empty field asks for: a chat's question, or a coding session's change. */
@@ -37,6 +40,10 @@ const IDLE_PLACEHOLDERS: Readonly<Record<SessionKind, string>> = {
   code: 'Ask swcode, or describe the change you want',
 };
 const QUEUE_PLACEHOLDER = 'Add a message for when this turn ends';
+const LISTENING_PLACEHOLDER = 'Listening…';
+const DICTATE_HINT = 'Dictate';
+const STOP_DICTATING_HINT = 'Stop dictating';
+const DICTATION_FAILED = 'Dictation stopped';
 const UNSEEN_NOTE = 'This model cannot see pictures: it is only told they are here.';
 const CHOICES_ICON_SIZE = 14;
 const SUMMARY_SEPARATOR = ' · ';
@@ -61,6 +68,10 @@ const optionId = (entry: MenuEntry): string =>
  * typed: the arrows move through them, Enter runs the one chosen (or completes one that takes words), Tab completes
  * it, Escape closes the list. A skill runs as a message, `/<its name>` and the words after it, which the daemon reads
  * the skill for. The list is drawn in the field's own shadow root, for the field to name the option chosen.
+ *
+ * Where the browser recognizes speech, the microphone dictates: what is said goes where the caret was, shown as it
+ * is heard, until the microphone is pressed again or the browser hears a long silence. Typing, sending or leaving
+ * ends it at once, keeping the words already in the field.
  */
 export class ScComposer extends ScElement {
   static readonly selector = 'sc-composer';
@@ -129,6 +140,9 @@ export class ScComposer extends ScElement {
   private _chosen = 0;
   // The text the list was closed on (Escape, or the field left): it stays closed until the text changes.
   private _dismissed: string | undefined;
+  // The dictation under way, and the text on each side of the caret when it started, which the words said go between.
+  private _dictation: Dictation | undefined;
+  private _around: TextAround = { after: '', before: '' };
 
   private readonly _runs: Readonly<Record<CommandName, (argument: string) => void>> = {
     compact: () => this.emitCommand('compact'),
@@ -153,6 +167,7 @@ export class ScComposer extends ScElement {
     commandList: ref('.command-menu'),
     commandOptions: ref('.options'),
     context: ref('.context'),
+    dictate: ref<JlButton>('.dictate'),
     help: ref(ScCommandHelp),
     pictureNote: ref('.picture-note'),
     pictures: ref('.pictures'),
@@ -198,6 +213,7 @@ export class ScComposer extends ScElement {
           </JlPopover>
           <span class="context" />
           <JlButton class="play" icon="gamepad" hint="Play while it works" variant="ghost" hidden />
+          <JlButton class="dictate" icon="mic" hint={DICTATE_HINT} variant="ghost" hidden />
           <JlButton class="stop" icon="stop" hint="Stop" hidden />
           <JlButton class="send" variant="primary" icon="arrow-up" hint="Send" />
         </div>
@@ -214,8 +230,14 @@ export class ScComposer extends ScElement {
     this._refs.send.events.register('press', () => this.submit());
     this._refs.stop.events.register('press', () => this.events.emit('stop'));
     this._refs.play.events.register('press', () => this.events.emit('play'));
+    this._refs.dictate.hidden = !canDictate();
+    this._refs.dictate.events.register('press', () => this.toggleDictation());
     this.on(this._refs.text, 'keydown', (event) => this.keyDown(event));
-    this.on(this._refs.text, 'input', () => this.typed());
+    // Only the person's typing fires `input`: the words dictated are written by script.
+    this.on(this._refs.text, 'input', () => {
+      this.abortDictation();
+      this.typed();
+    });
     this.on(this._refs.text, 'blur', () => this.dismiss());
     this.on(this._refs.text, 'focus', () => this.reopen());
     // A press on the list keeps the field focused, so it never closes before its click.
@@ -244,6 +266,10 @@ export class ScComposer extends ScElement {
     });
     this.onBus(presetsBus, 'changed', () => this.renderChoices());
     this.renderChoices();
+  }
+
+  onDisconnect(): void {
+    this.abortDictation();
   }
 
   private keyDown(event: KeyboardEvent): void {
@@ -483,7 +509,62 @@ export class ScComposer extends ScElement {
     this._refs.pictureNote.textContent = note;
   }
 
+  private toggleDictation(): void {
+    this._dictation === undefined ? this.startDictation() : this._dictation.stop();
+  }
+
+  private startDictation(): void {
+    const field = this._refs.text;
+    this._around = {
+      after: field.value.slice(field.selectionEnd),
+      before: field.value.slice(0, field.selectionStart),
+    };
+    const dictation = dictate({
+      ended: () => this.dictationEnded(dictation),
+      failed: (problem) => toast({ heading: DICTATION_FAILED, text: problem, tone: 'danger' }),
+      heard: (spoken) => this.showSpoken(spoken),
+    });
+    this._dictation = dictation;
+    this.renderDictation();
+  }
+
+  private showSpoken(spoken: string): void {
+    const field = this._refs.text;
+    const dictated = textWithSpoken(this._around, spoken);
+    field.value = dictated.text;
+    field.setSelectionRange(dictated.caret, dictated.caret);
+    this.typed();
+  }
+
+  /** A dictation ended: an aborted one may end after the next one started, which goes on. */
+  private dictationEnded(dictation: Dictation): void {
+    if (this._dictation !== dictation) {
+      return;
+    }
+    this._dictation = undefined;
+    this.renderDictation();
+    this._refs.text.focus();
+  }
+
+  /** Ends the dictation at once: the words already in the field stay, and no more come. */
+  private abortDictation(): void {
+    if (this._dictation === undefined) {
+      return;
+    }
+    this._dictation.abort();
+    this._dictation = undefined;
+    this.renderDictation();
+  }
+
+  private renderDictation(): void {
+    const listening = this._dictation !== undefined;
+    this._refs.dictate.variant.set(listening ? 'danger' : 'ghost');
+    this._refs.dictate.hint.set(listening ? STOP_DICTATING_HINT : DICTATE_HINT);
+    this.renderPlaceholder();
+  }
+
   private submit(): void {
+    this.abortDictation();
     const text = this._refs.text.value.trim();
     const command = commandLine(text, this.commands.get());
     if (command !== undefined) {
@@ -514,7 +595,14 @@ export class ScComposer extends ScElement {
   }
 
   private renderPlaceholder(): void {
-    this._refs.text.placeholder = this.working.get() ? QUEUE_PLACEHOLDER : IDLE_PLACEHOLDERS[this.kind.get()];
+    this._refs.text.placeholder = this.placeholder();
+  }
+
+  private placeholder(): string {
+    if (this._dictation !== undefined) {
+      return LISTENING_PLACEHOLDER;
+    }
+    return this.working.get() ? QUEUE_PLACEHOLDER : IDLE_PLACEHOLDERS[this.kind.get()];
   }
 
   /** The chip's words, the panel's choices: the preset shown is the one the daemon uses, the default when unknown. */
