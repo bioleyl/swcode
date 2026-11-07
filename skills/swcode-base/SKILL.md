@@ -1,6 +1,6 @@
 ---
 name: swcode-base
-description: The user's coding rules, with a check of your own diff before you deliver. Load before writing, editing, refactoring or reviewing code in any project or language, and keep applying it to every later code change in the session. Covers reading before writing, named constants, SOLID applied without speculative abstraction, frontend business rules kept in services apart from atomic components, guard clauses and exhaustive mappers instead of if/else and switch, function size limits, error handling, TypeScript types in a types/ directory, the mistakes coding agents tend to make, and verification. Run its self-check on your own after writing or changing code, before presenting or committing; don't wait to be asked. Not for conceptual questions, git workflow, CI configuration, prose or data analysis.
+description: The user's coding rules, with a check of your own diff before you deliver. Load before writing, editing, refactoring, reviewing or exploring code in any project or language, and keep applying it to every later code change in the session. Covers reading before writing, named constants, SOLID applied without speculative abstraction, frontend business rules kept in services apart from atomic components, guard clauses and exhaustive mappers instead of if/else and switch, function size limits, error handling, TypeScript types in a types/ directory, the mistakes coding agents tend to make, and verification. Run its self-check on your own after writing or changing code, before presenting or committing; don't wait to be asked. Also keeps the project's AGENTS.md, the notes every session starts from, without being asked, going by them before exploring, creating them when the project has none and adding what each task found out, so the next session does not find it all out again. Not for conceptual questions, git workflow, CI configuration, prose or data analysis.
 ---
 
 # Coding style
@@ -11,6 +11,7 @@ The design comes from SOLID, applied to the code that exists today. The rest exi
 
 ## How to use this skill
 
+- **The project's notes, first and last**: go by its AGENTS.md before exploring. At the end of every task, before the report, update it without being asked, and create it when the project has none: [references/project-notes.md](references/project-notes.md) says how.
 - **Before writing**: read the rules below. The first time in a session, also read [references/agent-mistakes.md](references/agent-mistakes.md): it shows the mistakes these rules are aimed at.
 - **While writing**: apply the rules. For the reasons and examples behind a rule, read the reference it points to.
 - **Before delivering**: run the [self-check](#self-check-before-delivery) on your diff, fix what it finds, and end with the report line.
@@ -130,6 +131,7 @@ Walk your diff once before you show it. Fix every "no", or say why it stays, the
 13. Does every new comment say why, or what an export means?
 14. For a refactor: is the behaviour unchanged?
 15. Did you run the checks in order (nearest tests, suite, type check and lint, static analysis, format), and say which ones you couldn't run?
+16. Does the project's AGENTS.md hold what this task found out (a command, a trap, a convention the code doesn't show)? Create it if the project has none, add what it lacks, fix what misled you, as [references/project-notes.md](references/project-notes.md) says, unasked, and name the change in the report.
 
 Then report the pass, so the user can see it ran. List each fix as `<file>:<line> — <what changed>` (leave out the line if it isn't stable), and each thing you noticed but didn't change as `flagged: <file> — <what and why>`. End with one line:
 
@@ -145,6 +147,7 @@ The task is done when the request is met, the checks have run and the report is 
 
 - Before starting, know what "done" means for this request. If it isn't clear, ask.
 - Something you notice outside the request (a bug next door, an old pattern, a missing test elsewhere) goes in the report as a `flagged:` line. Don't fix it.
+- The project's notes are not outside the request: updating them (self-check 16) is part of every task, done before the report, even a task that changed no code.
 - Suggest next steps in one line each; never start them unasked.
 - Don't add steps to your plan because you found more to improve. A new step is only for something the request needs.
 - In review mode, the review is the deliverable: write it and stop. Fixing starts only when asked.
