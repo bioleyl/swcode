@@ -297,6 +297,9 @@ export const SessionSummarySchema = z.object({
   queued: z.array(z.string()),
   // The person asked for them now: they go to the model at the turn's next step instead.
   queuedNow: z.boolean().default(false),
+  // The session's last activity the person saw, on any device: it shows done until they see what came after. A
+  // daemon from before it kept this says nothing.
+  seenAt: at.optional(),
   status: SessionStatusSchema,
   // Subagents at work in the background: the session works while they do, whether its turn ended or not.
   subagents: z.number().int().min(0).default(0),

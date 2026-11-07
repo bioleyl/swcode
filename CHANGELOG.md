@@ -4,6 +4,11 @@ All notable changes to swcode are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- On a phone, the agent's question, permission and password sheets end above the tab bar, which used to cover their bottom (the question's own answer field among it).
+- A session seen on one device shows seen on the others, and stays seen after an update: the daemon keeps what you saw of each session, instead of each browser, where a phone never knew what the computer saw and a lost or empty record turned every session green again.
+
 ### Maintenance
 
 - The release workflow publishes `RELEASE_NOTES.md` as the release's notes, which the update offer shows, and stops when they are not the tagged version's.

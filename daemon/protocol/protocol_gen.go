@@ -1707,6 +1707,7 @@ type SessionSummary struct {
 	Preset    string              `json:"preset,omitempty"`
 	Queued    []string            `json:"queued"`
 	QueuedNow bool                `json:"queuedNow"`
+	SeenAt    string              `json:"seenAt,omitempty"`
 	Status    SessionStatus       `json:"status"`
 	Subagents int                 `json:"subagents"`
 	Thinking  ThinkingMode        `json:"thinking"`
@@ -1808,6 +1809,8 @@ func (ClientMessageSetThinking) isClientMessage() {}
 func (ClientMessageSetPreset) isClientMessage() {}
 
 func (ClientMessageSetConcise) isClientMessage() {}
+
+func (ClientMessageMarkSeen) isClientMessage() {}
 
 func (ClientMessageCreateProject) isClientMessage() {}
 
@@ -1950,6 +1953,12 @@ func (u *ClientMessage) UnmarshalJSON(data []byte) error {
 			return err
 		}
 		u.Value = value
+	case "\"markSeen\"":
+		var value ClientMessageMarkSeen
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
 	case "\"createProject\"":
 		var value ClientMessageCreateProject
 		if err := json.Unmarshal(data, &value); err != nil {
@@ -2013,6 +2022,7 @@ type ClientMessageMapper[R any] interface {
 	SetThinking(ClientMessageSetThinking) R
 	SetPreset(ClientMessageSetPreset) R
 	SetConcise(ClientMessageSetConcise) R
+	MarkSeen(ClientMessageMarkSeen) R
 	CreateProject(ClientMessageCreateProject) R
 	RemoveProject(ClientMessageRemoveProject) R
 	SetProjectDefaults(ClientMessageSetProjectDefaults) R
@@ -2062,6 +2072,8 @@ func MapClientMessage[R any](u ClientMessage, m ClientMessageMapper[R]) R {
 		return m.SetPreset(value)
 	case ClientMessageSetConcise:
 		return m.SetConcise(value)
+	case ClientMessageMarkSeen:
+		return m.MarkSeen(value)
 	case ClientMessageCreateProject:
 		return m.CreateProject(value)
 	case ClientMessageRemoveProject:
@@ -2560,6 +2572,20 @@ func (v ClientMessageSetConcise) MarshalJSON() ([]byte, error) {
 		Key string `json:"type"`
 		plain
 	}{"setConcise", p})
+}
+
+type ClientMessageMarkSeen struct {
+	SeenAt    string `json:"seenAt"`
+	SessionID string `json:"sessionId"`
+}
+
+func (v ClientMessageMarkSeen) MarshalJSON() ([]byte, error) {
+	type plain ClientMessageMarkSeen
+	p := plain(v)
+	return json.Marshal(struct {
+		Key string `json:"type"`
+		plain
+	}{"markSeen", p})
 }
 
 type ClientMessageCreateProject struct {

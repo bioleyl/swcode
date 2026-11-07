@@ -63,6 +63,13 @@ export const LIT_ICONS: Readonly<Record<string, IconNode>> = Object.fromEntries(
   ...Object.values(HOST_SHAPES).flatMap(([icon, node]) => litVariants(icon, node)),
 ]);
 
+/**
+ * The last activity the person saw of a session, on any device. A daemon from before it kept this says nothing: its
+ * sessions count as seen, rather than done for good.
+ */
+export const seenAtOf = (session: Pick<SessionSummary, 'seenAt' | 'updatedAt'>): string =>
+  session.seenAt ?? session.updatedAt;
+
 /** A session's light: done once its turn ended, until the person saw it as it is now (its last activity, `seenAt`). */
 export const sessionLight = (
   session: Pick<SessionSummary, 'status' | 'subagents' | 'updatedAt'>,

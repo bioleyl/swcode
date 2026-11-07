@@ -90,6 +90,15 @@ jl-alert {
 }
 
 @media (max-width: 720px) {
+  /*
+   * The agent's requests (a question, a permission, a password) come as sheets fixed to the bottom: layout
+   * containment fixes them to this page rather than the screen, so they end above the app shell's tab bar, which
+   * would cover their bottom otherwise (the shell's main area is a stacking context of its own, under the bar).
+   */
+  :host {
+    contain: layout;
+  }
+
   header {
     gap: var(--jl-space-2);
     padding: var(--jl-space-2) var(--jl-space-3);

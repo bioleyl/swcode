@@ -26,9 +26,11 @@ type Meta struct {
 	Kind      protocol.SessionKind    `json:"kind"`
 	Mode      protocol.PermissionMode `json:"mode"`
 	Preset    string                  `json:"preset,omitempty"`
-	Thinking  protocol.ThinkingMode   `json:"thinking"`
-	Title     string                  `json:"title"`
-	Workspace string                  `json:"workspace"`
+	// SeenAt is the session's last activity the person saw, on any device; empty in a session from before it was kept.
+	SeenAt    string                `json:"seenAt,omitempty"`
+	Thinking  protocol.ThinkingMode `json:"thinking"`
+	Title     string                `json:"title"`
+	Workspace string                `json:"workspace"`
 }
 
 // UnmarshalJSON reads sessions from before hosts as on this computer, from before the choice as thinking as the

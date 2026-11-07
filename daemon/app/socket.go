@@ -174,6 +174,10 @@ func (h handlers) SetConcise(message protocol.ClientMessageSetConcise) struct{} 
 	return h.problem(h.app.Sessions.SetConcise(message.SessionID, message.Concise))
 }
 
+func (h handlers) MarkSeen(message protocol.ClientMessageMarkSeen) struct{} {
+	return h.problem(h.app.Sessions.MarkSeen(message.SessionID, message.SeenAt))
+}
+
 func (h handlers) SetPreset(message protocol.ClientMessageSetPreset) struct{} {
 	return h.problem(h.app.Sessions.SetPreset(message.SessionID, message.Preset))
 }

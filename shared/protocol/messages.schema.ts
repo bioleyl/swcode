@@ -104,6 +104,8 @@ export const ClientMessageSchema = z.discriminatedUnion('type', [
   z.object({ preset: z.string().min(1), sessionId: z.string(), type: z.literal('setPreset') }),
   // Token economy from the next message sent on: the model reads "Be concise." after each.
   z.object({ concise: z.boolean(), sessionId: z.string(), type: z.literal('setConcise') }),
+  // The person saw the session as it was at that activity, on this device: every device shows it seen.
+  z.object({ seenAt: z.iso.datetime(), sessionId: z.string(), type: z.literal('markSeen') }),
   // A project of a folder that exists, or of a new folder made inside it.
   z.object({
     folder: z.string().trim().min(1),

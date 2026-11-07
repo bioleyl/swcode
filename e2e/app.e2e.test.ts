@@ -389,8 +389,12 @@ describe('questions', () => {
     await page.locator('home-page textarea').press('Enter');
     const sheet = page.locator('sc-question .card');
     await sheet.waitFor();
+    // The sheet ends where the tab bar begins: none of it, its own answer included, goes under the bar.
     const box = await sheet.boundingBox();
-    expect(Math.round((box?.y ?? 0) + (box?.height ?? 0))).toBe(PHONE.height);
+    const tabs = await page.locator('jl-tab-bar').boundingBox();
+    expect(Math.round((box?.y ?? 0) + (box?.height ?? 0))).toBe(Math.round(tabs?.y ?? 0));
+    const own = await page.locator('sc-question .own').boundingBox();
+    expect((own?.y ?? 0) + (own?.height ?? 0)).toBeLessThanOrEqual(tabs?.y ?? 0);
     expect(await overflow(page)).toBe(0);
 
     await page.locator('sc-question').getByText('Map', { exact: true }).click();
@@ -1136,8 +1140,10 @@ describe('on a phone', () => {
 
     await askForTheEdit(page);
     expect(await overflow(page)).toBe(0);
+    // The sheet ends where the tab bar begins, none of it under the bar.
     const sheet = await page.locator('sc-permission .card').boundingBox();
-    expect(Math.round((sheet?.y ?? 0) + (sheet?.height ?? 0))).toBe(PHONE.height);
+    const tabs = await page.locator('jl-tab-bar').boundingBox();
+    expect(Math.round((sheet?.y ?? 0) + (sheet?.height ?? 0))).toBe(Math.round(tabs?.y ?? 0));
   });
 });
 
@@ -1400,6 +1406,28 @@ describe('the navigation', () => {
     await page.getByText('Done.').waitFor();
     await expect.poll(() => navIconFill(page, 'session:')).toBeNull();
     expect(await navIconFill(page, 'project:')).toBeNull();
+  });
+
+  it('empties on every device once the session is seen on one', async () => {
+    const rig = await start({ replies: [{ delayMs: LIGHT_TURN_MS, text: 'Done.' }] });
+    const computer = await rig.browser.newPage({ viewport: DESKTOP });
+    await computer.goto(rig.link);
+    await computer.locator('home-page textarea').fill('Hi');
+    await computer.locator('home-page textarea').press('Enter');
+    await expect.poll(() => navIconFill(computer, 'session:')).toContain('--jl-accent');
+    await settingsLink(computer).click();
+    await settle(computer);
+    // A phone: a browser of its own, which never opened the session.
+    const phone = await rig.browser.newPage({ viewport: DESKTOP });
+    await phone.goto(rig.link);
+    await settle(phone);
+    await expect.poll(() => navIconFill(phone, 'session:'), { timeout: LIGHT_TURN_MS * 2 }).toContain('--jl-ok');
+
+    await computer.locator('sc-nav .item[data-id^="session:"]').click();
+    await settle(computer);
+    await computer.getByText('Done.').waitFor();
+    await expect.poll(() => navIconFill(phone, 'session:')).toBeNull();
+    expect(await navIconFill(phone, 'project:')).toBeNull();
   });
 });
 

@@ -38,6 +38,7 @@ const (
 	compactWorking   = "This session is working: wait for its turn to end, or stop it, before compacting."
 	nothingToCompact = "There is nothing new to summarize."
 	restarted        = "The daemon restarted before the turn ended."
+	notATime         = "%q is not a time the daemon gave."
 	defaultMode      = protocol.PermissionModeAuto
 	// jobWatch is how often the jobs of a session are looked at, for the list to drop the ones that ended.
 	jobWatch = 5 * time.Second
@@ -188,11 +189,22 @@ func (s *Service) Load() {
 	for _, stored := range s.deps.Store.LoadAll() {
 		session := revive(stored)
 		s.sessions[session.meta.ID] = session
+		s.seenSoFar(session)
 		s.closeSubagents(session)
 		if turnID := unfinishedTurn(session.events); turnID != "" {
 			s.record(session, protocol.SessionEventTurnFinished{ID: turnID, Message: restarted, Outcome: protocol.TurnOutcomeStopped})
 		}
 	}
+}
+
+// seenSoFar counts a session from before the daemon kept what was seen as seen as it is, once and for good: it would
+// show done on every device otherwise. What the restart then closes (a turn, subagents) comes after, unseen.
+func (s *Service) seenSoFar(session *live) {
+	if session.meta.SeenAt != "" {
+		return
+	}
+	session.meta.SeenAt = lastActivity(session.meta, session.events)
+	s.saveMeta(session.meta)
 }
 
 func revive(stored Stored) *live {
@@ -272,10 +284,11 @@ func (s *Service) Create(ctx context.Context, request Request) (protocol.Session
 	if problem != "" {
 		return protocol.SessionSummary{}, problem
 	}
+	createdAt := protocol.Timestamp(s.deps.Now())
 	meta := Meta{
-		CreatedAt: protocol.Timestamp(s.deps.Now()), Host: hostRef, ID: s.deps.NewID(), Kind: kind, Mode: orMode(request.Mode),
-		Concise: request.Concise, Preset: request.Preset, Thinking: orThinking(request.Thinking, s.deps.Thinking.Session), Title: Untitled,
-		Workspace: workspace,
+		CreatedAt: createdAt, Host: hostRef, ID: s.deps.NewID(), Kind: kind, Mode: orMode(request.Mode),
+		Concise: request.Concise, Preset: request.Preset, SeenAt: createdAt,
+		Thinking: orThinking(request.Thinking, s.deps.Thinking.Session), Title: Untitled, Workspace: workspace,
 	}
 	s.saveMeta(meta)
 	session := revive(Stored{Meta: meta})
@@ -542,6 +555,31 @@ func (s *Service) SetConcise(sessionID string, concise bool) string {
 	})
 }
 
+// MarkSeen keeps that the person saw the session as it was at an activity, for every device to show it seen. What
+// a device saw before another already saw more changes nothing.
+func (s *Service) MarkSeen(sessionID, seenAt string) string {
+	seen, err := protocol.ParseTimestamp(seenAt)
+	if err != nil {
+		return fmt.Sprintf(notATime, seenAt)
+	}
+	return s.withSession(sessionID, func(session *live) string {
+		if !seenBefore(session.meta.SeenAt, seen) {
+			return ""
+		}
+		session.meta.SeenAt = seenAt
+		s.saveMeta(session.meta)
+		s.publishSessions()
+		return ""
+	})
+}
+
+// seenBefore tells whether what was seen so far comes before a newer sight: always when nothing was kept, or when
+// what was kept is not a time.
+func seenBefore(kept string, seen time.Time) bool {
+	before, err := protocol.ParseTimestamp(kept)
+	return err != nil || before.Before(seen)
+}
+
 // SetPreset sets the models the session works with from its next request on.
 func (s *Service) SetPreset(sessionID, preset string) string {
 	if !s.deps.Models.Has(preset) {
@@ -705,7 +743,8 @@ func summaryOf(session *live) protocol.SessionSummary {
 	}
 	return protocol.SessionSummary{
 		Host: session.meta.Host, ID: session.meta.ID, Jobs: append([]protocol.SessionSummaryJob{}, session.jobs...), Kind: session.meta.Kind,
-		Concise: session.meta.Concise, Mode: session.meta.Mode, Preset: session.meta.Preset, Queued: queued, QueuedNow: session.queueNow, Status: status,
+		Concise: session.meta.Concise, Mode: session.meta.Mode, Preset: session.meta.Preset, Queued: queued, QueuedNow: session.queueNow,
+		SeenAt: session.meta.SeenAt, Status: status,
 		Subagents: subagentsLeft(session),
 		Thinking:  session.meta.Thinking, Title: session.meta.Title, UpdatedAt: lastActivity(session.meta, session.events),
 		Workspace: session.meta.Workspace,

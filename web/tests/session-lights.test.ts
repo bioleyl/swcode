@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { HOST_ICONS } from '../src/lib/hosts';
-import { LIT_ICONS, litIcon, projectLight, SESSION_ICON, sessionLight } from '../src/lib/session-lights';
+import { LIT_ICONS, litIcon, projectLight, SESSION_ICON, seenAtOf, sessionLight } from '../src/lib/session-lights';
 
 const AT = '2026-11-05T12:00:00Z';
 const LATER = '2026-11-05T12:05:00Z';
@@ -17,6 +17,21 @@ describe('sessionLight', () => {
     expect(sessionLight({ status: 'idle', subagents: 0, updatedAt: LATER }, AT)).toBe('done');
     expect(sessionLight({ status: 'idle', subagents: 0, updatedAt: AT }, undefined)).toBe('done');
     expect(sessionLight({ status: 'idle', subagents: 0, updatedAt: AT }, AT)).toBe('seen');
+  });
+});
+
+describe('seenAtOf', () => {
+  it('is what the daemon kept the person saw, on any device', () => {
+    expect(seenAtOf({ seenAt: AT, updatedAt: LATER })).toBe(AT);
+    expect(
+      sessionLight({ status: 'idle', subagents: 0, updatedAt: LATER }, seenAtOf({ seenAt: AT, updatedAt: LATER }))
+    ).toBe('done');
+  });
+
+  it('counts a session of a daemon that keeps none as seen, not done for good', () => {
+    const session = { status: 'idle', subagents: 0, updatedAt: LATER } as const;
+    expect(seenAtOf(session)).toBe(LATER);
+    expect(sessionLight(session, seenAtOf(session))).toBe('seen');
   });
 });
 

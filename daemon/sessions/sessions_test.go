@@ -452,6 +452,62 @@ func TestDeletingAWorkingSessionIsRefused(t *testing.T) {
 	}
 }
 
+func TestWhatThePersonSawIsKeptForEveryDevice(t *testing.T) {
+	service, store, listener := chats(t, &words{})
+	sessionID := newChat(t, service)
+	if got := service.List()[0]; got.SeenAt != at {
+		t.Fatalf("a new session is seen as made: %+v", got)
+	}
+	const later = "2026-10-23T10:05:00.000Z"
+	if problem := service.MarkSeen(sessionID, later); problem != "" {
+		t.Fatal(problem)
+	}
+	meta, _ := store.metaOf(sessionID)
+	if meta.SeenAt != later || service.List()[0].SeenAt != later {
+		t.Fatalf("seen at %q, listed %q", meta.SeenAt, service.List()[0].SeenAt)
+	}
+	told := len(listener.ofType("sessions"))
+	// A device that saw less than another already did changes nothing, and tells nothing.
+	if problem := service.MarkSeen(sessionID, at); problem != "" {
+		t.Fatal(problem)
+	}
+	if meta, _ := store.metaOf(sessionID); meta.SeenAt != later || len(listener.ofType("sessions")) != told {
+		t.Fatalf("went back to %q", meta.SeenAt)
+	}
+	if problem := service.MarkSeen(sessionID, "yesterday"); problem == "" {
+		t.Fatal("took a word for a time")
+	}
+	if problem := service.MarkSeen("nope", later); problem != unknownSession {
+		t.Fatalf("another session: %q", problem)
+	}
+}
+
+func TestASessionFromBeforeWhatWasSeenIsSeenAsItWasOnce(t *testing.T) {
+	const earlier = "2026-10-23T09:00:00.000Z"
+	store := newMemory()
+	meta := Meta{
+		CreatedAt: earlier, Host: protocol.LocalHost(), ID: "s1", Kind: protocol.SessionKindChat, Mode: protocol.PermissionModeAuto,
+		Thinking: protocol.ThinkingModeOff, Title: "From before", Workspace: folder,
+	}
+	store.metas["s1"] = meta
+	store.events["s1"] = events(protocol.SessionEventTurnStarted{ID: "t1"}, protocol.SessionEventTurnFinished{ID: "t1", Outcome: protocol.TurnOutcomeDone})
+	// Another left halfway: the restart closes its turn after what was seen, which is then news.
+	meta.ID, meta.CreatedAt = "s2", earlier
+	store.metas["s2"] = meta
+	store.events["s2"] = []protocol.SessionEvent{{Value: protocol.Dated(protocol.SessionEventTurnStarted{ID: "t2"}, earlier)}}
+	service, _, _ := onStore(t, store, &words{})
+	service.Load()
+	if kept, _ := store.metaOf("s1"); kept.SeenAt != at {
+		t.Fatalf("seen at %q, kept for the next start", kept.SeenAt)
+	}
+	for _, summary := range service.List() {
+		seen := summary.SeenAt == summary.UpdatedAt
+		if seen != (summary.ID == "s1") {
+			t.Fatalf("%s seen %v: %+v", summary.ID, seen, summary)
+		}
+	}
+}
+
 func TestADaemonThatStoppedInATurnClosesItAsStopped(t *testing.T) {
 	store := newMemory()
 	store.metas["s1"] = Meta{
