@@ -4,6 +4,8 @@ A project's AGENTS.md is what the agent knows of it before reading any code. swc
 
 Keeping it is part of every task, done without being asked: the next session should start where this one ended.
 
+In swcode, write notes with the **notes** tool: give it each fact with the section it goes under, several in one call. It puts each at the end of its section, and makes the file and the section when they are not there yet, without your reading the file first. To fix or remove a note, edit AGENTS.md. Elsewhere, edit the file yourself.
+
 ## Use it
 
 - At the start of a task, go by the notes before exploring: the commands, the layout and the traps they give are already checked. In swcode they come with the first message ("The project's notes (AGENTS.md)…"); elsewhere, read the AGENTS.md at the project's root.
@@ -23,7 +25,7 @@ At the end of the first task in a project without notes, create its AGENTS.md, u
 - **Conventions** the configuration shows: the linter and formatter, what is generated and never edited by hand, where the tests go.
 - **What this task found out**: whatever you had to dig for.
 
-A first version is short, 20 to 40 lines: a start the next sessions add to, not a tour of the code. Say in your report that you created it, so the user can read it.
+A first version is short, 20 to 40 lines: a start the next sessions add to, not a tour of the code. In swcode, it is one call of notes with all of them. Say in your report that you created it, so the user can read it.
 
 ## What goes in
 

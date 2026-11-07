@@ -8,7 +8,7 @@ import (
 	"swcode/daemon/protocol"
 )
 
-const notesHeader = "The project’s notes (AGENTS.md), left by the user and by earlier sessions: what is already known of the project. Go by them rather than finding it all out again."
+const notesHeader = "The project’s notes (AGENTS.md), left by the user and by earlier sessions: what is already known of the project. Go by them rather than finding it all out again, and add what you find out that they lack with notes."
 
 // NotesText is what the model reads of the project's notes: each file under its path.
 func NotesText(notes []protocol.ProjectNote) string {

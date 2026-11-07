@@ -44,3 +44,32 @@ func TestAFolderWithoutNotesHasNone(t *testing.T) {
 		t.Fatalf("%d notes", len(found))
 	}
 }
+
+func TestTheFirstNoteMakesTheNotesWithATitle(t *testing.T) {
+	got := Add("", "app", "Commands", "make test runs everything.")
+	if got != "# app\n\n## Commands\n\n- make test runs everything.\n" {
+		t.Fatalf("%q", got)
+	}
+}
+
+func TestANoteGoesAtTheEndOfItsSectionBeforeTheNext(t *testing.T) {
+	notes := "# app\n\n## Commands\n\n- make build.\n\n## Traps\n\n- /tmp is in RAM.\n"
+	got := Add(notes, "app", "commands", "make test.")
+	if got != "# app\n\n## Commands\n\n- make build.\n- make test.\n\n## Traps\n\n- /tmp is in RAM.\n" {
+		t.Fatalf("%q", got)
+	}
+}
+
+func TestANoteOfANewSectionGoesAtTheEnd(t *testing.T) {
+	got := Add("# app\n\n## Commands\n\n- make build.\n", "app", "Traps", "- /tmp is in RAM:\nkeep outputs on the disk.")
+	if got != "# app\n\n## Commands\n\n- make build.\n\n## Traps\n\n- /tmp is in RAM:\n  keep outputs on the disk.\n" {
+		t.Fatalf("%q", got)
+	}
+}
+
+func TestANoteInAnEmptySectionIsSetApartFromItsHeading(t *testing.T) {
+	got := Add("# app\n\n## Commands\n## Traps\n\n- x\n", "app", "Commands", "make build.")
+	if got != "# app\n\n## Commands\n\n- make build.\n## Traps\n\n- x\n" {
+		t.Fatalf("%q", got)
+	}
+}

@@ -24,6 +24,8 @@ export const TOOL_NAMES = [
   'output',
   'kill',
   'skill',
+  // Adds what the agent found out about the project to its AGENTS.md, which every session starts from.
+  'notes',
   // Offered no longer: the calls older sessions hold keep their name.
   'saveskill',
   'screenshot',

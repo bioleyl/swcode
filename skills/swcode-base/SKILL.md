@@ -11,7 +11,7 @@ The design comes from SOLID, applied to the code that exists today. The rest exi
 
 ## How to use this skill
 
-- **The project's notes, first and last**: go by its AGENTS.md before exploring. At the end of every task, before the report, update it without being asked, and create it when the project has none: [references/project-notes.md](references/project-notes.md) says how.
+- **The project's notes, first and last**: go by its AGENTS.md before exploring. At the end of every task, before the report, update it without being asked (in swcode, with the notes tool), and create it when the project has none: [references/project-notes.md](references/project-notes.md) says how.
 - **Before writing**: read the rules below. The first time in a session, also read [references/agent-mistakes.md](references/agent-mistakes.md): it shows the mistakes these rules are aimed at.
 - **While writing**: apply the rules. For the reasons and examples behind a rule, read the reference it points to.
 - **Before delivering**: run the [self-check](#self-check-before-delivery) on your diff, fix what it finds, and end with the report line.

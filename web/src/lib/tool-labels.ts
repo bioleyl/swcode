@@ -60,6 +60,13 @@ const TOOL_LABELS: Readonly<Record<ToolName, ToolLabel>> = {
     question: 'Stop this command?',
     writing: 'Stopping a command',
   },
+  notes: {
+    doing: 'Noting',
+    icon: 'book-plus',
+    name: 'Notes',
+    question: 'Add these notes to AGENTS.md?',
+    writing: 'Writing notes',
+  },
   output: {
     doing: 'Reading the output of',
     icon: 'terminal',
@@ -160,6 +167,7 @@ const SESSION_GRANTS: Readonly<Record<ToolName, (summary: string) => string | un
   grep: never,
   image: () => ALL_EDITS,
   kill: never,
+  notes: () => ALL_EDITS,
   output: never,
   plan: never,
   question: never,

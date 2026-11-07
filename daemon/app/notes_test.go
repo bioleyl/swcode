@@ -68,8 +68,8 @@ func TestTheRepositorysNotesComeBeforeTheFoldersOwn(t *testing.T) {
 
 func TestTheNotesAreReadAgainAfterACompaction(t *testing.T) {
 	test := Start(t, Options{
-		// The system prompt and the tools take about 4,000 tokens; big.txt, about 4,000 more.
-		ContextTokens: 6000,
+		// The system prompt, the tools and the notes take a little over 4,000 tokens; big.txt, about 4,000 more.
+		ContextTokens: 6400,
 		Files:         map[string]string{"AGENTS.md": buildNotes, "big.txt": strings.Repeat(strings.Repeat("x", 60)+"\n", 200)},
 		Replies:       []fakellama.Reply{call("read", map[string]any{"path": "big.txt"}), text("Lines of x.")},
 		Scripts:       map[string][]fakellama.Reply{summaryRequest: {text("The user asked what big.txt holds.")}},
@@ -89,5 +89,33 @@ func TestTheNotesAreReadAgainAfterACompaction(t *testing.T) {
 	requests := test.Requests()
 	if !strings.Contains(RequestText(requests[len(requests)-1]), "Build with make") {
 		t.Fatal("the notes were not read after the summary")
+	}
+}
+
+func TestTheAgentsFirstNotesMakeTheProjectsAgentsMd(t *testing.T) {
+	test := Start(t, Options{Replies: []fakellama.Reply{call("notes", map[string]any{"notes": []any{
+		map[string]any{"section": "Commands", "text": "make test runs everything."},
+		map[string]any{"section": "Traps", "text": "/tmp is in RAM: keep outputs on the disk."},
+	}}), text("Noted.")}})
+	session := test.NewSession(sessions.Request{Prompt: "Test it"})
+	test.UntilIdle(session.ID)
+	Expect(t, Finished(test.Events(session.ID)), `[{"ok":true,"output":"Added to AGENTS.md: 2 notes."}]`)
+	want := "# " + filepath.Base(test.Workspace) + "\n\n## Commands\n\n- make test runs everything.\n\n## Traps\n\n- /tmp is in RAM: keep outputs on the disk.\n"
+	if got := test.ReadFile("AGENTS.md"); got != want {
+		t.Fatalf("%q", got)
+	}
+}
+
+func TestANoteGoesToTheNotesTheRepositoryAlreadyHas(t *testing.T) {
+	test := Start(t, Options{
+		Files: map[string]string{".git/HEAD": "ref: refs/heads/main\n", "AGENTS.md": "# app\n\n## Commands\n\n- make build.\n", "api/main.go": "package main\n"},
+		Replies: []fakellama.Reply{call("notes", map[string]any{"notes": []any{
+			map[string]any{"section": "Commands", "text": "make test."},
+		}}), text("Noted.")},
+	})
+	session := test.NewSession(sessions.Request{Prompt: "Test it", Workspace: filepath.Join(test.Workspace, "api")})
+	test.UntilIdle(session.ID)
+	if got := test.ReadFile("AGENTS.md"); got != "# app\n\n## Commands\n\n- make build.\n- make test.\n" {
+		t.Fatalf("%q", got)
 	}
 }
