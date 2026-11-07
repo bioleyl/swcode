@@ -2,7 +2,8 @@ import { Bus } from '@jadis/core';
 
 import { ENDPOINTS } from '../../../shared/protocol/endpoints';
 import { StatusSchema } from '../../../shared/protocol/messages.schema';
-import { authorizationHeaders } from './access';
+import { problemOf } from '../lib/daemon-lines';
+import { jsonOfText, request, textOf } from './api';
 import { pairingFailed } from './pairing';
 
 import type { DaemonState } from '../types/daemon.types';
@@ -18,15 +19,18 @@ const state: { current: DaemonState } = { current: { kind: 'unknown' } };
 export const daemonState = (): DaemonState => state.current;
 
 async function fetchState(): Promise<DaemonState> {
-  const response = await fetch(ENDPOINTS.status, { headers: authorizationHeaders() }).catch(() => undefined);
+  const response = await request('GET', ENDPOINTS.status);
   if (!response) {
     return { kind: 'offline' };
   }
-  if (response.status === UNAUTHORIZED) {
-    return { kind: 'locked', pairingFailed: pairingFailed() };
+  const body = await textOf(response);
+  if (!response.ok) {
+    return response.status === UNAUTHORIZED
+      ? { kind: 'locked', pairingFailed: pairingFailed() }
+      : { kind: 'refused', problem: problemOf(response.status, body), status: response.status };
   }
-  const parsed = StatusSchema.safeParse(await response.json().catch(() => undefined));
-  return parsed.success ? { kind: 'ready', status: parsed.data } : { kind: 'offline' };
+  const parsed = StatusSchema.safeParse(jsonOfText(body));
+  return parsed.success ? { kind: 'ready', status: parsed.data } : { kind: 'badAnswer' };
 }
 
 export async function refreshStatus(): Promise<void> {
@@ -34,8 +38,9 @@ export async function refreshStatus(): Promise<void> {
   daemonStatusBus.emit('changed', state.current);
 }
 
-/** Asks for the status now, then every little while, for as long as the page is open. */
-export function watchStatus(): void {
+/** Asks for the status now, then every little while, until the signal is cut: the page's own `killSignal`. */
+export function watchStatus(signal: AbortSignal): void {
   void refreshStatus();
-  setInterval(() => void refreshStatus(), POLL_MS);
+  const timer = setInterval(() => void refreshStatus(), POLL_MS);
+  signal.addEventListener('abort', () => clearInterval(timer), { once: true });
 }

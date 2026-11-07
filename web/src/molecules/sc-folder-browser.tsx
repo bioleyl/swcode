@@ -68,6 +68,14 @@ export class ScFolderBrowser extends ScElement {
     this._refs.up.disabled.set(true);
   }
 
+  /** The daemon refused to list the folder at all: nothing to browse, and no folder to pick. */
+  failed(problem: string): void {
+    this._view = undefined;
+    this.loading();
+    this._refs.state.textContent = problem;
+    this.toggleClass('refused', true);
+  }
+
   show(view: FolderView): void {
     this._view = view;
     this._refs.path.value = view.path;

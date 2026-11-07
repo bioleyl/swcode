@@ -4,7 +4,8 @@ import { confirmDialog, JlAlert, JlButton, JlListItem } from '@syware/jlib';
 import { ScElement } from '../base/sc-element';
 import { SETTINGS_SAVED } from '../lib/settings-saved';
 import { sshHostsLine, sshHostsOf } from '../lib/ssh-hosts';
-import { daemon, daemonBus } from '../services/daemon';
+import { daemonBus } from '../services/daemon';
+import { askHosts } from '../services/daemon-answers';
 import { refreshStatus } from '../services/daemon-status';
 import { loadSettings, saveSettings } from '../services/settings';
 import { BASE_STYLES } from '../styles/shared';
@@ -12,7 +13,6 @@ import { ScSshHostDialog } from './sc-ssh-host-dialog';
 import styles from './sc-ssh-hosts.css?inline';
 
 import type { Tone } from '@syware/jlib';
-import type { ServerMessage } from '../../../shared/protocol/messages.schema';
 import type { SettingName } from '../../../shared/protocol/settings.schema';
 
 const SETTING: SettingName = 'SWCODE_SSH_ENDPOINTS';
@@ -75,7 +75,6 @@ export class ScSshHosts extends ScElement {
   onConnect(): void {
     this._refs.add.events.register('press', () => this._refs.dialog.edit('', this._hosts));
     this._refs.dialog.events.register('save', ({ host, replaced }) => void this.saveHost(host, replaced));
-    this.onBus(daemonBus, 'message', (message) => this.received(message));
     this.onBus(daemonBus, 'online', (online) => {
       if (online && this._restarting) {
         void this.restarted();
@@ -100,15 +99,16 @@ export class ScSshHosts extends ScElement {
     if (fixed) {
       this.say(`Set in the environment (${SETTING}): change it there.`, 'info');
     }
-    daemon.send({ type: 'listHosts' });
+    await this.loadFromConfig();
   }
 
   /** The SSH hosts the daemon offers that the list does not have: those of ~/.ssh/config. */
-  private received(message: ServerMessage): void {
-    if (message.type !== 'hosts') {
+  private async loadFromConfig(): Promise<void> {
+    const hosts = await askHosts();
+    if (!hosts.ok || !this.isConnected) {
       return;
     }
-    const fromConfig = message.hosts
+    const fromConfig = hosts.answer
       .flatMap((option) => (option.ref.kind === 'ssh' ? [option.ref.endpoint] : []))
       .filter((endpoint) => !this._hosts.includes(endpoint));
     this._refs.configSection.hidden = fromConfig.length === 0;
@@ -167,7 +167,7 @@ export class ScSshHosts extends ScElement {
     this._restarting = false;
     this.say(SETTINGS_SAVED.restarted, 'ok');
     await refreshStatus();
-    daemon.send({ type: 'listHosts' });
+    await this.loadFromConfig();
   }
 
   private render(hosts: string[], fixed: boolean): void {

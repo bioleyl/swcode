@@ -7,12 +7,11 @@ import { ScElement } from '../base/sc-element';
 import { childPath } from '../lib/folders';
 import { folderName } from '../lib/format';
 import { ScFolderBrowser } from '../molecules/sc-folder-browser';
-import { daemon, daemonBus } from '../services/daemon';
+import { askCreateProject, askFolders, askHosts } from '../services/daemon-answers';
 import { BASE_STYLES } from '../styles/shared';
 import styles from './sc-project-dialog.css?inline';
 
 import type { SegmentedOption } from '@syware/jlib';
-import type { ServerMessage } from '../../../shared/protocol/messages.schema';
 import type { HostOption, HostRef, Project } from '../../../shared/protocol/project.schema';
 import type { ProjectSource, SourceView } from '../types/project.types';
 
@@ -95,24 +94,32 @@ export class ScProjectDialog extends ScElement {
 
   onConnect(): void {
     this._refs.cancel.events.register('press', () => this._refs.dialog.close());
-    this._refs.confirm.events.register('press', () => this.make());
-    this._refs.browser.events.register('go', (path) => this.goTo(path));
+    this._refs.confirm.events.register('press', () => void this.make());
+    this._refs.browser.events.register('go', (path) => void this.goTo(path));
     this._refs.sources.events.register('change', (value) => this.choose(sourceOf(value)));
     this._refs.name.events.register('input', () => this.render());
-    this._refs.host.events.register('change', (key) => this.chooseHost(key));
-    this.onBus(daemonBus, 'message', (message) => this.received(message));
+    this._refs.host.events.register('change', (key) => void this.chooseHost(key));
   }
 
   open(): void {
-    this._making = false;
     this._refs.name.value.set('');
     this.showProblem('');
     this._host = LOCAL_HOST;
     this.renderHosts();
-    daemon.send({ type: 'listHosts' });
+    void this.loadHosts();
     this.choose('existing');
-    this.goTo(undefined);
+    void this.goTo(undefined);
     this._refs.dialog.show();
+  }
+
+  /** The hosts to choose from, from the daemon: it lists only this computer when it knows no other. */
+  private async loadHosts(): Promise<void> {
+    const hosts = await askHosts();
+    if (!hosts.ok || !this.isConnected) {
+      return;
+    }
+    this._hosts = hosts.answer;
+    this.renderHosts();
   }
 
   private showProblem(text: string): void {
@@ -121,10 +128,10 @@ export class ScProjectDialog extends ScElement {
   }
 
   /** Another host: its folders, from its usual folder, take the browser's place. */
-  private chooseHost(key: string): void {
+  private async chooseHost(key: string): Promise<void> {
     this._host = this._hosts.find((option) => hostKey(option.ref) === key)?.ref ?? LOCAL_HOST;
     this.showProblem('');
-    this.goTo(undefined);
+    await this.goTo(undefined);
   }
 
   /** The hosts to choose from: shown once there is more than this computer. */
@@ -147,41 +154,24 @@ export class ScProjectDialog extends ScElement {
     }
   }
 
-  /** Asks the daemon for a folder's subfolders; without a path, the folder projects usually go in. */
-  private goTo(path: string | undefined): void {
+  /** Asks for a folder's subfolders; without a path, for the folder projects usually go in. */
+  private async goTo(path: string | undefined): Promise<void> {
     this._refs.browser.loading();
     this.render();
-    daemon.send({ host: this._host, type: 'listFolders', ...(path === undefined ? {} : { path }) });
-  }
-
-  private received(message: ServerMessage): void {
-    if (message.type === 'hosts') {
-      this._hosts = message.hosts.length === 0 ? [LOCAL_OPTION] : message.hosts;
-      this.renderHosts();
+    const folders = await askFolders(this._host, path);
+    if (!this.isConnected || !this._refs.dialog.open.get()) {
       return;
     }
-    if (message.type === 'folders' && this._refs.dialog.open.get()) {
-      this._refs.browser.show(message);
+    if (!folders.ok) {
+      this._refs.browser.failed(folders.problem);
       this.render();
       return;
     }
-    if (!this._making) {
-      return;
-    }
-    if (message.type === 'projectCreated') {
-      this._making = false;
-      this._refs.dialog.close();
-      this.events.emit('created', message.project);
-      return;
-    }
-    if (message.type === 'projectRefused') {
-      this._making = false;
-      this.showProblem(message.message);
-      this.render();
-    }
+    this._refs.browser.show(folders.answer);
+    this.render();
   }
 
-  private make(): void {
+  private async make(): Promise<void> {
     const folder = this._refs.browser.path;
     if (folder === undefined) {
       return;
@@ -190,12 +180,18 @@ export class ScProjectDialog extends ScElement {
     this.showProblem('');
     this.render();
     const newFolder = this._source === 'fresh' ? this.newName() : undefined;
-    daemon.send({
-      folder,
-      host: this._host,
-      type: 'createProject',
-      ...(newFolder === undefined ? {} : { newFolder }),
-    });
+    const created = await askCreateProject(folder, this._host, newFolder);
+    this._making = false;
+    if (!this.isConnected) {
+      return;
+    }
+    if (!created.ok) {
+      this.showProblem(created.problem);
+      this.render();
+      return;
+    }
+    this._refs.dialog.close();
+    this.events.emit('created', created.answer);
   }
 
   /** The new folder's name, once it is one: a name, not a path. */

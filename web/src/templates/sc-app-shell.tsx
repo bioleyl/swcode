@@ -165,8 +165,26 @@ export class ScAppShell extends ScElement {
   }
 
   onConnect(): void {
-    const nav = this._refs.nav;
+    this.mountPages();
+    this.wireNavigation();
+    this.wirePalette();
+    this.wireProjects();
+    this.watchDaemon();
+    this.showWhatIsListed();
+  }
+
+  /** The router, and the page its address names. */
+  private mountPages(): void {
     const outlet = this._refs.outlet;
+    const router = new Router(ROUTES, { mode: 'hash', signal: this.killSignal });
+    router.mountOn(outlet, { show: (page) => outlet.show(page) });
+    window.addEventListener(HASH_CHANGE, () => this.follow(router.currentRoute), { signal: this.killSignal });
+    this.follow(router.currentRoute);
+  }
+
+  /** The side nav: chat or code, the settings link closing a phone's drawer, and the mode the page is in. */
+  private wireNavigation(): void {
+    const nav = this._refs.nav;
     // Heard before the first page: it may switch the mode as it shows.
     this.onBus(workModeBus, 'changed', (mode) => this.renderMode(mode));
     this.renderMode(workMode());
@@ -174,37 +192,50 @@ export class ScAppShell extends ScElement {
       setWorkMode(mode);
       navigate(newPathOf(mode));
     });
-    const router = new Router(ROUTES, { mode: 'hash', signal: this.killSignal });
-    router.mountOn(outlet, { show: (page) => outlet.show(page) });
-    window.addEventListener(HASH_CHANGE, () => this.follow(router.currentRoute), { signal: this.killSignal });
-    this.follow(router.currentRoute);
-    // The settings' link, at the nav's foot, closes a phone's drawer as the nav's own links do.
     nav.events.register('settings', () => this._refs.frame.toggleNav(false));
     nav.events.register('search', () => this._refs.palette.show());
-    this._refs.topSearch.events.register('press', () => this._refs.palette.show());
-    this._refs.palette.events.register('select', (id) => this.choose(paletteTarget(id)));
-    this._refs.palette.events.register('open', () => this.renderPalette());
-    this._refs.palette.events.register('search', (query) => this._refs.palette.loading.set(searchSessions(query)));
+  }
+
+  /** The command palette: what it finds by itself, and what the daemon finds in the conversations. */
+  private wirePalette(): void {
+    const palette = this._refs.palette;
+    this._refs.topSearch.events.register('press', () => palette.show());
+    palette.events.register('select', (id) => this.choose(paletteTarget(id)));
+    palette.events.register('open', () => this.renderPalette());
+    palette.events.register('search', (query) => palette.loading.set(searchSessions(query)));
     this.onBus(sessionSearchBus, 'found', (matches) => {
-      this._refs.palette.loading.set(false);
-      this._refs.palette.commands.set([...this._commands, ...matchCommands(matches, allSessions())]);
+      palette.loading.set(false);
+      palette.commands.set([...this._commands, ...matchCommands(matches, allSessions())]);
     });
     void this.offerStartup();
+  }
+
+  /** The project dialog the palette and the pages open, and what a new or removed project does. */
+  private wireProjects(): void {
     this._refs.projectDialog.events.register('created', (project) => navigate(newSessionPath(project.id)));
     this.onBus(projectListBus, 'open', () => this._refs.projectDialog.open());
     this.onBus(projectListBus, 'remove', (projectId) => void this.removeProject(projectId));
-    this.onBus(projectListBus, 'changed', () => nav.projects.set([...allProjects()]));
-    this.onBus(sessionListBus, 'changed', () => {
-      nav.sessions.set([...allSessions()]);
-      // A session opened before the list came: its kind is known now.
-      this.followMode(this._route);
-    });
-    this.onBus(seenBus, 'changed', () => nav.seen.set({ ...seenSessions() }));
-    this.onBus(sessionListBus, 'created', (session) => navigate(sessionPath(session.id)));
+    this.onBus(projectListBus, 'changed', () => this._refs.nav.projects.set([...allProjects()]));
+  }
+
+  /** The daemon's state, and the sessions as the daemon lists them. */
+  private watchDaemon(): void {
     this.onBus(daemonStatusBus, 'changed', (state) => {
       this.renderDaemon(state);
       offerUpdate(state);
     });
+    this.onBus(sessionListBus, 'changed', () => {
+      this._refs.nav.sessions.set([...allSessions()]);
+      // A session opened before the list came: its kind is known now.
+      this.followMode(this._route);
+    });
+    this.onBus(seenBus, 'changed', () => this._refs.nav.seen.set({ ...seenSessions() }));
+    this.onBus(sessionListBus, 'created', (session) => navigate(sessionPath(session.id)));
+  }
+
+  /** What the services already hold, so the frame shows it before the first answer comes. */
+  private showWhatIsListed(): void {
+    const nav = this._refs.nav;
     nav.projects.set([...allProjects()]);
     nav.sessions.set([...allSessions()]);
     nav.seen.set({ ...seenSessions() });

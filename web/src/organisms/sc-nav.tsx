@@ -10,6 +10,7 @@ import { sessionsOf } from '../lib/session-kinds';
 import { LIT_ICONS, litIcon, projectLight, SESSION_ICON, sessionLight } from '../lib/session-lights';
 import { waitingCount } from '../lib/session-status';
 import { ScComputerSwitch } from '../molecules/sc-computer-switch';
+import { keepNavFolded, navFolded } from '../services/nav-fold';
 import {
   hrefOf,
   NEW_CHAT_PATH,
@@ -45,7 +46,6 @@ registerIcons({
 export const NAV_ID = { newChat: 'new-chat', newSession: 'new' } as const;
 const PROJECT_PREFIX = 'project:';
 const SESSION_PREFIX = 'session:';
-const FOLDED_KEY = 'swcode.nav.folded';
 // What jlib's side nav says on itself while it is a rail.
 const RAIL = 'rail';
 // What jlib's app shell says on its nav while it is a phone's drawer: the side nav inside shows whole then.
@@ -68,22 +68,6 @@ const WORK_MODES: SegmentedOption<SessionKind>[] = [
 
 export const projectNavId = (id: string): string => `${PROJECT_PREFIX}${id}`;
 export const sessionNavId = (id: string): string => `${SESSION_PREFIX}${id}`;
-
-const storedFold = (): boolean => {
-  try {
-    return localStorage.getItem(FOLDED_KEY) === 'true';
-  } catch {
-    return false;
-  }
-};
-
-const keepFold = (folded: boolean): void => {
-  try {
-    localStorage.setItem(FOLDED_KEY, String(folded));
-  } catch {
-    // Without storage, the side nav opens unfolded next time.
-  }
-};
 
 /** A session, its bubble filled while it works, waits for the person, or is done and not seen yet. */
 const sessionItem = (session: SessionSummary, seen: Readonly<Record<string, string>>): SideNavItem => ({
@@ -202,7 +186,7 @@ export class ScNav extends ScElement {
 
   templateHtml(): Node {
     return (
-      <JlSideNav label="swcode" collapsed={storedFold()}>
+      <JlSideNav label="swcode" collapsed={navFolded()}>
         <div slot="header" class="header">
           <a class="brand">
             <ScBrand />
@@ -250,7 +234,7 @@ export class ScNav extends ScElement {
   private fold(): void {
     const folded = !this._refs.nav.collapsed.get();
     this._refs.nav.collapsed.set(folded);
-    keepFold(folded);
+    keepNavFolded(folded);
   }
 
   /**

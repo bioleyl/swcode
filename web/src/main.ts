@@ -26,5 +26,5 @@ daemonBus.register('online', () => void refreshStatus(), forever);
 // A phone opened from the QR code trades its pairing code for a token before it talks to the daemon.
 void pairFromLink().finally(() => {
   daemon.connect();
-  watchStatus();
+  watchStatus(forever);
 });

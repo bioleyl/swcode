@@ -1,8 +1,11 @@
 import { ENDPOINTS, PAIR_PARAM } from '../../../shared/protocol/endpoints';
 import { DevicesSchema, PairAnswerSchema, PairingCodeSchema } from '../../../shared/protocol/pairing.schema';
+import { problemOf } from '../lib/daemon-lines';
 import { authorizationHeaders, keepToken } from './access';
+import { jsonOfText, request, textOf } from './api';
 
 import type { Device, PairingCode } from '../../../shared/protocol/pairing.schema';
+import type { Answer } from '../types/answer.types';
 
 // What a phone calls itself in the computer's list, from what its browser says it runs on.
 const DEVICE_NAMES: readonly (readonly [RegExp, string])[] = [
@@ -49,11 +52,21 @@ export async function pairFromLink(): Promise<void> {
   keepToken(answer.data.token);
 }
 
-/** A new code for the QR code, or nothing when the daemon does not answer. */
-export async function newPairingCode(): Promise<PairingCode | undefined> {
-  const response = await fetch(ENDPOINTS.pairingCode, { headers: authorizationHeaders() }).catch(() => undefined);
-  const parsed = PairingCodeSchema.safeParse(await response?.json().catch(() => undefined));
-  return parsed.success ? parsed.data : undefined;
+/** The daemon gives no code at all, as when it is not running: the phone topic says so in its place. */
+export const NO_CODE = 'The daemon gives no pairing code: is it running?';
+
+/** A new code for the QR code; when the daemon does not answer or refuses one, what it said. */
+export async function newPairingCode(): Promise<Answer<PairingCode>> {
+  const response = await request('GET', ENDPOINTS.pairingCode);
+  if (!response) {
+    return { ok: false, problem: NO_CODE };
+  }
+  const body = await textOf(response);
+  const parsed = PairingCodeSchema.safeParse(jsonOfText(body));
+  if (!response.ok || !parsed.success) {
+    return { ok: false, problem: problemOf(response.status, body) };
+  }
+  return { answer: parsed.data, ok: true };
 }
 
 export async function pairedDevices(): Promise<Device[]> {
