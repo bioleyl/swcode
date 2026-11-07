@@ -13,6 +13,12 @@
       "skillPath": "plugins/jlib-official/skills/jlib-official/SKILL.md",
       "computedHash": "1d24e02b22b8534930e16137588411db16e254af8d6f6db89a5a9af6a2126b57"
     },
+    "swcode-base": {
+      "source": "bioleyl/swcode",
+      "sourceType": "github",
+      "skillPath": "plugins/swcode-base/skills/swcode-base/SKILL.md",
+      "computedHash": "db5f93b6cba8849c2e2d9ebd68cf7b5a9137649866719547d53c61a6f1139af0"
+    },
     "syware-ux": {
       "source": "bioleyl/jlib",
       "sourceType": "github",
