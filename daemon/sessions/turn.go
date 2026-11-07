@@ -11,6 +11,7 @@ import (
 	"swcode/daemon/hosts"
 	"swcode/daemon/images"
 	"swcode/daemon/llm"
+	"swcode/daemon/notes"
 	"swcode/daemon/permissions"
 	"swcode/daemon/protocol"
 	"swcode/daemon/tools"
@@ -127,7 +128,10 @@ func (s *Service) setupFor(session *live, meta Meta, main llm.Choice, where plac
 		NewID:         s.deps.NewID,
 		Pictures:      &agent.PictureView{Folder: s.picturesFolderOf(session), Seen: sees},
 		LoadSkill:     where.skills.Load,
-		Skills:        where.skills.List,
+		Notes: func(ctx context.Context) []protocol.ProjectNote {
+			return notes.Find(ctx, where.host, meta.Workspace)
+		},
+		Skills: where.skills.List,
 		SystemPrompt: agent.SystemPrompt(meta.Workspace, where.scratch, where.platform, agent.Servers{
 			Browser: s.deps.Browser != nil && sees, Images: s.deps.ImageURL != "",
 		}, limit),

@@ -794,6 +794,11 @@ func (v *PlanStep) Normalize() error {
 	return nil
 }
 
+type ProjectNote struct {
+	Path string `json:"path"`
+	Text string `json:"text"`
+}
+
 type Question struct {
 	Header      string           `json:"header"`
 	MultiSelect bool             `json:"multiSelect"`
@@ -835,6 +840,8 @@ func (SessionEventContextCompacted) isSessionEvent() {}
 func (SessionEventReminder) isSessionEvent() {}
 
 func (SessionEventSkillsListed) isSessionEvent() {}
+
+func (SessionEventProjectNotesRead) isSessionEvent() {}
 
 func (SessionEventSkillLoaded) isSessionEvent() {}
 
@@ -915,6 +922,12 @@ func (u *SessionEvent) UnmarshalJSON(data []byte) error {
 		u.Value = value
 	case "\"skillsListed\"":
 		var value SessionEventSkillsListed
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
+	case "\"projectNotesRead\"":
+		var value SessionEventProjectNotesRead
 		if err := json.Unmarshal(data, &value); err != nil {
 			return err
 		}
@@ -1029,6 +1042,7 @@ type SessionEventMapper[R any] interface {
 	ContextCompacted(SessionEventContextCompacted) R
 	Reminder(SessionEventReminder) R
 	SkillsListed(SessionEventSkillsListed) R
+	ProjectNotesRead(SessionEventProjectNotesRead) R
 	SkillLoaded(SessionEventSkillLoaded) R
 	ToolCall(SessionEventToolCall) R
 	PermissionRequested(SessionEventPermissionRequested) R
@@ -1062,6 +1076,8 @@ func MapSessionEvent[R any](u SessionEvent, m SessionEventMapper[R]) R {
 		return m.Reminder(value)
 	case SessionEventSkillsListed:
 		return m.SkillsListed(value)
+	case SessionEventProjectNotesRead:
+		return m.ProjectNotesRead(value)
 	case SessionEventSkillLoaded:
 		return m.SkillLoaded(value)
 	case SessionEventToolCall:
@@ -1227,6 +1243,24 @@ func (v SessionEventSkillsListed) MarshalJSON() ([]byte, error) {
 		Key string `json:"kind"`
 		plain
 	}{"skillsListed", p})
+}
+
+type SessionEventProjectNotesRead struct {
+	At    string        `json:"at"`
+	ID    string        `json:"id"`
+	Notes []ProjectNote `json:"notes"`
+}
+
+func (v SessionEventProjectNotesRead) MarshalJSON() ([]byte, error) {
+	type plain SessionEventProjectNotesRead
+	p := plain(v)
+	if p.Notes == nil {
+		p.Notes = []ProjectNote{}
+	}
+	return json.Marshal(struct {
+		Key string `json:"kind"`
+		plain
+	}{"projectNotesRead", p})
 }
 
 type SessionEventSkillLoaded struct {

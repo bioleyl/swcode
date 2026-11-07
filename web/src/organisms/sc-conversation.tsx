@@ -39,6 +39,9 @@ const REMINDER_TITLES: Readonly<Record<ReminderReason, string>> = {
   stepLimit: 'The agent reached the step limit: swcode asked it for its report',
 };
 
+// The project's notes as the model read them, folded: their files are long, and told once a session.
+const NOTES_LINE = 'The agent read the project’s notes (AGENTS.md)';
+
 const skillsLine = (skills: readonly SkillSummary[]): string =>
   skills.length === 0
     ? 'The agent was told there are no skills now'
@@ -117,6 +120,18 @@ export class ScConversation extends ScElement {
     passwordRequested: (event) => this.openPassword(event),
     permissionAnswered: (event) => this.closeRequest(event.requestId),
     permissionRequested: (event) => this.openRequest(event),
+    projectNotesRead: (event) =>
+      this.add(
+        <details class="compaction">
+          <summary>{NOTES_LINE}</summary>
+          {event.notes.map((note) => (
+            <p>
+              <strong>{note.path}</strong>
+              {`\n${note.text}`}
+            </p>
+          ))}
+        </details>
+      ),
     questionAnswered: (event) => this.closeRequest(event.requestId),
     questionAsked: (event) => this.openQuestion(event),
     reminder: (event) =>

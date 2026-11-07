@@ -358,6 +358,7 @@ func RunTurn(ctx context.Context, message *PromptMessage, host TurnHost, setup S
 	if message != nil {
 		host.Record(UserMessage(setup.NewID(), *message))
 	}
+	ReadNotes(ctx, host, setup)
 	ListSkills(ctx, host, setup)
 	if message != nil {
 		LoadAskedSkill(ctx, host, setup, message.Text)

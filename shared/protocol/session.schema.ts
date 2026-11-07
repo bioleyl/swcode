@@ -116,6 +116,10 @@ export const UsageSchema = z.object({
 });
 export type Usage = z.infer<typeof UsageSchema>;
 
+/** One of the project's notes files (an AGENTS.md), as the model read it: where it is, and what it says. */
+export const ProjectNoteSchema = z.object({ path: z.string(), text: z.string() });
+export type ProjectNote = z.infer<typeof ProjectNoteSchema>;
+
 const at = z.iso.datetime();
 
 /**
@@ -161,6 +165,9 @@ export const SessionEventSchema = z.discriminatedUnion('kind', [
   }),
   // The user's skills, as the model was told them: at a turn's start when they changed, and after a compaction.
   z.object({ at, id: z.string(), kind: z.literal('skillsListed'), skills: z.array(SkillSummarySchema) }),
+  // The project's notes, its AGENTS.md files from the repository's root to its folder, as the model read them: with
+  // the first message of a session that has some, and again after a compaction.
+  z.object({ at, id: z.string(), kind: z.literal('projectNotesRead'), notes: z.array(ProjectNoteSchema) }),
   // A skill the person ran with /<its name> at the start of their message, as the model read it then: right after
   // that message.
   z.object({ at, id: z.string(), kind: z.literal('skillLoaded'), name: z.string(), text: z.string() }),

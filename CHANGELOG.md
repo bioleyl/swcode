@@ -7,6 +7,7 @@ All notable changes to swcode are documented here.
 ### Added
 
 - swcode comes with a skill of its own, swcode-base: coding rules, with a check of the agent's own changes before it hands them over. A project's page installs it in the project or in your home for all projects, on the project's own host, and takes it out again; the app offers it once when your home has none.
+- A session starts from the project's notes: the AGENTS.md files from the repository's root down to the session's folder go to the model with its first message, and again after a compaction. The conversation shows them folded.
 
 ### Fixed
 

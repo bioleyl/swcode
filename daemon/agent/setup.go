@@ -73,6 +73,9 @@ type Setup struct {
 	// LoadSkill is one of those skills as the model reads it, for a message that runs it with /<its name>; nil for
 	// subagents.
 	LoadSkill func(ctx context.Context, name string) skills.Text
+	// Notes is the project's notes (its AGENTS.md files) as they are now, which the model reads once; nil for
+	// subagents and chats.
+	Notes func(ctx context.Context) []protocol.ProjectNote
 	// Pictures is the session's pasted pictures; nil for a subagent, and the summary of a compaction.
 	Pictures *PictureView
 }

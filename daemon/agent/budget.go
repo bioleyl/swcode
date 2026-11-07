@@ -49,6 +49,8 @@ func charsOf(event protocol.SessionEvent) int {
 		return chars(string(data))
 	case protocol.SessionEventSkillLoaded:
 		return chars(LoadedSkillText(value))
+	case protocol.SessionEventProjectNotesRead:
+		return chars(NotesText(value.Notes))
 	case protocol.SessionEventContextCompacted:
 		return chars(value.Summary)
 	}
