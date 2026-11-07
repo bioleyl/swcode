@@ -11,6 +11,8 @@ import type { Locator, Page } from 'playwright-core';
 import type { E2eRig } from './types/e2e.types.js';
 
 const DESKTOP = { height: 900, width: 1440 };
+// A window too short for the help dialog, whose body then scrolls.
+const SHORT_DESKTOP = { height: 360, width: 1440 };
 // Wide enough for the side panel, which leaves the composer 650 pixels.
 const LAPTOP = { height: 900, width: 1280 };
 const PHONE = { height: 844, width: 390 };
@@ -152,6 +154,10 @@ const overflow = (page: Page) => page.evaluate(PAGE_OVERFLOW);
 /** Run on an element in the page: whether its text is longer than the room it has. */
 const cutShort = (node: { clientWidth: number; scrollWidth: number }): boolean =>
   node.scrollWidth > node.clientWidth;
+
+/** Run on an element in the page: whether what it holds is taller than it, so that it scrolls. */
+const scrolls = (node: { clientHeight: number; scrollHeight: number }): boolean =>
+  node.scrollHeight > node.clientHeight;
 
 /** Run on an element in the page: its opacity, as drawn. */
 const opacityOf = (node: {
@@ -1310,6 +1316,12 @@ describe('the commands', () => {
       '/peek ‹question›',
       '/help',
     ]);
+    // In a short window only the dialog's body scrolls: the keycaps' spoken words, in absolute spans, stay inside it
+    // rather than giving the dialog a second scrollbar.
+    await page.setViewportSize(SHORT_DESKTOP);
+    await page.evaluate('0');
+    expect(await help.locator('.body').evaluate(scrolls)).toBe(true);
+    expect(await help.locator('dialog').evaluate(scrolls)).toBe(false);
     expect(await field.inputValue()).toBe('');
     expect(rig.llama.requests.length).toBe(1);
   });

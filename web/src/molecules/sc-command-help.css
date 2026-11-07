@@ -6,10 +6,6 @@
    phone. Every list takes the same first column, so they line up: wide enough for a skill's name, which wraps past
    it rather than pushing the dialog sideways. */
 dl {
-  /* jlib's keycaps hold their spoken words in an absolute span, and jl-dialog's scrolling body is not positioned:
-     without a positioned list, those spans hang below the dialog and give it a second scrollbar of its own. Remove
-     once jl-dialog's body is the containing block of what it scrolls: https://github.com/bioleyl/jlib/issues/3 */
-  position: relative;
   display: grid;
   grid-template-columns: 15rem minmax(0, 1fr);
   align-items: start;
