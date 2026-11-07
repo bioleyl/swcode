@@ -20,6 +20,7 @@ All notable changes to swcode are documented here.
 
 - The release workflow publishes `RELEASE_NOTES.md` as the release's notes, which the update offer shows, and stops when they are not the tagged version's.
 - The README is a shorter tour of swcode, with screenshots of the app, and swcode is under the MIT license.
+- The notes for coding agents working on swcode are in AGENTS.md, which swcode's own agent reads too; CLAUDE.md imports them.
 
 ## [0.4.0] - 2026-11-07
 
