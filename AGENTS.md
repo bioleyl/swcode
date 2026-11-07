@@ -77,8 +77,13 @@ Read `README.md` first.
   never set `GOTOOLCHAIN=local`, which then refuses to build. `gofmt` is not a go command and does not switch:
   run the toolchain's (`$(go env GOROOT)/bin/gofmt`, as `check:go` does). The latest of a dependency can want a
   newer Go still, and `go get` then raises `go.mod`'s lines: pin versions, and raise Go on purpose.
-- **The swcode-base skills in `skills/` are embedded in the program** (`assets.go`, `//go:embed all:skills`): the
-  build fails without that folder.
+- **swcode-base is not in the program**: the repository publishes it (`plugins/swcode-base`, listed in
+  `.claude-plugin/marketplace.json` for Claude Code's plugins and skills.sh), and the daemon has the skills CLI install
+  and remove it on the project's host (`daemon/swcodebase`): `npx --yes skills@<pinned> add bioleyl/swcode --skill
+  swcode-base --agent universal --yes`, `--global` for the home. `universal` is the CLI's agent whose folder is
+  `.agents/skills` itself; any other also copies it into its own. A change to the skill reaches people from GitHub's
+  main. A release raises `plugin.json`'s version with `package.json`'s (a test compares them): Claude Code updates a
+  plugin only when its version changes. The tests put a fake `npx` first on the PATH, with a HOME of their own.
 - **The desktop app runs the daemon inside it** (`desktop/`, Windows only, built from WSL): Win32 hands it structures
   as `uintptr`, hence `-unsafeptr=false` when `check:go` vets for Windows. Its page may only `postMessage` strings:
   go-webview2 ends the program on any other.

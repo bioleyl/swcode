@@ -35,10 +35,10 @@ const DEFAULTS_APP =
   'The app’s defaults, until you pick otherwise here. The composer still changes them for one session.';
 const SKILLS_NOTE =
   'Read in your ~/.agents/skills and the project’s .agents/skills. The agent is told of those on, and each is a / command in the composer.';
-// The card of the skill swcode comes with: what it says, each place's button, as swcode-base is there or not, and
-// what the person agrees to before it leaves a place.
+// The card of swcode's own skill: what it says, each place's button, as swcode-base is there or not, and what the
+// person agrees to before it leaves a place. The daemon installs and removes it with npx skills, on the project's host.
 const SWCODE_BASE_NOTE =
-  'The skill swcode comes with. A project finds it in its own .agents/skills, or in your ~/.agents/skills, where every project does.';
+  'swcode’s skill of coding rules, installed with npx skills from bioleyl/swcode. A project finds it in its own .agents/skills, or in your ~/.agents/skills, where every project does.';
 const SWCODE_BASE_BUTTONS: Readonly<
   Record<SwcodeBasePlace, Record<'absent' | 'present', { icon: string; label: string }>>
 > = {
@@ -56,12 +56,12 @@ const SWCODE_BASE_REMOVAL: Readonly<Record<SwcodeBasePlace, { confirm: string; h
     home: {
       confirm: 'Remove',
       heading: 'Remove swcode-base from your home?',
-      text: 'Its folder is deleted from ~/.agents/skills, which every project reads. A project’s own copy stays.',
+      text: 'npx skills deletes it from ~/.agents/skills, which every project reads. A project’s own copy stays.',
     },
     project: {
       confirm: 'Remove',
       heading: 'Remove swcode-base from this project?',
-      text: 'Its folder is deleted from the project’s .agents/skills. The copy in your home stays.',
+      text: 'npx skills deletes it from the project’s .agents/skills and skills-lock.json. The copy in your home stays.',
     },
   };
 const UNREACHABLE = 'The daemon did not answer.';
@@ -305,7 +305,6 @@ export class ProjectPage extends ScElement {
     void this.swcodeBaseState().load({
       draw: (status: SwcodeBaseStatus) => this.drawSwcodeBase(status),
       fetch: () => this.fetchSwcodeBase(projectId),
-      isEmpty: (status: SwcodeBaseStatus) => !status.carried,
     });
   }
 

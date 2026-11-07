@@ -1,0 +1,22 @@
+{
+  "name": "swcode",
+  "description": "swcode's skill for coding agents: swcode-base, the coding rules swcode's agent works by, for any agent that reads Agent Skills.",
+  "owner": {
+    "name": "Leal Bioley",
+    "url": "https://github.com/bioleyl/swcode"
+  },
+  "plugins": [
+    {
+      "name": "swcode-base",
+      "source": "./plugins/swcode-base",
+      "description": "Coding rules with a check of the agent's own diff before it delivers: reading before writing, named constants, SOLID without speculative abstraction, guard clauses and exhaustive mappers, function size, error handling, types, the mistakes coding agents make, and the project's AGENTS.md kept without being asked.",
+      "category": "development",
+      "tags": [
+        "coding-style",
+        "code-review",
+        "solid",
+        "agents-md"
+      ]
+    }
+  ]
+}

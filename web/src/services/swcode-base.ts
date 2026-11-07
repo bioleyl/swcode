@@ -10,26 +10,26 @@ import { readStored, writeStored } from './device-store';
 import type { SwcodeBaseStatus } from '../../../shared/protocol/skill.schema';
 import type { SwcodeBasePlace, SwcodeBaseRead } from '../types/swcode-base.types';
 
+const UNREACHABLE = 'The daemon did not answer.';
+
 /** What the daemon answered of swcode-base, and for which project, for the pages to show it. */
 export const swcodeBaseBus = new Bus<{ changed: SwcodeBaseRead }>();
 
-// The pack this device was last asked about, by its names, so a new pack asks again.
+// The skill this device was asked about: its name, as the versions that offered a pack of skills stored it.
 const ASKED_KEY = 'swcode.swcodeBaseAsked';
+const SKILL_NAME = 'swcode-base';
 const NEVER_ASKED = '';
 
-const asked = { pack: readStored(ASKED_KEY, z.string(), NEVER_ASKED) };
+const asked = { skill: readStored(ASKED_KEY, z.string(), NEVER_ASKED) };
 
-/**
- * Whether to ask this machine whether to install the pack: carried, nowhere in sight, and not asked for this pack
- * yet. The pack's names are the key: a new pack asks again.
- */
+/** Whether to ask this device whether to install swcode-base: it is nowhere in sight, and it was not asked yet. */
 export const wantsSwcodeBase = (status: SwcodeBaseStatus): boolean =>
-  status.carried && !status.installed && asked.pack !== status.names.join(',');
+  !status.installed && asked.skill !== SKILL_NAME;
 
-/** Says this device was asked, so it is not asked again for this pack. */
-export const markSwcodeBaseAsked = (status: SwcodeBaseStatus): void => {
-  asked.pack = status.names.join(',');
-  writeStored(ASKED_KEY, asked.pack);
+/** Says this device was asked, so it is not asked again. */
+export const markSwcodeBaseAsked = (): void => {
+  asked.skill = SKILL_NAME;
+  writeStored(ASKED_KEY, asked.skill);
 };
 
 /**
@@ -49,8 +49,8 @@ async function ask(method: string, path: string, projectId?: string): Promise<Sw
 }
 
 /**
- * Whether this swcode carries the swcode-base skills, and where they are: with a project, whether that one has
- * them; without one, the home alone, which is what the startup offer asks about.
+ * Where swcode-base is: with a project, whether that one or its host's home has it; without one, this computer's
+ * home alone, which is what the startup offer asks about.
  */
 export const readSwcodeBase = (projectId?: string): Promise<SwcodeBaseStatus | undefined> =>
   ask('GET', ENDPOINTS.swcodeBase, projectId);
@@ -63,8 +63,9 @@ const SWCODE_BASE_ENDPOINTS: Readonly<Record<SwcodeBasePlace, string>> = {
 const SWCODE_BASE_INSTALLS: Readonly<Record<SwcodeBasePlace, string>> = { home: 'PUT', project: 'POST' };
 
 /**
- * Writes them in the place, on the project's host: its home, or the project itself; this computer's home without a
- * project. What is there once they were.
+ * Has the daemon install swcode-base with npx skills in the place, on the project's host: its home, or the project
+ * itself; this computer's home without a project. Where it is once it was: npx fetches it from GitHub, which takes a
+ * few seconds.
  */
 export const installSwcodeBase = (
   place: SwcodeBasePlace,
@@ -72,29 +73,37 @@ export const installSwcodeBase = (
 ): Promise<SwcodeBaseStatus | undefined> =>
   ask(SWCODE_BASE_INSTALLS[place], SWCODE_BASE_ENDPOINTS[place], projectId);
 
-/** Takes them out of the place, as `installSwcodeBase` puts them in: what is there once they left. */
+/** Takes it out of the place with npx skills, as `installSwcodeBase` puts it in: where it is once it left. */
 export const removeSwcodeBase = (
   place: SwcodeBasePlace,
   projectId?: string
 ): Promise<SwcodeBaseStatus | undefined> => ask('DELETE', SWCODE_BASE_ENDPOINTS[place], projectId);
 
+/** Installs swcode-base in this computer's home, as the offer's action does: why it could not, in a toast. */
+async function installInHome(): Promise<void> {
+  const installed = await installSwcodeBase('home');
+  const problem = installed === undefined ? UNREACHABLE : installed.problem;
+  if (problem !== undefined) {
+    toast({ heading: problem, tone: 'danger' });
+  }
+}
+
 /**
- * Asks once, for each pack, whether to install it: on a machine where neither the home nor any project has a
- * skill. Its action installs the skills in the home; closing the toast asks again on another device, or after the
- * pack changes.
+ * Asks once whether to install swcode-base, on a device where this computer's home does not have it. Its action has
+ * npx skills install it in the home; closing the toast asks again on another device only.
  */
 export function offerSwcodeBase(status: SwcodeBaseStatus): void {
   if (!wantsSwcodeBase(status)) {
     return;
   }
-  markSwcodeBaseAsked(status);
+  markSwcodeBaseAsked();
   toast({
     actionLabel: 'Install',
     duration: 0,
-    heading: 'swcode comes with skills',
+    heading: 'swcode has a skill of coding rules',
     icon: 'book-open',
-    onAction: () => void installSwcodeBase('home'),
-    text: 'No skill was found in ~/.agents/skills nor in a project. Install the swcode-base skills in your home?',
+    onAction: () => void installInHome(),
+    text: 'swcode-base is not in your ~/.agents/skills. Install it there with npx skills, for every project?',
     tone: 'info',
   });
 }

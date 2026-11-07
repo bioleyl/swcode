@@ -2,26 +2,10 @@
 // built with -tags embedweb.
 package swcode
 
-import (
-	"embed"
-	"io/fs"
-)
+import "embed"
 
 //go:embed scripts/wsl
 var windowsFiles embed.FS
-
-//go:embed all:skills
-var swcodeBase embed.FS
-
-// SwcodeBaseSkills is the swcode-base skills the program carries, as a folder of skills each with its SKILL.md; the app
-// offers them to a person whose machine has none.
-func SwcodeBaseSkills() fs.FS {
-	skills, err := fs.Sub(swcodeBase, "skills")
-	if err != nil {
-		panic(err)
-	}
-	return skills
-}
 
 //go:embed web/public/swcode.ico
 var icon []byte

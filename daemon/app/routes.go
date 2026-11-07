@@ -250,8 +250,8 @@ func (a *App) settingsProblem(values map[string]string) string {
 }
 
 // skillRoutes are a project's page's: the skills its sessions find, read on its host as a turn reads them, and the
-// swcode-base skills the program carries, installed in the home or in the project, on the project's host, or taken
-// out of either.
+// swcode-base skill, which the skills CLI installs in the home or in the project, on the project's host, or takes out
+// of either.
 func (a *App) skillRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET "+protocol.EndpointSkills, func(response http.ResponseWriter, request *http.Request) {
 		project, found := a.Projects.ByID(request.URL.Query().Get(protocol.ProjectParam))
@@ -278,8 +278,8 @@ func (a *App) skillRoutes(mux *http.ServeMux) {
 	})
 }
 
-// projectOf is the project the request names, or nothing: without one, the swcode-base skills answer for this
-// computer's home alone.
+// projectOf is the project the request names, or nothing: without one, swcode-base answers for this computer's home
+// alone.
 func (a *App) projectOf(request *http.Request) *protocol.Project {
 	project, found := a.Projects.ByID(request.URL.Query().Get(protocol.ProjectParam))
 	if !found {

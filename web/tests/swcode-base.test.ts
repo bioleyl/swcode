@@ -5,11 +5,9 @@ import { isSwcodeBaseIn } from '../src/lib/swcode-base';
 import type { SwcodeBaseStatus } from '../../shared/protocol/skill.schema';
 
 const status = (inHome: boolean, inProject: boolean): SwcodeBaseStatus => ({
-  carried: true,
   inHome,
   inProject,
   installed: inHome || inProject,
-  names: ['swcode-base'],
 });
 
 describe('isSwcodeBaseIn', () => {

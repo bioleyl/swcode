@@ -99,7 +99,7 @@ type App struct {
 	Models *models.Service
 	// Updates looks for a newer version every 10 minutes, and installs it.
 	Updates *update.Service
-	// SwcodeBase are the swcode-base skills the program carries, and where they are.
+	// SwcodeBase is where the swcode-base skill is, and the skills CLI that installs it.
 	SwcodeBase *swcodebase.Service
 	Token      string
 	LanURLs    []string
@@ -194,7 +194,7 @@ func New(settings config.Config, options Options) (*App, error) {
 	app := &App{
 		LanURLs: LANURLs(settings.Host, settings.Port, options.Interfaces()), Token: token,
 		Models: modelService, config: settings, hosts: registry, http: options.HTTP,
-		SwcodeBase:   swcodebase.NewService(registry),
+		SwcodeBase:   swcodebase.NewService(registry, logger),
 		imagesFolder: filepath.Join(settings.DataDir, imagesFolder), logger: logger, options: options, workspace: workspace,
 		pairing: pairing.New(filepath.Join(settings.DataDir, devicesFile), options.Now, options.NewID),
 	}

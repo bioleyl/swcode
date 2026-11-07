@@ -715,26 +715,15 @@ type SkillSummary struct {
 }
 
 type SwcodeBaseStatus struct {
-	Carried   bool     `json:"carried"`
-	InHome    bool     `json:"inHome"`
-	InProject bool     `json:"inProject"`
-	Installed bool     `json:"installed"`
-	Names     []string `json:"names"`
-	Problem   string   `json:"problem,omitempty"`
-}
-
-func (v SwcodeBaseStatus) MarshalJSON() ([]byte, error) {
-	type plain SwcodeBaseStatus
-	p := plain(v)
-	if p.Names == nil {
-		p.Names = []string{}
-	}
-	return json.Marshal(p)
+	InHome    bool   `json:"inHome"`
+	InProject bool   `json:"inProject"`
+	Installed bool   `json:"installed"`
+	Problem   string `json:"problem,omitempty"`
 }
 
 func (v *SwcodeBaseStatus) UnmarshalJSON(data []byte) error {
 	type plain SwcodeBaseStatus
-	p := plain{Carried: false, InHome: false, InProject: false, Installed: false}
+	p := plain{InHome: false, InProject: false, Installed: false}
 	if err := json.Unmarshal(data, &p); err != nil {
 		return err
 	}

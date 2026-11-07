@@ -1,0 +1,17 @@
+{
+  "name": "swcode-base",
+  "version": "0.5.0",
+  "description": "Coding rules for any project and language, with a check of the agent's own diff before it delivers, and the project's AGENTS.md kept without being asked: the skill swcode's agent works by.",
+  "author": {
+    "name": "Leal Bioley"
+  },
+  "homepage": "https://github.com/bioleyl/swcode",
+  "repository": "https://github.com/bioleyl/swcode",
+  "license": "MIT",
+  "keywords": [
+    "coding-style",
+    "code-review",
+    "solid",
+    "agents-md"
+  ]
+}

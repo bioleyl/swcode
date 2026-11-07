@@ -2,6 +2,12 @@
 
 All notable changes to swcode are documented here.
 
+## [Unreleased]
+
+### Changed
+
+- swcode-base is no longer inside the program: swcode's repository publishes it, as a Claude Code plugin (`/plugin marketplace add bioleyl/swcode`, then `/plugin install swcode-base@swcode`) and for skills.sh (`npx skills add bioleyl/swcode`). A project's page installs it and takes it out with the skills CLI, on the project's host, which then needs Node.js 22.20 or later; why the CLI failed shows in a toast.
+
 ## [0.5.0] - 2026-11-07
 
 ### Added
@@ -101,6 +107,7 @@ All notable changes to swcode are documented here.
 - Updated release workflow actions for Node 24.
 - Added protocol validation for numeric bounds and optional numbers.
 
+[Unreleased]: https://github.com/bioleyl/swcode/compare/v0.5.0...HEAD
 [0.5.0]: https://github.com/bioleyl/swcode/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/bioleyl/swcode/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/bioleyl/swcode/compare/v0.2.0...v0.3.0
