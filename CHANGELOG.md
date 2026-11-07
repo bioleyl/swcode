@@ -2,7 +2,7 @@
 
 All notable changes to swcode are documented here.
 
-## [Unreleased]
+## [0.5.0] - 2026-11-07
 
 ### Added
 
@@ -10,6 +10,10 @@ All notable changes to swcode are documented here.
 - A session starts from the project's notes: the AGENTS.md files from the repository's root down to the session's folder go to the model with its first message, and again after a compaction. The conversation shows them folded.
 - swcode-base has the agent keep the project's AGENTS.md without being asked: it goes by the notes before exploring, writes the first ones of a project that has none, and adds what each task found out.
 - A notes tool: the agent adds what it found out to the project's AGENTS.md in one call, each note at the end of its section, and makes the file when there is none. Its description asks for it unasked, so the agent keeps the notes even without swcode-base.
+
+### Changed
+
+- Saving the settings file, from the settings page or the SSH hosts, asks first where swcode restarts by itself on it: the sessions open at that moment can break with the restart. Run in a terminal, where you restart it yourself, swcode saves without asking.
 
 ### Fixed
 
@@ -97,7 +101,7 @@ All notable changes to swcode are documented here.
 - Updated release workflow actions for Node 24.
 - Added protocol validation for numeric bounds and optional numbers.
 
-[Unreleased]: https://github.com/bioleyl/swcode/compare/v0.4.0...HEAD
+[0.5.0]: https://github.com/bioleyl/swcode/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/bioleyl/swcode/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/bioleyl/swcode/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/bioleyl/swcode/compare/v0.1.0...v0.2.0
