@@ -3,6 +3,8 @@ import { basename, join } from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { E2E_VERSION } from './e2e.constants.js';
+import { programOf } from './fake-releases.js';
 import { startRig } from './rig.js';
 
 import type { Locator, Page } from 'playwright-core';
@@ -856,6 +858,44 @@ describe('settings', () => {
   });
 });
 
+describe('updates', () => {
+  const release = { notes: '## Highlights\n\n- swcode updates itself.', version: '0.2.0' };
+  const offer = 'swcode 0.2.0 is out';
+  const iphone =
+    'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148';
+
+  it('are offered once on a computer, then installed from the settings in place of the program', async () => {
+    const rig = await start({ release, replies: [] });
+    const page = await rig.browser.newPage({ viewport: DESKTOP });
+    await page.goto(rig.link);
+    await page.getByText(offer).waitFor();
+    await page.reload();
+    await settingsLink(page).click();
+    await settle(page);
+    await topicTab(page, 'Updates').click();
+    await settle(page);
+    const updates = page.locator('sc-update-settings');
+    await updates.getByRole('heading', { exact: true, name: 'swcode 0.2.0' }).waitFor();
+    expect(await page.getByText(offer).count()).toBe(0);
+    expect(await updates.getByText(E2E_VERSION).isVisible()).toBe(true);
+    expect(await updates.getByText('swcode updates itself.').isVisible()).toBe(true);
+    await updates.getByRole('button', { name: 'Install 0.2.0' }).click();
+    await updates.getByText('swcode 0.2.0 is installed: restart swcode for it to run.').waitFor();
+    expect(readFileSync(rig.program, 'utf8')).toBe(programOf(release));
+  });
+
+  it('are never offered on a phone, whose settings have no Updates', async () => {
+    const rig = await start({ release, replies: [] });
+    const page = await rig.browser.newPage({ userAgent: iphone, viewport: PHONE });
+    await page.goto(rig.link);
+    await tab(page, 'Settings').click();
+    await settle(page);
+    await topicTab(page, 'Models', true).waitFor();
+    expect(await topicTab(page, 'Updates').count()).toBe(0);
+    expect(await page.getByText(offer).count()).toBe(0);
+  });
+});
+
 describe('the command palette', () => {
   it('opens on Ctrl K and goes to a session found by its title', async () => {
     const rig = await start({ replies: [{ text: 'Tidied.' }] });
@@ -1075,7 +1115,7 @@ describe('the side panel', () => {
     const title = await page.locator('session-page header sc-title button').boundingBox();
     const path = await page.locator('session-page header .chip').boundingBox();
     expect((title?.x ?? 0) + (title?.width ?? 0)).toBeLessThanOrEqual(path?.x ?? 0);
-    expect(await page.locator('session-page sc-side-panel .version').textContent()).toBe('swcode dev');
+    expect(await page.locator('session-page sc-side-panel .version').textContent()).toBe(`swcode ${E2E_VERSION}`);
     const server = page.locator('session-page sc-side-panel .server');
     await server.locator('.state', { hasText: 'Connected' }).waitFor();
     expect(await server.count()).toBe(1);

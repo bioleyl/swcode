@@ -29,9 +29,9 @@ irm https://raw.githubusercontent.com/bioleyl/swcode/main/install.ps1 | iex
 
 or download `swcode-desktop.exe` from the latest release and open it. Either way it installs itself in
 `%LOCALAPPDATA%\Programs\swcode`, makes its Start menu and desktop shortcuts and starts, then lives in the
-notification area. To update it, quit it (Quit swcode, in the icon's menu) and do the same again. The program is not
-signed: the first time, Windows may say it protected your PC (More info, then Run anyway). More in
-[On Windows](#on-windows).
+notification area. It asks before installing each newer version ([Updates](#updates)); doing the same again, once it
+is quit (Quit swcode, in the icon's menu), updates it too. The program is not signed: the first time, Windows may say
+it protected your PC (More info, then Run anyway). More in [On Windows](#on-windows).
 
 ### Linux, WSL and macOS: the command line
 
@@ -42,7 +42,8 @@ curl -fsSL https://raw.githubusercontent.com/bioleyl/swcode/main/install.sh | sh
 downloads the program built for this machine (Linux or macOS, x86-64 or ARM), checks it against the release's
 checksums and installs it as `~/.local/bin/swcode`, keeping the `LLAMA_*` and `SWCODE_*` settings set in the
 environment. In WSL it also adds a shortcut to Windows' Start menu, and asks (UAC) for the firewall rule phones need.
-The same command updates it. Then:
+The same command updates it, and swcode asks before installing each newer version itself ([Updates](#updates)).
+Then:
 
 ```bash
 swcode
@@ -385,7 +386,7 @@ Phone: the QR code pairs the phone, as above.
 ## Settings
 
 The settings page (the cog at the foot of the navigation) has a tab for each topic: the models, thinking, projects,
-SSH hosts, pictures, the network, the phones, how it starts and the other computers. Thinking, projects, SSH,
+SSH hosts, pictures, the network, the phones, how it starts, the other computers and updates. Thinking, projects, SSH,
 pictures and the network are kept in `~/.swcode/settings.env` (`KEY=value` lines), which the page writes (the SSH
 hosts, a list, as they change; the others together, with Save): saving restarts the daemon on them when it runs in
 the background (`swcode`) or in the desktop app, and waits while a session works. The environment's own come on
@@ -408,6 +409,16 @@ top, for one command; the page shows those as set in the environment.
 | `SWCODE_TOKEN` | created once, kept in the data folder | The access token every API call and the socket need. |
 | `SWCODE_PUBLIC_URL` | `http://host:port` | The address the printed link uses. |
 | `SWCODE_WEB_DIR` | the app inside the program, else `dist/web` | The built web app. |
+| `SWCODE_RELEASES_URL` | swcode's latest release in GitHub's API | Where swcode looks for a newer version: a fork's own releases. |
+
+### Updates
+
+swcode looks for a newer release on GitHub as it starts and every 10 minutes; Settings → Updates turns that off, and
+looks now. When one is out, a computer's page asks once whether to install it, and Settings → Updates shows what it
+brings, to install it later; a phone is never asked. Installing downloads the program built for that machine, checks
+it against the release's `SHA256SUMS` and puts it in place of the one that runs: swcode in the background (`swcode`)
+and the desktop app restart on it, waiting while a session works; run in a terminal (`swcode serve`, a systemd
+service), it goes on until you restart it. A development build (`dev`, run from the sources) never looks.
 
 ## How it works
 

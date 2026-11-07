@@ -20,14 +20,17 @@ import (
 	"swcode/daemon/cli"
 	"swcode/daemon/config"
 	"swcode/daemon/protocol"
+	"swcode/daemon/update"
 )
 
-// Outcome is how the daemon ended: stopped, or to start again on new settings.
+// Outcome is how the daemon ended: stopped, to start again on new settings, or on a newer version put in place of
+// the program.
 type Outcome int
 
 const (
 	Stopped Outcome = iota
 	Restart
+	Updated
 )
 
 // Options is how the daemon runs.
@@ -44,6 +47,8 @@ type Options struct {
 	Ready func(link string)
 	// Startup starts the daemon with its computer: the Windows app's.
 	Startup app.StartupPort
+	// Program is what installing a newer version replaces: the program the daemon runs in.
+	Program update.Program
 }
 
 func logOf(options Options) (io.Writer, func(), error) {
@@ -75,8 +80,10 @@ func Run(settings config.Config, options Options) (Outcome, error) {
 		FindBrowser: browser.Find,
 		Home:        options.Home,
 		Log:         log,
-		OnRestart:   restartOf(options, ended),
+		OnRestart:   endingOf(options, ended, Restart),
 		OnStop:      func() { ended <- Stopped },
+		OnUpdated:   endingOf(options, ended, Updated),
+		Program:     options.Program,
 		Startup:     options.Startup,
 	})
 	if err != nil {
@@ -106,12 +113,13 @@ func Run(settings config.Config, options Options) (Outcome, error) {
 	return outcome, nil
 }
 
-// restartOf is what new settings do once the daemon closed: in a terminal, the person restarts it.
-func restartOf(options Options, ended chan Outcome) func() {
+// endingOf ends the daemon for new settings or a newer version, to start again on them: in a terminal, the person
+// restarts it.
+func endingOf(options Options, ended chan Outcome, outcome Outcome) func() {
 	if options.Mode == cli.ModeTerminal {
 		return nil
 	}
-	return func() { ended <- Restart }
+	return func() { ended <- outcome }
 }
 
 func wait(ended <-chan Outcome, stop <-chan struct{}) Outcome {

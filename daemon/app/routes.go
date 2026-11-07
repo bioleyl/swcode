@@ -14,7 +14,6 @@ import (
 	"swcode/daemon/hosts"
 	"swcode/daemon/llm"
 	"swcode/daemon/protocol"
-	"swcode/daemon/version"
 )
 
 const (
@@ -53,7 +52,8 @@ func (a *App) statusRoutes(mux *http.ServeMux) {
 		computer, _ := os.Hostname()
 		answer(response, protocol.Status{
 			Computer: computer, LANURLs: a.LanURLs, Llama: a.Models.Status(request.Context()),
-			PublicURL: a.config.PublicURL, Thinking: a.config.Thinking, Version: version.Build, Workspace: a.workspace,
+			PublicURL: a.config.PublicURL, Thinking: a.config.Thinking, Update: a.Updates.Offer(), Version: a.options.Version,
+			Workspace: a.workspace,
 		})
 	})
 }
@@ -161,8 +161,11 @@ func (a *App) modelRoutes(mux *http.ServeMux) {
 	})
 }
 
-func (a *App) restartKind() protocol.Restart {
-	if a.options.OnRestart == nil {
+func (a *App) restartKind() protocol.Restart { return restartOf(a.options.OnRestart) }
+
+// restartOf is how a change applies: the daemon restarts by itself when it has a way, or the person restarts it.
+func restartOf(restart func()) protocol.Restart {
+	if restart == nil {
 		return protocol.RestartPerson
 	}
 	return protocol.RestartSelf

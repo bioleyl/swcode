@@ -1,7 +1,7 @@
 /** biome-ignore-all lint/style/useNamingConvention: environment variable names */
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -11,8 +11,9 @@ import { chromium } from 'playwright-core';
 
 import { ENDPOINTS, TOKEN_PARAM } from '../shared/protocol/endpoints.js';
 import { SessionEventSchema } from '../shared/protocol/session.schema.js';
-import { DAEMON_BINARY, WEB_DIR } from './e2e.constants.js';
+import { DAEMON_BINARY, E2E_RELEASE, WEB_DIR } from './e2e.constants.js';
 import { startFakeLlama } from './fake-llama.js';
+import { startFakeReleases } from './fake-releases.js';
 
 import type { ChildProcess } from 'node:child_process';
 import type { SessionEvent } from '../shared/protocol/session.schema.js';
@@ -27,6 +28,10 @@ const SESSIONS_FOLDER = 'sessions';
 const EVENTS_SUFFIX = '.jsonl';
 const START_TIMEOUT_MS = 20_000;
 const POLL_MS = 50;
+// The latest release when the test sets none: the one the daemon is, which then has nothing newer to offer.
+const SAME_RELEASE = { notes: '', version: E2E_RELEASE };
+// Where a daemon that may install a newer version runs from, in its home: the person's command line is there.
+const PROGRAM_PATH = '.local/bin/swcode';
 
 const writeAll = (folder: string, files: Readonly<Record<string, string>>): void => {
   for (const [path, content] of Object.entries(files)) {
@@ -70,6 +75,17 @@ async function stopDaemon(daemon: ChildProcess): Promise<void> {
   await ended;
 }
 
+/** The daemon's program: the one built for the run, or a copy of its own in its home when an update may replace it. */
+function programIn(home: string, replaceable: boolean): string {
+  if (!replaceable) {
+    return DAEMON_BINARY;
+  }
+  const program = join(home, PROGRAM_PATH);
+  mkdirSync(dirname(program), { recursive: true });
+  copyFileSync(DAEMON_BINARY, program);
+  return program;
+}
+
 /** The events of the daemon's sessions, as it keeps them in its data folder. */
 const eventsIn = (dataDir: string): SessionEvent[] => {
   const folder = join(dataDir, SESSIONS_FOLDER);
@@ -100,9 +116,11 @@ export async function startRig(options: E2eOptions): Promise<E2eRig> {
     slots: options.slots ?? SLOTS,
     vision: options.vision ?? false,
   });
+  const releases = await startFakeReleases(options.release ?? SAME_RELEASE);
+  const program = programIn(home, options.release !== undefined);
   const port = await freePort();
   const chromiumPath = process.env.SWCODE_CHROMIUM;
-  const daemon = spawn(DAEMON_BINARY, ['serve'], {
+  const daemon = spawn(program, ['serve'], {
     env: {
       HOME: home,
       LLAMA_MODEL: model,
@@ -112,6 +130,7 @@ export async function startRig(options: E2eOptions): Promise<E2eRig> {
       SWCODE_ENV: 'test',
       SWCODE_HOST: HOST,
       SWCODE_PORT: String(port),
+      SWCODE_RELEASES_URL: releases.url,
       SWCODE_TOKEN: TOKEN,
       SWCODE_WEB_DIR: WEB_DIR,
       SWCODE_WORKSPACE: workspace,
@@ -129,10 +148,12 @@ export async function startRig(options: E2eOptions): Promise<E2eRig> {
     events: () => eventsIn(dataDir),
     link: `${address}/?${TOKEN_PARAM}=${TOKEN}`,
     llama,
+    program,
     stop: async () => {
       await browser.close();
       await stopDaemon(daemon);
       await llama.stop();
+      await releases.stop();
       rmSync(workspace, { force: true, recursive: true });
       rmSync(dataDir, { force: true, recursive: true });
       rmSync(home, { force: true, recursive: true });

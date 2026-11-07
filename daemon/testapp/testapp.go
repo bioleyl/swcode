@@ -25,6 +25,7 @@ import (
 	"swcode/daemon/hosts"
 	"swcode/daemon/protocol"
 	"swcode/daemon/sessions"
+	"swcode/daemon/update"
 )
 
 const (
@@ -61,6 +62,10 @@ type Options struct {
 	Settings map[string]string
 	// Startup starts the daemon with its computer, as the Windows app does.
 	Startup app.StartupPort
+	// Version is the build the daemon says it is: a release's looks for a newer one (SWCODE_RELEASES_URL).
+	Version string
+	// Program is what installing a newer version replaces.
+	Program update.Program
 }
 
 // App is a daemon under test.
@@ -76,6 +81,7 @@ type App struct {
 	messages  []protocol.ServerMessage
 	restarts  chan struct{}
 	stops     chan struct{}
+	updates   chan struct{}
 }
 
 func write(t *testing.T, root string, files map[string]string) {
@@ -123,7 +129,7 @@ func Start(t *testing.T, options Options) *App {
 	if err != nil {
 		t.Fatal(err)
 	}
-	test := &App{DataDir: dataDir, Home: home, Llama: llama, Workspace: workspace, restarts: make(chan struct{}, 1), stops: make(chan struct{}, 1), t: t}
+	test := &App{DataDir: dataDir, Home: home, Llama: llama, Workspace: workspace, restarts: make(chan struct{}, 1), stops: make(chan struct{}, 1), t: t, updates: make(chan struct{}, 1)}
 	environmentOf := options.Environment
 	if environmentOf == nil {
 		environmentOf = map[string]string{}
@@ -132,7 +138,8 @@ func Start(t *testing.T, options Options) *App {
 		Browser: options.Browser, ConnectHost: options.ConnectHost, Defaults: config.Defaults{Cwd: workspace, Home: home},
 		Environment: environmentOf, Home: home, MaxSteps: options.MaxSteps,
 		OnRestart: func() { test.restarts <- struct{}{} }, OnStop: func() { test.stops <- struct{}{} },
-		Startup: options.Startup,
+		OnUpdated: func() { test.updates <- struct{}{} }, Program: options.Program, Startup: options.Startup,
+		Version: options.Version,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -235,6 +242,16 @@ func (a *App) WaitForRestart() {
 	case <-a.restarts:
 	case <-time.After(waitLimit):
 		a.t.Fatal("no restart")
+	}
+}
+
+// WaitForUpdated waits for a newer version installed to ask the daemon to start again on it.
+func (a *App) WaitForUpdated() {
+	a.t.Helper()
+	select {
+	case <-a.updates:
+	case <-time.After(waitLimit):
+		a.t.Fatal("no restart on the newer version")
 	}
 }
 

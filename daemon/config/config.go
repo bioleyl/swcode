@@ -30,6 +30,9 @@ const (
 	defaultMaxSteps = 150
 	minMaxSteps     = 1
 	maxMaxSteps     = 1000
+
+	// defaultReleases is swcode's latest release in GitHub's API: updates come from there.
+	defaultReleases = "https://api.github.com/repos/bioleyl/swcode/releases/latest"
 )
 
 // The environment's names of the settings.
@@ -46,6 +49,7 @@ const (
 	envNodeEnv          = "NODE_ENV"
 	envPort             = "SWCODE_PORT"
 	envPublicURL        = "SWCODE_PUBLIC_URL"
+	envReleasesURL      = "SWCODE_RELEASES_URL"
 	envShutdownTimeout  = "SWCODE_SHUTDOWN_TIMEOUT_MS"
 	envSSHEndpoints     = "SWCODE_SSH_ENDPOINTS"
 	envSubagentThinking = "SWCODE_SUBAGENT_THINKING"
@@ -92,7 +96,9 @@ type Config struct {
 	MaxSteps int
 	Port     int
 	// The address people open, when it differs from host and port (the Vite server in development).
-	PublicURL         string
+	PublicURL string
+	// The latest release in GitHub's API, which updates come from: a fork's own, or a test's.
+	ReleasesURL       string
 	ShutdownTimeoutMs int
 	// Machines projects can be on, reached over SSH: ssh destinations, by commas or spaces.
 	SSHEndpoints []string
@@ -206,6 +212,7 @@ func Load(environment map[string]string, defaults Defaults) (Config, error) {
 		MaxSteps:           r.number(envMaxSteps, defaultMaxSteps, minMaxSteps, maxMaxSteps),
 		Port:               r.number(envPort, DefaultPort, 1, maxPort),
 		PublicURL:          r.url(envPublicURL, ""),
+		ReleasesURL:        r.url(envReleasesURL, defaultReleases),
 		ShutdownTimeoutMs:  r.number(envShutdownTimeout, defaultShutdown, minShutdown, maxShutdown),
 		SSHEndpoints:       endpoints(r.text(envSSHEndpoints)),
 		SubagentThinking:   r.thinking(envSubagentThinking, subagentThinking),

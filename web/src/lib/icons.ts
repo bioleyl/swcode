@@ -13,6 +13,7 @@ import {
   ChevronRight,
   Circle,
   CircleAlert,
+  CircleArrowUp,
   CircleQuestionMark,
   Copy,
   CornerLeftUp,
@@ -98,6 +99,8 @@ const ICONS = {
   'chevron-right': ChevronRight,
   circle: Circle,
   'circle-alert': CircleAlert,
+  // A newer version of swcode, to install.
+  'circle-arrow-up': CircleArrowUp,
   'circle-question': CircleQuestionMark,
   copy: Copy,
   'corner-left-up': CornerLeftUp,

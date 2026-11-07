@@ -23,6 +23,8 @@ import (
 	"swcode/daemon/local"
 	"swcode/daemon/protocol"
 	"swcode/daemon/serve"
+	"swcode/daemon/update"
+	"swcode/desktop/selfinstall"
 )
 
 const (
@@ -44,6 +46,8 @@ const (
 type daemon struct {
 	stopping atomic.Bool
 	startup  startupEntry
+	// exe is this program: an update puts its newer version in its place.
+	exe string
 }
 
 // daemonRun is one run of the server, once it listens: run inside this program, or the daemon alone (--daemon),
@@ -80,7 +84,7 @@ func newDaemon(exe string) (*daemon, error) {
 	if err := windows.AssignProcessToJobObject(job, windows.CurrentProcess()); err != nil {
 		return nil, err
 	}
-	return &daemon{startup: startupEntry{exe: exe}}, nil
+	return &daemon{exe: exe, startup: startupEntry{exe: exe}}, nil
 }
 
 // loadSettings is the settings saved now, the environment's on top, and that environment.
@@ -142,6 +146,7 @@ func (d *daemon) start() (*daemonRun, error) {
 			Home:        home,
 			LogFile:     local.LogFileOf(settings),
 			Mode:        cli.ModeDesktop,
+			Program:     update.Program{File: selfinstall.ProgramName, Path: d.exe},
 			Ready:       func(link string) { links <- link },
 			Startup:     d.startup,
 			Stop:        run.stop,
@@ -205,6 +210,12 @@ func (r *daemonRun) token() string { return r.link.Query().Get(protocol.TokenPar
 func (r *daemonRun) restarts() bool {
 	<-r.done
 	return r.err == nil && r.outcome == serve.Restart
+}
+
+// updated tells whether the run ended for a newer version, put in place of this program: the new one starts then.
+func (r *daemonRun) updated() bool {
+	<-r.done
+	return r.err == nil && r.outcome == serve.Updated
 }
 
 // problem is why the run ended, when it failed.

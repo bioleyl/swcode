@@ -520,13 +520,17 @@ func (w *window) destroyed(_, _, _ uintptr) uintptr {
 	return 0
 }
 
-// daemonEnded: the server ended by itself. On new settings it starts again; asked to stop from elsewhere, the
-// window closes with it; a failure is said first.
+// daemonEnded: the server ended by itself. On new settings it starts again; for a newer version, the new program
+// starts in place of this one; asked to stop from elsewhere, the window closes with it; a failure is said first.
 func (w *window) daemonEnded(_, _, _ uintptr) uintptr {
 	ended := w.current
 	w.current = nil
 	if ended.restarts() {
 		go w.startAgain()
+		return 0
+	}
+	if ended.updated() {
+		w.startUpdated()
 		return 0
 	}
 	if err := ended.problem(); err != nil {

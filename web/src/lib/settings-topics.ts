@@ -11,6 +11,7 @@ export const SETTINGS_TOPICS = [
   'phone',
   'startup',
   'computers',
+  'updates',
 ] as const;
 export type SettingsTopic = (typeof SETTINGS_TOPICS)[number];
 
@@ -30,6 +31,7 @@ export const SETTINGS_TOPIC_LABELS: Readonly<Record<SettingsTopic, { label: stri
   ssh: { icon: 'server', label: 'SSH' },
   startup: { icon: 'power', label: 'Startup' },
   thinking: { icon: 'brain', label: 'Thinking' },
+  updates: { icon: 'circle-arrow-up', label: 'Updates' },
 };
 
 export const isSettingsTopic = (value: string | null | undefined): value is SettingsTopic =>

@@ -11,6 +11,7 @@ import (
 	"swcode/daemon/local"
 	"swcode/daemon/remote"
 	"swcode/daemon/serve"
+	"swcode/daemon/update"
 	"swcode/daemon/version"
 )
 
@@ -36,11 +37,21 @@ func settings(environment map[string]string) config.Config {
 	return loaded
 }
 
+// commandLine is the program that runs, as an update replaces it: nothing is replaced when it cannot say where it
+// is.
+func commandLine() update.Program {
+	path, err := os.Executable()
+	if err != nil {
+		return update.Program{}
+	}
+	return update.CommandLine(path)
+}
+
 func runServe(command cli.Command, environment map[string]string) int {
 	loaded := settings(environment)
 	where := place(environment)
 	cwd, _ := os.Getwd()
-	options := serve.Options{Cwd: cwd, Environment: environment, Home: where.Home, Mode: command.Mode}
+	options := serve.Options{Cwd: cwd, Environment: environment, Home: where.Home, Mode: command.Mode, Program: commandLine()}
 	if command.Mode != cli.ModeTerminal {
 		options.LogFile = local.LogFileOf(loaded)
 	}
@@ -49,10 +60,10 @@ func runServe(command cli.Command, environment map[string]string) int {
 		fmt.Fprintln(os.Stderr, err)
 		return failed
 	}
-	if outcome != serve.Restart {
+	if outcome == serve.Stopped {
 		return 0
 	}
-	// For a restart, a daemon in the background starts the next one.
+	// For a restart, on new settings or a newer version, a daemon in the background starts the next one.
 	if !local.StartInBackground(where) {
 		return failed
 	}

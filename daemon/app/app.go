@@ -27,6 +27,8 @@ import (
 	"swcode/daemon/protocol"
 	"swcode/daemon/sessions"
 	"swcode/daemon/tools"
+	"swcode/daemon/update"
+	"swcode/daemon/version"
 	"swcode/daemon/web"
 )
 
@@ -40,6 +42,8 @@ const (
 	// devicesFile is the paired phones, their tokens kept as hashes.
 	devicesFile  = "devices.json"
 	projectsFile = "projects.json"
+	// updatesFile keeps whether to look for a newer version every 10 minutes.
+	updatesFile = "updates.json"
 	// maxSubagentSteps: a subagent answers one question, it needs fewer steps, and the main agent waits for it.
 	maxSubagentSteps = 30
 	defaultWebDir    = "dist/web"
@@ -76,6 +80,13 @@ type Options struct {
 	Busy func() bool
 	// Startup starts the daemon with its computer: only the Windows app has one.
 	Startup StartupPort
+	// Program is what installing a newer version replaces: the program the daemon runs in.
+	Program update.Program
+	// OnUpdated is what installing a newer version does once it is in place: the program starts again on it.
+	// Without it, the person restarts it.
+	OnUpdated func()
+	// Version stands in for the build's (the tests give a release's).
+	Version string
 }
 
 // App is a daemon, ready to serve.
@@ -84,7 +95,9 @@ type App struct {
 	Sessions *sessions.Service
 	Projects *projects.Service
 	// Models is the llm-servers and the presets sessions pick from them.
-	Models  *models.Service
+	Models *models.Service
+	// Updates looks for a newer version every 10 minutes, and installs it.
+	Updates *update.Service
 	Token   string
 	LanURLs []string
 
@@ -96,6 +109,7 @@ type App struct {
 	hosts        *hosts.Registry
 	pairing      *pairing.Pairing
 	logger       *slog.Logger
+	stopWatching context.CancelFunc
 }
 
 // NewID is a random UUID, as sessions and projects are named.
@@ -128,6 +142,9 @@ func (o *Options) fill() {
 	}
 	if o.Log == nil {
 		o.Log = io.Discard
+	}
+	if o.Version == "" {
+		o.Version = version.Build
 	}
 }
 
@@ -219,8 +236,21 @@ func New(settings config.Config, options Options) (*App, error) {
 	if app.options.Busy == nil {
 		app.options.Busy = func() bool { return anyWorking(service.List()) }
 	}
+	app.watchUpdates(settings, logError)
 	app.Handler = app.routes()
 	return app, nil
+}
+
+// watchUpdates looks for a newer version now and every 10 minutes, until the daemon closes.
+func (a *App) watchUpdates(settings config.Config, logError func(error)) {
+	a.Updates = update.NewService(update.Deps{
+		File: filepath.Join(settings.DataDir, updatesFile), HTTP: a.options.HTTP, LogError: logError,
+		Now: a.options.Now, Program: a.options.Program, Restart: restartOf(a.options.OnUpdated),
+		Source: settings.ReleasesURL, Version: a.options.Version,
+	})
+	watching, stop := context.WithCancel(context.Background())
+	a.stopWatching = stop
+	go a.Updates.Watch(watching)
 }
 
 func anyWorking(summaries []protocol.SessionSummary) bool {
@@ -255,6 +285,7 @@ func (a *App) routes() http.Handler {
 	a.skillRoutes(mux)
 	a.closingRoutes(mux)
 	a.startupRoutes(mux)
+	a.updateRoutes(mux)
 	mux.HandleFunc("GET "+protocol.EndpointSocket, a.socket)
 	mux.Handle("/", webApp(a.webFiles()))
 	return withAuth(mux, a.Token, a.pairing)
@@ -262,6 +293,7 @@ func (a *App) routes() http.Handler {
 
 // Close stops every session's turn and lets go of the hosts, when the daemon stops.
 func (a *App) Close() {
+	a.stopWatching()
 	a.Sessions.StopAll()
 	a.hosts.Close()
 }

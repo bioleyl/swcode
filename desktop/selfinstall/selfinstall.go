@@ -12,7 +12,8 @@ import (
 const (
 	programsFolder = "Programs"
 	appFolder      = "swcode"
-	programName    = "swcode-desktop.exe"
+	// ProgramName is the desktop app's program, as its releases name it too.
+	ProgramName = "swcode-desktop.exe"
 	// The new program is written beside the old one first: a copy that fails leaves the old one whole.
 	partialSuffix = ".new"
 	folderMode    = 0o755
@@ -21,7 +22,7 @@ const (
 
 // Target is where the app lives: %LOCALAPPDATA%\Programs\swcode\swcode-desktop.exe, as per-user installers put them.
 func Target(localAppData string) string {
-	return filepath.Join(localAppData, programsFolder, appFolder, programName)
+	return filepath.Join(localAppData, programsFolder, appFolder, ProgramName)
 }
 
 // Installed tells whether the program runs from there already: Windows paths ignore case.
