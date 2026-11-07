@@ -104,7 +104,7 @@ func TestFollowingADaemonTellsWhenASessionNeedsItsPersonThenFinishes(t *testing.
 		t.Fatalf("found %+v", asked)
 	}
 	request := test.WaitForEvent("permissionRequested", 1).Value.(protocol.SessionEventPermissionRequested)
-	if problem := test.App.Sessions.AnswerPermission(session.ID, request.RequestID, protocol.PermissionDecisionAllowOnce); problem != "" {
+	if problem := test.App.Sessions.Answer(session.ID, request.RequestID, sessions.Permission(protocol.PermissionDecisionAllowOnce)); problem != "" {
 		t.Fatal(problem)
 	}
 	if done := next(t, notices); done.Kind != watch.Finished || done.Text != "It printed hello." {

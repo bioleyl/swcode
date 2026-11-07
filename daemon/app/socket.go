@@ -68,11 +68,11 @@ func (h handlers) problem(text string) struct{} {
 }
 
 func (h handlers) AnswerPermission(message protocol.ClientMessageAnswerPermission) struct{} {
-	return h.problem(h.app.Sessions.AnswerPermission(message.SessionID, message.RequestID, message.Decision))
+	return h.problem(h.app.Sessions.Answer(message.SessionID, message.RequestID, sessions.Permission(message.Decision)))
 }
 
 func (h handlers) AnswerQuestion(message protocol.ClientMessageAnswerQuestion) struct{} {
-	return h.problem(h.app.Sessions.AnswerQuestion(message.SessionID, message.RequestID, message.Answers))
+	return h.problem(h.app.Sessions.Answer(message.SessionID, message.RequestID, sessions.Answers(message.Answers)))
 }
 
 func (h handlers) ClearQueue(message protocol.ClientMessageClearQueue) struct{} {

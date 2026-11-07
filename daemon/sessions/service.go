@@ -113,12 +113,17 @@ type Request struct {
 	Concise bool
 }
 
-// pending is what a turn waits for from a person: a permission, or answers to the agent's questions.
+// pending is what a turn waits for from a person: a permission, or answers to the agent's questions. The answer
+// comes back on waiting, whichever way it comes: the person's, or the turn's stopping, which settles it with a no.
 type pending struct {
 	requestID string
-	question  bool
-	decide    func(protocol.PermissionDecision)
-	answer    func([]string)
+	// waitsFor says whether an answer is the kind this request waits for, so a question's answer never settles a
+	// permission.
+	waitsFor func(answer) bool
+	// settle takes the answer on the turn's behalf: it clears the request, records the answer, and acts on a
+	// permission allowed for the session. The service calls it with its lock held; it is also how the turn's own
+	// stopping settles the request with a no.
+	settle func(answer)
 }
 
 type runningTurn struct {
@@ -452,24 +457,33 @@ func (s *Service) SendPrompt(sessionID, text string, uploads []protocol.PictureU
 	})
 }
 
-func (s *Service) AnswerPermission(sessionID, requestID string, decision protocol.PermissionDecision) string {
+// Permission is a person's answer to a permission the agent asked for.
+func Permission(decision protocol.PermissionDecision) answer { return answer{decision: decision} }
+
+// Answers is a person's answers to the agent's questions.
+func Answers(answers []string) answer { return answer{answers: append([]string{}, answers...)} }
+
+// Answer answers what the turn of a session asked a person: a permission, or the agent's questions. The turn takes
+// it through the request it holds, which records the answer and lets the turn go on.
+func (s *Service) Answer(sessionID, requestID string, answer answer) string {
 	return s.withSession(sessionID, func(session *live) string {
-		if session.turn == nil || session.turn.pending == nil || session.turn.pending.question || session.turn.pending.requestID != requestID {
+		settle := session.turn.settleOf(requestID, answer)
+		if settle == nil {
 			return alreadyAnswered
 		}
-		session.turn.pending.decide(decision)
+		settle(answer)
 		return ""
 	})
 }
 
-func (s *Service) AnswerQuestion(sessionID, requestID string, answers []string) string {
-	return s.withSession(sessionID, func(session *live) string {
-		if session.turn == nil || session.turn.pending == nil || !session.turn.pending.question || session.turn.pending.requestID != requestID {
-			return alreadyAnswered
-		}
-		session.turn.pending.answer(answers)
-		return ""
-	})
+// settleOf is how the turn takes an answer: the request it still waits for, when that request takes an answer of
+// this kind and bears this id; nil otherwise, which is how an answer too late or of the wrong kind is refused. The
+// caller holds the service's lock.
+func (t *runningTurn) settleOf(requestID string, got answer) func(answer) {
+	if t == nil || t.pending == nil || t.pending.requestID != requestID || !t.pending.waitsFor(got) {
+		return nil
+	}
+	return t.pending.settle
 }
 
 // Stop stops the running turn; what was queued for after it goes too, since people stop to think again.

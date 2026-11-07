@@ -31,23 +31,9 @@ func TitleFrom(text string) string {
 	return string(runes[:titleLength-1]) + ellipsis
 }
 
-// unfinishedTurn is the turn that started and never finished, when the daemon stopped in the middle of it.
-func unfinishedTurn(events []protocol.SessionEvent) string {
-	finished := map[string]bool{}
-	started := ""
-	for _, event := range events {
-		switch value := event.Value.(type) {
-		case protocol.SessionEventTurnFinished:
-			finished[value.ID] = true
-		case protocol.SessionEventTurnStarted:
-			started = value.ID
-		}
-	}
-	if started == "" || finished[started] {
-		return ""
-	}
-	return started
-}
+// unfinishedTurn is the turn that started and never finished, when the daemon stopped in the middle of it: the
+// events of the last turn say it, the way the agent rebuilds its conversation from them.
+func unfinishedTurn(events []protocol.SessionEvent) string { return agent.TurnRunning(events) }
 
 // lastActivity is when a session last did something: its last event, or its making.
 func lastActivity(meta Meta, events []protocol.SessionEvent) string {

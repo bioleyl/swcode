@@ -50,7 +50,7 @@ func prompt(t *testing.T, test *App, text string) string {
 func answerNext(t *testing.T, test *App, sessionID string, decision protocol.PermissionDecision, count int) {
 	t.Helper()
 	request := test.WaitForEvent("permissionRequested", count).Value.(protocol.SessionEventPermissionRequested)
-	if problem := test.App.Sessions.AnswerPermission(sessionID, request.RequestID, decision); problem != "" {
+	if problem := test.App.Sessions.Answer(sessionID, request.RequestID, sessions.Permission(decision)); problem != "" {
 		t.Fatal(problem)
 	}
 }
@@ -227,10 +227,10 @@ func TestTheAgentAsksThePersonItsQuestionsWaitsAndGivesTheModelTheirAnswers(t *t
 	if test.App.Sessions.List()[0].Status != protocol.SessionStatusWaiting {
 		t.Fatal("not waiting")
 	}
-	if problem := test.App.Sessions.AnswerQuestion(sessionID, "another", []string{"Map"}); !strings.Contains(problem, "answered") {
+	if problem := test.App.Sessions.Answer(sessionID, "another", sessions.Answers([]string{"Map"})); !strings.Contains(problem, "answered") {
 		t.Fatalf("got %q", problem)
 	}
-	if problem := test.App.Sessions.AnswerQuestion(sessionID, asked.RequestID, []string{"Map"}); problem != "" {
+	if problem := test.App.Sessions.Answer(sessionID, asked.RequestID, sessions.Answers([]string{"Map"})); problem != "" {
 		t.Fatal(problem)
 	}
 	test.UntilIdle(sessionID)

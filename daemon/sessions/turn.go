@@ -163,7 +163,7 @@ func (s *Service) hostFor(session *live, turn *runningTurn, ready prepared, sees
 	host := &turnHost{service: s, session: session, turn: turn}
 	host.context = &tools.Context{
 		AskQuestions: func(ctx context.Context, callID string, questions []protocol.Question) []string {
-			return s.askQuestions(ctx, session, turn, callID, questions)
+			return s.ask(ctx, session, turn, questionsAsked{callID: callID, questions: questions, service: s}).answers
 		},
 		Host:        where.host,
 		Images:      s.imagesFor(session),
@@ -223,7 +223,106 @@ func (h *turnHost) NeedsPermission(subject permissions.Subject) bool {
 }
 
 func (h *turnHost) AskPermission(ctx context.Context, ask agent.PermissionAsk) protocol.PermissionDecision {
-	return h.service.askPermission(ctx, h.session, h.turn, ask)
+	return h.service.ask(ctx, h.session, h.turn, permissionAsk{ask: ask, service: h.service}).decision
+}
+
+func (h *turnHost) AskQuestions(ctx context.Context, callID string, questions []protocol.Question) []string {
+	return h.service.ask(ctx, h.session, h.turn, questionsAsked{callID: callID, questions: questions, service: h.service}).answers
+}
+
+// asked is what a turn asks a person, and how the turn takes the answer once it comes: the service records the
+// request and the answer, publishes the session, and does what the answer means for the session.
+type asked interface {
+	// request is the event of asking, with what the person is asked in it.
+	request(id string) protocol.SessionEventVariant
+	// no is the answer of a turn that stopped before anyone answered.
+	no() answer
+	// settled is the turn taking the answer: recording it, and acting on it. The service holds its lock.
+	settled(session *live, id string, got answer)
+	// waitsFor says whether an answer is one of this kind, so a question's answer never settles a permission and
+	// the answer of a turn that stopped is taken whichever way it comes.
+	waitsFor(got answer) bool
+}
+
+// answer is what a person gives what they were asked: a permission, or answers to the agent's questions. What it
+// holds says which kind of request it answers, so a question's answer never settles a permission.
+type answer struct {
+	// decision is a permission's answer, empty for the agent's questions.
+	decision protocol.PermissionDecision
+	// answers is the agent's questions' answers, nil for a permission.
+	answers []string
+}
+
+// permissionAsk is a permission the agent asked for; allowed for the session, it grants what was asked for the
+// session's whole life.
+type permissionAsk struct {
+	ask     agent.PermissionAsk
+	service *Service
+}
+
+func (a permissionAsk) request(id string) protocol.SessionEventVariant {
+	return protocol.SessionEventPermissionRequested{CallID: a.ask.CallID, Detail: a.ask.Preview, RequestID: id}
+}
+
+func (permissionAsk) no() answer { return answer{decision: protocol.PermissionDecisionDeny} }
+
+func (permissionAsk) waitsFor(got answer) bool { return got.answers == nil }
+
+func (a permissionAsk) settled(session *live, id string, got answer) {
+	a.service.record(session, protocol.SessionEventPermissionAnswered{Decision: got.decision, RequestID: id})
+	if got.decision == protocol.PermissionDecisionAllowSession {
+		granted := permissions.GrantForSession(a.ask.Subject, a.service.grantsOf(session))
+		session.grants = permissions.Grants{Edits: granted.Edits, Programs: granted.Programs}
+	}
+}
+
+// questionsAsked are the agent's questions; stopping the turn answers none of them.
+type questionsAsked struct {
+	callID    string
+	questions []protocol.Question
+	service   *Service
+}
+
+func (q questionsAsked) request(id string) protocol.SessionEventVariant {
+	return protocol.SessionEventQuestionAsked{CallID: q.callID, Questions: q.questions, RequestID: id}
+}
+
+func (questionsAsked) no() answer { return answer{answers: []string{}} }
+
+func (questionsAsked) waitsFor(got answer) bool { return got.answers != nil }
+
+func (q questionsAsked) settled(session *live, id string, got answer) {
+	q.service.record(session, protocol.SessionEventQuestionAnswered{Answers: append([]string{}, got.answers...), RequestID: id})
+}
+
+// ask asks a person something and waits: it records the request, waits for the answer or the turn's stopping, and
+// records the answer it got either way. The service's lock is not held while it waits.
+func (s *Service) ask(ctx context.Context, session *live, turn *runningTurn, what asked) answer {
+	answered := make(chan answer, 1)
+	s.mu.Lock()
+	requestID := s.deps.NewID()
+	settle := func(got answer) {
+		if turn.pending == nil || turn.pending.requestID != requestID {
+			return
+		}
+		turn.pending = nil
+		what.settled(session, requestID, got)
+		s.publishSessions()
+		answered <- got
+	}
+	turn.pending = &pending{requestID: requestID, settle: settle, waitsFor: what.waitsFor}
+	s.record(session, what.request(requestID))
+	s.publishSessions()
+	s.mu.Unlock()
+	select {
+	case got := <-answered:
+		return got
+	case <-ctx.Done():
+		s.mu.Lock()
+		settle(what.no())
+		s.mu.Unlock()
+		return <-answered
+	}
 }
 
 func (h *turnHost) TakeMessages() *agent.PromptMessage { return h.service.takeQueued(h.session) }
@@ -242,68 +341,6 @@ func (s *Service) grantsOf(session *live) permissions.Grants {
 	grants := session.grants
 	grants.Mode = session.meta.Mode
 	return grants
-}
-
-// askPermission waits for a person's answer; stopping the turn counts as a no.
-func (s *Service) askPermission(ctx context.Context, session *live, turn *runningTurn, ask agent.PermissionAsk) protocol.PermissionDecision {
-	decided := make(chan protocol.PermissionDecision, 1)
-	s.mu.Lock()
-	requestID := s.deps.NewID()
-	settle := func(decision protocol.PermissionDecision) {
-		if turn.pending == nil || turn.pending.requestID != requestID {
-			return
-		}
-		turn.pending = nil
-		s.record(session, protocol.SessionEventPermissionAnswered{Decision: decision, RequestID: requestID})
-		if decision == protocol.PermissionDecisionAllowSession {
-			granted := permissions.GrantForSession(ask.Subject, s.grantsOf(session))
-			session.grants = permissions.Grants{Edits: granted.Edits, Programs: granted.Programs}
-		}
-		s.publishSessions()
-		decided <- decision
-	}
-	turn.pending = &pending{decide: settle, requestID: requestID}
-	s.record(session, protocol.SessionEventPermissionRequested{CallID: ask.CallID, Detail: ask.Preview, RequestID: requestID})
-	s.publishSessions()
-	s.mu.Unlock()
-	select {
-	case decision := <-decided:
-		return decision
-	case <-ctx.Done():
-		s.mu.Lock()
-		settle(protocol.PermissionDecisionDeny)
-		s.mu.Unlock()
-		return <-decided
-	}
-}
-
-// askQuestions waits for a person's answers to the agent's questions; stopping the turn gives none.
-func (s *Service) askQuestions(ctx context.Context, session *live, turn *runningTurn, callID string, questions []protocol.Question) []string {
-	answered := make(chan []string, 1)
-	s.mu.Lock()
-	requestID := s.deps.NewID()
-	settle := func(answers []string) {
-		if turn.pending == nil || turn.pending.requestID != requestID {
-			return
-		}
-		turn.pending = nil
-		s.record(session, protocol.SessionEventQuestionAnswered{Answers: append([]string{}, answers...), RequestID: requestID})
-		s.publishSessions()
-		answered <- answers
-	}
-	turn.pending = &pending{answer: settle, question: true, requestID: requestID}
-	s.record(session, protocol.SessionEventQuestionAsked{CallID: callID, Questions: questions, RequestID: requestID})
-	s.publishSessions()
-	s.mu.Unlock()
-	select {
-	case answers := <-answered:
-		return answers
-	case <-ctx.Done():
-		s.mu.Lock()
-		settle([]string{})
-		s.mu.Unlock()
-		return <-answered
-	}
 }
 
 // sessionJobs is a session's background commands, on its host, in its folder: the session lists them while they

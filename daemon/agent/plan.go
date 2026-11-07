@@ -9,15 +9,40 @@ import (
 // maxReminders is enough for a long task that stops early more than once, never a loop.
 const maxReminders = 3
 
+// lastTurnStart is where the session's last turn started in the events, -1 when none did.
+func lastTurnStart(events []protocol.SessionEvent) int {
+	for index := len(events) - 1; index >= 0; index-- {
+		if _, started := events[index].Value.(protocol.SessionEventTurnStarted); started {
+			return index
+		}
+	}
+	return -1
+}
+
 // LastTurn is the events of the session's last turn, from its start; a subagent's own conversation has no turns:
 // all of it.
 func LastTurn(events []protocol.SessionEvent) []protocol.SessionEvent {
-	for index := len(events) - 1; index >= 0; index-- {
-		if _, started := events[index].Value.(protocol.SessionEventTurnStarted); started {
-			return events[index:]
-		}
+	if start := lastTurnStart(events); start >= 0 {
+		return events[start:]
 	}
 	return events
+}
+
+// TurnRunning is the turn the events leave unfinished, when the daemon stopped in the middle of it: its id, or ""
+// when the last turn ended, or there is none.
+func TurnRunning(events []protocol.SessionEvent) string {
+	start := lastTurnStart(events)
+	if start < 0 {
+		return ""
+	}
+	turn := events[start:]
+	for _, event := range turn {
+		if _, finished := event.Value.(protocol.SessionEventTurnFinished); finished {
+			return ""
+		}
+	}
+	started, _ := turn[0].Value.(protocol.SessionEventTurnStarted)
+	return started.ID
 }
 
 func planOf(event protocol.SessionEvent) []protocol.PlanStep {

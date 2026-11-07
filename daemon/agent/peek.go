@@ -79,16 +79,6 @@ func stillRunningResults(events []protocol.SessionEvent) []protocol.SessionEvent
 	return results
 }
 
-// lastTurnStart is where the last turn started in the events, -1 when none did.
-func lastTurnStart(events []protocol.SessionEvent) int {
-	for index := len(events) - 1; index >= 0; index-- {
-		if _, started := events[index].Value.(protocol.SessionEventTurnStarted); started {
-			return index
-		}
-	}
-	return -1
-}
-
 // peekProblem is why a peek has no answer: stopped, refused by llm-server, or a call instead of words.
 func peekProblem(ctx context.Context, reply llm.Reply, err error) string {
 	if ctx.Err() != nil {

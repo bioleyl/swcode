@@ -123,6 +123,7 @@ func (s *Store) SaveMeta(meta Meta) error {
 	return os.WriteFile(s.metaPath(meta.ID), data, 0o644)
 }
 
+// Append adds an event to a session's file: the event is the one it holds, so its kind and its time come from it.
 func (s *Store) Append(sessionID string, event protocol.SessionEvent) error {
 	data, err := json.Marshal(event)
 	if err != nil {
