@@ -4,15 +4,12 @@ import { JlBadge, JlButton, JlListItem } from '@syware/jlib';
 import { ScElement } from '../base/sc-element';
 import { ago } from '../lib/format';
 import { sessionHost } from '../lib/session-kinds';
-import { liveStatus, SESSION_STATUS_LOOKS } from '../lib/session-status';
+import { canDeleteSession, deleteHintOf, liveStatus, SESSION_STATUS_LOOKS } from '../lib/session-status';
 import { hrefOf, sessionPath } from '../services/navigation';
 import { BASE_STYLES } from '../styles/shared';
 import styles from './sc-session-row.css?inline';
 
 import type { SessionSummary } from '../../../shared/protocol/session.schema';
-
-const DELETE_HINT = 'Delete this session';
-const WORKING_HINT = 'Stop this session before deleting it';
 
 /**
  * A session in a list: its title, where and when it last worked, its state; the row opens it. Where the list tidies
@@ -38,7 +35,7 @@ export class ScSessionRow extends ScElement {
     return (
       <JlListItem icon="message">
         <JlBadge slot="end" />
-        <JlButton slot="end" icon="trash" variant="ghost" size="sm" hint={DELETE_HINT} hidden />
+        <JlButton slot="end" icon="trash" variant="ghost" size="sm" hidden />
       </JlListItem>
     );
   }
@@ -64,13 +61,11 @@ export class ScSessionRow extends ScElement {
     this._refs.row.heading.set(session.title);
     this._refs.row.description.set(`${sessionHost(session)} · ${ago(session.updatedAt, new Date())}`);
     this._refs.row.href.set(hrefOf(sessionPath(session.id)));
-    const status = liveStatus(session);
-    this._refs.badge.showStatus(SESSION_STATUS_LOOKS[status]);
-    // The daemon deletes no session at work.
+    this._refs.badge.showStatus(SESSION_STATUS_LOOKS[liveStatus(session)]);
     const remove = this._refs.remove;
     remove.hidden = !this.removable.get();
-    remove.disabled.set(status !== 'idle');
-    remove.hint.set(status === 'idle' ? DELETE_HINT : WORKING_HINT);
+    remove.disabled.set(!canDeleteSession(session));
+    remove.hint.set(deleteHintOf(session));
   }
 }
 

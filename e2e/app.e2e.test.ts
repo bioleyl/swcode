@@ -54,6 +54,8 @@ const GAME_FLOW = {
 
 // Long enough to see a session at work, and to leave it for another page before its turn ends.
 const LIGHT_TURN_MS = 3_000;
+// Long enough to see the delete button held while the turn runs.
+const DELETE_TURN_MS = 3_000;
 // What the daemon asks to have the conversation summarized.
 const SUMMARY_REQUEST = 'Summarize the conversation below';
 
@@ -720,6 +722,25 @@ describe('the composer', () => {
     expect(await composer.locator('.model').isHidden()).toBe(true);
     expect(await composer.locator('.context').isHidden()).toBe(true);
     expect(await overflow(page)).toBe(0);
+  });
+});
+
+describe('deleting a session', () => {
+  it('is held while the session works, and offered once its turn is over', async () => {
+    const rig = await start({ replies: [{ delayMs: DELETE_TURN_MS, text: 'Done.' }] });
+    const page = await rig.browser.newPage({ viewport: LAPTOP });
+    await page.goto(rig.link);
+    await page.locator('home-page textarea').fill('Say done');
+    await page.locator('home-page textarea').press('Enter');
+    const header = page.locator('session-page header');
+
+    const held = header.getByRole('button', { name: 'Stop this session before deleting it' });
+    await held.waitFor();
+    expect(await held.isDisabled()).toBe(true);
+    await page.getByText('Done.').waitFor();
+    const offered = header.getByRole('button', { name: 'Delete this session' });
+    await offered.waitFor();
+    expect(await offered.isEnabled()).toBe(true);
   });
 });
 

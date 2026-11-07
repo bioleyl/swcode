@@ -9,7 +9,7 @@ import { currentPlan } from '../lib/plan';
 import { presetOf, presetStatusOf } from '../lib/presets';
 import { skillsOn } from '../lib/project-skills';
 import { sessionPlace } from '../lib/session-kinds';
-import { liveStatus, SESSION_STATUS_LOOKS } from '../lib/session-status';
+import { canDeleteSession, deleteHintOf, liveStatus, SESSION_STATUS_LOOKS } from '../lib/session-status';
 import { ScTitle } from '../molecules/sc-title';
 import { ScArcade } from '../organisms/sc-arcade';
 import { ScComposer } from '../organisms/sc-composer';
@@ -149,7 +149,7 @@ export class SessionPage extends ScElement {
               <JlIcon name="laptop" size={14} />
               <span class="path" />
             </span>
-            <JlButton class="delete" icon="trash" hint="Delete this session" variant="ghost" size="sm" />
+            <JlButton class="delete" icon="trash" variant="ghost" size="sm" hidden />
             <JlButton class="panel-toggle" variant="ghost" size="sm" />
           </header>
           <ScConversation />
@@ -362,7 +362,7 @@ export class SessionPage extends ScElement {
     const session = findSession(this._sessionId);
     this._refs.title.value.set(session?.title ?? NOT_FOUND);
     this._refs.title.fixed.set(session === undefined);
-    this._refs.remove.hidden = session === undefined;
+    this.renderDelete(session);
     this._refs.status.hidden = session === undefined;
     this._refs.status.showStatus(SESSION_STATUS_LOOKS[session ? liveStatus(session) : 'idle']);
     this._refs.conversation.queued.set(session?.queued ?? []);
@@ -388,6 +388,17 @@ export class SessionPage extends ScElement {
     this._refs.arcade.status.set(live);
     this.noteSeen();
     document.title = session ? `${session.title} · swcode` : 'swcode';
+  }
+
+  /** The delete button: none without a session, held while it works, which the daemon would refuse to delete. */
+  private renderDelete(session: SessionSummary | undefined): void {
+    const remove = this._refs.remove;
+    remove.hidden = session === undefined;
+    if (session === undefined) {
+      return;
+    }
+    remove.disabled.set(!canDeleteSession(session));
+    remove.hint.set(deleteHintOf(session));
   }
 
   /**

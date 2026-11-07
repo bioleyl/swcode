@@ -19,6 +19,7 @@ All notable changes to swcode are documented here.
 - A pairing code the daemon refuses no longer says the daemon is not running: the phone topic shows what the daemon said.
 - A pasted picture the browser cannot draw says which step failed.
 - Two pages asking `/peek` at the same moment no longer risk getting each other's answer: each peek has an id of its own.
+- A session's own page holds its delete button while the session works, its subagents included, as the project page's list did: the daemon refuses to delete a session at work, and the page used to leave as if it had gone.
 
 ### Maintenance
 
