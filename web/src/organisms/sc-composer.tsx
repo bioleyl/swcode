@@ -82,7 +82,8 @@ export class ScComposer extends ScElement {
     concise: boolean;
   }>();
 
-  // While a turn runs, a message waits for the next one: send stays, stop comes beside it, and a game to pass the time.
+  // While a turn runs, a message waits for the next one: send stays, stop comes beside it, and a game to pass the
+  // time. `working` counts the subagents at work too, the way the session's own status does.
   /** The commands available here: none where there is no session yet, where a slash is only a word. */
   readonly commands = this.useChange<CommandName[]>([], (names) => {
     this._refs.help.commands.set(names);

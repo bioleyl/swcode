@@ -368,11 +368,12 @@ export class SessionPage extends ScElement {
     this._refs.composer.preset.set(session?.preset ?? '');
     this._refs.composer.concise.set(session?.concise ?? false);
     this.renderDaemon();
-    this._refs.composer.working.set((session?.status ?? 'idle') !== 'idle');
+    const live = session ? liveStatus(session) : 'idle';
+    this._refs.composer.working.set(live !== 'idle');
     this._refs.composer.background.set((session?.subagents ?? 0) > 0);
     this._refs.plan.working.set((session?.status ?? 'idle') !== 'idle');
     this._refs.panel.status.set(session?.status ?? 'idle');
-    this._refs.arcade.status.set(session?.status ?? 'idle');
+    this._refs.arcade.status.set(live);
     this.noteSeen();
     document.title = session ? `${session.title} · swcode` : 'swcode';
   }
