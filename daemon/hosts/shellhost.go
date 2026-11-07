@@ -472,6 +472,11 @@ func (h *ShellHost) MakeFolder(ctx context.Context, parentInput, name string) (F
 	return FolderMaking{OK: true, Path: target}, nil
 }
 
+func (h *ShellHost) RemoveFolder(ctx context.Context, target string) error {
+	_, err := h.session.Run(ctx, "rm -rf -- "+ShellWord(target))
+	return err
+}
+
 func (h *ShellHost) ScratchFolder(ctx context.Context, sessionID string) (string, error) {
 	folder := scratchFolder + "/" + sessionID
 	answer, err := h.session.Run(ctx, fmt.Sprintf(`mkdir -p "%s" && printf %%s "%s"`, folder, folder))

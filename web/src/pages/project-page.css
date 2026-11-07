@@ -39,6 +39,14 @@
   margin-top: var(--jl-space-3);
 }
 
+/* The swcode-base card's buttons, one per place, under its note as the reset button is under the choices. */
+.base-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--jl-space-2);
+  margin-top: var(--jl-space-3);
+}
+
 @media (max-width: 900px) {
   .layout {
     grid-template-columns: minmax(0, 1fr);

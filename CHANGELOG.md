@@ -4,6 +4,10 @@ All notable changes to swcode are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- swcode comes with a skill of its own, swcode-base: coding rules, with a check of the agent's own changes before it hands them over. A project's page installs it in the project or in your home for all projects, on the project's own host, and takes it out again; the app offers it once when your home has none.
+
 ### Fixed
 
 - On a phone, the agent's question, permission and password sheets end above the tab bar, which used to cover their bottom (the question's own answer field among it).

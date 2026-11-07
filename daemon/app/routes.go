@@ -249,7 +249,9 @@ func (a *App) settingsProblem(values map[string]string) string {
 	return ""
 }
 
-// skillRoutes are a project's page's: the skills its sessions find, read on its host as a turn reads them.
+// skillRoutes are a project's page's: the skills its sessions find, read on its host as a turn reads them, and the
+// swcode-base skills the program carries, installed in the home or in the project, on the project's host, or taken
+// out of either.
 func (a *App) skillRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET "+protocol.EndpointSkills, func(response http.ResponseWriter, request *http.Request) {
 		project, found := a.Projects.ByID(request.URL.Query().Get(protocol.ProjectParam))
@@ -259,6 +261,31 @@ func (a *App) skillRoutes(mux *http.ServeMux) {
 		}
 		answer(response, a.projectSkills(request.Context(), project))
 	})
+	mux.HandleFunc("GET "+protocol.EndpointSwcodeBase, func(response http.ResponseWriter, request *http.Request) {
+		answer(response, a.SwcodeBase.Status(request.Context(), a.projectOf(request)))
+	})
+	mux.HandleFunc("POST "+protocol.EndpointSwcodeBase, func(response http.ResponseWriter, request *http.Request) {
+		answer(response, a.SwcodeBase.Install(request.Context(), a.projectOf(request), false))
+	})
+	mux.HandleFunc("DELETE "+protocol.EndpointSwcodeBase, func(response http.ResponseWriter, request *http.Request) {
+		answer(response, a.SwcodeBase.Remove(request.Context(), a.projectOf(request), false))
+	})
+	mux.HandleFunc("PUT "+protocol.EndpointSwcodeBaseHome, func(response http.ResponseWriter, request *http.Request) {
+		answer(response, a.SwcodeBase.Install(request.Context(), a.projectOf(request), true))
+	})
+	mux.HandleFunc("DELETE "+protocol.EndpointSwcodeBaseHome, func(response http.ResponseWriter, request *http.Request) {
+		answer(response, a.SwcodeBase.Remove(request.Context(), a.projectOf(request), true))
+	})
+}
+
+// projectOf is the project the request names, or nothing: without one, the swcode-base skills answer for this
+// computer's home alone.
+func (a *App) projectOf(request *http.Request) *protocol.Project {
+	project, found := a.Projects.ByID(request.URL.Query().Get(protocol.ProjectParam))
+	if !found {
+		return nil
+	}
+	return &project
 }
 
 // projectSkills is each name once, the person's first, whether the project turned it off or not; why the host could

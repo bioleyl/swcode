@@ -27,6 +27,12 @@ export const ENDPOINTS = {
   status: '/api/status',
   // POST: the daemon shuts down, as on Ctrl+C.
   stop: '/api/stop',
+  // GET whether this swcode carries the swcode-base skills and where they are, with ?project=<id>; POST puts them
+  // in the project, DELETE takes them out of it. All on the project's host.
+  swcodeBase: '/api/swcode-base',
+  // PUT installs the swcode-base skills in the home, DELETE takes them out of it: the home on the host of the
+  // ?project=<id>, this computer's without one.
+  swcodeBaseHome: '/api/swcode-base/home',
   // GET the version that runs and what is known of a newer one; PUT whether to look every 10 minutes.
   update: '/api/update',
   // POST: look for a newer version now.

@@ -121,6 +121,8 @@ type Host interface {
 	ListFolders(ctx context.Context, path string) (FolderListing, error)
 	// MakeFolder makes a new, empty folder in one that exists, for a new project.
 	MakeFolder(ctx context.Context, parent, name string) (FolderMaking, error)
+	// RemoveFolder deletes a folder and all it holds; one that is not there is no failure.
+	RemoveFolder(ctx context.Context, path string) error
 	// ScratchFolder is a session's scratch folder there, made if needed: where the agent keeps its experiments.
 	ScratchFolder(ctx context.Context, sessionID string) (string, error)
 	RemoveScratch(ctx context.Context, sessionID string) error

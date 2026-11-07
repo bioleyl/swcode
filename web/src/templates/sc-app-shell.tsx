@@ -42,6 +42,7 @@ import { seenBus, seenSessions } from '../services/seen-sessions';
 import { allSessions, findSession, sessionListBus } from '../services/session-list';
 import { searchSessions, sessionSearchBus } from '../services/session-search';
 import { loadStartup } from '../services/startup';
+import { offerSwcodeBase, readSwcodeBase } from '../services/swcode-base';
 import { offerUpdate } from '../services/update-offer';
 import { installsUpdates } from '../services/updates';
 import { setWorkMode, workMode, workModeBus } from '../services/work-mode';
@@ -113,6 +114,8 @@ export class ScAppShell extends ScElement {
   private _route: ActiveRoute | undefined;
   // Whether this daemon can start with its computer: the palette offers the Startup topic then.
   private _startup = false;
+  // Whether the swcode-base skills were asked about: the daemon answers often, the person once.
+  private _baseOffered = false;
   // What the palette finds by itself, as it opened: the conversations the daemon finds join them.
   private _commands: PaletteCommand[] = [];
 
@@ -223,6 +226,7 @@ export class ScAppShell extends ScElement {
     this.onBus(daemonStatusBus, 'changed', (state) => {
       this.renderDaemon(state);
       offerUpdate(state);
+      void this.offerSwcodeBaseSkills(state);
     });
     this.onBus(sessionListBus, 'changed', () => {
       this._refs.nav.sessions.set([...allSessions()]);
@@ -231,6 +235,21 @@ export class ScAppShell extends ScElement {
     });
     this.onBus(seenBus, 'changed', () => this._refs.nav.seen.set({ ...seenSessions() }));
     this.onBus(sessionListBus, 'created', (session) => navigate(sessionPath(session.id)));
+  }
+
+  /**
+   * Once the daemon answers, whether to offer the swcode-base skills: only on a machine where neither the home nor
+   * any project has one, and only once per pack.
+   */
+  private async offerSwcodeBaseSkills(state: DaemonState): Promise<void> {
+    if (this._baseOffered || state.kind !== 'ready') {
+      return;
+    }
+    this._baseOffered = true;
+    const status = await readSwcodeBase();
+    if (status !== undefined) {
+      offerSwcodeBase(status);
+    }
   }
 
   /** What the services already hold, so the frame shows it before the first answer comes. */

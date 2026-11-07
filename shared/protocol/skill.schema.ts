@@ -28,3 +28,19 @@ export const ProjectSkillsSchema = z.object({
   skills: z.array(ProjectSkillSchema),
 });
 export type ProjectSkills = z.infer<typeof ProjectSkillsSchema>;
+
+/**
+ * `GET /api/swcode-base`, and what the daemon answers after installing or removing them: the swcode-base skills the
+ * program carries, and where they are already. `installed` is each of them in one place or the other, so the app
+ * offers them on a machine that has none.
+ */
+export const SwcodeBaseStatusSchema = z.object({
+  // Whether this swcode carries them at all: a build from the sources alone may carry none.
+  carried: z.boolean().default(false),
+  inHome: z.boolean().default(false),
+  inProject: z.boolean().default(false),
+  installed: z.boolean().default(false),
+  names: z.array(z.string()),
+  problem: z.string().optional(),
+});
+export type SwcodeBaseStatus = z.infer<typeof SwcodeBaseStatusSchema>;
