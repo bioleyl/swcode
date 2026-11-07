@@ -399,6 +399,7 @@ top, for one command; the page shows those as set in the environment.
 | `LLAMA_API_KEY` | none | llm-server's `--api-key`. |
 | `SWCODE_THINKING` | `full` | How much the main agent of a new session thinks: `full` (the model's default), `medium`, `low`, `off` (instruct). Each session changes it in its composer. |
 | `SWCODE_SUBAGENT_THINKING` | `low` | How much subagents think. |
+| `SWCODE_MAX_STEPS` | `150` | How many times the main agent may act in one turn before it stops and reports what it did: 1 to 1000. |
 | `SWCODE_WORKSPACE` | the current folder | Where projects usually go: the project dialog starts there, and a session without a project works there. |
 | `SWCODE_SSH_ENDPOINTS` | none | Machines projects can be on, reached over SSH: ssh destinations by commas (`me@box, gmktec`). The `Host` aliases of `~/.ssh/config` come too. |
 | `SWCODE_IMAGE_URL` | none | A stable-diffusion.cpp `sd-server`, such as `http://garfield.home:8090`: the main agent makes pictures with it (`image`). Without one the tool is not offered. |

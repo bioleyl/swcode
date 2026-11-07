@@ -38,9 +38,6 @@ const (
 	// devicesFile is the paired phones, their tokens kept as hashes.
 	devicesFile  = "devices.json"
 	projectsFile = "projects.json"
-	// maxSteps is enough for a long task (a local model takes 20 to 40 s a step); past it, the model reports what it
-	// did.
-	maxSteps = 150
 	// maxSubagentSteps: a subagent answers one question, it needs fewer steps, and the main agent waits for it.
 	maxSubagentSteps = 30
 	defaultWebDir    = "dist/web"
@@ -56,8 +53,9 @@ type Options struct {
 	NewID       func() string
 	// ConnectHost is how other hosts are reached: through their bash otherwise.
 	ConnectHost func(protocol.HostRef) hosts.Host
-	MaxSteps    int
-	Interfaces  func() []Interface
+	// MaxSteps, when set, stands in for the setting (the tests give one).
+	MaxSteps   int
+	Interfaces func() []Interface
 	// OnStop is what POST /api/stop does: the daemon shuts down. Without it, the route is not there.
 	OnStop func()
 	// OnRestart is what PUT /api/settings does once the settings are saved: the daemon restarts. Without it, the
@@ -119,9 +117,6 @@ func (o *Options) fill() {
 	}
 	if o.ConnectHost == nil {
 		o.ConnectHost = hosts.RemoteHost
-	}
-	if o.MaxSteps == 0 {
-		o.MaxSteps = maxSteps
 	}
 	if o.Interfaces == nil {
 		o.Interfaces = SystemInterfaces
@@ -189,9 +184,13 @@ func New(settings config.Config, options Options) (*App, error) {
 		Store: projects.NewStore(filepath.Join(settings.DataDir, projectsFile)),
 	})
 	app.Projects.Load()
+	maxSteps := settings.MaxSteps
+	if options.MaxSteps != 0 {
+		maxSteps = options.MaxSteps
+	}
 	service = sessions.NewService(sessions.Deps{
 		Browser: found, HTTP: options.HTTP, Hosts: registry, ImageURL: settings.ImageURL,
-		ImagesFolder: app.imagesFolder, LogError: logError, MaxSteps: options.MaxSteps, MaxSubagentSteps: maxSubagentSteps,
+		ImagesFolder: app.imagesFolder, LogError: logError, MaxSteps: maxSteps, MaxSubagentSteps: maxSubagentSteps,
 		Model: servers, Models: modelService, NewID: options.NewID, Now: options.Now,
 		OnWorkspace: func(path string, host protocol.HostRef) { app.Projects.Ensure(path, host) },
 		Search: web.Paced(func(ctx context.Context, query string) web.SearchOutcome {

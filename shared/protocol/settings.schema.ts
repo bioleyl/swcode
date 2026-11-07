@@ -12,6 +12,7 @@ export const EDITABLE_SETTINGS = [
   'SWCODE_IMAGE_URL',
   'SWCODE_HOST',
   'SWCODE_PORT',
+  'SWCODE_MAX_STEPS',
 ] as const;
 export const SettingNameSchema = z.enum(EDITABLE_SETTINGS);
 export type SettingName = z.infer<typeof SettingNameSchema>;

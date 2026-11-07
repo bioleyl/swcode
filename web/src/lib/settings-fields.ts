@@ -33,6 +33,11 @@ export const SETTING_FIELDS: Readonly<Record<SettingName, SettingField>> = {
     hint: 'A stable-diffusion.cpp sd-server: the agent makes pictures with it, saved in the project, and you see them in the conversation.',
     label: 'Picture server',
   },
+  SWCODE_MAX_STEPS: {
+    control: { kind: 'text', placeholder: '150' },
+    hint: 'How many times the agent may act in one turn before it stops and reports what it did: 1 to 1000. A local model takes 20 to 40 s a step, so a long task needs many.',
+    label: 'Max steps per turn',
+  },
   SWCODE_PORT: {
     control: { kind: 'text', placeholder: '4500' },
     hint: 'Changed, swcode answers at the new port only: open it there.',
@@ -61,7 +66,11 @@ export const SETTING_FIELDS: Readonly<Record<SettingName, SettingField>> = {
 };
 
 export const SETTING_SECTIONS: readonly SettingSection[] = [
-  { names: ['SWCODE_THINKING', 'SWCODE_SUBAGENT_THINKING'], title: 'Thinking', topic: 'thinking' },
+  {
+    names: ['SWCODE_THINKING', 'SWCODE_SUBAGENT_THINKING', 'SWCODE_MAX_STEPS'],
+    title: 'Thinking',
+    topic: 'thinking',
+  },
   { names: ['SWCODE_WORKSPACE'], title: 'Projects', topic: 'projects' },
   { names: ['SWCODE_IMAGE_URL'], title: 'Pictures', topic: 'pictures' },
   { names: ['SWCODE_HOST', 'SWCODE_PORT'], title: 'Network', topic: 'network' },

@@ -25,6 +25,11 @@ const (
 	maxShutdown      = 120_000
 	defaultThinking  = protocol.ThinkingModeFull
 	subagentThinking = protocol.ThinkingModeLow
+	// maxSteps is enough for a long task (a local model takes 20 to 40 s a step); past it, the model reports what it
+	// did. The settings page changes it (SWCODE_MAX_STEPS).
+	defaultMaxSteps = 150
+	minMaxSteps     = 1
+	maxMaxSteps     = 1000
 )
 
 // The environment's names of the settings.
@@ -37,6 +42,7 @@ const (
 	envLlamaSubagent    = "LLAMA_SUBAGENT_MODEL"
 	envLlamaURL         = "LLAMA_URL"
 	envEnv              = "SWCODE_ENV"
+	envMaxSteps         = "SWCODE_MAX_STEPS"
 	envNodeEnv          = "NODE_ENV"
 	envPort             = "SWCODE_PORT"
 	envPublicURL        = "SWCODE_PUBLIC_URL"
@@ -82,7 +88,9 @@ type Config struct {
 	LlamaSubagentModel string
 	LlamaURL           string
 	Env                Env
-	Port               int
+	// How many times the main agent may answer in one turn, so a model going round in circles stops.
+	MaxSteps int
+	Port     int
 	// The address people open, when it differs from host and port (the Vite server in development).
 	PublicURL         string
 	ShutdownTimeoutMs int
@@ -195,6 +203,7 @@ func Load(environment map[string]string, defaults Defaults) (Config, error) {
 		LlamaModel:         r.text(envLlamaModel),
 		LlamaSubagentModel: r.text(envLlamaSubagent),
 		LlamaURL:           r.url(envLlamaURL, defaultLlamaURL),
+		MaxSteps:           r.number(envMaxSteps, defaultMaxSteps, minMaxSteps, maxMaxSteps),
 		Port:               r.number(envPort, DefaultPort, 1, maxPort),
 		PublicURL:          r.url(envPublicURL, ""),
 		ShutdownTimeoutMs:  r.number(envShutdownTimeout, defaultShutdown, minShutdown, maxShutdown),
