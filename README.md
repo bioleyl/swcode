@@ -263,15 +263,17 @@ ports at localhost, and the desktop app refuses to open a daemon on its port tha
 
 ### A release
 
-Raise `version` in `package.json`, commit, then tag that commit with it and push the tag:
+Raise `version` in `package.json`, date the changelog's section for it, write `RELEASE_NOTES.md` for it (its first
+line `# swcode 0.2.0`), commit, then tag that commit with it and push the tag:
 
 ```bash
 git tag v0.2.0 && git push origin v0.2.0
 ```
 
-The Release workflow (`.github/workflows/release.yml`) checks that the tag is `package.json`'s version, runs
-`npm run check`, builds the command line for Linux, macOS and Windows (x86-64 and ARM) and the desktop app, and
-publishes them as a GitHub release with their `SHA256SUMS`: the install commands take the latest one. A copy of the
+The Release workflow (`.github/workflows/release.yml`) checks that the tag is `package.json`'s version and that
+`RELEASE_NOTES.md` is that version's, runs `npm run check`, builds the command line for Linux, macOS and Windows
+(x86-64 and ARM) and the desktop app, and publishes them as a GitHub release with their `SHA256SUMS`, its notes
+`RELEASE_NOTES.md`: the install commands take the latest one, and swcode's update offer shows its notes. A copy of the
 desktop app opened anywhere but `%LOCALAPPDATA%\Programs\swcode` installs itself there; `--here` runs a test copy
 where it is.
 
