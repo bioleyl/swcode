@@ -42,6 +42,8 @@ import { seenBus, seenSessions } from '../services/seen-sessions';
 import { allSessions, findSession, sessionListBus } from '../services/session-list';
 import { searchSessions, sessionSearchBus } from '../services/session-search';
 import { loadStartup } from '../services/startup';
+import { offerUpdate } from '../services/update-offer';
+import { installsUpdates } from '../services/updates';
 import { setWorkMode, workMode, workModeBus } from '../services/work-mode';
 import { BASE_STYLES } from '../styles/shared';
 import styles from './sc-app-shell.css?inline';
@@ -199,7 +201,10 @@ export class ScAppShell extends ScElement {
     });
     this.onBus(seenBus, 'changed', () => nav.seen.set({ ...seenSessions() }));
     this.onBus(sessionListBus, 'created', (session) => navigate(sessionPath(session.id)));
-    this.onBus(daemonStatusBus, 'changed', (state) => this.renderDaemon(state));
+    this.onBus(daemonStatusBus, 'changed', (state) => {
+      this.renderDaemon(state);
+      offerUpdate(state);
+    });
     nav.projects.set([...allProjects()]);
     nav.sessions.set([...allSessions()]);
     nav.seen.set({ ...seenSessions() });
@@ -213,12 +218,17 @@ export class ScAppShell extends ScElement {
     this._refs.palette.commands.set(this._commands);
   }
 
-  /** The topics only some places have: the other computers in the desktop app, startup where the daemon can. */
+  /**
+   * The topics only some places have: the other computers in the desktop app, startup where the daemon can, updates
+   * on a computer.
+   */
   private offersTopic(topic: SettingsTopic): boolean {
-    if (topic === 'computers') {
-      return inDesktopApp();
-    }
-    return topic !== 'startup' || this._startup;
+    const offered: Partial<Record<SettingsTopic, () => boolean>> = {
+      computers: inDesktopApp,
+      startup: () => this._startup,
+      updates: installsUpdates,
+    };
+    return offered[topic]?.() ?? true;
   }
 
   private async offerStartup(): Promise<void> {

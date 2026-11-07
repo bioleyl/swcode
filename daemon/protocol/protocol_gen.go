@@ -76,6 +76,9 @@ const (
 	EndpointStartup        = "/api/startup"
 	EndpointStatus         = "/api/status"
 	EndpointStop           = "/api/stop"
+	EndpointUpdate         = "/api/update"
+	EndpointUpdateCheck    = "/api/update/check"
+	EndpointUpdateInstall  = "/api/update/install"
 )
 
 const PairParam = "pair"
@@ -3357,6 +3360,7 @@ type Status struct {
 	Llama     StatusLlama  `json:"llama"`
 	PublicURL string       `json:"publicUrl,omitempty"`
 	Thinking  ThinkingMode `json:"thinking,omitempty"`
+	Update    string       `json:"update,omitempty"`
 	Version   string       `json:"version,omitempty"`
 	Workspace string       `json:"workspace"`
 }
@@ -3822,6 +3826,334 @@ func (v *SettingsView) UnmarshalJSON(data []byte) error {
 
 // Normalize trims and checks what the app sent, as its schema does.
 func (v *SettingsView) Normalize() error {
+	if !v.Restart.Valid() {
+		return fmt.Errorf("%s: unknown value %q", "restart", v.Restart)
+	}
+	return nil
+}
+
+type Release struct {
+	Notes   string `json:"notes"`
+	Page    string `json:"page"`
+	Version string `json:"version"`
+}
+
+type UpdateChange struct {
+	Checks bool `json:"checks"`
+}
+
+// UpdateInstalled holds one of its variants, told apart by "ok".
+type UpdateInstalled struct {
+	Value UpdateInstalledVariant
+}
+
+type UpdateInstalledVariant interface {
+	isUpdateInstalled()
+}
+
+func (UpdateInstalledOk) isUpdateInstalled() {}
+
+func (UpdateInstalledFailed) isUpdateInstalled() {}
+
+func (u UpdateInstalled) MarshalJSON() ([]byte, error) {
+	if u.Value == nil {
+		return nil, errors.New("protocol: an empty UpdateInstalled")
+	}
+	return json.Marshal(u.Value)
+}
+
+func (u *UpdateInstalled) UnmarshalJSON(data []byte) error {
+	var head struct {
+		Key json.RawMessage `json:"ok"`
+	}
+	if err := json.Unmarshal(data, &head); err != nil {
+		return err
+	}
+	switch string(head.Key) {
+	case "true":
+		var value UpdateInstalledOk
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
+	case "false":
+		var value UpdateInstalledFailed
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
+	default:
+		return fmt.Errorf("protocol: no UpdateInstalled with ok %s", head.Key)
+	}
+	return nil
+}
+
+// UpdateInstalledMapper has a method per variant: a new variant does not compile until its mappers have one.
+type UpdateInstalledMapper[R any] interface {
+	Ok(UpdateInstalledOk) R
+	Failed(UpdateInstalledFailed) R
+}
+
+// MapUpdateInstalled calls the mapper's method for the variant u holds.
+func MapUpdateInstalled[R any](u UpdateInstalled, m UpdateInstalledMapper[R]) R {
+	switch value := u.Value.(type) {
+	case UpdateInstalledOk:
+		return m.Ok(value)
+	case UpdateInstalledFailed:
+		return m.Failed(value)
+	}
+	panic(fmt.Sprintf("protocol: an empty or unknown UpdateInstalled %T", u.Value))
+}
+
+type UpdateInstalledOk struct {
+	Restart Restart `json:"restart"`
+	Version string  `json:"version"`
+}
+
+func (v UpdateInstalledOk) MarshalJSON() ([]byte, error) {
+	type plain UpdateInstalledOk
+	p := plain(v)
+	return json.Marshal(struct {
+		Key bool `json:"ok"`
+		plain
+	}{true, p})
+}
+
+func (v *UpdateInstalledOk) UnmarshalJSON(data []byte) error {
+	type plain UpdateInstalledOk
+	p := plain{}
+	if err := json.Unmarshal(data, &p); err != nil {
+		return err
+	}
+	*v = UpdateInstalledOk(p)
+	return v.Normalize()
+}
+
+// Normalize trims and checks what the app sent, as its schema does.
+func (v *UpdateInstalledOk) Normalize() error {
+	if !v.Restart.Valid() {
+		return fmt.Errorf("%s: unknown value %q", "restart", v.Restart)
+	}
+	return nil
+}
+
+type UpdateInstalledFailed struct {
+	Problem string `json:"problem"`
+}
+
+func (v UpdateInstalledFailed) MarshalJSON() ([]byte, error) {
+	type plain UpdateInstalledFailed
+	p := plain(v)
+	return json.Marshal(struct {
+		Key bool `json:"ok"`
+		plain
+	}{false, p})
+}
+
+// UpdateState holds one of its variants, told apart by "kind".
+type UpdateState struct {
+	Value UpdateStateVariant
+}
+
+type UpdateStateVariant interface {
+	isUpdateState()
+}
+
+func (UpdateStateSource) isUpdateState() {}
+
+func (UpdateStateUnchecked) isUpdateState() {}
+
+func (UpdateStateCurrent) isUpdateState() {}
+
+func (UpdateStateNewer) isUpdateState() {}
+
+func (UpdateStateFailed) isUpdateState() {}
+
+func (UpdateStateInstalled) isUpdateState() {}
+
+func (u UpdateState) MarshalJSON() ([]byte, error) {
+	if u.Value == nil {
+		return nil, errors.New("protocol: an empty UpdateState")
+	}
+	return json.Marshal(u.Value)
+}
+
+func (u *UpdateState) UnmarshalJSON(data []byte) error {
+	var head struct {
+		Key json.RawMessage `json:"kind"`
+	}
+	if err := json.Unmarshal(data, &head); err != nil {
+		return err
+	}
+	switch string(head.Key) {
+	case "\"source\"":
+		var value UpdateStateSource
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
+	case "\"unchecked\"":
+		var value UpdateStateUnchecked
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
+	case "\"current\"":
+		var value UpdateStateCurrent
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
+	case "\"newer\"":
+		var value UpdateStateNewer
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
+	case "\"failed\"":
+		var value UpdateStateFailed
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
+	case "\"installed\"":
+		var value UpdateStateInstalled
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
+	default:
+		return fmt.Errorf("protocol: no UpdateState with kind %s", head.Key)
+	}
+	return nil
+}
+
+// UpdateStateMapper has a method per variant: a new variant does not compile until its mappers have one.
+type UpdateStateMapper[R any] interface {
+	Source(UpdateStateSource) R
+	Unchecked(UpdateStateUnchecked) R
+	Current(UpdateStateCurrent) R
+	Newer(UpdateStateNewer) R
+	Failed(UpdateStateFailed) R
+	Installed(UpdateStateInstalled) R
+}
+
+// MapUpdateState calls the mapper's method for the variant u holds.
+func MapUpdateState[R any](u UpdateState, m UpdateStateMapper[R]) R {
+	switch value := u.Value.(type) {
+	case UpdateStateSource:
+		return m.Source(value)
+	case UpdateStateUnchecked:
+		return m.Unchecked(value)
+	case UpdateStateCurrent:
+		return m.Current(value)
+	case UpdateStateNewer:
+		return m.Newer(value)
+	case UpdateStateFailed:
+		return m.Failed(value)
+	case UpdateStateInstalled:
+		return m.Installed(value)
+	}
+	panic(fmt.Sprintf("protocol: an empty or unknown UpdateState %T", u.Value))
+}
+
+type UpdateStateSource struct {
+}
+
+func (v UpdateStateSource) MarshalJSON() ([]byte, error) {
+	type plain UpdateStateSource
+	p := plain(v)
+	return json.Marshal(struct {
+		Key string `json:"kind"`
+		plain
+	}{"source", p})
+}
+
+type UpdateStateUnchecked struct {
+}
+
+func (v UpdateStateUnchecked) MarshalJSON() ([]byte, error) {
+	type plain UpdateStateUnchecked
+	p := plain(v)
+	return json.Marshal(struct {
+		Key string `json:"kind"`
+		plain
+	}{"unchecked", p})
+}
+
+type UpdateStateCurrent struct {
+	At string `json:"at"`
+}
+
+func (v UpdateStateCurrent) MarshalJSON() ([]byte, error) {
+	type plain UpdateStateCurrent
+	p := plain(v)
+	return json.Marshal(struct {
+		Key string `json:"kind"`
+		plain
+	}{"current", p})
+}
+
+type UpdateStateNewer struct {
+	At      string  `json:"at"`
+	Release Release `json:"release"`
+}
+
+func (v UpdateStateNewer) MarshalJSON() ([]byte, error) {
+	type plain UpdateStateNewer
+	p := plain(v)
+	return json.Marshal(struct {
+		Key string `json:"kind"`
+		plain
+	}{"newer", p})
+}
+
+type UpdateStateFailed struct {
+	At      string `json:"at"`
+	Problem string `json:"problem"`
+}
+
+func (v UpdateStateFailed) MarshalJSON() ([]byte, error) {
+	type plain UpdateStateFailed
+	p := plain(v)
+	return json.Marshal(struct {
+		Key string `json:"kind"`
+		plain
+	}{"failed", p})
+}
+
+type UpdateStateInstalled struct {
+	Release Release `json:"release"`
+}
+
+func (v UpdateStateInstalled) MarshalJSON() ([]byte, error) {
+	type plain UpdateStateInstalled
+	p := plain(v)
+	return json.Marshal(struct {
+		Key string `json:"kind"`
+		plain
+	}{"installed", p})
+}
+
+type UpdateView struct {
+	Checks  bool        `json:"checks"`
+	Restart Restart     `json:"restart"`
+	State   UpdateState `json:"state"`
+	Version string      `json:"version"`
+}
+
+func (v *UpdateView) UnmarshalJSON(data []byte) error {
+	type plain UpdateView
+	p := plain{}
+	if err := json.Unmarshal(data, &p); err != nil {
+		return err
+	}
+	*v = UpdateView(p)
+	return v.Normalize()
+}
+
+// Normalize trims and checks what the app sent, as its schema does.
+func (v *UpdateView) Normalize() error {
 	if !v.Restart.Valid() {
 		return fmt.Errorf("%s: unknown value %q", "restart", v.Restart)
 	}

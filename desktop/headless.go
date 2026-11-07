@@ -15,7 +15,8 @@ import (
 var daemonInstance windows.Handle
 
 // runDaemon is swcode-desktop.exe --daemon: the daemon alone, without window nor icon, until it is stopped (swcode
-// stop, or the app's Quit does not: it only shows it). The app, opened later, shows it; new settings restart it.
+// stop, or the app's Quit does not: it only shows it). The app, opened later, shows it; new settings restart it,
+// and a newer version starts in its place.
 func runDaemon() error {
 	handle, err := windows.CreateMutex(nil, false, utf16(daemonMutex))
 	daemonInstance = handle
@@ -34,6 +35,9 @@ func runDaemon() error {
 		run, err := server.start()
 		if err != nil {
 			return err
+		}
+		if run.updated() {
+			return startReplacing(exe, flagDaemon)
 		}
 		if !run.restarts() {
 			return run.problem()

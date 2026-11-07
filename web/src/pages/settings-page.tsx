@@ -16,12 +16,14 @@ import { ScModelsEditor } from '../organisms/sc-models-editor';
 import { ScPhone } from '../organisms/sc-phone';
 import { ScSshHosts } from '../organisms/sc-ssh-hosts';
 import { ScStartupSettings } from '../organisms/sc-startup-settings';
+import { ScUpdateSettings } from '../organisms/sc-update-settings';
 import { daemonBus } from '../services/daemon';
 import { refreshStatus } from '../services/daemon-status';
 import { inDesktopApp } from '../services/desktop';
 import { hrefOf, settingsPath } from '../services/navigation';
 import { loadSettings, saveSettings } from '../services/settings';
 import { loadStartup } from '../services/startup';
+import { installsUpdates } from '../services/updates';
 import { BASE_STYLES } from '../styles/shared';
 import styles from './settings-page.css?inline';
 
@@ -79,6 +81,7 @@ const ORGANISM_PANELS: Readonly<Partial<Record<SettingsTopic, () => Node>>> = {
   phone: () => <ScPhone />,
   ssh: () => <ScSshHosts />,
   startup: () => <ScStartupSettings />,
+  updates: () => <ScUpdateSettings />,
 };
 
 const portNote = (port: string): string =>
@@ -87,8 +90,8 @@ const portNote = (port: string): string =>
 /**
  * The settings of this swcode, a tab for each topic, each with its own address: how much the agents think, where
  * projects go, pictures, how it listens, kept in its settings file and saved together; the llm-servers and the
- * presets, the SSH hosts, the phones, how it starts and the other computers, each saved as it changes. Saving the
- * file restarts the daemon on it; a setting set in the environment cannot change.
+ * presets, the SSH hosts, the phones, how it starts, the other computers and its updates, each saved as it changes.
+ * Saving the file restarts the daemon on it; a setting set in the environment cannot change.
  */
 export class SettingsPage extends ScElement {
   static readonly selector = 'settings-page';
@@ -138,6 +141,9 @@ export class SettingsPage extends ScElement {
     });
     if (!inDesktopApp()) {
       this.panelFor('computers').remove();
+    }
+    if (!installsUpdates()) {
+      this.panelFor('updates').remove();
     }
     this.renderTopic(this.topicShown());
     void this.load();

@@ -27,6 +27,12 @@ export const ENDPOINTS = {
   status: '/api/status',
   // POST: the daemon shuts down, as on Ctrl+C.
   stop: '/api/stop',
+  // GET the version that runs and what is known of a newer one; PUT whether to look every 10 minutes.
+  update: '/api/update',
+  // POST: look for a newer version now.
+  updateCheck: '/api/update/check',
+  // POST: install the newer version found, in place of the program that runs, which then restarts.
+  updateInstall: '/api/update/install',
 } as const;
 
 /** The access token travels in this query parameter: a browser cannot set headers on a WebSocket. */

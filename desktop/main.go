@@ -6,7 +6,7 @@
 // while a session works. With --daemon it is the server alone, which the app shows when it starts after it; the
 // window also shows other computers' swcode, paired with it. It runs once: opened again, its window comes forward.
 // Opened from anywhere but the programs folder (a download), it installs itself there first; --here runs a copy
-// where it is, to try a build.
+// where it is, to try a build. A newer version installed from the app's Updates takes its place and starts again.
 package main
 
 import (
@@ -91,7 +91,7 @@ func init() {
 }
 
 func main() {
-	started := launches[launchOf(os.Args[1:])]
+	started := launches[launchOf(afterReplaced(os.Args[1:]))]
 	if err := started.run(); err != nil {
 		showError(fmt.Sprintf(started.failure, err))
 		os.Exit(1)

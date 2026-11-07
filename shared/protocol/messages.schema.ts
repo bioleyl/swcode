@@ -205,6 +205,8 @@ export const StatusSchema = z.object({
   publicUrl: z.string().optional(),
   // How much the main agent of a new session thinks, unless the person picks otherwise.
   thinking: ThinkingModeSchema.optional(),
+  // A newer version found on GitHub and not installed yet, for the app to offer on a computer: its number.
+  update: z.string().optional(),
   // The build: its version and commit (0.1.0+7bd0cd6), or dev from the sources.
   version: z.string().optional(),
   workspace: z.string(),
