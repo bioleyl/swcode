@@ -55,6 +55,11 @@ func (b bridge) OpenComputer(request protocol.DesktopRequestOpenComputer) struct
 	return struct{}{}
 }
 
+func (b bridge) RenameComputer(request protocol.DesktopRequestRenameComputer) struct{} {
+	b.w.renameComputer(request.ID, request.Name)
+	return struct{}{}
+}
+
 func (b bridge) ForgetComputer(request protocol.DesktopRequestForgetComputer) struct{} {
 	b.w.forgetComputer(request.ID)
 	b.w.answerComputers()
@@ -89,6 +94,18 @@ func (w *window) computerAdded(_, _, _ uintptr) uintptr {
 	w.notices.follow(result.computer.ID, result.computer.Address, result.computer.Token)
 	w.answerComputers()
 	return 0
+}
+
+// renameComputer gives another computer the name the person calls it by.
+func (w *window) renameComputer(id, name string) {
+	if id == protocol.ThisComputer {
+		return
+	}
+	if err := w.computers.Rename(id, name); err != nil {
+		w.answer(protocol.DesktopAnswer{Value: protocol.DesktopAnswerComputerRefused{Message: err.Error()}})
+		return
+	}
+	w.answerComputers()
 }
 
 // forgetComputer forgets a computer: the window shows this one instead when it showed that one.

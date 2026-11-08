@@ -26,6 +26,7 @@ export const DesktopRequestSchema = z.discriminatedUnion('type', [
     type: z.literal('addComputer'),
   }),
   z.object({ id: z.string(), type: z.literal('openComputer') }),
+  z.object({ id: z.string(), name: z.string().trim().min(1).max(60), type: z.literal('renameComputer') }),
   z.object({ id: z.string(), type: z.literal('forgetComputer') }),
   z.object({ type: z.literal('openOutside'), url: z.string() }),
 ]);

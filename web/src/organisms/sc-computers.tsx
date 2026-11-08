@@ -1,5 +1,15 @@
 import { createElement, css } from '@jadis/core';
-import { JlAlert, JlBadge, JlButton, JlCopyButton, JlField, JlInput, JlListItem } from '@syware/jlib';
+import {
+  JlAlert,
+  JlBadge,
+  JlButton,
+  JlCopyButton,
+  JlDialog,
+  JlField,
+  JlInput,
+  JlListItem,
+  JlMenu,
+} from '@syware/jlib';
 
 import { THIS_COMPUTER } from '../../../shared/protocol/desktop.schema';
 import { ScElement } from '../base/sc-element';
@@ -16,14 +26,20 @@ import { NO_CODE, newPairingCode } from '../services/pairing';
 import { BASE_STYLES } from '../styles/shared';
 import styles from './sc-computers.css?inline';
 
-import type { Tone } from '@syware/jlib';
+import type { MenuItem, Tone } from '@syware/jlib';
 import type { Computer, DesktopAnswer } from '../../../shared/protocol/desktop.schema';
 import type { PairingCode } from '../../../shared/protocol/pairing.schema';
-import type { DesktopAnswerHandlers, DesktopAnswerMap } from '../types/desktop.types';
+import type { ComputerAction, DesktopAnswerHandlers, DesktopAnswerMap } from '../types/desktop.types';
 
 const PAIRING = 'Pairing…';
 const ADDED = 'Added: open it to show its swcode here.';
 const NO_ADDRESS = 'Type that computer’s address.';
+const NO_NAME = 'Type the name this app should call that computer.';
+const COMPUTER_ACTIONS: MenuItem<ComputerAction>[] = [
+  { icon: 'pencil', label: 'Rename', value: 'rename' },
+  { divider: true },
+  { danger: true, icon: 'trash', label: 'Forget', value: 'forget' },
+];
 const NOT_IN_APP =
   'Only swcode’s desktop app shows other computers. In a browser, open the other computer’s swcode at its own address.';
 const UNREACHABLE = 'not reachable';
@@ -45,6 +61,8 @@ export class ScComputers extends ScElement {
 
   // Set from asking the app to pair until it answers.
   private _pairing = false;
+  // The computer the rename dialog is open on, until it closes.
+  private _renaming: Computer | undefined;
   private _code: PairingCode | undefined;
   // Why there is no code: what the daemon said, or that it does not answer.
   private _problem = NO_CODE;
@@ -55,10 +73,17 @@ export class ScComputers extends ScElement {
     computerRefused: (answer) => {
       this._pairing = false;
       this._refs.add.loading.set(false);
+      if (this._renaming) {
+        this.refuseRename(answer.message);
+        return;
+      }
       this.say(answer.message, 'danger');
     },
     computers: (answer) => {
       this.renderComputers(answer.computers, answer.current);
+      if (this._renaming) {
+        this._refs.rename.close();
+      }
       if (!this._pairing) {
         return;
       }
@@ -78,12 +103,17 @@ export class ScComputers extends ScElement {
     copyAddress: ref<JlCopyButton>('.copy-address'),
     copyCode: ref<JlCopyButton>('.copy-code'),
     expires: ref('.expires'),
-    feedback: ref(JlAlert),
+    feedback: ref<JlAlert>('.feedback'),
     form: ref<HTMLFormElement>('form'),
     note: ref('.note'),
     notInApp: ref('.not-in-app'),
     pairAddress: ref('.address'),
     pairingCode: ref('.code'),
+    rename: ref(JlDialog),
+    renameCancel: ref<JlButton>('.rename-cancel'),
+    renameName: ref<JlInput>('.rename-name'),
+    renameProblem: ref<JlAlert>('.rename-problem'),
+    renameSave: ref<JlButton>('.rename-save'),
   }));
 
   templateHtml(): Node {
@@ -128,11 +158,21 @@ export class ScComputers extends ScElement {
             hint="That computer’s swcode shows one in its Settings → Computers topic, or run swcode pair there (swcode-desktop.exe --pair on Windows). A link with its token needs none.">
             <JlInput id="computer-code" autocomplete="off" />
           </JlField>
-          <JlAlert hidden />
+          <JlAlert class="feedback" hidden />
           <div class="actions">
             <JlButton class="add" type="submit" variant="primary" label="Add" />
           </div>
         </form>
+        <JlDialog class="rename" heading="Rename computer" size="sm">
+          <div class="rename-body">
+            <JlField label="Name" hint="What this app calls that computer. Its address and token stay.">
+              <JlInput class="rename-name" autocomplete="off" />
+            </JlField>
+            <JlAlert class="rename-problem" tone="danger" hidden />
+          </div>
+          <JlButton slot="actions" class="rename-cancel" label="Cancel" />
+          <JlButton slot="actions" class="rename-save" variant="primary" label="Save" />
+        </JlDialog>
         <p class="not-in-app" hidden>
           {NOT_IN_APP}
         </p>
@@ -153,6 +193,9 @@ export class ScComputers extends ScElement {
       this.add();
     });
     this._refs.add.events.register('press', () => this.add());
+    this._refs.rename.events.register('close', () => this.stopRenaming());
+    this._refs.renameCancel.events.register('press', () => this._refs.rename.close());
+    this._refs.renameSave.events.register('press', () => this.rename());
     onDesktopAnswer((answer) => this.hear(answer), this.killSignal);
     askDesktop({ type: 'listComputers' });
     if (this.active.get()) {
@@ -256,11 +299,68 @@ export class ScComputers extends ScElement {
     askDesktop({ address, code: this._refs.code.value.get().trim(), type: 'addComputer' });
   }
 
+  /** The actions of a paired computer, in its row's More menu: the menu keeps its clicks to itself. */
+  private actionsNode(computer: Computer): Node {
+    const menu = createElement(JlMenu<ComputerAction>, {
+      attrs: { slot: 'end' },
+      props: { items: COMPUTER_ACTIONS, label: `Actions for ${computer.name}` },
+    });
+    menu.append(
+      createElement(JlButton, {
+        attrs: { slot: 'trigger' },
+        props: { hint: 'More actions', icon: 'ellipsis', size: 'sm', variant: 'ghost' },
+      })
+    );
+    menu.events.register('select', (action) => this.act(action, computer));
+    return menu;
+  }
+
+  private act(action: ComputerAction, computer: Computer): void {
+    const actions: Record<ComputerAction, () => void> = {
+      forget: () => askDesktop({ id: computer.id, type: 'forgetComputer' }),
+      rename: () => this.openRename(computer),
+    };
+    actions[action]();
+  }
+
+  private openRename(computer: Computer): void {
+    this._renaming = computer;
+    this._refs.rename.heading.set(`Rename ${computer.name}`);
+    this._refs.renameName.value.set(computer.name);
+    this.refuseRename('');
+    this._refs.rename.show();
+  }
+
+  private rename(): void {
+    const computer = this._renaming;
+    if (!computer) {
+      return;
+    }
+    const name = this._refs.renameName.value.get().trim();
+    if (name === '') {
+      this.refuseRename(NO_NAME);
+      return;
+    }
+    this._refs.renameSave.loading.set(true);
+    askDesktop({ id: computer.id, name, type: 'renameComputer' });
+  }
+
+  private stopRenaming(): void {
+    this._renaming = undefined;
+    this.refuseRename('');
+  }
+
+  private refuseRename(problem: string): void {
+    this._refs.renameSave.loading.set(false);
+    this._refs.renameProblem.description.set(problem);
+    this._refs.renameProblem.hidden = problem === '';
+  }
+
   private renderComputers(computers: readonly Computer[], current: string): void {
     this._refs.computers.replaceChildren(...computers.map((computer) => this.computerNode(computer, current)));
   }
 
-  /** A computer, and its buttons: a button keeps its clicks to itself, so each knows its computer. */
+  /** A computer, and its actions: each control keeps its clicks to itself, so it knows its computer. */
   private computerNode(computer: Computer, current: string): Node {
     const shown = computer.id === current;
     const local = computer.id === THIS_COMPUTER;
@@ -287,17 +387,7 @@ export class ScComputers extends ScElement {
       row.append(open);
     }
     if (!local) {
-      const forget = createElement(JlButton, {
-        attrs: { class: 'forget', slot: 'end' },
-        props: {
-          hint: `Forget ${computer.name}: its token stops working here`,
-          label: 'Forget',
-          size: 'sm',
-          variant: 'ghost',
-        },
-      });
-      forget.events.register('press', () => askDesktop({ id: computer.id, type: 'forgetComputer' }));
-      row.append(forget);
+      row.append(this.actionsNode(computer));
     }
     return row;
   }

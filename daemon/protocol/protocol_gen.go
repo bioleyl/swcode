@@ -4651,6 +4651,8 @@ func (DesktopRequestAddComputer) isDesktopRequest() {}
 
 func (DesktopRequestOpenComputer) isDesktopRequest() {}
 
+func (DesktopRequestRenameComputer) isDesktopRequest() {}
+
 func (DesktopRequestForgetComputer) isDesktopRequest() {}
 
 func (DesktopRequestOpenOutside) isDesktopRequest() {}
@@ -4688,6 +4690,12 @@ func (u *DesktopRequest) UnmarshalJSON(data []byte) error {
 			return err
 		}
 		u.Value = value
+	case "\"renameComputer\"":
+		var value DesktopRequestRenameComputer
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
 	case "\"forgetComputer\"":
 		var value DesktopRequestForgetComputer
 		if err := json.Unmarshal(data, &value); err != nil {
@@ -4711,6 +4719,7 @@ type DesktopRequestMapper[R any] interface {
 	ListComputers(DesktopRequestListComputers) R
 	AddComputer(DesktopRequestAddComputer) R
 	OpenComputer(DesktopRequestOpenComputer) R
+	RenameComputer(DesktopRequestRenameComputer) R
 	ForgetComputer(DesktopRequestForgetComputer) R
 	OpenOutside(DesktopRequestOpenOutside) R
 }
@@ -4724,6 +4733,8 @@ func MapDesktopRequest[R any](u DesktopRequest, m DesktopRequestMapper[R]) R {
 		return m.AddComputer(value)
 	case DesktopRequestOpenComputer:
 		return m.OpenComputer(value)
+	case DesktopRequestRenameComputer:
+		return m.RenameComputer(value)
 	case DesktopRequestForgetComputer:
 		return m.ForgetComputer(value)
 	case DesktopRequestOpenOutside:
@@ -4795,6 +4806,42 @@ func (v DesktopRequestOpenComputer) MarshalJSON() ([]byte, error) {
 		Key string `json:"type"`
 		plain
 	}{"openComputer", p})
+}
+
+type DesktopRequestRenameComputer struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+func (v DesktopRequestRenameComputer) MarshalJSON() ([]byte, error) {
+	type plain DesktopRequestRenameComputer
+	p := plain(v)
+	return json.Marshal(struct {
+		Key string `json:"type"`
+		plain
+	}{"renameComputer", p})
+}
+
+func (v *DesktopRequestRenameComputer) UnmarshalJSON(data []byte) error {
+	type plain DesktopRequestRenameComputer
+	p := plain{}
+	if err := json.Unmarshal(data, &p); err != nil {
+		return err
+	}
+	*v = DesktopRequestRenameComputer(p)
+	return v.Normalize()
+}
+
+// Normalize trims and checks what the app sent, as its schema does.
+func (v *DesktopRequestRenameComputer) Normalize() error {
+	v.Name = strings.TrimSpace(v.Name)
+	if utf8.RuneCountInString(v.Name) < 1 {
+		return fmt.Errorf("%s: must not be empty", "name")
+	}
+	if utf8.RuneCountInString(v.Name) > 60 {
+		return fmt.Errorf("%s: at most 60 characters", "name")
+	}
+	return nil
 }
 
 type DesktopRequestForgetComputer struct {

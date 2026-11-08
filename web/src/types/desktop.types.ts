@@ -15,6 +15,9 @@ declare global {
 
 export type DesktopAnswerMap = { [Answer in DesktopAnswer as Answer['type']]: Answer };
 
+/** What the actions of a paired computer's row do. */
+export type ComputerAction = 'rename' | 'forget';
+
 /** One handler per kind of answer from the desktop app: a new kind does not compile until the page decides. */
 export type DesktopAnswerHandlers = {
   [Type in keyof DesktopAnswerMap]: (answer: DesktopAnswerMap[Type]) => void;

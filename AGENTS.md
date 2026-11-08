@@ -22,6 +22,7 @@ Read `README.md` first.
   `--jl-accent`. An icon a jl-* component draws by name is registered (`registerIcons`, lucide's; the usual ones in
   `lib/icons.ts`).
 - A session's history is paged from its end: `openSession` takes an `events` limit and `sessionHistory` answers with `keptBack` (events older than those shown); `olderEvents` asks for the page above. The conversation view (`sc-conversation`) keeps the scroll rules in `lib/history-window.ts` and asks for more at its top; the page never learns the whole list until it is all pulled.
+- **A turn's restore point is captured by wrapping its `hosts.Host`** (`daemon/checkpoints`, `Recorder.Host()` in `runTurnIn`): writes through tool hosts are kept, bash's are not. The service makes the turn id (`runningTurn.id`, `agent.Setup.TurnID`), and `agent.RunTurn` records `checkpointSaved` before `turnFinished` through `TurnHost.TakeCheckpoint`, so the turn still ends on its own event.
 
 ## Gotchas met so far
 
@@ -111,6 +112,8 @@ Read `README.md` first.
 - Commit only after `npm run check` passed: it stops at the first failing step.
 - **A settings panel removed in a browser takes its ref with it**: `useRefs` resolves lazily and `getElement` throws once the element is gone, so `SettingsPage.renderTopic` touches `_refs.computers` only under `inDesktopApp()` (the panel is removed otherwise).
 - **The e2e rig serves `dist/web`**: running `npx vitest --config vitest.e2e.config.ts` alone tests the last `npm run build`, so build after a web change (or use `npm run test:e2e`, which builds first).
+- A new request from the page to the desktop app (`shared/protocol/desktop.schema.ts`) needs `npm run protocol`, then a method on `bridge` in `desktop/bridge.go`. That file is Windows-only, so plain `go vet ./...` on Linux skips it: use `GOOS=windows go vet -unsafeptr=false ./...` to compile it.
+- **Restore points live in `<data>/checkpoints/<session>/<turn>`** (manifest plus blob copies), keep the newest 10 turns of a session, and go with the session. A restore writes the pre-images back and deletes files the turn created, checking each path through `Host.RealPath` so a link cannot lead outside the workspace.
 
 ## Commands
 

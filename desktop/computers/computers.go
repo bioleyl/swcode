@@ -36,6 +36,7 @@ const (
 	bearerHeader = "authorization"
 
 	noAddress   = "Type that computer's address: its name or IP address, and the port when it is not 4500."
+	noComputer  = "That computer is not kept here."
 	noCode      = "Type the code that computer's swcode shows to pair a device, or paste its link with the token."
 	codeRefused = "The code was refused: it works once, for a minute. Ask that computer's swcode for a new one."
 	linkRefused = "That computer's swcode refused the link's token."
@@ -98,6 +99,16 @@ func (s *Store) SetCurrent(id string) error {
 func (s *Store) Add(computer Computer) error {
 	s.kept.Computers = slices.DeleteFunc(s.kept.Computers, func(known Computer) bool { return known.Address == computer.Address })
 	s.kept.Computers = append(s.kept.Computers, computer)
+	return s.save()
+}
+
+// Rename gives a kept computer the name the person calls it by: its address and token stay.
+func (s *Store) Rename(id, name string) error {
+	index := slices.IndexFunc(s.kept.Computers, func(known Computer) bool { return known.ID == id })
+	if index < 0 {
+		return errors.New(noComputer)
+	}
+	s.kept.Computers[index].Name = name
 	return s.save()
 }
 
