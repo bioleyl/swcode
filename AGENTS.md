@@ -23,6 +23,7 @@ Read `README.md` first.
   `lib/icons.ts`).
 - A session's history is paged from its end: `openSession` takes an `events` limit and `sessionHistory` answers with `keptBack` (events older than those shown); `olderEvents` asks for the page above. The conversation view (`sc-conversation`) keeps the scroll rules in `lib/history-window.ts` and asks for more at its top; the page never learns the whole list until it is all pulled.
 - **A turn's restore point is captured by wrapping its `hosts.Host`** (`daemon/checkpoints`, `Recorder.Host()` in `runTurnIn`): writes through tool hosts are kept, bash's are not. The service makes the turn id (`runningTurn.id`, `agent.Setup.TurnID`), and `agent.RunTurn` records `checkpointSaved` before `turnFinished` through `TurnHost.TakeCheckpoint`, so the turn still ends on its own event.
+- A paired computer's colour lives in `computers.json` and reaches the page as `Computer.color`; `sc-computer-switch` puts it on `<html>` as `data-computer-color`, and `global.css` turns that into the `--jl-accent*`, `--jl-on-accent` and `--jl-focus-ring` tokens (the light and dark values use `light-dark()`).
 
 ## Gotchas met so far
 
@@ -114,7 +115,9 @@ Read `README.md` first.
 - **The e2e rig serves `dist/web`**: running `npx vitest --config vitest.e2e.config.ts` alone tests the last `npm run build`, so build after a web change (or use `npm run test:e2e`, which builds first).
 - A new request from the page to the desktop app (`shared/protocol/desktop.schema.ts`) needs `npm run protocol`, then a method on `bridge` in `desktop/bridge.go`. That file is Windows-only, so plain `go vet ./...` on Linux skips it: use `GOOS=windows go vet -unsafeptr=false ./...` to compile it.
 - **Restore points live in `<data>/checkpoints/<session>/<turn>`** (manifest plus blob copies), keep the newest 10 turns of a session, and go with the session. A restore writes the pre-images back and deletes files the turn created, checking each path through `Host.RealPath` so a link cannot lead outside the workspace.
+- **jlib 0.12.0's `jl-side-nav` scrolls as one column**, its `header` and `footer` slots leaving the screen with the sections: `sc-nav` puts `sc-nav-scroll.css` into the side nav's shadow root (`nav { overflow: hidden }`, `.sections` scrolling, `.bottom` fixed), as it already patches that root for the + of a project row. It goes once jlib does it (bioleyl/jlib#4).
 
 ## Commands
 
 - `npm run check` needs both toolchains on PATH: nvm's node (`~/.nvm/versions/node/v26.7.0/bin`) and the go.mod toolchain (`~/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.27.3.linux-amd64/bin`) — the machine's `go` (1.18) can't parse go.mod, and `GOTOOLCHAIN` with a path doesn't help.
+- `npm run test:e2e`'s global setup runs plain `go build`: without the go.mod toolchain on PATH (`~/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.27.3.linux-amd64/bin`) it fails parsing go.mod (`invalid go version '1.27.0'`).
