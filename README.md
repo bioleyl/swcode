@@ -132,9 +132,9 @@ You can also trigger a skill directly from the composer with `/<skill-name>`.
 swcode has a skill of its own, `swcode-base`: coding rules for any project and language, with a check of the agent's own changes before it hands them over, and the project's `AGENTS.md` kept without being asked. A project's page installs it in the project or in your home, on the machine the project is on, and takes it out again; the app offers it once when your home doesn't have it. swcode does it with the [skills.sh](https://skills.sh) CLI, which needs Node.js 22.20 or later on that machine:
 
 ```bash
-npx skills add bioleyl/swcode --skill swcode-base --agent universal        # in the project's .agents/skills
-npx skills add bioleyl/swcode --skill swcode-base --agent universal -g     # in ~/.agents/skills, for every project
-npx skills remove swcode-base --agent universal                            # -g for the home's
+npx --yes skills add bioleyl/swcode --skill swcode-base --agent universal -y        # in the project's .agents/skills
+npx --yes skills add bioleyl/swcode --skill swcode-base --agent universal -y -g     # in ~/.agents/skills, for every project
+npx --yes skills remove swcode-base --agent universal -y                            # -g for the home's
 ```
 
 Other coding agents can use it too:
@@ -149,7 +149,7 @@ Other coding agents can use it too:
 - **Any agent** (Codex, Cursor, Gemini CLI, GitHub Copilot, OpenCode…), with skills.sh, which asks which agents:
 
   ```bash
-  npx skills add bioleyl/swcode
+  npx --yes skills add bioleyl/swcode
   ```
 
 The skill is in [plugins/swcode-base](plugins/swcode-base/skills/swcode-base/SKILL.md).

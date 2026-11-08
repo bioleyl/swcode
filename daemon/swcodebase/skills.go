@@ -51,6 +51,28 @@ const (
 	reasonSeparator = ": "
 	// thisComputer is the local host as a problem names it, in the middle of its sentence.
 	thisComputer = "this computer"
+	// commandMark is where bashHostScript holds the CLI's command line: twice, for its two branches.
+	commandMark = "@command@"
+	// bashHostScript runs the command line on a host whose commands run in bash, and gives a Windows npx reached
+	// through WSL the host's home and folder: see commandOn. cmd.exe takes a UNC folder for its own only once a drive
+	// is mapped: pushd maps the share (unquoted, or cmd calls it invalid), then the folder is reached from there, so
+	// its spaces are safe.
+	bashHostScript = `if command -v npx 2>/dev/null | grep -q '^/mnt/' && command -v cmd.exe >/dev/null 2>&1; then
+  folder=$(wslpath -w "$PWD")
+  home=$(wslpath -w "$HOME")
+  case "$folder" in
+    '\\'*)
+      rest=${folder#\\\\}
+      after=${rest#*\\}
+      enter="pushd \\\\${rest%%\\*}\\${after%%\\*} && cd \"${after#*\\}\""
+      ;;
+    *)
+      enter="cd /d \"$folder\""
+      ;;
+  esac
+  exec cmd.exe /c "$enter && set USERPROFILE=$home&& @command@"
+fi
+@command@`
 )
 
 // escapes are the terminal's codes in the CLI's output: its cursor's moves, its colours.
@@ -82,6 +104,25 @@ func scopeOf(inHome bool) []string {
 		return nil
 	}
 	return []string{"--global"}
+}
+
+// commandOn is the command line of an action, run on the host. A host whose commands run in bash gets
+// bashHostScript, since WSL appends Windows' PATH to its own: npx there is a Windows program under /mnt, and its
+// home is the Windows profile, not the distribution's. The skill would then land where the distribution's
+// sessions never look for it, and a project's install could not make its folder (cmd.exe, given a UNC folder,
+// moves to C:\Windows). cmd.exe and a mapped drive give the CLI the host's own home and folder.
+func commandOn(ctx context.Context, host hosts.Host, act action, inHome bool) string {
+	command := commandOf(act, inHome)
+	if !runsBash(ctx, host) {
+		return command
+	}
+	return strings.ReplaceAll(bashHostScript, commandMark, command)
+}
+
+// runsBash is whether the host's commands run in bash: a Linux computer, a WSL distribution, an SSH endpoint.
+func runsBash(ctx context.Context, host hosts.Host) bool {
+	platform, err := host.Platform(ctx)
+	return err == nil && strings.HasPrefix(platform, "linux")
 }
 
 // problemOf is why the CLI did not do what it was asked, on the host named: npx missing, its time up, or the error it
@@ -208,7 +249,7 @@ func (s *Service) run(ctx context.Context, project *protocol.Project, inHome boo
 	if problem != "" {
 		return failed(problem)
 	}
-	command := commandOf(act, inHome)
+	command := commandOn(ctx, host, act, inHome)
 	result := host.Run(ctx, command, hosts.CommandOptions{Cwd: folder, Timeout: cliTimeout})
 	if problem := problemOf(result, act, whereOf(ref)); problem != "" {
 		s.logger.Warn("the skills CLI failed", "command", command, "output", result.Output)
