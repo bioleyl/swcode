@@ -2,6 +2,13 @@ import { createElement, css } from '@jadis/core';
 import { JlButton, JlListItem } from '@syware/jlib';
 
 import { ScElement } from '../base/sc-element';
+import {
+  isLocalBase,
+  LOCAL_ADDRESS_NOTE,
+  reachableBaseOf,
+  renewalLine,
+  secondsUntilRenewal,
+} from '../lib/pairing-view';
 import { qrElement } from '../lib/qr';
 import { daemonState } from '../services/daemon-status';
 import { forgetDevice, NO_CODE, newPairingCode, pairedDevices, pairingLink } from '../services/pairing';
@@ -10,23 +17,9 @@ import styles from './sc-phone.css?inline';
 
 import type { Device, PairingCode } from '../../../shared/protocol/pairing.schema';
 
-const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
-const LOCAL_NOTE =
-  'This address only works on this computer: the daemon listens here alone. Start it with SWCODE_HOST=0.0.0.0 for the network, or SWCODE_PUBLIC_URL set to an address the phone reaches.';
 const QR_LABEL = 'QR code of the link that pairs a phone with swcode';
 const MS_PER_SECOND = 1000;
-// A new code comes this long before the shown one expires, so the QR code never shows a dead one.
-const RENEW_AHEAD_MS = 2000;
 const NO_DEVICES = 'No phone is paired yet.';
-
-const isLocal = (base: string): boolean => LOCAL_HOSTS.has(new URL(base).hostname);
-
-/** The address a phone reaches: the daemon's public one, else its address on the network, else this page's. */
-const phoneBase = (): string => {
-  const state = daemonState();
-  const status = state.kind === 'ready' ? state.status : undefined;
-  return status?.publicUrl ?? status?.lanUrls?.[0] ?? location.origin;
-};
 
 /**
  * The settings' Phone topic, how to use swcode from a phone: a QR code with a pairing code that serves once and
@@ -110,11 +103,11 @@ export class ScPhone extends ScElement {
   }
 
   private tick(): void {
-    const left = this._code ? Date.parse(this._code.expiresAt) - Date.now() : 0;
-    if (left <= RENEW_AHEAD_MS) {
+    const code = this._code;
+    if (!code || secondsUntilRenewal(code.expiresAt, Date.now()) === 0) {
       void this.renew();
     }
-    this.renderExpiry(left);
+    this.renderExpiry();
   }
 
   private async renew(): Promise<void> {
@@ -133,20 +126,21 @@ export class ScPhone extends ScElement {
   }
 
   private renderPairing(): void {
-    const base = phoneBase();
+    const base = reachableBaseOf(daemonState(), location.origin);
     const code = this._code;
     const link = code ? pairingLink(base, code.code) : '';
     this._refs.qr.replaceChildren(...(code ? [qrElement(link, QR_LABEL)] : []));
     this._refs.link.textContent = link;
-    this.renderExpiry(code ? Date.parse(code.expiresAt) - Date.now() : 0);
-    this._refs.note.hidden = !isLocal(base);
-    this._refs.note.textContent = LOCAL_NOTE;
+    this.renderExpiry();
+    this._refs.note.hidden = !isLocalBase(base);
+    this._refs.note.textContent = LOCAL_ADDRESS_NOTE;
   }
 
   /** The seconds left, or why there is no code to wait for. */
-  private renderExpiry(left: number): void {
-    this._refs.expires.textContent = this._code
-      ? `A new code in ${Math.max(0, Math.ceil((left - RENEW_AHEAD_MS) / MS_PER_SECOND))} s`
+  private renderExpiry(): void {
+    const code = this._code;
+    this._refs.expires.textContent = code
+      ? renewalLine(secondsUntilRenewal(code.expiresAt, Date.now()))
       : this._problem;
   }
 

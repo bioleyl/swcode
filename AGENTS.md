@@ -109,6 +109,8 @@ Read `README.md` first.
   prompt** (`daemon/agent/skills.go`, `daemon/agent/notes.go`): two user messages in a row are joined into one
   (`ConversationOf`), since some chat templates want the roles to alternate.
 - Commit only after `npm run check` passed: it stops at the first failing step.
+- **A settings panel removed in a browser takes its ref with it**: `useRefs` resolves lazily and `getElement` throws once the element is gone, so `SettingsPage.renderTopic` touches `_refs.computers` only under `inDesktopApp()` (the panel is removed otherwise).
+- **The e2e rig serves `dist/web`**: running `npx vitest --config vitest.e2e.config.ts` alone tests the last `npm run build`, so build after a web change (or use `npm run test:e2e`, which builds first).
 
 ## Commands
 

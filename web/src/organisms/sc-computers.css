@@ -21,6 +21,51 @@
   gap: var(--jl-space-1);
 }
 
+.connect-from {
+  display: flex;
+  flex-direction: column;
+  gap: var(--jl-space-3);
+  padding-top: var(--jl-space-4);
+  border-top: 1px solid var(--jl-line);
+}
+
+.pairing {
+  display: flex;
+  flex-direction: column;
+  gap: var(--jl-space-2);
+}
+
+.pair {
+  display: flex;
+  align-items: center;
+  gap: var(--jl-space-3);
+}
+
+.pair .label {
+  flex: 0 0 6.5rem;
+}
+
+.pair code {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: var(--jl-font-md);
+  user-select: all;
+}
+
+.expires {
+  font-size: 12px;
+  color: var(--jl-muted);
+}
+
+.note {
+  padding: 10px 12px;
+  border-radius: var(--jl-radius);
+  background: var(--jl-danger-soft);
+  font-size: 13px;
+  color: var(--jl-danger);
+}
+
 form {
   display: flex;
   flex-direction: column;

@@ -5,6 +5,7 @@ import { ScElement } from '../base/sc-element';
 import { SETTING_FIELDS, SETTING_SECTIONS } from '../lib/settings-fields';
 import { SETTINGS_SAVED } from '../lib/settings-saved';
 import {
+  COMPUTERS_TOPIC,
   DEFAULT_SETTINGS_TOPIC,
   isSettingsTopic,
   PHONE_TOPIC,
@@ -108,6 +109,7 @@ export class SettingsPage extends ScElement {
   });
 
   private readonly _refs = this.useRefs((ref) => ({
+    computers: ref(ScComputers),
     feedback: ref(JlAlert),
     phone: ref(ScPhone),
     save: ref<JlButton>('.save'),
@@ -207,9 +209,12 @@ export class SettingsPage extends ScElement {
     this.renderTopic(topic);
   }
 
-  /** Save is for the settings file: the other topics save as they change. The phone's makes codes while shown. */
+  /** Save is for the settings file: the other topics save as they change. Codes are made while their topic is shown. */
   private renderTopic(topic: SettingsTopic): void {
     this._refs.save.hidden = !FILE_TOPICS.has(topic);
+    if (inDesktopApp()) {
+      this._refs.computers.active.set(topic === COMPUTERS_TOPIC);
+    }
     this._refs.phone.active.set(topic === PHONE_TOPIC);
   }
 

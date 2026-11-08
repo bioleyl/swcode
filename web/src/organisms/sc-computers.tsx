@@ -1,14 +1,24 @@
 import { createElement, css } from '@jadis/core';
-import { JlAlert, JlBadge, JlButton, JlField, JlInput, JlListItem } from '@syware/jlib';
+import { JlAlert, JlBadge, JlButton, JlCopyButton, JlField, JlInput, JlListItem } from '@syware/jlib';
 
 import { THIS_COMPUTER } from '../../../shared/protocol/desktop.schema';
 import { ScElement } from '../base/sc-element';
+import {
+  isLocalBase,
+  LOCAL_ADDRESS_NOTE,
+  reachableBaseOf,
+  renewalLine,
+  secondsUntilRenewal,
+} from '../lib/pairing-view';
+import { daemonState } from '../services/daemon-status';
 import { askDesktop, inDesktopApp, onDesktopAnswer } from '../services/desktop';
+import { NO_CODE, newPairingCode } from '../services/pairing';
 import { BASE_STYLES } from '../styles/shared';
 import styles from './sc-computers.css?inline';
 
 import type { Tone } from '@syware/jlib';
 import type { Computer, DesktopAnswer } from '../../../shared/protocol/desktop.schema';
+import type { PairingCode } from '../../../shared/protocol/pairing.schema';
 import type { DesktopAnswerHandlers, DesktopAnswerMap } from '../types/desktop.types';
 
 const PAIRING = 'Pairing…';
@@ -17,6 +27,11 @@ const NO_ADDRESS = 'Type that computer’s address.';
 const NOT_IN_APP =
   'Only swcode’s desktop app shows other computers. In a browser, open the other computer’s swcode at its own address.';
 const UNREACHABLE = 'not reachable';
+const CONNECT_LEAD =
+  'On the other computer’s swcode, open Settings → Computers, type this address and this code there, then Add. The code works once, and a new one comes every minute.';
+const ADDRESS_LABEL = 'Address';
+const CODE_LABEL = 'Pairing code';
+const MS_PER_SECOND = 1000;
 
 /**
  * The settings' Computers: the computers the desktop app's window shows, this one and the others paired with it,
@@ -25,8 +40,16 @@ const UNREACHABLE = 'not reachable';
 export class ScComputers extends ScElement {
   static readonly selector = 'sc-computers';
 
+  /** Whether its topic is shown: codes are asked for while they can be read. */
+  readonly active = this.useChange(false, (active) => (active ? this.startCode() : this.stopClock()));
+
   // Set from asking the app to pair until it answers.
   private _pairing = false;
+  private _code: PairingCode | undefined;
+  // Why there is no code: what the daemon said, or that it does not answer.
+  private _problem = NO_CODE;
+  private _renewing = false;
+  private _clock: ReturnType<typeof setInterval> | undefined;
 
   private readonly _handlers: DesktopAnswerHandlers = {
     computerRefused: (answer) => {
@@ -52,9 +75,15 @@ export class ScComputers extends ScElement {
     address: ref<JlInput>('#computer-address'),
     code: ref<JlInput>('#computer-code'),
     computers: ref('.computers'),
+    copyAddress: ref<JlCopyButton>('.copy-address'),
+    copyCode: ref<JlCopyButton>('.copy-code'),
+    expires: ref('.expires'),
     feedback: ref(JlAlert),
     form: ref<HTMLFormElement>('form'),
+    note: ref('.note'),
     notInApp: ref('.not-in-app'),
+    pairAddress: ref('.address'),
+    pairingCode: ref('.code'),
   }));
 
   templateHtml(): Node {
@@ -65,6 +94,26 @@ export class ScComputers extends ScElement {
           swcode works on while this one is off, and its sessions notify you here.
         </p>
         <div class="computers" />
+        <section class="connect-from">
+          <h3>Connect from another computer</h3>
+          <p class="lead">{CONNECT_LEAD}</p>
+          <div class="pairing">
+            <div class="pair">
+              <span class="label">{ADDRESS_LABEL}</span>
+              <code class="address" />
+              <JlCopyButton class="copy-address" />
+            </div>
+            <div class="pair">
+              <span class="label">{CODE_LABEL}</span>
+              <code class="code" />
+              <JlCopyButton class="copy-code" />
+            </div>
+          </div>
+          <p class="expires" />
+          <p class="note" hidden>
+            {LOCAL_ADDRESS_NOTE}
+          </p>
+        </section>
         <form>
           <h3>Add a computer</h3>
           <JlField label="Address" hint="Its swcode listens on the network: SWCODE_HOST is 0.0.0.0 by default.">
@@ -76,7 +125,7 @@ export class ScComputers extends ScElement {
           </JlField>
           <JlField
             label="Pairing code"
-            hint="That computer’s swcode shows one in its phone dialog, or run swcode pair there (swcode-desktop.exe --pair on Windows). A link with its token needs none.">
+            hint="That computer’s swcode shows one in its Settings → Computers topic, or run swcode pair there (swcode-desktop.exe --pair on Windows). A link with its token needs none.">
             <JlInput id="computer-code" autocomplete="off" />
           </JlField>
           <JlAlert hidden />
@@ -106,6 +155,76 @@ export class ScComputers extends ScElement {
     this._refs.add.events.register('press', () => this.add());
     onDesktopAnswer((answer) => this.hear(answer), this.killSignal);
     askDesktop({ type: 'listComputers' });
+    if (this.active.get()) {
+      this.startCode();
+    }
+  }
+
+  onDisconnect(): void {
+    this.stopClock();
+  }
+
+  /** A first code, renewed every minute for as long as the topic is shown. */
+  private startCode(): void {
+    if (!this.isConnected) {
+      return;
+    }
+    this._code = undefined;
+    this.renderPairing();
+    void this.renew();
+    this.startClock();
+  }
+
+  private startClock(): void {
+    this.stopClock();
+    this._clock = setInterval(() => this.tick(), MS_PER_SECOND);
+  }
+
+  private stopClock(): void {
+    clearInterval(this._clock);
+    this._clock = undefined;
+  }
+
+  private tick(): void {
+    const code = this._code;
+    if (!code || secondsUntilRenewal(code.expiresAt, Date.now()) === 0) {
+      void this.renew();
+    }
+    this.renderExpiry();
+  }
+
+  private async renew(): Promise<void> {
+    if (this._renewing) {
+      return;
+    }
+    this._renewing = true;
+    try {
+      const code = await newPairingCode();
+      this._code = code.ok ? code.answer : undefined;
+      this._problem = code.ok ? '' : code.problem;
+    } finally {
+      this._renewing = false;
+    }
+    this.renderPairing();
+  }
+
+  private renderPairing(): void {
+    const base = reachableBaseOf(daemonState(), location.origin);
+    const code = this._code?.code ?? '';
+    this._refs.pairAddress.textContent = base;
+    this._refs.pairingCode.textContent = code;
+    this._refs.copyAddress.value.set(base);
+    this._refs.copyCode.value.set(code);
+    this._refs.copyCode.hidden = code === '';
+    this._refs.note.hidden = !isLocalBase(base);
+    this.renderExpiry();
+  }
+
+  private renderExpiry(): void {
+    const code = this._code;
+    this._refs.expires.textContent = code
+      ? renewalLine(secondsUntilRenewal(code.expiresAt, Date.now()))
+      : this._problem;
   }
 
   private hear(answer: DesktopAnswer): void {
