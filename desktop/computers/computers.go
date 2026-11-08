@@ -46,10 +46,11 @@ const (
 
 // Computer is another computer's swcode, as this app reaches it.
 type Computer struct {
-	ID      string `json:"id"`
-	Name    string `json:"name"`
-	Address string `json:"address"`
-	Token   string `json:"token"`
+	ID      string                 `json:"id"`
+	Name    string                 `json:"name"`
+	Color   protocol.ComputerColor `json:"color,omitempty"`
+	Address string                 `json:"address"`
+	Token   string                 `json:"token"`
 }
 
 // Store is the computers this app knows, and which one its window showed last, kept in a file.
@@ -102,13 +103,14 @@ func (s *Store) Add(computer Computer) error {
 	return s.save()
 }
 
-// Rename gives a kept computer the name the person calls it by: its address and token stay.
-func (s *Store) Rename(id, name string) error {
+// Edit gives a kept computer the name and colour the person chose: its address and token stay.
+func (s *Store) Edit(id, name string, color protocol.ComputerColor) error {
 	index := slices.IndexFunc(s.kept.Computers, func(known Computer) bool { return known.ID == id })
 	if index < 0 {
 		return errors.New(noComputer)
 	}
 	s.kept.Computers[index].Name = name
+	s.kept.Computers[index].Color = color
 	return s.save()
 }
 

@@ -7,9 +7,25 @@ import { z } from 'zod';
  */
 export const THIS_COMPUTER = 'local';
 
-// `reachable`: its swcode answers the app now.
+/** The colours a paired computer can take, as the app's primary colour while it shows that computer. */
+export const COMPUTER_COLORS = [
+  'amber',
+  'blue',
+  'green',
+  'orange',
+  'pink',
+  'red',
+  'slate',
+  'teal',
+  'violet',
+] as const;
+export const ComputerColorSchema = z.enum(COMPUTER_COLORS);
+export type ComputerColor = z.infer<typeof ComputerColorSchema>;
+
+// `reachable`: its swcode answers the app now. `color`: the primary colour it takes while shown; none for the default.
 export const ComputerSchema = z.object({
   address: z.string(),
+  color: ComputerColorSchema.optional(),
   id: z.string(),
   name: z.string(),
   reachable: z.boolean(),
@@ -26,7 +42,13 @@ export const DesktopRequestSchema = z.discriminatedUnion('type', [
     type: z.literal('addComputer'),
   }),
   z.object({ id: z.string(), type: z.literal('openComputer') }),
-  z.object({ id: z.string(), name: z.string().trim().min(1).max(60), type: z.literal('renameComputer') }),
+  // The name and colour the app keeps for that computer; no colour is the default one.
+  z.object({
+    color: ComputerColorSchema.optional(),
+    id: z.string(),
+    name: z.string().trim().min(1).max(60),
+    type: z.literal('editComputer'),
+  }),
   z.object({ id: z.string(), type: z.literal('forgetComputer') }),
   z.object({ type: z.literal('openOutside'), url: z.string() }),
 ]);

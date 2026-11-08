@@ -55,6 +55,8 @@ var Restarts = []Restart{RestartSelf, RestartPerson}
 
 var StartupModes = []StartupMode{StartupModeOff, StartupModeTray, StartupModeDaemon}
 
+var ComputerColors = []ComputerColor{ComputerColorAmber, ComputerColorBlue, ComputerColorGreen, ComputerColorOrange, ComputerColorPink, ComputerColorRed, ComputerColorSlate, ComputerColorTeal, ComputerColorViolet}
+
 const ThisComputer = "local"
 
 const APIPrefix = "/api/"
@@ -314,6 +316,29 @@ const (
 func (v StartupMode) Valid() bool {
 	switch v {
 	case StartupModeOff, StartupModeTray, StartupModeDaemon:
+		return true
+	}
+	return false
+}
+
+type ComputerColor string
+
+const (
+	ComputerColorAmber  ComputerColor = "amber"
+	ComputerColorBlue   ComputerColor = "blue"
+	ComputerColorGreen  ComputerColor = "green"
+	ComputerColorOrange ComputerColor = "orange"
+	ComputerColorPink   ComputerColor = "pink"
+	ComputerColorRed    ComputerColor = "red"
+	ComputerColorSlate  ComputerColor = "slate"
+	ComputerColorTeal   ComputerColor = "teal"
+	ComputerColorViolet ComputerColor = "violet"
+)
+
+// Valid tells whether v is one of the ComputerColor values.
+func (v ComputerColor) Valid() bool {
+	switch v {
+	case ComputerColorAmber, ComputerColorBlue, ComputerColorGreen, ComputerColorOrange, ComputerColorPink, ComputerColorRed, ComputerColorSlate, ComputerColorTeal, ComputerColorViolet:
 		return true
 	}
 	return false
@@ -4537,10 +4562,29 @@ func (v *StartupView) Normalize() error {
 }
 
 type Computer struct {
-	Address   string `json:"address"`
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	Reachable bool   `json:"reachable"`
+	Address   string        `json:"address"`
+	Color     ComputerColor `json:"color,omitempty"`
+	ID        string        `json:"id"`
+	Name      string        `json:"name"`
+	Reachable bool          `json:"reachable"`
+}
+
+func (v *Computer) UnmarshalJSON(data []byte) error {
+	type plain Computer
+	p := plain{}
+	if err := json.Unmarshal(data, &p); err != nil {
+		return err
+	}
+	*v = Computer(p)
+	return v.Normalize()
+}
+
+// Normalize trims and checks what the app sent, as its schema does.
+func (v *Computer) Normalize() error {
+	if v.Color != "" && !v.Color.Valid() {
+		return fmt.Errorf("%s: unknown value %q", "color", v.Color)
+	}
+	return nil
 }
 
 // DesktopAnswer holds one of its variants, told apart by "type".
@@ -4651,7 +4695,7 @@ func (DesktopRequestAddComputer) isDesktopRequest() {}
 
 func (DesktopRequestOpenComputer) isDesktopRequest() {}
 
-func (DesktopRequestRenameComputer) isDesktopRequest() {}
+func (DesktopRequestEditComputer) isDesktopRequest() {}
 
 func (DesktopRequestForgetComputer) isDesktopRequest() {}
 
@@ -4690,8 +4734,8 @@ func (u *DesktopRequest) UnmarshalJSON(data []byte) error {
 			return err
 		}
 		u.Value = value
-	case "\"renameComputer\"":
-		var value DesktopRequestRenameComputer
+	case "\"editComputer\"":
+		var value DesktopRequestEditComputer
 		if err := json.Unmarshal(data, &value); err != nil {
 			return err
 		}
@@ -4719,7 +4763,7 @@ type DesktopRequestMapper[R any] interface {
 	ListComputers(DesktopRequestListComputers) R
 	AddComputer(DesktopRequestAddComputer) R
 	OpenComputer(DesktopRequestOpenComputer) R
-	RenameComputer(DesktopRequestRenameComputer) R
+	EditComputer(DesktopRequestEditComputer) R
 	ForgetComputer(DesktopRequestForgetComputer) R
 	OpenOutside(DesktopRequestOpenOutside) R
 }
@@ -4733,8 +4777,8 @@ func MapDesktopRequest[R any](u DesktopRequest, m DesktopRequestMapper[R]) R {
 		return m.AddComputer(value)
 	case DesktopRequestOpenComputer:
 		return m.OpenComputer(value)
-	case DesktopRequestRenameComputer:
-		return m.RenameComputer(value)
+	case DesktopRequestEditComputer:
+		return m.EditComputer(value)
 	case DesktopRequestForgetComputer:
 		return m.ForgetComputer(value)
 	case DesktopRequestOpenOutside:
@@ -4808,32 +4852,36 @@ func (v DesktopRequestOpenComputer) MarshalJSON() ([]byte, error) {
 	}{"openComputer", p})
 }
 
-type DesktopRequestRenameComputer struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
+type DesktopRequestEditComputer struct {
+	Color ComputerColor `json:"color,omitempty"`
+	ID    string        `json:"id"`
+	Name  string        `json:"name"`
 }
 
-func (v DesktopRequestRenameComputer) MarshalJSON() ([]byte, error) {
-	type plain DesktopRequestRenameComputer
+func (v DesktopRequestEditComputer) MarshalJSON() ([]byte, error) {
+	type plain DesktopRequestEditComputer
 	p := plain(v)
 	return json.Marshal(struct {
 		Key string `json:"type"`
 		plain
-	}{"renameComputer", p})
+	}{"editComputer", p})
 }
 
-func (v *DesktopRequestRenameComputer) UnmarshalJSON(data []byte) error {
-	type plain DesktopRequestRenameComputer
+func (v *DesktopRequestEditComputer) UnmarshalJSON(data []byte) error {
+	type plain DesktopRequestEditComputer
 	p := plain{}
 	if err := json.Unmarshal(data, &p); err != nil {
 		return err
 	}
-	*v = DesktopRequestRenameComputer(p)
+	*v = DesktopRequestEditComputer(p)
 	return v.Normalize()
 }
 
 // Normalize trims and checks what the app sent, as its schema does.
-func (v *DesktopRequestRenameComputer) Normalize() error {
+func (v *DesktopRequestEditComputer) Normalize() error {
+	if v.Color != "" && !v.Color.Valid() {
+		return fmt.Errorf("%s: unknown value %q", "color", v.Color)
+	}
 	v.Name = strings.TrimSpace(v.Name)
 	if utf8.RuneCountInString(v.Name) < 1 {
 		return fmt.Errorf("%s: must not be empty", "name")

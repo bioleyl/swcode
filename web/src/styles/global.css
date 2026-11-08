@@ -22,3 +22,79 @@ body {
 ::selection {
   background: color-mix(in srgb, var(--jl-brand) 22%, transparent);
 }
+
+/*
+ * A paired computer's colour, while its swcode is the one shown: the accent family and the focus ring. The variants
+ * follow the theme through light-dark(), and the tints through what the theme's surface and text are.
+ */
+:root[data-computer-color="blue"] {
+  --jl-computer-light: #0c72b0;
+  --jl-computer-dark: #3ea6e8;
+  --jl-computer-on-light: #fff;
+  --jl-computer-on-dark: #04131c;
+}
+
+:root[data-computer-color="violet"] {
+  --jl-computer-light: #6d4bd0;
+  --jl-computer-dark: #a99bf0;
+  --jl-computer-on-light: #fff;
+  --jl-computer-on-dark: #1a1230;
+}
+
+:root[data-computer-color="green"] {
+  --jl-computer-light: #17784a;
+  --jl-computer-dark: #4cc38a;
+  --jl-computer-on-light: #fff;
+  --jl-computer-on-dark: #04130b;
+}
+
+:root[data-computer-color="amber"] {
+  --jl-computer-light: #9a5b00;
+  --jl-computer-dark: #e5a54b;
+  --jl-computer-on-light: #fff;
+  --jl-computer-on-dark: #1c1204;
+}
+
+:root[data-computer-color="red"] {
+  --jl-computer-light: #b42318;
+  --jl-computer-dark: #f0786c;
+  --jl-computer-on-light: #fff;
+  --jl-computer-on-dark: #1c0604;
+}
+
+:root[data-computer-color="orange"] {
+  --jl-computer-light: #c2410c;
+  --jl-computer-dark: #fb923c;
+  --jl-computer-on-light: #fff;
+  --jl-computer-on-dark: #1c0a04;
+}
+
+:root[data-computer-color="pink"] {
+  --jl-computer-light: #b0306a;
+  --jl-computer-dark: #f28ab8;
+  --jl-computer-on-light: #fff;
+  --jl-computer-on-dark: #200a14;
+}
+
+:root[data-computer-color="teal"] {
+  --jl-computer-light: #127a72;
+  --jl-computer-dark: #4fc1b5;
+  --jl-computer-on-light: #fff;
+  --jl-computer-on-dark: #041614;
+}
+
+:root[data-computer-color="slate"] {
+  --jl-computer-light: #4b5563;
+  --jl-computer-dark: #aeb7c2;
+  --jl-computer-on-light: #fff;
+  --jl-computer-on-dark: #11151a;
+}
+
+:root[data-computer-color] {
+  --jl-accent: light-dark(var(--jl-computer-light), var(--jl-computer-dark));
+  --jl-accent-strong: color-mix(in srgb, var(--jl-accent) 80%, var(--jl-text));
+  --jl-accent-soft: color-mix(in srgb, var(--jl-accent) 12%, var(--jl-surface));
+  --jl-accent-line: color-mix(in srgb, var(--jl-accent) 35%, var(--jl-surface));
+  --jl-focus-ring: 0 0 0 3px color-mix(in srgb, var(--jl-accent) 35%, transparent);
+  --jl-on-accent: light-dark(var(--jl-computer-on-light), var(--jl-computer-on-dark));
+}

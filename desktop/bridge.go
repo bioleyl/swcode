@@ -55,8 +55,8 @@ func (b bridge) OpenComputer(request protocol.DesktopRequestOpenComputer) struct
 	return struct{}{}
 }
 
-func (b bridge) RenameComputer(request protocol.DesktopRequestRenameComputer) struct{} {
-	b.w.renameComputer(request.ID, request.Name)
+func (b bridge) EditComputer(request protocol.DesktopRequestEditComputer) struct{} {
+	b.w.editComputer(request.ID, request.Name, request.Color)
 	return struct{}{}
 }
 
@@ -96,12 +96,12 @@ func (w *window) computerAdded(_, _, _ uintptr) uintptr {
 	return 0
 }
 
-// renameComputer gives another computer the name the person calls it by.
-func (w *window) renameComputer(id, name string) {
+// editComputer gives another computer the name and colour the person chose.
+func (w *window) editComputer(id, name string, color protocol.ComputerColor) {
 	if id == protocol.ThisComputer {
 		return
 	}
-	if err := w.computers.Rename(id, name); err != nil {
+	if err := w.computers.Edit(id, name, color); err != nil {
 		w.answer(protocol.DesktopAnswer{Value: protocol.DesktopAnswerComputerRefused{Message: err.Error()}})
 		return
 	}
@@ -129,7 +129,8 @@ func (w *window) computerViews() []protocol.Computer {
 	views := []protocol.Computer{{Address: address, ID: protocol.ThisComputer, Name: thisComputer, Reachable: w.current != nil}}
 	for _, computer := range w.computers.All() {
 		views = append(views, protocol.Computer{
-			Address: computer.Address, ID: computer.ID, Name: computer.Name, Reachable: w.notices.isReachable(computer.ID),
+			Address: computer.Address, Color: computer.Color, ID: computer.ID, Name: computer.Name,
+			Reachable: w.notices.isReachable(computer.ID),
 		})
 	}
 	return views

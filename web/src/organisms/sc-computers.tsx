@@ -9,9 +9,10 @@ import {
   JlInput,
   JlListItem,
   JlMenu,
+  JlSelect,
 } from '@syware/jlib';
 
-import { THIS_COMPUTER } from '../../../shared/protocol/desktop.schema';
+import { COMPUTER_COLORS, ComputerColorSchema, THIS_COMPUTER } from '../../../shared/protocol/desktop.schema';
 import { ScElement } from '../base/sc-element';
 import {
   isLocalBase,
@@ -26,8 +27,8 @@ import { NO_CODE, newPairingCode } from '../services/pairing';
 import { BASE_STYLES } from '../styles/shared';
 import styles from './sc-computers.css?inline';
 
-import type { MenuItem, Tone } from '@syware/jlib';
-import type { Computer, DesktopAnswer } from '../../../shared/protocol/desktop.schema';
+import type { MenuItem, SelectOption, Tone } from '@syware/jlib';
+import type { Computer, ComputerColor, DesktopAnswer } from '../../../shared/protocol/desktop.schema';
 import type { PairingCode } from '../../../shared/protocol/pairing.schema';
 import type { ComputerAction, DesktopAnswerHandlers, DesktopAnswerMap } from '../types/desktop.types';
 
@@ -35,8 +36,24 @@ const PAIRING = 'Pairing…';
 const ADDED = 'Added: open it to show its swcode here.';
 const NO_ADDRESS = 'Type that computer’s address.';
 const NO_NAME = 'Type the name this app should call that computer.';
+const DEFAULT_COLOR = 'default';
+const COLOR_LABELS: Readonly<Record<ComputerColor, string>> = {
+  amber: 'Amber',
+  blue: 'Blue',
+  green: 'Green',
+  orange: 'Orange',
+  pink: 'Pink',
+  red: 'Red',
+  slate: 'Slate',
+  teal: 'Teal',
+  violet: 'Violet',
+};
+const COLOR_OPTIONS: SelectOption[] = [
+  { label: 'Default', value: DEFAULT_COLOR },
+  ...COMPUTER_COLORS.map((color) => ({ label: COLOR_LABELS[color], value: color })),
+];
 const COMPUTER_ACTIONS: MenuItem<ComputerAction>[] = [
-  { icon: 'pencil', label: 'Rename', value: 'rename' },
+  { icon: 'pencil', label: 'Edit', value: 'edit' },
   { divider: true },
   { danger: true, icon: 'trash', label: 'Forget', value: 'forget' },
 ];
@@ -61,8 +78,8 @@ export class ScComputers extends ScElement {
 
   // Set from asking the app to pair until it answers.
   private _pairing = false;
-  // The computer the rename dialog is open on, until it closes.
-  private _renaming: Computer | undefined;
+  // The computer the edit dialog is open on, until it closes.
+  private _editing: Computer | undefined;
   private _code: PairingCode | undefined;
   // Why there is no code: what the daemon said, or that it does not answer.
   private _problem = NO_CODE;
@@ -73,16 +90,16 @@ export class ScComputers extends ScElement {
     computerRefused: (answer) => {
       this._pairing = false;
       this._refs.add.loading.set(false);
-      if (this._renaming) {
-        this.refuseRename(answer.message);
+      if (this._editing) {
+        this.refuseEdit(answer.message);
         return;
       }
       this.say(answer.message, 'danger');
     },
     computers: (answer) => {
       this.renderComputers(answer.computers, answer.current);
-      if (this._renaming) {
-        this._refs.rename.close();
+      if (this._editing) {
+        this._refs.edit.close();
       }
       if (!this._pairing) {
         return;
@@ -102,6 +119,12 @@ export class ScComputers extends ScElement {
     computers: ref('.computers'),
     copyAddress: ref<JlCopyButton>('.copy-address'),
     copyCode: ref<JlCopyButton>('.copy-code'),
+    edit: ref(JlDialog),
+    editCancel: ref<JlButton>('.edit-cancel'),
+    editColor: ref<JlSelect>('.edit-color'),
+    editName: ref<JlInput>('.edit-name'),
+    editProblem: ref<JlAlert>('.edit-problem'),
+    editSave: ref<JlButton>('.edit-save'),
     expires: ref('.expires'),
     feedback: ref<JlAlert>('.feedback'),
     form: ref<HTMLFormElement>('form'),
@@ -109,11 +132,6 @@ export class ScComputers extends ScElement {
     notInApp: ref('.not-in-app'),
     pairAddress: ref('.address'),
     pairingCode: ref('.code'),
-    rename: ref(JlDialog),
-    renameCancel: ref<JlButton>('.rename-cancel'),
-    renameName: ref<JlInput>('.rename-name'),
-    renameProblem: ref<JlAlert>('.rename-problem'),
-    renameSave: ref<JlButton>('.rename-save'),
   }));
 
   templateHtml(): Node {
@@ -163,15 +181,18 @@ export class ScComputers extends ScElement {
             <JlButton class="add" type="submit" variant="primary" label="Add" />
           </div>
         </form>
-        <JlDialog class="rename" heading="Rename computer" size="sm">
-          <div class="rename-body">
+        <JlDialog class="edit" heading="Edit computer" size="sm">
+          <div class="edit-body">
             <JlField label="Name" hint="What this app calls that computer. Its address and token stay.">
-              <JlInput class="rename-name" autocomplete="off" />
+              <JlInput class="edit-name" autocomplete="off" />
             </JlField>
-            <JlAlert class="rename-problem" tone="danger" hidden />
+            <JlField label="Colour" hint="The primary colour while this computer is shown.">
+              <JlSelect class="edit-color" options={COLOR_OPTIONS} />
+            </JlField>
+            <JlAlert class="edit-problem" tone="danger" hidden />
           </div>
-          <JlButton slot="actions" class="rename-cancel" label="Cancel" />
-          <JlButton slot="actions" class="rename-save" variant="primary" label="Save" />
+          <JlButton slot="actions" class="edit-cancel" label="Cancel" />
+          <JlButton slot="actions" class="edit-save" variant="primary" label="Save" />
         </JlDialog>
         <p class="not-in-app" hidden>
           {NOT_IN_APP}
@@ -193,9 +214,9 @@ export class ScComputers extends ScElement {
       this.add();
     });
     this._refs.add.events.register('press', () => this.add());
-    this._refs.rename.events.register('close', () => this.stopRenaming());
-    this._refs.renameCancel.events.register('press', () => this._refs.rename.close());
-    this._refs.renameSave.events.register('press', () => this.rename());
+    this._refs.edit.events.register('close', () => this.stopEditing());
+    this._refs.editCancel.events.register('press', () => this._refs.edit.close());
+    this._refs.editSave.events.register('press', () => this.edit());
     onDesktopAnswer((answer) => this.hear(answer), this.killSignal);
     askDesktop({ type: 'listComputers' });
     if (this.active.get()) {
@@ -317,43 +338,50 @@ export class ScComputers extends ScElement {
 
   private act(action: ComputerAction, computer: Computer): void {
     const actions: Record<ComputerAction, () => void> = {
+      edit: () => this.openEdit(computer),
       forget: () => askDesktop({ id: computer.id, type: 'forgetComputer' }),
-      rename: () => this.openRename(computer),
     };
     actions[action]();
   }
 
-  private openRename(computer: Computer): void {
-    this._renaming = computer;
-    this._refs.rename.heading.set(`Rename ${computer.name}`);
-    this._refs.renameName.value.set(computer.name);
-    this.refuseRename('');
-    this._refs.rename.show();
+  private openEdit(computer: Computer): void {
+    this._editing = computer;
+    this._refs.edit.heading.set(`Edit ${computer.name}`);
+    this._refs.editName.value.set(computer.name);
+    this._refs.editColor.value.set(computer.color ?? DEFAULT_COLOR);
+    this.refuseEdit('');
+    this._refs.edit.show();
   }
 
-  private rename(): void {
-    const computer = this._renaming;
+  private edit(): void {
+    const computer = this._editing;
     if (!computer) {
       return;
     }
-    const name = this._refs.renameName.value.get().trim();
+    const name = this._refs.editName.value.get().trim();
     if (name === '') {
-      this.refuseRename(NO_NAME);
+      this.refuseEdit(NO_NAME);
       return;
     }
-    this._refs.renameSave.loading.set(true);
-    askDesktop({ id: computer.id, name, type: 'renameComputer' });
+    const color = this.colorChosen();
+    this._refs.editSave.loading.set(true);
+    askDesktop({ id: computer.id, name, type: 'editComputer', ...(color === undefined ? {} : { color }) });
   }
 
-  private stopRenaming(): void {
-    this._renaming = undefined;
-    this.refuseRename('');
+  private colorChosen(): ComputerColor | undefined {
+    const chosen = ComputerColorSchema.safeParse(this._refs.editColor.value.get());
+    return chosen.success ? chosen.data : undefined;
   }
 
-  private refuseRename(problem: string): void {
-    this._refs.renameSave.loading.set(false);
-    this._refs.renameProblem.description.set(problem);
-    this._refs.renameProblem.hidden = problem === '';
+  private stopEditing(): void {
+    this._editing = undefined;
+    this.refuseEdit('');
+  }
+
+  private refuseEdit(problem: string): void {
+    this._refs.editSave.loading.set(false);
+    this._refs.editProblem.description.set(problem);
+    this._refs.editProblem.hidden = problem === '';
   }
 
   private renderComputers(computers: readonly Computer[], current: string): void {

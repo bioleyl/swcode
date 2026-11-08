@@ -69,20 +69,23 @@ func TestAComputerNoSwcodeAnswersOnSaysSo(t *testing.T) {
 	}
 }
 
-func TestAComputerKeepsTheNameThePersonGivesIt(t *testing.T) {
+func TestAComputerKeepsTheNameAndColourThePersonGivesIt(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "computers.json")
 	store := computers.Load(file)
 	_ = store.Add(computers.Computer{Address: "http://192.168.1.20:4500", ID: "a", Name: "192.168.1.20", Token: "t1"})
-	if err := store.Rename("a", "gmktec"); err != nil {
+	if err := store.Edit("a", "gmktec", protocol.ComputerColorViolet); err != nil {
 		t.Fatal(err)
 	}
 	again := computers.Load(file)
-	renamed, found := again.Find("a")
-	if !found || renamed.Name != "gmktec" || renamed.Address != "http://192.168.1.20:4500" || renamed.Token != "t1" {
-		t.Fatalf("found %+v, kept %v", renamed, found)
+	edited, found := again.Find("a")
+	if !found || edited.Name != "gmktec" || edited.Color != protocol.ComputerColorViolet {
+		t.Fatalf("found %+v, kept %v", edited, found)
 	}
-	if err := again.Rename("missing", "other"); err == nil {
-		t.Fatal("a computer that is not kept was renamed")
+	if edited.Address != "http://192.168.1.20:4500" || edited.Token != "t1" {
+		t.Fatalf("the address or token changed: %+v", edited)
+	}
+	if err := again.Edit("missing", "other", ""); err == nil {
+		t.Fatal("a computer that is not kept was edited")
 	}
 }
 

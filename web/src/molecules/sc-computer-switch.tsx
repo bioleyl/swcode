@@ -3,6 +3,7 @@ import { JlIcon, JlSelect } from '@syware/jlib';
 
 import { THIS_COMPUTER } from '../../../shared/protocol/desktop.schema';
 import { ScElement } from '../base/sc-element';
+import { applyComputerColor } from '../services/computer-color';
 import { askDesktop, inDesktopApp, onDesktopAnswer } from '../services/desktop';
 import { navigate, settingsPath } from '../services/navigation';
 import { BASE_STYLES, PILL_SELECT_STYLES } from '../styles/shared';
@@ -88,6 +89,7 @@ export class ScComputerSwitch extends ScElement {
     this._refs.select.options.set(optionsOf(computers));
     this._refs.select.value.set(current);
     this.renderPlace(current !== THIS_COMPUTER);
+    applyComputerColor(computers.find((computer) => computer.id === current)?.color);
   }
 
   /** A browser knows the daemon's machine, and whether the page came from this one. */
