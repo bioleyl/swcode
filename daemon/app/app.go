@@ -44,10 +44,8 @@ const (
 	devicesFile  = "devices.json"
 	projectsFile = "projects.json"
 	// updatesFile keeps whether to look for a newer version every 10 minutes.
-	updatesFile = "updates.json"
-	// maxSubagentSteps: a subagent answers one question, it needs fewer steps, and the main agent waits for it.
-	maxSubagentSteps = 30
-	defaultWebDir    = "dist/web"
+	updatesFile   = "updates.json"
+	defaultWebDir = "dist/web"
 )
 
 // Options is what a daemon may be given instead of what it finds by itself: the tests' stand-ins, and how it stops.
@@ -214,7 +212,7 @@ func New(settings config.Config, options Options) (*App, error) {
 	}
 	service = sessions.NewService(sessions.Deps{
 		Browser: found, HTTP: options.HTTP, Hosts: registry, ImageURL: settings.ImageURL,
-		ImagesFolder: app.imagesFolder, LogError: logError, MaxSteps: maxSteps, MaxSubagentSteps: maxSubagentSteps,
+		ImagesFolder: app.imagesFolder, LogError: logError, MaxSteps: maxSteps, MaxSubagentSteps: settings.SubagentMaxSteps,
 		Model: servers, Models: modelService, NewID: options.NewID, Now: options.Now,
 		OnWorkspace: func(path string, host protocol.HostRef) { app.Projects.Ensure(path, host) },
 		Search: web.Paced(func(ctx context.Context, query string) web.SearchOutcome {

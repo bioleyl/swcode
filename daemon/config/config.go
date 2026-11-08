@@ -28,8 +28,10 @@ const (
 	// maxSteps is enough for a long task (a local model takes 20 to 40 s a step); past it, the model reports what it
 	// did. The settings page changes it (SWCODE_MAX_STEPS).
 	defaultMaxSteps = 150
-	minMaxSteps     = 1
-	maxMaxSteps     = 1000
+	// A subagent answers one question, so it needs fewer, and the main agent waits for it (SWCODE_SUBAGENT_MAX_STEPS).
+	defaultSubagentMaxSteps = 30
+	minMaxSteps             = 1
+	maxMaxSteps             = 1000
 
 	// defaultReleases is swcode's latest release in GitHub's API: updates come from there.
 	defaultReleases = "https://api.github.com/repos/bioleyl/swcode/releases/latest"
@@ -52,6 +54,7 @@ const (
 	envReleasesURL      = "SWCODE_RELEASES_URL"
 	envShutdownTimeout  = "SWCODE_SHUTDOWN_TIMEOUT_MS"
 	envSSHEndpoints     = "SWCODE_SSH_ENDPOINTS"
+	envSubagentMaxSteps = "SWCODE_SUBAGENT_MAX_STEPS"
 	envSubagentThinking = "SWCODE_SUBAGENT_THINKING"
 	envThinking         = "SWCODE_THINKING"
 	envToken            = "SWCODE_TOKEN"
@@ -102,6 +105,8 @@ type Config struct {
 	ShutdownTimeoutMs int
 	// Machines projects can be on, reached over SSH: ssh destinations, by commas or spaces.
 	SSHEndpoints []string
+	// How many times a subagent may answer before it reports, apart from the main agent's limit.
+	SubagentMaxSteps int
 	// How much subagents think: briefly, their answers being for the main agent.
 	SubagentThinking protocol.ThinkingMode
 	// How much the main agent of a new session thinks: as the model does by itself, unless said.
@@ -215,6 +220,7 @@ func Load(environment map[string]string, defaults Defaults) (Config, error) {
 		ReleasesURL:        r.url(envReleasesURL, defaultReleases),
 		ShutdownTimeoutMs:  r.number(envShutdownTimeout, defaultShutdown, minShutdown, maxShutdown),
 		SSHEndpoints:       endpoints(r.text(envSSHEndpoints)),
+		SubagentMaxSteps:   r.number(envSubagentMaxSteps, defaultSubagentMaxSteps, minMaxSteps, maxMaxSteps),
 		SubagentThinking:   r.thinking(envSubagentThinking, subagentThinking),
 		Thinking:           r.thinking(envThinking, defaultThinking),
 		Token:              r.token(),

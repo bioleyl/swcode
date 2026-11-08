@@ -35,7 +35,7 @@ export const SETTING_FIELDS: Readonly<Record<SettingName, SettingField>> = {
   },
   SWCODE_MAX_STEPS: {
     control: { kind: 'text', placeholder: '150' },
-    hint: 'How many times the agent may act in one turn before it stops and reports what it did: 1 to 1000. A local model takes 20 to 40 s a step, so a long task needs many.',
+    hint: 'How many times the main agent may act in one turn before it stops and reports what it did: 1 to 1000. A local model takes 20 to 40 s a step, so a long task needs many.',
     label: 'Max steps per turn',
   },
   SWCODE_PORT: {
@@ -47,6 +47,11 @@ export const SETTING_FIELDS: Readonly<Record<SettingName, SettingField>> = {
     control: { kind: 'text', placeholder: 'me@build-box, gmktec' },
     hint: 'Machines projects can be on, reached with ssh, by commas: user@host, or a Host of ~/.ssh/config (those come by themselves). A key or the SSH agent must let ssh in without a password. Linux x64 only, for now.',
     label: 'SSH endpoints',
+  },
+  SWCODE_SUBAGENT_MAX_STEPS: {
+    control: { kind: 'text', placeholder: '30' },
+    hint: 'How many times a subagent may act before it stops and reports what it found: 1 to 1000. The main agent waits for its report.',
+    label: 'Max steps per subagent',
   },
   SWCODE_SUBAGENT_THINKING: {
     control: { kind: 'choice', options: thinkingOptions('low') },
@@ -67,7 +72,7 @@ export const SETTING_FIELDS: Readonly<Record<SettingName, SettingField>> = {
 
 export const SETTING_SECTIONS: readonly SettingSection[] = [
   {
-    names: ['SWCODE_THINKING', 'SWCODE_SUBAGENT_THINKING', 'SWCODE_MAX_STEPS'],
+    names: ['SWCODE_THINKING', 'SWCODE_SUBAGENT_THINKING', 'SWCODE_MAX_STEPS', 'SWCODE_SUBAGENT_MAX_STEPS'],
     title: 'Thinking',
     topic: 'thinking',
   },

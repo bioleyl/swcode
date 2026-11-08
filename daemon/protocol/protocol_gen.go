@@ -49,7 +49,7 @@ const MaxContextTokens = 10000000
 
 const MaxSubagentsAtOnce = 20
 
-var EditableSettings = []SettingName{SettingNameSwcodeThinking, SettingNameSwcodeSubagentThinking, SettingNameSwcodeWorkspace, SettingNameSwcodeSSHEndpoints, SettingNameSwcodeImageURL, SettingNameSwcodeHost, SettingNameSwcodePort, SettingNameSwcodeMaxSteps}
+var EditableSettings = []SettingName{SettingNameSwcodeThinking, SettingNameSwcodeSubagentThinking, SettingNameSwcodeWorkspace, SettingNameSwcodeSSHEndpoints, SettingNameSwcodeImageURL, SettingNameSwcodeHost, SettingNameSwcodePort, SettingNameSwcodeMaxSteps, SettingNameSwcodeSubagentMaxSteps}
 
 var Restarts = []Restart{RestartSelf, RestartPerson}
 
@@ -290,12 +290,13 @@ const (
 	SettingNameSwcodeHost             SettingName = "SWCODE_HOST"
 	SettingNameSwcodePort             SettingName = "SWCODE_PORT"
 	SettingNameSwcodeMaxSteps         SettingName = "SWCODE_MAX_STEPS"
+	SettingNameSwcodeSubagentMaxSteps SettingName = "SWCODE_SUBAGENT_MAX_STEPS"
 )
 
 // Valid tells whether v is one of the SettingName values.
 func (v SettingName) Valid() bool {
 	switch v {
-	case SettingNameSwcodeThinking, SettingNameSwcodeSubagentThinking, SettingNameSwcodeWorkspace, SettingNameSwcodeSSHEndpoints, SettingNameSwcodeImageURL, SettingNameSwcodeHost, SettingNameSwcodePort, SettingNameSwcodeMaxSteps:
+	case SettingNameSwcodeThinking, SettingNameSwcodeSubagentThinking, SettingNameSwcodeWorkspace, SettingNameSwcodeSSHEndpoints, SettingNameSwcodeImageURL, SettingNameSwcodeHost, SettingNameSwcodePort, SettingNameSwcodeMaxSteps, SettingNameSwcodeSubagentMaxSteps:
 		return true
 	}
 	return false

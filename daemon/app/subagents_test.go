@@ -162,6 +162,25 @@ func oneSlowSubagent(delay time.Duration, replies ...fakellama.Reply) Options {
 	}
 }
 
+// TestASubagentStopsAtItsOwnStepLimitAndReports: the setting limits subagents apart from the main agent, which
+// gets what the subagent found before it stopped.
+func TestASubagentStopsAtItsOwnStepLimitAndReports(t *testing.T) {
+	test := Start(t, Options{
+		Files: subagentFiles,
+		Replies: []fakellama.Reply{
+			{ToolCalls: []fakellama.ToolCall{agentCall("Find the tools", "TASK-L: where are the tools listed?")}},
+			text("It found src/tools.ts before its steps ran out."),
+		},
+		Scripts:  map[string][]fakellama.Reply{"TASK-L": {call("glob", map[string]any{"pattern": "**/*.ts"}), text("src/tools.ts, as far as I got.")}},
+		Settings: map[string]string{"SWCODE_SUBAGENT_MAX_STEPS": "1"},
+	})
+	sessionID := prompt(t, test, "Where are the tools?")
+	test.WaitForEvent("turnFinished", 2)
+	events := test.Events(sessionID)
+	Expect(t, OfKind(events, "subagentFinished"), `[{"outcome":"limit"}]`)
+	Expect(t, OfKind(events, "subagentReport"), `[{"text":"src/tools.ts, as far as I got.\n[Stopped after 1 steps: the agent was asked for its report.]"}]`)
+}
+
 func TestThePersonTalksWithTheMainAgentWhileItsSubagentWorks(t *testing.T) {
 	test := Start(t, oneSlowSubagent(time.Second, text("Hello! It is still looking."), text("It found them in src/tools.ts.")))
 	sessionID := prompt(t, test, "Where are the tools?")

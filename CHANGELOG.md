@@ -4,6 +4,10 @@ All notable changes to swcode are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- Subagents have a step limit of their own on the settings page: how many times a subagent may act before it stops and reports what it found (`SWCODE_SUBAGENT_MAX_STEPS`, 30 by default, up to 1000). It used to be a fixed 30 whatever the settings said; `SWCODE_MAX_STEPS` limits the main agent only.
+
 ### Changed
 
 - swcode-base is no longer inside the program: swcode's repository publishes it, as a Claude Code plugin (`/plugin marketplace add bioleyl/swcode`, then `/plugin install swcode-base@swcode`) and for skills.sh (`npx skills add bioleyl/swcode`). A project's page installs it and takes it out with the skills CLI, on the project's host, which then needs Node.js 22.20 or later; why the CLI failed shows in a toast.

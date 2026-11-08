@@ -111,7 +111,8 @@ Settings are stored in `~/.swcode/settings.env` (key=value lines). The settings 
 | `SWCODE_PORT` | `4500` | Port the daemon listens on |
 | `SWCODE_DATA_DIR` | `~/.swcode` | Where sessions and settings are stored |
 | `SWCODE_THINKING` | `full` | Reasoning effort for new sessions (`full`, `medium`, `low`, `off`) |
-| `SWCODE_MAX_STEPS` | `150` | Maximum tool calls per turn before the agent stops |
+| `SWCODE_MAX_STEPS` | `150` | Maximum tool calls per turn before the main agent stops |
+| `SWCODE_SUBAGENT_MAX_STEPS` | `30` | Maximum tool calls of a subagent before it stops and reports |
 | `SWCODE_IMAGE_URL` | — | Address of a stable-diffusion.cpp server for image generation |
 | `SWCODE_SSH_ENDPOINTS` | — | Comma-separated SSH hosts for remote projects |
 

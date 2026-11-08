@@ -24,11 +24,14 @@ func TestTheDefaults(t *testing.T) {
 	if config.Thinking != "full" || config.SubagentThinking != "low" || config.LlamaURL != "http://127.0.0.1:8080" {
 		t.Fatalf("got %+v", config)
 	}
+	if config.MaxSteps != 150 || config.SubagentMaxSteps != 30 {
+		t.Fatalf("steps %d, subagents' %d", config.MaxSteps, config.SubagentMaxSteps)
+	}
 }
 
 func TestABadValueSaysWhichSetting(t *testing.T) {
-	_, err := Load(map[string]string{"SWCODE_PORT": "99999", "LLAMA_URL": "gmktec", "SWCODE_THINKING": "lots"}, place)
-	for _, name := range []string{"SWCODE_PORT", "LLAMA_URL", "SWCODE_THINKING"} {
+	_, err := Load(map[string]string{"SWCODE_PORT": "99999", "LLAMA_URL": "gmktec", "SWCODE_THINKING": "lots", "SWCODE_SUBAGENT_MAX_STEPS": "0"}, place)
+	for _, name := range []string{"SWCODE_PORT", "LLAMA_URL", "SWCODE_THINKING", "SWCODE_SUBAGENT_MAX_STEPS"} {
 		if err == nil || !strings.Contains(err.Error(), name) {
 			t.Errorf("%s not named in %v", name, err)
 		}
