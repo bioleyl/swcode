@@ -94,6 +94,18 @@
   color: var(--jl-danger);
 }
 
+.checkpoint {
+  display: flex;
+  align-items: center;
+  gap: var(--jl-space-3);
+  font-size: 13px;
+  color: var(--jl-muted);
+}
+
+.checkpoint-text {
+  flex: 1;
+}
+
 @media (max-width: 720px) {
   .column {
     padding: 20px 16px 16px;

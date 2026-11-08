@@ -1,4 +1,4 @@
-import { css } from '@jadis/core';
+import { createElement, css } from '@jadis/core';
 import { JlButton } from '@syware/jlib';
 
 import { ENDPOINTS } from '../../../shared/protocol/endpoints';
@@ -77,6 +77,14 @@ const ENDINGS: Readonly<Record<TurnOutcome, string>> = {
   stopped: 'Stopped.',
 };
 
+const RESTORE_HINT = 'Restore the files this turn wrote or edited';
+
+const savedText = (count: number): string =>
+  count === 1 ? '1 file saved before this turn' : `${count} files saved before this turn`;
+
+const restoredText = (count: number): string =>
+  count === 1 ? 'Restored 1 file to before that turn.' : `Restored ${count} files to before that turn.`;
+
 /**
  * The conversation of a session, drawn from its events as they come: messages, tool calls, the permission
  * requests waiting for a person, and a line saying what the agent does while it works. It scrolls itself.
@@ -91,6 +99,8 @@ export class ScConversation extends ScElement {
     older: number;
     password: { requestId: string; secret: string };
     question: { requestId: string; answers: string[] };
+    /** The person asked to put back the files a turn changed: its id. */
+    restoreCheckpoint: string;
     sendQueueNow: undefined;
   }>();
 
@@ -133,6 +143,8 @@ export class ScConversation extends ScElement {
       this.finishMessage(event.id, event.text);
       this.doing({ kind: 'working' });
     },
+    checkpointRestored: (event) => this.note(restoredText(event.files.length), 'done'),
+    checkpointSaved: (event) => this.add(this.checkpointNode(event.turnId, event.files)),
     contextCompacted: (event) =>
       this.add(
         <details class="compaction">
@@ -562,6 +574,22 @@ export class ScConversation extends ScElement {
       return;
     }
     this._refs.status.textContent = line;
+  }
+
+  /** The files a turn changed, with the button that puts them back as they were before it. */
+  private checkpointNode(turnId: string, files: readonly string[]): Element {
+    const restore = createElement(JlButton, {
+      attrs: { class: 'restore' },
+      props: { hint: RESTORE_HINT, label: 'Restore', size: 'sm', variant: 'ghost' },
+    });
+    restore.events.register('press', () => this.events.emit('restoreCheckpoint', turnId));
+    const row = (
+      <p class="checkpoint">
+        <span class="checkpoint-text">{savedText(files.length)}</span>
+      </p>
+    );
+    row.append(restore);
+    return row;
   }
 
   private note(text: string, outcome: TurnOutcome): void {

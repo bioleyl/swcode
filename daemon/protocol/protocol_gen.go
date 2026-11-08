@@ -864,6 +864,10 @@ func (SessionEventSubagentFinished) isSessionEvent() {}
 
 func (SessionEventSubagentReport) isSessionEvent() {}
 
+func (SessionEventCheckpointSaved) isSessionEvent() {}
+
+func (SessionEventCheckpointRestored) isSessionEvent() {}
+
 func (SessionEventTurnFinished) isSessionEvent() {}
 
 func (u SessionEvent) MarshalJSON() ([]byte, error) {
@@ -1013,6 +1017,18 @@ func (u *SessionEvent) UnmarshalJSON(data []byte) error {
 			return err
 		}
 		u.Value = value
+	case "\"checkpointSaved\"":
+		var value SessionEventCheckpointSaved
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
+	case "\"checkpointRestored\"":
+		var value SessionEventCheckpointRestored
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
 	case "\"turnFinished\"":
 		var value SessionEventTurnFinished
 		if err := json.Unmarshal(data, &value); err != nil {
@@ -1049,6 +1065,8 @@ type SessionEventMapper[R any] interface {
 	SubagentActivity(SessionEventSubagentActivity) R
 	SubagentFinished(SessionEventSubagentFinished) R
 	SubagentReport(SessionEventSubagentReport) R
+	CheckpointSaved(SessionEventCheckpointSaved) R
+	CheckpointRestored(SessionEventCheckpointRestored) R
 	TurnFinished(SessionEventTurnFinished) R
 }
 
@@ -1099,6 +1117,10 @@ func MapSessionEvent[R any](u SessionEvent, m SessionEventMapper[R]) R {
 		return m.SubagentFinished(value)
 	case SessionEventSubagentReport:
 		return m.SubagentReport(value)
+	case SessionEventCheckpointSaved:
+		return m.CheckpointSaved(value)
+	case SessionEventCheckpointRestored:
+		return m.CheckpointRestored(value)
 	case SessionEventTurnFinished:
 		return m.TurnFinished(value)
 	}
@@ -1723,6 +1745,42 @@ func (v SessionEventSubagentReport) MarshalJSON() ([]byte, error) {
 	}{"subagentReport", p})
 }
 
+type SessionEventCheckpointSaved struct {
+	At     string   `json:"at"`
+	Files  []string `json:"files"`
+	TurnID string   `json:"turnId"`
+}
+
+func (v SessionEventCheckpointSaved) MarshalJSON() ([]byte, error) {
+	type plain SessionEventCheckpointSaved
+	p := plain(v)
+	if p.Files == nil {
+		p.Files = []string{}
+	}
+	return json.Marshal(struct {
+		Key string `json:"kind"`
+		plain
+	}{"checkpointSaved", p})
+}
+
+type SessionEventCheckpointRestored struct {
+	At     string   `json:"at"`
+	Files  []string `json:"files"`
+	TurnID string   `json:"turnId"`
+}
+
+func (v SessionEventCheckpointRestored) MarshalJSON() ([]byte, error) {
+	type plain SessionEventCheckpointRestored
+	p := plain(v)
+	if p.Files == nil {
+		p.Files = []string{}
+	}
+	return json.Marshal(struct {
+		Key string `json:"kind"`
+		plain
+	}{"checkpointRestored", p})
+}
+
 type SessionEventTurnFinished struct {
 	At      string      `json:"at"`
 	ID      string      `json:"id"`
@@ -1854,6 +1912,8 @@ func (ClientMessageAnswerPassword) isClientMessage() {}
 
 func (ClientMessageStopTurn) isClientMessage() {}
 
+func (ClientMessageRestoreCheckpoint) isClientMessage() {}
+
 func (ClientMessageOlderEvents) isClientMessage() {}
 
 func (ClientMessageCompactSession) isClientMessage() {}
@@ -1963,6 +2023,12 @@ func (u *ClientMessage) UnmarshalJSON(data []byte) error {
 		u.Value = value
 	case "\"stopTurn\"":
 		var value ClientMessageStopTurn
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
+	case "\"restoreCheckpoint\"":
+		var value ClientMessageRestoreCheckpoint
 		if err := json.Unmarshal(data, &value); err != nil {
 			return err
 		}
@@ -2082,6 +2148,7 @@ type ClientMessageMapper[R any] interface {
 	AnswerQuestion(ClientMessageAnswerQuestion) R
 	AnswerPassword(ClientMessageAnswerPassword) R
 	StopTurn(ClientMessageStopTurn) R
+	RestoreCheckpoint(ClientMessageRestoreCheckpoint) R
 	OlderEvents(ClientMessageOlderEvents) R
 	CompactSession(ClientMessageCompactSession) R
 	SearchSessions(ClientMessageSearchSessions) R
@@ -2125,6 +2192,8 @@ func MapClientMessage[R any](u ClientMessage, m ClientMessageMapper[R]) R {
 		return m.AnswerPassword(value)
 	case ClientMessageStopTurn:
 		return m.StopTurn(value)
+	case ClientMessageRestoreCheckpoint:
+		return m.RestoreCheckpoint(value)
 	case ClientMessageOlderEvents:
 		return m.OlderEvents(value)
 	case ClientMessageCompactSession:
@@ -2456,6 +2525,20 @@ func (v ClientMessageStopTurn) MarshalJSON() ([]byte, error) {
 		Key string `json:"type"`
 		plain
 	}{"stopTurn", p})
+}
+
+type ClientMessageRestoreCheckpoint struct {
+	SessionID string `json:"sessionId"`
+	TurnID    string `json:"turnId"`
+}
+
+func (v ClientMessageRestoreCheckpoint) MarshalJSON() ([]byte, error) {
+	type plain ClientMessageRestoreCheckpoint
+	p := plain(v)
+	return json.Marshal(struct {
+		Key string `json:"type"`
+		plain
+	}{"restoreCheckpoint", p})
 }
 
 type ClientMessageOlderEvents struct {

@@ -65,6 +65,13 @@ func (h *LocalHost) WriteFile(_ context.Context, path string, data []byte) error
 	return os.WriteFile(path, data, 0o644)
 }
 
+func (h *LocalHost) RemoveFile(_ context.Context, path string) error {
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
+}
+
 func (h *LocalHost) RealPath(_ context.Context, path string) (string, error) {
 	return localRealPath(path)
 }

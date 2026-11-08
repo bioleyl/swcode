@@ -1,6 +1,7 @@
 package app_test
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -361,6 +362,41 @@ func TestEditsGoThroughWithoutAskingInTheAcceptEditsMode(t *testing.T) {
 	test.UntilIdle(session.ID)
 	if len(OfKind(test.Events(session.ID), "permissionRequested")) != 0 || test.ReadFile("fresh.txt") != "new\n" {
 		t.Fatal("asked, or not written")
+	}
+}
+
+func TestARestorePointPutsBackTheFilesATurnChanged(t *testing.T) {
+	test := Start(t, Options{Files: map[string]string{"app.ts": "answer = 41\n"}, Replies: []fakellama.Reply{
+		call("read", map[string]any{"path": "app.ts"}),
+		call("edit", map[string]any{"newString": "42", "oldString": "41", "path": "app.ts"}),
+		call("write", map[string]any{"content": "new\n", "path": "made.ts"}),
+		text("Done."),
+	}})
+	session := test.NewSession(sessions.Request{Mode: protocol.PermissionModeAcceptEdits})
+	if problem := test.App.Sessions.SendPrompt(session.ID, "Change it", nil); problem != "" {
+		t.Fatal(problem)
+	}
+	test.UntilIdle(session.ID)
+	saved := test.WaitForEvent("checkpointSaved", 1).Value.(protocol.SessionEventCheckpointSaved)
+	if !reflect.DeepEqual(saved.Files, []string{"app.ts", "made.ts"}) || saved.TurnID == "" {
+		t.Fatalf("restore point %v", saved)
+	}
+	if test.ReadFile("app.ts") != "answer = 42\n" {
+		t.Fatalf("app.ts is %q", test.ReadFile("app.ts"))
+	}
+
+	if problem := test.App.Sessions.RestoreCheckpoint(session.ID, saved.TurnID); problem != "" {
+		t.Fatal(problem)
+	}
+	if test.ReadFile("app.ts") != "answer = 41\n" {
+		t.Fatalf("app.ts is %q", test.ReadFile("app.ts"))
+	}
+	if _, err := os.Stat(filepath.Join(test.Workspace, "made.ts")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("made.ts survived")
+	}
+	restored := test.WaitForEvent("checkpointRestored", 1).Value.(protocol.SessionEventCheckpointRestored)
+	if !reflect.DeepEqual(restored.Files, saved.Files) || restored.TurnID != saved.TurnID {
+		t.Fatalf("restored %v", restored)
 	}
 }
 

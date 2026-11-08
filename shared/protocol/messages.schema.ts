@@ -90,6 +90,8 @@ export const ClientMessageSchema = z.discriminatedUnion('type', [
     type: z.literal('answerPassword'),
   }),
   z.object({ sessionId: z.string(), type: z.literal('stopTurn') }),
+  // Puts back the files a turn wrote or edited, as they were before it: refused while the session's turn runs.
+  z.object({ sessionId: z.string(), turnId: z.string(), type: z.literal('restoreCheckpoint') }),
   // The `events` messages older than the ones a page shows, sent up from the end of its history, past the
   // `keptBack` the last history said it held back: what a page asks for as the person scrolls to the top. The
   // answer is a `sessionHistory` of them.

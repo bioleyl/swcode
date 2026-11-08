@@ -160,6 +160,11 @@ func (h *ShellHost) WriteFile(ctx context.Context, target string, data []byte) e
 	return err
 }
 
+func (h *ShellHost) RemoveFile(ctx context.Context, target string) error {
+	_, err := h.session.Run(ctx, "rm -f -- "+ShellWord(target))
+	return err
+}
+
 func (h *ShellHost) RealPath(ctx context.Context, target string) (string, error) {
 	answer, err := h.session.Run(ctx, "realpath -m -- "+ShellWord(target))
 	return strings.TrimSpace(answer), err

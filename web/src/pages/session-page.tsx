@@ -26,6 +26,7 @@ import { foundSkills, projectSkillsBus, readProjectSkills } from '../services/pr
 import { markSeen } from '../services/seen-sessions';
 import { deleteSession } from '../services/session-delete';
 import { findSession, sessionListBus } from '../services/session-list';
+import { restoreCheckpoint } from '../services/session-restore';
 import { setSidePanelOpen, sidePanelOpen } from '../services/side-panel';
 import { BASE_STYLES } from '../styles/shared';
 import styles from './session-page.css?inline';
@@ -225,6 +226,7 @@ export class SessionPage extends ScElement {
     conversation.events.register('sendQueueNow', () =>
       daemon.send({ sessionId: this._sessionId, type: 'sendQueueNow' })
     );
+    conversation.events.register('restoreCheckpoint', (turnId) => void restoreCheckpoint(this._sessionId, turnId));
     conversation.events.register('older', (older) =>
       daemon.send({ events: HISTORY_EVENTS, keptBack: older, sessionId: this._sessionId, type: 'olderEvents' })
     );

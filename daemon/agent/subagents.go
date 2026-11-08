@@ -128,6 +128,9 @@ func (h *subagentHost) AskPermission(context.Context, PermissionAsk) protocol.Pe
 	return protocol.PermissionDecisionDeny
 }
 
+// TakeCheckpoint is none: a subagent writes no file, and the turn's restore point is the main agent's.
+func (h *subagentHost) TakeCheckpoint() []string { return nil }
+
 // TakeMessages is none: the person talks to the main agent only.
 func (h *subagentHost) TakeMessages() *PromptMessage { return nil }
 

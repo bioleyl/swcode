@@ -278,6 +278,20 @@ export const SessionEventSchema = z.discriminatedUnion('kind', [
     note: z.string().optional(),
     text: z.string(),
   }),
+  // The files a turn wrote or edited, as they were before it changed them: the turn's restore point.
+  z.object({
+    at,
+    files: z.array(z.string()),
+    kind: z.literal('checkpointSaved'),
+    turnId: z.string(),
+  }),
+  // The files of a restore point, put back as they were before its turn.
+  z.object({
+    at,
+    files: z.array(z.string()),
+    kind: z.literal('checkpointRestored'),
+    turnId: z.string(),
+  }),
   z.object({
     at,
     id: z.string(),

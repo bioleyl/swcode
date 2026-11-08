@@ -14,6 +14,7 @@ import (
 	"swcode/daemon/agent"
 	"swcode/daemon/browser"
 	"swcode/daemon/catalog"
+	"swcode/daemon/checkpoints"
 	"swcode/daemon/hosts"
 	"swcode/daemon/images"
 	"swcode/daemon/llm"
@@ -40,6 +41,10 @@ const (
 	restarted        = "The daemon restarted before the turn ended."
 	notATime         = "%q is not a time the daemon gave."
 	defaultMode      = protocol.PermissionModeAuto
+	// restoreWorking: a turn may still write the files a restore would put back.
+	restoreWorking = "This session is working: wait for its turn to end, or stop it, before restoring files."
+	restoreNoFiles = "This session works in no folder: it has no files to restore."
+	restoreTimeout = 30 * time.Second
 	// jobWatch is how often the jobs of a session are looked at, for the list to drop the ones that ended.
 	jobWatch = 5 * time.Second
 )
@@ -92,9 +97,11 @@ type Deps struct {
 	Hosts            *hosts.Registry
 	MaxSteps         int
 	MaxSubagentSteps int
-	Now              func() time.Time
-	NewID            func() string
-	LogError         func(error)
+	// Checkpoints keeps the files a turn changes, as they were before it; nil keeps none.
+	Checkpoints *checkpoints.Store
+	Now         func() time.Time
+	NewID       func() string
+	LogError    func(error)
 }
 
 // Request is a new session: a chat, or a coding session in a folder on a host; its first message, how it asks and
@@ -128,7 +135,11 @@ type pending struct {
 }
 
 type runningTurn struct {
-	cancel    context.CancelFunc
+	cancel context.CancelFunc
+	// id is the turn's own, made before the agent runs so its restore point bears the same id as its events.
+	id string
+	// recorder keeps the files the turn changes, before it changes them; closed when the turn ends.
+	recorder  *checkpoints.Recorder
 	streaming *protocol.Streaming
 	pending   *pending
 	// setup is what the turn runs with once ready: a peek asks with the same, for the prompt llm-server cached.
@@ -387,6 +398,9 @@ func (s *Service) Remove(sessionID string) string {
 func (s *Service) forget(session *live) {
 	delete(s.sessions, session.meta.ID)
 	s.deps.Store.Remove(session.meta.ID)
+	if s.deps.Checkpoints != nil {
+		s.deps.Checkpoints.Remove(session.meta.ID)
+	}
 	host := s.hostOf(session)
 	jobs := append([]protocol.SessionSummaryJob{}, session.jobs...)
 	go func() {
@@ -564,6 +578,27 @@ func (s *Service) Stop(sessionID string) string {
 	})
 }
 
+// RestoreCheckpoint puts back the files a turn wrote or edited, as they were before it, and deletes those it made.
+// It holds the service while the host writes them, so no turn starts in the middle of a restore.
+func (s *Service) RestoreCheckpoint(sessionID, turnID string) string {
+	return s.withSession(sessionID, func(session *live) string {
+		if session.turn != nil {
+			return restoreWorking
+		}
+		if s.deps.Checkpoints == nil || session.meta.Workspace == "" {
+			return restoreNoFiles
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), restoreTimeout)
+		defer cancel()
+		files, err := s.deps.Checkpoints.Restore(ctx, s.hostOf(session), sessionID, turnID, session.meta.Workspace)
+		if err != nil {
+			return err.Error()
+		}
+		s.record(session, protocol.SessionEventCheckpointRestored{Files: files, TurnID: turnID})
+		return ""
+	})
+}
+
 func (s *Service) SetMode(sessionID string, mode protocol.PermissionMode) string {
 	return s.withSession(sessionID, func(session *live) string {
 		session.meta.Mode = mode
@@ -681,7 +716,7 @@ func (s *Service) inTurn(session *live, work func(ctx context.Context, turn *run
 		return
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	turn := &runningTurn{cancel: cancel}
+	turn := &runningTurn{cancel: cancel, id: s.deps.NewID()}
 	session.turn = turn
 	s.publishSessions()
 	s.turns.Add(1)

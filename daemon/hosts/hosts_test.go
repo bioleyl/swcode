@@ -72,6 +72,15 @@ func TestAHostReadsAndWritesFilesBytesAndOddNamesIncluded(t *testing.T) {
 			if read, _ := host.ReadFile(ctx, odd); !bytes.Equal(read, binary) {
 				t.Fatalf("read %v", read)
 			}
+			if err := host.RemoveFile(ctx, odd); err != nil {
+				t.Fatal(err)
+			}
+			if info, _ := host.FileInfo(ctx, odd); info.Kind != KindMissing {
+				t.Fatalf("removed file is %v", info)
+			}
+			if err := host.RemoveFile(ctx, odd); err != nil {
+				t.Fatalf("removing a missing file: %v", err)
+			}
 			real, err := host.RealPath(ctx, filepath.Join(folder, "src", "..", "later.ts"))
 			if err != nil || real != filepath.Join(folder, "later.ts") {
 				t.Fatalf("real path %q, %v", real, err)

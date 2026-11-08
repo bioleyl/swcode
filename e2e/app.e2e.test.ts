@@ -239,6 +239,26 @@ describe('on a computer', () => {
     expect(readFileSync(join(rig.workspace, 'src/greet.ts'), 'utf8')).toContain('Hi, ');
     expect(await overflow(page)).toBe(0);
   });
+
+  it('puts a turn’s files back as they were before it, once confirmed', async () => {
+    const rig = await start(EDIT_FLOW);
+    const page = await rig.browser.newPage({ viewport: DESKTOP });
+    await page.goto(rig.link);
+    await askForTheEdit(page);
+    await page.locator('sc-permission .allow button').click();
+    await settle(page);
+    await page.getByText('it says').waitFor();
+    const checkpoint = page.locator('sc-conversation .checkpoint');
+    await checkpoint.getByText('1 file saved before this turn').waitFor();
+    expect(readFileSync(join(rig.workspace, 'src/greet.ts'), 'utf8')).toContain('Hi, ');
+
+    await checkpoint.locator('.restore').click();
+    await settle(page);
+    await page.locator('jl-confirm').getByRole('button', { name: 'Restore' }).click();
+    await page.getByText('Restored 1 file to before that turn.').waitFor();
+    expect(readFileSync(join(rig.workspace, 'src/greet.ts'), 'utf8')).toBe(GREET);
+    expect(await overflow(page)).toBe(0);
+  });
 });
 
 describe('the plan', () => {

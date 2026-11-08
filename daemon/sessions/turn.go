@@ -8,6 +8,7 @@ import (
 	"swcode/daemon/agent"
 	"swcode/daemon/browser"
 	"swcode/daemon/catalog"
+	"swcode/daemon/checkpoints"
 	"swcode/daemon/hosts"
 	"swcode/daemon/images"
 	"swcode/daemon/llm"
@@ -80,10 +81,24 @@ func (s *Service) runTurnIn(ctx context.Context, session *live, turn *runningTur
 		s.failTurn(session, message, err)
 		return
 	}
+	recorder := s.keepFilesOf(&ready, session, turn)
+	ready.setup.TurnID = turn.id
 	s.mu.Lock()
 	turn.setup = &ready.setup
+	turn.recorder = recorder
 	s.mu.Unlock()
 	agent.RunTurn(ctx, message, s.hostFor(session, turn, ready, ready.main.Vision), ready.setup)
+}
+
+// keepFilesOf takes the restore point of a coding turn, and works through a host that keeps each file before it is
+// first written; nil for a chat, and where no restore points are kept.
+func (s *Service) keepFilesOf(ready *prepared, session *live, turn *runningTurn) *checkpoints.Recorder {
+	if ready.where.host == nil || s.deps.Checkpoints == nil || session.meta.Workspace == "" {
+		return nil
+	}
+	recorder := s.deps.Checkpoints.Begin(ready.where.host, session.meta.ID, turn.id, session.meta.Workspace)
+	ready.where.host = recorder.Host()
+	return recorder
 }
 
 // compactIn summarizes the conversation with what the session's agent runs with now, its model and its skills.
@@ -199,6 +214,21 @@ func (h *turnHost) Record(event protocol.SessionEventVariant) {
 	h.service.mu.Lock()
 	defer h.service.mu.Unlock()
 	h.service.record(h.session, event)
+}
+
+// TakeCheckpoint closes the turn's restore point, once: the files it kept, for the turn's own event.
+func (h *turnHost) TakeCheckpoint() []string {
+	recorder := h.turn.recorder
+	h.turn.recorder = nil
+	if recorder == nil {
+		return nil
+	}
+	files, err := recorder.Close()
+	if err != nil {
+		h.service.deps.LogError(err)
+		return nil
+	}
+	return files
 }
 
 func (h *turnHost) StreamText(messageID, text string) {

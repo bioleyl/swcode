@@ -107,6 +107,8 @@ type Host interface {
 	ReadFile(ctx context.Context, path string) ([]byte, error)
 	// WriteFile writes a file, its folders made first.
 	WriteFile(ctx context.Context, path string, data []byte) error
+	// RemoveFile deletes a file; one that is not there is no failure.
+	RemoveFile(ctx context.Context, path string) error
 	// RealPath is where a path really leads, links followed; for one not made yet, from its nearest folder that
 	// exists.
 	RealPath(ctx context.Context, path string) (string, error)

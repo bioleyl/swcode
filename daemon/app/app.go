@@ -18,6 +18,7 @@ import (
 	"swcode"
 	"swcode/daemon/browser"
 	"swcode/daemon/catalog"
+	"swcode/daemon/checkpoints"
 	"swcode/daemon/config"
 	"swcode/daemon/hosts"
 	"swcode/daemon/llm"
@@ -36,6 +37,8 @@ import (
 const (
 	sessionsFolder = "sessions"
 	scratchFolder  = "scratch"
+	// checkpointsFolder is the files turns wrote or edited, as they were before, a folder per session and turn.
+	checkpointsFolder = "checkpoints"
 	// imagesFolder is the pictures the agents made, as the app shows them: a folder per session.
 	imagesFolder = "images"
 	// helpersFolder is the programs the daemon's commands run: the password prompt sudo -A and ssh ask with.
@@ -222,8 +225,9 @@ func New(settings config.Config, options Options) (*App, error) {
 			project, _ := app.Projects.Find(path, host)
 			return project.SkillsOff
 		},
-		Store:     sessions.NewStore(filepath.Join(settings.DataDir, sessionsFolder)),
-		ChatTools: chatTools, SubagentTools: exploreTools, Thinking: sessions.Thinking{Session: settings.Thinking, Subagents: settings.SubagentThinking},
+		Store:       sessions.NewStore(filepath.Join(settings.DataDir, sessionsFolder)),
+		Checkpoints: checkpoints.NewStore(filepath.Join(settings.DataDir, checkpointsFolder), logError),
+		ChatTools:   chatTools, SubagentTools: exploreTools, Thinking: sessions.Thinking{Session: settings.Thinking, Subagents: settings.SubagentThinking},
 		Tools: mainTools, Workspace: workspace,
 	})
 	app.Sessions = service

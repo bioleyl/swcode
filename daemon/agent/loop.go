@@ -353,7 +353,10 @@ func taskStep(ctx context.Context, text string, host TurnHost, setup Setup) Task
 // RunTurn runs one turn: the person's message, or none when the subagents' reports woke the agent, then the model
 // and its tools in turns until it answers without a tool call.
 func RunTurn(ctx context.Context, message *PromptMessage, host TurnHost, setup Setup) {
-	turnID := setup.NewID()
+	turnID := setup.TurnID
+	if turnID == "" {
+		turnID = setup.NewID()
+	}
 	host.Record(protocol.SessionEventTurnStarted{ID: turnID})
 	if message != nil {
 		host.Record(UserMessage(setup.NewID(), *message))
@@ -364,5 +367,8 @@ func RunTurn(ctx context.Context, message *PromptMessage, host TurnHost, setup S
 		LoadAskedSkill(ctx, host, setup, message.Text)
 	}
 	ending := steps(ctx, host, setup)
+	if files := host.TakeCheckpoint(); len(files) > 0 {
+		host.Record(protocol.SessionEventCheckpointSaved{Files: files, TurnID: turnID})
+	}
 	host.Record(protocol.SessionEventTurnFinished{ID: turnID, Message: ending.Message, Outcome: ending.Outcome})
 }

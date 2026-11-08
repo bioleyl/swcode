@@ -47,6 +47,9 @@ type TurnHost interface {
 	StreamToolCall(messageID string, tool protocol.ToolName)
 	NeedsPermission(subject permissions.Subject) bool
 	AskPermission(ctx context.Context, ask PermissionAsk) protocol.PermissionDecision
+	// TakeCheckpoint closes the turn's restore point and says which files it kept, once; none for a host that keeps
+	// none.
+	TakeCheckpoint() []string
 	// TakeMessages is what the person sent to come in now, during the turn: once, then it is the turn's.
 	TakeMessages() *PromptMessage
 	// TakeReports is the reports of the subagents that finished since: once, then they are the turn's.
@@ -63,6 +66,8 @@ type Setup struct {
 	Tools        tools.Box
 	SystemPrompt string
 	NewID        func() string
+	// TurnID is the turn's id, made before the turn so its restore point bears it; empty for a new one.
+	TurnID string
 	// MaxSteps is how many times the model may answer in one turn, so a model going round in circles stops.
 	MaxSteps int
 	// ContextTokens is how many tokens a slot of the agent's model holds (0 when unknown): past most of it, the

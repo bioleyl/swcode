@@ -168,6 +168,10 @@ func (h handlers) RenameSession(message protocol.ClientMessageRenameSession) str
 	return h.problem(h.app.Sessions.Rename(message.SessionID, message.Title))
 }
 
+func (h handlers) RestoreCheckpoint(message protocol.ClientMessageRestoreCheckpoint) struct{} {
+	return h.problem(h.app.Sessions.RestoreCheckpoint(message.SessionID, message.TurnID))
+}
+
 func (h handlers) SendPrompt(message protocol.ClientMessageSendPrompt) struct{} {
 	return h.problem(h.app.Sessions.SendPrompt(message.SessionID, message.Text, message.Pictures))
 }
