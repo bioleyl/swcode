@@ -2,7 +2,7 @@
 
 All notable changes to swcode are documented here.
 
-## [Unreleased]
+## [0.6.0] - 2026-11-08
 
 ### Added
 
@@ -11,6 +11,11 @@ All notable changes to swcode are documented here.
 ### Changed
 
 - swcode-base is no longer inside the program: swcode's repository publishes it, as a Claude Code plugin (`/plugin marketplace add bioleyl/swcode`, then `/plugin install swcode-base@swcode`) and for skills.sh (`npx skills add bioleyl/swcode`). A project's page installs it and takes it out with the skills CLI, on the project's host, which then needs Node.js 22.20 or later; why the CLI failed shows in a toast.
+
+### Maintenance
+
+- The keyboard help's list drops its workaround: jlib 0.12's dialog body holds the keycaps' spoken words. An e2e test checks that only the dialog's body scrolls in a short window.
+- The skills for working on swcode come from skills.sh, locked in `skills-lock.json`.
 
 ## [0.5.0] - 2026-11-07
 
@@ -111,7 +116,7 @@ All notable changes to swcode are documented here.
 - Updated release workflow actions for Node 24.
 - Added protocol validation for numeric bounds and optional numbers.
 
-[Unreleased]: https://github.com/bioleyl/swcode/compare/v0.5.0...HEAD
+[0.6.0]: https://github.com/bioleyl/swcode/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/bioleyl/swcode/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/bioleyl/swcode/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/bioleyl/swcode/compare/v0.2.0...v0.3.0
