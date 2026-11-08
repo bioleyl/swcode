@@ -91,6 +91,7 @@ body {
 }
 
 :root[data-computer-color] {
+  --jl-brand: light-dark(var(--jl-computer-light), var(--jl-computer-dark));
   --jl-accent: light-dark(var(--jl-computer-light), var(--jl-computer-dark));
   --jl-accent-strong: color-mix(in srgb, var(--jl-accent) 80%, var(--jl-text));
   --jl-accent-soft: color-mix(in srgb, var(--jl-accent) 12%, var(--jl-surface));
