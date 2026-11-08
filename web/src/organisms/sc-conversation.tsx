@@ -6,6 +6,7 @@ import { ScElement } from '../base/sc-element';
 import { activityLine } from '../lib/activity';
 import { keepingEnd } from '../lib/follow-end';
 import { folderName } from '../lib/format';
+import { atTop, fillsWindow, scrollAfterOlder } from '../lib/history-window';
 import { ScMessage } from '../molecules/sc-message';
 import { ScPassword } from '../molecules/sc-password';
 import { ScPermission } from '../molecules/sc-permission';
@@ -16,6 +17,7 @@ import { authorizedUrl } from '../services/access';
 import { BASE_STYLES } from '../styles/shared';
 import styles from './sc-conversation.css?inline';
 
+import type { Streaming } from '../../../shared/protocol/messages.schema';
 import type { PictureRef } from '../../../shared/protocol/picture.schema';
 import type {
   PermissionDecision,
@@ -30,6 +32,19 @@ import type { SessionEventHandlers, SessionEventMap } from '../types/conversatio
 
 // How close to the end counts as "following along": new content then keeps the end in view.
 const FOLLOW_DISTANCE_PX = 80;
+// How close to the top counts as reaching it: the older events then come. A short way in, so a wheel turn that
+// ends there asks once and the page it brings is already read as it lands above.
+const TOP_DISTANCE_PX = 120;
+// What the top of the conversation says while the older events come. Once they are all here the line goes away: the
+// beginning of the conversation is then simply what is at the top.
+const TOP_LOADING = 'Looking for earlier messages…';
+
+/** Holds rows together, for one of the rare events that draws several (a subagent's report has its note). */
+const fragmentOf = (nodes: readonly Element[]): DocumentFragment => {
+  const fragment = document.createDocumentFragment();
+  fragment.append(...nodes);
+  return fragment;
+};
 // When the waiting messages go: after the turn, or at the agent's next step once the person asked for them now.
 const QUEUE_NOTES = { later: 'Sent when this turn ends.', now: 'Sent at the agent’s next step.' } as const;
 
@@ -72,6 +87,8 @@ export class ScConversation extends ScElement {
   readonly events = this.useEvents<{
     answer: { requestId: string; decision: PermissionDecision };
     cancelQueue: undefined;
+    /** The person reached the top of what is shown: `older` events are missing above it. */
+    older: number;
     password: { requestId: string; secret: string };
     question: { requestId: string; answers: string[] };
     sendQueueNow: undefined;
@@ -88,6 +105,13 @@ export class ScConversation extends ScElement {
   });
   /** The session's id: the pictures pasted in it are its own. */
   readonly session = this.useChange('', () => undefined);
+
+  // The events the session holds before the ones shown, told by the daemon: none means the conversation is whole.
+  private _older = 0;
+  // What the top says about the older events: waiting for them, or not waiting.
+  private _topState: 'loading' | 'none' = 'none';
+  // The rows added since the last turn of the handlers: an older page takes them from the end and puts them above.
+  private _pending: Element[] = [];
 
   private readonly _messages = new Map<string, ScMessage>();
   private readonly _thoughts = new Map<string, ScThinking>();
@@ -229,6 +253,7 @@ export class ScConversation extends ScElement {
     queuedWhen: ref('.queued-when'),
     sendNow: ref<JlButton>('.send-now'),
     status: ref('.working-text'),
+    top: ref('.older'),
     where: ref('.where'),
     working: ref('.working'),
   }));
@@ -239,6 +264,7 @@ export class ScConversation extends ScElement {
         <p class="empty">
           Ask swcode to look into something in <span class="where" />.
         </p>
+        <div class="older" hidden />
         <div class="items" />
         <p class="working" hidden>
           <span class="dot" aria-hidden="true" />
@@ -263,10 +289,12 @@ export class ScConversation extends ScElement {
   onConnect(): void {
     this._refs.cancel.events.register('press', () => this.events.emit('cancelQueue'));
     this._refs.sendNow.events.register('press', () => this.events.emit('sendQueueNow'));
+    this.on(this, 'scroll', () => this.watchTop());
   }
 
-  /** Draws a whole session again, from its history and the answer being written. */
-  load(events: readonly SessionEvent[], streaming: { messageId: string; text: string } | undefined): void {
+  /** Draws the end of a session again, from the history the daemon answered, and the answer being written. */
+  load(events: readonly SessionEvent[], older: number, streaming: Streaming | undefined): void {
+    this._older = older;
     this._messages.clear();
     this._thoughts.clear();
     this._rows.clear();
@@ -274,6 +302,7 @@ export class ScConversation extends ScElement {
     this._subagents.clear();
     this._working.clear();
     this._refs.items.replaceChildren();
+    this._refs.empty.hidden = events.length > 0;
     this.working(false);
     for (const event of events) {
       this.handle(event.kind, event);
@@ -282,6 +311,25 @@ export class ScConversation extends ScElement {
       this.delta(streaming.messageId, streaming.text);
     }
     this.scrollTop = this.scrollHeight;
+    this._topState = 'none';
+    this.showTop();
+    this.askForRoom();
+  }
+
+  /** Adds a page of older events above what is shown, keeping people on what they were reading. */
+  addOlder(events: readonly SessionEvent[], older: number): void {
+    this._older = older;
+    const atEnd = this.isAtEnd();
+    for (const event of [...events].reverse()) {
+      const row = this.nodeOf(event);
+      if (row) {
+        this._refs.items.prepend(row);
+      }
+    }
+    this.scrollTop = scrollAfterOlder(this, atEnd);
+    this._topState = 'none';
+    this.showTop();
+    this.askForRoom();
   }
 
   apply(event: SessionEvent): void {
@@ -305,6 +353,47 @@ export class ScConversation extends ScElement {
 
   private handle<Kind extends keyof SessionEventMap>(kind: Kind, event: SessionEventMap[Kind]): void {
     this._handlers[kind](event);
+  }
+
+  /** The row an event makes, without adding it: an older page goes above what is shown, not after it. Some events
+   * answer a request that was already answered in the meantime and draw nothing at all. */
+  private nodeOf(event: SessionEvent): Node | undefined {
+    this._pending = [];
+    this.handle(event.kind, event);
+    const made = this._pending;
+    this._pending = [];
+    for (const node of made) {
+      node.remove();
+    }
+    return made.length === 1 ? made[0] : made.length === 0 ? undefined : fragmentOf(made);
+  }
+
+  /** Reaches the top of what is shown: the older events come, once, until the session's whole list is here. */
+  private watchTop(): void {
+    if (this._older === 0 || this._topState !== 'none' || !atTop(this, TOP_DISTANCE_PX)) {
+      return;
+    }
+    this._topState = 'loading';
+    this.showTop();
+    this.events.emit('older', this._older);
+  }
+
+  /** The beginning of a conversation too short to fill the window comes by itself: no scrollbar to reach it with. */
+  private askForRoom(): void {
+    if (this._topState === 'none' && fillsWindow(this, this._older)) {
+      this.watchTop();
+    }
+  }
+
+  /** Whether people are looking at the end of the conversation, where a new event would show. */
+  private isAtEnd(): boolean {
+    return this.scrollHeight - this.scrollTop - this.clientHeight < FOLLOW_DISTANCE_PX;
+  }
+
+  /** What the top of the conversation says about the older events: that they are coming. */
+  private showTop(): void {
+    this._refs.top.hidden = this._topState === 'none';
+    this._refs.top.textContent = this._topState === 'none' ? '' : TOP_LOADING;
   }
 
   /** Keeps the end in view when people were looking at it; leaves them where they are when they scrolled up. */
@@ -353,8 +442,9 @@ export class ScConversation extends ScElement {
     return authorizedUrl(`${ENDPOINTS.images}/${encodeURIComponent(this.session.get())}/${picture.file}`);
   }
 
-  private add(node: Node): void {
-    this._refs.items.append(node);
+  private add(row: Element): void {
+    this._pending.push(row);
+    this._refs.items.append(row);
     this._refs.empty.hidden = true;
   }
 

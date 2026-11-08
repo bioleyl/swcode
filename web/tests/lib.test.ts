@@ -15,6 +15,7 @@ import { daemonLine } from '../src/lib/daemon-lines';
 import { childPath } from '../src/lib/folders';
 import { keepingEnd } from '../src/lib/follow-end';
 import { ago, contextText, folderName, percent, tokens } from '../src/lib/format';
+import { atTop, fillsWindow, scrollAfterOlder } from '../src/lib/history-window';
 import { blocksOf } from '../src/lib/markdown';
 import { matchCommands, paletteCommands, paletteTarget } from '../src/lib/palette';
 import { groupByProject, preferredProject, removalConsequence } from '../src/lib/project-groups';
@@ -191,6 +192,50 @@ describe('groupByProject', () => {
     expect(preferredProject(Projects, sessions, undefined)?.id).toBe('api');
     expect(preferredProject(Projects, [], 'gone')?.id).toBe('shop');
     expect(preferredProject([], [], undefined)).toBeUndefined();
+  });
+});
+
+describe('the conversation’s window of events', () => {
+  // A window 100 pixels high, scrolled to 60.
+  const box = (scrollTop: number, scrollHeight = 500) => ({ clientHeight: 100, scrollHeight, scrollTop });
+
+  describe('atTop', () => {
+    it('says yes at the top and just below it', () => {
+      expect(atTop(box(0), 120)).toBe(true);
+      expect(atTop(box(120), 120)).toBe(true);
+    });
+
+    it('says no past the distance', () => {
+      expect(atTop(box(121), 120)).toBe(false);
+    });
+  });
+
+  describe('scrollAfterOlder', () => {
+    // Older events were added above: the browser moved the scroll by their height, to 360 of 800.
+    const grown = () => box(360, 800);
+
+    it('goes back to the end for people who were there', () => {
+      expect(scrollAfterOlder(grown(), true)).toBe(800);
+    });
+
+    it('leaves those who scrolled up where the browser put them, below the page that came in', () => {
+      expect(scrollAfterOlder(grown(), false)).toBe(360);
+    });
+  });
+
+  describe('fillsWindow', () => {
+    it('asks for older events while what is shown is shorter than the window', () => {
+      expect(fillsWindow(box(0, 40), 300)).toBe(true);
+    });
+
+    it('never asks when the session holds nothing older', () => {
+      expect(fillsWindow(box(0, 40), 0)).toBe(false);
+    });
+
+    it('never asks once the window is full of events', () => {
+      expect(fillsWindow(box(0, 100), 300)).toBe(false);
+      expect(fillsWindow(box(0, 500), 300)).toBe(false);
+    });
   });
 });
 

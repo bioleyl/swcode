@@ -39,6 +39,9 @@ const NOT_FOUND = 'This session is not on the daemon.';
 const VISIBILITY_CHANGE = 'visibilitychange';
 // On the host while the side panel is hidden.
 const PANEL_CLOSED = 'panel-closed';
+// How many events a session page opens with, and how many each scroll to the top brings: the same for both, so a
+// page is enough to read through before the next is asked, and few enough for a long session to show at once.
+const HISTORY_EVENTS = 120;
 // The events that can change the plan above the composer: a new turn hides the last one, a plan call shows its own.
 const PLAN_EVENTS: ReadonlySet<SessionEventKind> = new Set(['turnStarted', 'toolFinished']);
 const SUBAGENT_EVENTS: ReadonlySet<SessionEventKind> = new Set([
@@ -85,8 +88,11 @@ export class SessionPage extends ScElement {
   private _used = 0;
   // The project whose skills this page read for the composer: they are read again for another one.
   private _skillsOf: string | undefined;
-  // The session's events so far: the side panel lists its subagents from them.
+  // The session's events the page holds, oldest first: the side panel lists its subagents from them, and its token
+  // count and plan come from them. Older pages are added in front as the person scrolls up.
   private _events: SessionEvent[] = [];
+  // Whether this page has its history yet: the next answer is a page of older events, not the conversation itself.
+  private _opened = false;
 
   readonly route = this.useAttributes({
     id: (id) => {
@@ -110,13 +116,21 @@ export class SessionPage extends ScElement {
         this._refs.conversation.reasoning(message.messageId, message.text)
       ),
     sessionEvent: (message) => this.forThisSession(message.sessionId, () => this.applyEvent(message.event)),
+    // The end of the conversation, or a page of its older events: the first draws the conversation again, the other
+    // is added above what is shown.
     sessionHistory: (message) =>
       this.forThisSession(message.sessionId, () => {
-        this._events = [...message.events];
-        this._refs.conversation.load(message.events, message.streaming);
+        if (this._opened) {
+          this._events = [...message.events, ...this._events];
+          this._refs.conversation.addOlder(message.events, message.keptBack);
+        } else {
+          this._opened = true;
+          this._events = [...message.events];
+          this._refs.conversation.load(message.events, message.keptBack, message.streaming);
+        }
         this._refs.panel.agents.set(agentsOf(this._events));
         this._refs.plan.show(currentPlan(this._events));
-        this.showUsage(usedTokens(message.events));
+        this.showUsage(usedTokens(this._events));
       }),
     toolCallWriting: (message) =>
       this.forThisSession(message.sessionId, () => this._refs.conversation.writingCall(message.tool)),
@@ -169,13 +183,15 @@ export class SessionPage extends ScElement {
   }
 
   onConnect(): void {
+    this._opened = false;
+    this._events = [];
     this.watchDaemon();
     this.wireConversation();
     this.wireComposer();
     this.wireFrame();
     this.renderSummary();
     this.renderDaemon();
-    daemon.send({ sessionId: this._sessionId, type: 'openSession' });
+    this.openHistory();
     this._refs.composer.focusText();
   }
 
@@ -208,6 +224,9 @@ export class SessionPage extends ScElement {
     );
     conversation.events.register('sendQueueNow', () =>
       daemon.send({ sessionId: this._sessionId, type: 'sendQueueNow' })
+    );
+    conversation.events.register('older', (older) =>
+      daemon.send({ events: HISTORY_EVENTS, keptBack: older, sessionId: this._sessionId, type: 'olderEvents' })
     );
   }
 
@@ -263,12 +282,23 @@ export class SessionPage extends ScElement {
     action();
   }
 
-  /** Back online after the daemon went away: the session is drawn again from what the daemon kept. */
+  /** Back online after the daemon went away: the conversation is drawn again from what the daemon kept, so the
+   * older pages the person had scrolled to come with it. */
   private reopen(online: boolean): void {
     if (!online) {
       return;
     }
-    daemon.send({ sessionId: this._sessionId, type: 'openSession' });
+    this._opened = false;
+    this.openHistory();
+  }
+
+  /** Asks for the end of the conversation, and for as much before it as the window already shows. */
+  private openHistory(): void {
+    daemon.send({
+      events: HISTORY_EVENTS + this._events.length,
+      sessionId: this._sessionId,
+      type: 'openSession',
+    });
   }
 
   private send(draft: PromptDraft): void {

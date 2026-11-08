@@ -253,7 +253,7 @@ func until(t *testing.T, service *Service, sessionID string, want protocol.Sessi
 
 func history(t *testing.T, service *Service, sessionID string) []protocol.SessionEvent {
 	t.Helper()
-	message, ok := service.History(sessionID)
+	message, ok := service.History(sessionID, 0)
 	if !ok {
 		t.Fatal("no such session")
 	}
@@ -548,6 +548,100 @@ func TestATurnWhoseModelDoesNotAnswerStillEnds(t *testing.T) {
 	}
 	if problem := service.SendPrompt(sessionID, "again", nil); problem != "" {
 		t.Fatalf("the session is stuck: %q", problem)
+	}
+}
+
+// texts is the text of each user message of a history, to see which events a page holds.
+func texts(t *testing.T, list []protocol.SessionEvent) []string {
+	t.Helper()
+	got := []string{}
+	for _, event := range list {
+		if message, ok := event.Value.(protocol.SessionEventUserMessage); ok {
+			got = append(got, message.Text)
+		}
+	}
+	return got
+}
+
+// pageOf is what a page of history holds: the text of its messages, and how many older events the daemon kept
+// back. The tests ask about a session they made, so it answers.
+func pageOf(t *testing.T, message protocol.ServerMessage) ([]string, int) {
+	t.Helper()
+	history, ok := message.Value.(protocol.ServerMessageSessionHistory)
+	if !ok {
+		t.Fatalf("a history of another kind: %T", message.Value)
+	}
+	return texts(t, history.Events), history.KeptBack
+}
+
+// pagesOf is the same for what History or OlderEvents answered, which the tests expect to be there.
+func pagesOf(t *testing.T, message protocol.ServerMessage, found bool) ([]string, int) {
+	t.Helper()
+	if !found {
+		t.Fatal("the session answered no history")
+	}
+	return pageOf(t, message)
+}
+
+func TestAHistoryOfTheEndKeepsTheOlderEventsBack(t *testing.T) {
+	service, _, _ := chats(t, &words{replies: []string{"One.", "Two.", "Three.", "Four.", "Five."}})
+	sessionID := newChat(t, service)
+	for index := 1; index <= 5; index++ {
+		if problem := service.SendPrompt(sessionID, string(rune('a'+index)), nil); problem != "" {
+			t.Fatal(problem)
+		}
+		until(t, service, sessionID, protocol.SessionStatusIdle)
+	}
+	all, _ := service.History(sessionID, 0)
+	if got, kept := pageOf(t, all); len(got) != 5 || kept != 0 {
+		t.Fatalf("without a limit: %v, %d kept back", got, kept)
+	}
+	// Each turn writes four events: its start, the person's message, the model's answer, its end.
+	last, _ := service.History(sessionID, 2)
+	if got, kept := pageOf(t, last); len(got) != 0 || kept != 18 {
+		t.Fatalf("the last two events, an answer and its end: %v, %d kept back", got, kept)
+	}
+	turn, _ := service.History(sessionID, 4)
+	if got, kept := pageOf(t, turn); !reflect.DeepEqual(got, []string{"f"}) || kept != 16 {
+		t.Fatalf("the last turn: %v, %d kept back", got, kept)
+	}
+	over, _ := service.History(sessionID, 50)
+	if got, kept := pageOf(t, over); len(got) != 5 || kept != 0 {
+		t.Fatalf("a limit past the session: %v, %d kept back", got, kept)
+	}
+}
+
+func TestTheOlderEventsComeUpFromTheEndOfTheHistory(t *testing.T) {
+	service, _, _ := chats(t, &words{replies: []string{"One.", "Two.", "Three.", "Four.", "Five."}})
+	sessionID := newChat(t, service)
+	for index := 1; index <= 5; index++ {
+		if problem := service.SendPrompt(sessionID, string(rune('a'+index)), nil); problem != "" {
+			t.Fatal(problem)
+		}
+		until(t, service, sessionID, protocol.SessionStatusIdle)
+	}
+	// The page a person opens with: the last four events, and as many as the session holds before them.
+	end, found := service.History(sessionID, 4)
+	if _, kept := pagesOf(t, end, found); kept == 0 {
+		t.Fatal("a session of five turns has events to keep back")
+	}
+	// The page above it holds what the session had before those, and how many are left before that.
+	next, found := service.OlderEvents(sessionID, 16, 8)
+	if got, older := pagesOf(t, next, found); len(got) == 0 || older >= 16 {
+		t.Fatalf("the next page up: %v, %d kept back", got, older)
+	}
+	// A page that runs past the beginning holds what is left and says nothing is.
+	first, found := service.OlderEvents(sessionID, 2, 40)
+	if got, older := pagesOf(t, first, found); len(got) == 0 || older != 0 {
+		t.Fatalf("past the beginning: %v, %d kept back", got, older)
+	}
+	// Nothing is older than the whole conversation, and another session has none of its own.
+	none, found := service.OlderEvents(sessionID, 200, 4)
+	if got, older := pagesOf(t, none, found); len(got) != 0 || older != 0 {
+		t.Fatalf("older than all of it: %v, %d kept back", got, older)
+	}
+	if _, found := service.OlderEvents("nope", 4, 4); found {
+		t.Fatal("another session's events")
 	}
 }
 

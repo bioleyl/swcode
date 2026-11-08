@@ -1854,6 +1854,8 @@ func (ClientMessageAnswerPassword) isClientMessage() {}
 
 func (ClientMessageStopTurn) isClientMessage() {}
 
+func (ClientMessageOlderEvents) isClientMessage() {}
+
 func (ClientMessageCompactSession) isClientMessage() {}
 
 func (ClientMessageSearchSessions) isClientMessage() {}
@@ -1961,6 +1963,12 @@ func (u *ClientMessage) UnmarshalJSON(data []byte) error {
 		u.Value = value
 	case "\"stopTurn\"":
 		var value ClientMessageStopTurn
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
+	case "\"olderEvents\"":
+		var value ClientMessageOlderEvents
 		if err := json.Unmarshal(data, &value); err != nil {
 			return err
 		}
@@ -2074,6 +2082,7 @@ type ClientMessageMapper[R any] interface {
 	AnswerQuestion(ClientMessageAnswerQuestion) R
 	AnswerPassword(ClientMessageAnswerPassword) R
 	StopTurn(ClientMessageStopTurn) R
+	OlderEvents(ClientMessageOlderEvents) R
 	CompactSession(ClientMessageCompactSession) R
 	SearchSessions(ClientMessageSearchSessions) R
 	Peek(ClientMessagePeek) R
@@ -2116,6 +2125,8 @@ func MapClientMessage[R any](u ClientMessage, m ClientMessageMapper[R]) R {
 		return m.AnswerPassword(value)
 	case ClientMessageStopTurn:
 		return m.StopTurn(value)
+	case ClientMessageOlderEvents:
+		return m.OlderEvents(value)
 	case ClientMessageCompactSession:
 		return m.CompactSession(value)
 	case ClientMessageSearchSessions:
@@ -2279,6 +2290,7 @@ func (v ClientMessageSendQueueNow) MarshalJSON() ([]byte, error) {
 }
 
 type ClientMessageOpenSession struct {
+	Events    int    `json:"events,omitempty"`
 	SessionID string `json:"sessionId"`
 }
 
@@ -2289,6 +2301,24 @@ func (v ClientMessageOpenSession) MarshalJSON() ([]byte, error) {
 		Key string `json:"type"`
 		plain
 	}{"openSession", p})
+}
+
+func (v *ClientMessageOpenSession) UnmarshalJSON(data []byte) error {
+	type plain ClientMessageOpenSession
+	p := plain{}
+	if err := json.Unmarshal(data, &p); err != nil {
+		return err
+	}
+	*v = ClientMessageOpenSession(p)
+	return v.Normalize()
+}
+
+// Normalize trims and checks what the app sent, as its schema does.
+func (v *ClientMessageOpenSession) Normalize() error {
+	if v.Events != 0 && v.Events <= 0 {
+		return fmt.Errorf("%s: must be positive", "events")
+	}
+	return nil
 }
 
 type ClientMessageSendPrompt struct {
@@ -2426,6 +2456,42 @@ func (v ClientMessageStopTurn) MarshalJSON() ([]byte, error) {
 		Key string `json:"type"`
 		plain
 	}{"stopTurn", p})
+}
+
+type ClientMessageOlderEvents struct {
+	Events    int    `json:"events"`
+	KeptBack  int    `json:"keptBack"`
+	SessionID string `json:"sessionId"`
+}
+
+func (v ClientMessageOlderEvents) MarshalJSON() ([]byte, error) {
+	type plain ClientMessageOlderEvents
+	p := plain(v)
+	return json.Marshal(struct {
+		Key string `json:"type"`
+		plain
+	}{"olderEvents", p})
+}
+
+func (v *ClientMessageOlderEvents) UnmarshalJSON(data []byte) error {
+	type plain ClientMessageOlderEvents
+	p := plain{}
+	if err := json.Unmarshal(data, &p); err != nil {
+		return err
+	}
+	*v = ClientMessageOlderEvents(p)
+	return v.Normalize()
+}
+
+// Normalize trims and checks what the app sent, as its schema does.
+func (v *ClientMessageOlderEvents) Normalize() error {
+	if v.Events <= 0 {
+		return fmt.Errorf("%s: must be positive", "events")
+	}
+	if v.KeptBack < 0 {
+		return fmt.Errorf("%s: at least 0", "keptBack")
+	}
+	return nil
 }
 
 type ClientMessageCompactSession struct {
@@ -3078,6 +3144,7 @@ type SessionMatch struct {
 
 type ServerMessageSessionHistory struct {
 	Events    []SessionEvent `json:"events"`
+	KeptBack  int            `json:"keptBack"`
 	SessionID string         `json:"sessionId"`
 	Streaming *Streaming     `json:"streaming,omitempty"`
 }
@@ -3092,6 +3159,24 @@ func (v ServerMessageSessionHistory) MarshalJSON() ([]byte, error) {
 		Key string `json:"type"`
 		plain
 	}{"sessionHistory", p})
+}
+
+func (v *ServerMessageSessionHistory) UnmarshalJSON(data []byte) error {
+	type plain ServerMessageSessionHistory
+	p := plain{}
+	if err := json.Unmarshal(data, &p); err != nil {
+		return err
+	}
+	*v = ServerMessageSessionHistory(p)
+	return v.Normalize()
+}
+
+// Normalize trims and checks what the app sent, as its schema does.
+func (v *ServerMessageSessionHistory) Normalize() error {
+	if v.KeptBack < 0 {
+		return fmt.Errorf("%s: at least 0", "keptBack")
+	}
+	return nil
 }
 
 type Streaming struct {

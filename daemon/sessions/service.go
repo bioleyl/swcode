@@ -432,18 +432,56 @@ func (s *Service) SendQueueNow(sessionID string) string {
 	})
 }
 
-// History is a session's events, and the answer being written, for a page that opens it.
-func (s *Service) History(sessionID string) (protocol.ServerMessage, bool) {
+// History is the end of a session's conversation, and the answer being written, for a page that opens it: at most
+// `limit` events, all of them when the limit is none. `keptBack` says how many older ones the session holds, so the
+// page knows whether scrolling up has anything more to find.
+func (s *Service) History(sessionID string, limit int) (protocol.ServerMessage, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	session, ok := s.sessions[sessionID]
 	if !ok {
 		return protocol.ServerMessage{}, false
 	}
-	history := protocol.ServerMessageSessionHistory{Events: append([]protocol.SessionEvent{}, session.events...), SessionID: sessionID}
+	kept, older := lastEvents(session.events, limit)
+	history := protocol.ServerMessageSessionHistory{
+		Events:    append([]protocol.SessionEvent{}, kept...),
+		KeptBack:  older,
+		SessionID: sessionID,
+	}
 	if session.turn != nil && session.turn.streaming != nil {
 		streaming := *session.turn.streaming
 		history.Streaming = &streaming
+	}
+	return protocol.ServerMessage{Value: history}, true
+}
+
+// lastEvents is the last `limit` events of a session, and how many come before them.
+func lastEvents(events []protocol.SessionEvent, limit int) ([]protocol.SessionEvent, int) {
+	if limit <= 0 || limit >= len(events) {
+		return events, 0
+	}
+	return events[len(events)-limit:], len(events) - limit
+}
+
+// OlderEvents is the page of events before the ones a page shows: the `limit` that come right before the
+// `keptBack` older ones its last history reported, and how many are left before those. The streaming answer is not
+// repeated: the page holds it.
+func (s *Service) OlderEvents(sessionID string, keptBack, limit int) (protocol.ServerMessage, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	session, ok := s.sessions[sessionID]
+	if !ok {
+		return protocol.ServerMessage{}, false
+	}
+	end := len(session.events) - keptBack
+	if end < 0 {
+		end = 0
+	}
+	start := max(end-limit, 0)
+	history := protocol.ServerMessageSessionHistory{
+		Events:    append([]protocol.SessionEvent{}, session.events[start:end]...),
+		KeptBack:  start,
+		SessionID: sessionID,
 	}
 	return protocol.ServerMessage{Value: history}, true
 }

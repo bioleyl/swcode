@@ -54,7 +54,13 @@ export const ClientMessageSchema = z.discriminatedUnion('type', [
   z.object({ sessionId: z.string(), type: z.literal('clearQueue') }),
   // The queued messages go to the model at the running turn's next step, without waiting for its end.
   z.object({ sessionId: z.string(), type: z.literal('sendQueueNow') }),
-  z.object({ sessionId: z.string(), type: z.literal('openSession') }),
+  // The end of a session's conversation: at most `events` of its last events, so a long one shows quickly and the
+  // older ones come as the person scrolls up.
+  z.object({
+    events: z.number().int().positive().optional(),
+    sessionId: z.string(),
+    type: z.literal('openSession'),
+  }),
   z.object({
     pictures: z.array(PictureUploadSchema).max(MAX_PICTURES).optional(),
     sessionId: z.string(),
@@ -84,6 +90,15 @@ export const ClientMessageSchema = z.discriminatedUnion('type', [
     type: z.literal('answerPassword'),
   }),
   z.object({ sessionId: z.string(), type: z.literal('stopTurn') }),
+  // The `events` messages older than the ones a page shows, sent up from the end of its history, past the
+  // `keptBack` the last history said it held back: what a page asks for as the person scrolls to the top. The
+  // answer is a `sessionHistory` of them.
+  z.object({
+    events: z.number().int().positive(),
+    keptBack: z.number().int().min(0),
+    sessionId: z.string(),
+    type: z.literal('olderEvents'),
+  }),
   // Summarizes the conversation now (/compact), in a turn of its own: refused while a turn runs.
   z.object({ sessionId: z.string(), type: z.literal('compactSession') }),
   // The conversations that say every word typed in the palette's search; the answer goes to this socket alone.
@@ -142,6 +157,7 @@ export type ClientMessageType = ClientMessage['type'];
 
 /** The answer being written right now, so a page opened mid-answer shows what came so far. */
 export const StreamingSchema = z.object({ messageId: z.string(), text: z.string() });
+export type Streaming = z.infer<typeof StreamingSchema>;
 
 /** What the daemon sends the app. Session events go to every open socket; history only to the one asking. */
 export const ServerMessageSchema = z.discriminatedUnion('type', [
@@ -149,8 +165,11 @@ export const ServerMessageSchema = z.discriminatedUnion('type', [
   z.object({ session: SessionSummarySchema, type: z.literal('sessionCreated') }),
   // The answer to a search, the newest sessions first: the query comes back, for the app to drop an answer too late.
   z.object({ matches: z.array(SessionMatchSchema), query: z.string(), type: z.literal('sessionMatches') }),
+  // A page's history: the events it asked for, and how many older ones the daemon kept back, so the app knows
+  // whether scrolling up has anything more to find.
   z.object({
     events: z.array(SessionEventSchema),
+    keptBack: z.number().int().min(0),
     sessionId: z.string(),
     streaming: StreamingSchema.optional(),
     type: z.literal('sessionHistory'),

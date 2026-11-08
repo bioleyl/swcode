@@ -134,7 +134,17 @@ func (h handlers) ListHosts(protocol.ClientMessageListHosts) struct{} {
 }
 
 func (h handlers) OpenSession(message protocol.ClientMessageOpenSession) struct{} {
-	history, found := h.app.Sessions.History(message.SessionID)
+	history, found := h.app.Sessions.History(message.SessionID, message.Events)
+	if !found {
+		return h.problem(unknownSession)
+	}
+	h.reply(history)
+	return struct{}{}
+}
+
+// OlderEvents answers a page that scrolled to the top of what it shows with the events before them.
+func (h handlers) OlderEvents(message protocol.ClientMessageOlderEvents) struct{} {
+	history, found := h.app.Sessions.OlderEvents(message.SessionID, message.KeptBack, message.Events)
 	if !found {
 		return h.problem(unknownSession)
 	}

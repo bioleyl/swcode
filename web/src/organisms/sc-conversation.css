@@ -22,6 +22,14 @@
   gap: 16px;
 }
 
+/* The older events coming in: a quiet line at the top of what is shown, where the scroll reached them. */
+.older {
+  padding: 0 0 16px;
+  font-size: 13px;
+  text-align: center;
+  color: var(--jl-muted);
+}
+
 .empty {
   padding: 48px 0;
   font-size: 15px;

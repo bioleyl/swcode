@@ -181,7 +181,7 @@ func (a *App) NewSession(request sessions.Request) protocol.SessionSummary {
 
 // Events is a session's events.
 func (a *App) Events(sessionID string) []protocol.SessionEvent {
-	history, ok := a.App.Sessions.History(sessionID)
+	history, ok := a.App.Sessions.History(sessionID, 0)
 	if !ok {
 		return nil
 	}

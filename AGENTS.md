@@ -21,6 +21,7 @@ Read `README.md` first.
   spaces and fonts are jlib's `--jl-*` tokens only. The logo blue (`--jl-brand`) never carries small text: use
   `--jl-accent`. An icon a jl-* component draws by name is registered (`registerIcons`, lucide's; the usual ones in
   `lib/icons.ts`).
+- A session's history is paged from its end: `openSession` takes an `events` limit and `sessionHistory` answers with `keptBack` (events older than those shown); `olderEvents` asks for the page above. The conversation view (`sc-conversation`) keeps the scroll rules in `lib/history-window.ts` and asks for more at its top; the page never learns the whole list until it is all pulled.
 
 ## Gotchas met so far
 
@@ -108,3 +109,7 @@ Read `README.md` first.
   prompt** (`daemon/agent/skills.go`, `daemon/agent/notes.go`): two user messages in a row are joined into one
   (`ConversationOf`), since some chat templates want the roles to alternate.
 - Commit only after `npm run check` passed: it stops at the first failing step.
+
+## Commands
+
+- `npm run check` needs both toolchains on PATH: nvm's node (`~/.nvm/versions/node/v26.7.0/bin`) and the go.mod toolchain (`~/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.27.3.linux-amd64/bin`) — the machine's `go` (1.18) can't parse go.mod, and `GOTOOLCHAIN` with a path doesn't help.
