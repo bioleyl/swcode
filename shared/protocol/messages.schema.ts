@@ -3,7 +3,14 @@ import { z } from 'zod';
 import { SessionDefaultsSchema } from './choices.schema.js';
 import { PresetChoicesSchema, PresetStatusSchema, SourceStatusSchema } from './models.schema.js';
 import { MAX_PICTURES, PictureUploadSchema } from './picture.schema.js';
-import { HostOptionSchema, HostRefSchema, NewFolderNameSchema, ProjectSchema } from './project.schema.js';
+import {
+  HostOptionSchema,
+  HostRefSchema,
+  MAX_PINNED_TODOS,
+  NewFolderNameSchema,
+  ProjectSchema,
+  TodoTextSchema,
+} from './project.schema.js';
 import {
   PermissionDecisionSchema,
   PermissionModeSchema,
@@ -42,6 +49,9 @@ export const ClientMessageSchema = z.discriminatedUnion('type', [
     mode: PermissionModeSchema.optional(),
     // The first message's pictures; a message may be pictures alone.
     pictures: z.array(PictureUploadSchema).max(MAX_PICTURES).optional(),
+    // Todos of the project appended to this session's first message: their ids link them to it.
+    pinnedTodoIds: z.array(z.string()).max(MAX_PINNED_TODOS).optional(),
+    pinnedTodos: z.array(TodoTextSchema).max(MAX_PINNED_TODOS).optional(),
     // The default preset when left out.
     preset: z.string().optional(),
     prompt: z.string().trim().optional(),
@@ -144,6 +154,31 @@ export const ClientMessageSchema = z.discriminatedUnion('type', [
     on: z.boolean(),
     projectId: z.string(),
     type: z.literal('setProjectSkill'),
+  }),
+  // Adds a todo to the project.
+  z.object({
+    projectId: z.string(),
+    text: TodoTextSchema,
+    type: z.literal('addProjectTodo'),
+  }),
+  // Marks one of the project's todos done or not.
+  z.object({
+    done: z.boolean(),
+    projectId: z.string(),
+    todoId: z.string(),
+    type: z.literal('setProjectTodoDone'),
+  }),
+  // Changes what one of the project's todos says.
+  z.object({
+    projectId: z.string(),
+    text: TodoTextSchema,
+    todoId: z.string(),
+    type: z.literal('setProjectTodoText'),
+  }),
+  z.object({
+    projectId: z.string(),
+    todoId: z.string(),
+    type: z.literal('removeProjectTodo'),
   }),
   // Where projects can be: this computer, its WSL distributions, the SSH endpoints.
   z.object({ type: z.literal('listHosts') }),

@@ -25,6 +25,10 @@ const MaxPictures = 4
 
 var PictureTypes = []PictureType{PictureTypeImageJpeg, PictureTypeImagePng}
 
+const MaxPinnedTodos = 20
+
+const MaxTodoText = 500
+
 var SkillOrigins = []SkillOrigin{SkillOriginPersonal, SkillOriginProject}
 
 var DiffLineKinds = []DiffLineKind{DiffLineKindAdd, DiffLineKindRemove, DiffLineKindContext, DiffLineKindGap}
@@ -670,6 +674,7 @@ type Project struct {
 	Name      string           `json:"name"`
 	Path      string           `json:"path"`
 	SkillsOff []string         `json:"skillsOff"`
+	Todos     []ProjectTodo    `json:"todos"`
 }
 
 func (v Project) MarshalJSON() ([]byte, error) {
@@ -678,12 +683,15 @@ func (v Project) MarshalJSON() ([]byte, error) {
 	if p.SkillsOff == nil {
 		p.SkillsOff = []string{}
 	}
+	if p.Todos == nil {
+		p.Todos = []ProjectTodo{}
+	}
 	return json.Marshal(p)
 }
 
 func (v *Project) UnmarshalJSON(data []byte) error {
 	type plain Project
-	p := plain{Host: HostRef{Value: HostRefLocal{}}, SkillsOff: []string{}}
+	p := plain{Host: HostRef{Value: HostRefLocal{}}, SkillsOff: []string{}, Todos: []ProjectTodo{}}
 	if err := json.Unmarshal(data, &p); err != nil {
 		return err
 	}
@@ -693,6 +701,36 @@ func (v *Project) UnmarshalJSON(data []byte) error {
 
 // Normalize trims and checks what the app sent, as its schema does.
 func (v *Project) Normalize() error {
+	return nil
+}
+
+type ProjectTodo struct {
+	CreatedAt string `json:"createdAt"`
+	Done      bool   `json:"done"`
+	ID        string `json:"id"`
+	SessionID string `json:"sessionId,omitempty"`
+	Text      string `json:"text"`
+}
+
+func (v *ProjectTodo) UnmarshalJSON(data []byte) error {
+	type plain ProjectTodo
+	p := plain{Done: false}
+	if err := json.Unmarshal(data, &p); err != nil {
+		return err
+	}
+	*v = ProjectTodo(p)
+	return v.Normalize()
+}
+
+// Normalize trims and checks what the app sent, as its schema does.
+func (v *ProjectTodo) Normalize() error {
+	v.Text = strings.TrimSpace(v.Text)
+	if utf8.RuneCountInString(v.Text) < 1 {
+		return fmt.Errorf("%s: must not be empty", "text")
+	}
+	if utf8.RuneCountInString(v.Text) > 500 {
+		return fmt.Errorf("%s: at most 500 characters", "text")
+	}
 	return nil
 }
 
@@ -1967,6 +2005,14 @@ func (ClientMessageSetProjectDefaults) isClientMessage() {}
 
 func (ClientMessageSetProjectSkill) isClientMessage() {}
 
+func (ClientMessageAddProjectTodo) isClientMessage() {}
+
+func (ClientMessageSetProjectTodoDone) isClientMessage() {}
+
+func (ClientMessageSetProjectTodoText) isClientMessage() {}
+
+func (ClientMessageRemoveProjectTodo) isClientMessage() {}
+
 func (ClientMessageListHosts) isClientMessage() {}
 
 func (ClientMessageListFolders) isClientMessage() {}
@@ -2142,6 +2188,30 @@ func (u *ClientMessage) UnmarshalJSON(data []byte) error {
 			return err
 		}
 		u.Value = value
+	case "\"addProjectTodo\"":
+		var value ClientMessageAddProjectTodo
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
+	case "\"setProjectTodoDone\"":
+		var value ClientMessageSetProjectTodoDone
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
+	case "\"setProjectTodoText\"":
+		var value ClientMessageSetProjectTodoText
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
+	case "\"removeProjectTodo\"":
+		var value ClientMessageRemoveProjectTodo
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
 	case "\"listHosts\"":
 		var value ClientMessageListHosts
 		if err := json.Unmarshal(data, &value); err != nil {
@@ -2188,6 +2258,10 @@ type ClientMessageMapper[R any] interface {
 	RemoveProject(ClientMessageRemoveProject) R
 	SetProjectDefaults(ClientMessageSetProjectDefaults) R
 	SetProjectSkill(ClientMessageSetProjectSkill) R
+	AddProjectTodo(ClientMessageAddProjectTodo) R
+	SetProjectTodoDone(ClientMessageSetProjectTodoDone) R
+	SetProjectTodoText(ClientMessageSetProjectTodoText) R
+	RemoveProjectTodo(ClientMessageRemoveProjectTodo) R
 	ListHosts(ClientMessageListHosts) R
 	ListFolders(ClientMessageListFolders) R
 }
@@ -2247,6 +2321,14 @@ func MapClientMessage[R any](u ClientMessage, m ClientMessageMapper[R]) R {
 		return m.SetProjectDefaults(value)
 	case ClientMessageSetProjectSkill:
 		return m.SetProjectSkill(value)
+	case ClientMessageAddProjectTodo:
+		return m.AddProjectTodo(value)
+	case ClientMessageSetProjectTodoDone:
+		return m.SetProjectTodoDone(value)
+	case ClientMessageSetProjectTodoText:
+		return m.SetProjectTodoText(value)
+	case ClientMessageRemoveProjectTodo:
+		return m.RemoveProjectTodo(value)
 	case ClientMessageListHosts:
 		return m.ListHosts(value)
 	case ClientMessageListFolders:
@@ -2256,15 +2338,17 @@ func MapClientMessage[R any](u ClientMessage, m ClientMessageMapper[R]) R {
 }
 
 type ClientMessageCreateSession struct {
-	Concise   bool            `json:"concise,omitempty"`
-	Host      *HostRef        `json:"host,omitempty"`
-	Kind      SessionKind     `json:"kind,omitempty"`
-	Mode      PermissionMode  `json:"mode,omitempty"`
-	Pictures  []PictureUpload `json:"pictures,omitempty"`
-	Preset    string          `json:"preset,omitempty"`
-	Prompt    string          `json:"prompt,omitempty"`
-	Thinking  ThinkingMode    `json:"thinking,omitempty"`
-	Workspace string          `json:"workspace,omitempty"`
+	Concise       bool            `json:"concise,omitempty"`
+	Host          *HostRef        `json:"host,omitempty"`
+	Kind          SessionKind     `json:"kind,omitempty"`
+	Mode          PermissionMode  `json:"mode,omitempty"`
+	Pictures      []PictureUpload `json:"pictures,omitempty"`
+	PinnedTodoIds []string        `json:"pinnedTodoIds,omitempty"`
+	PinnedTodos   []string        `json:"pinnedTodos,omitempty"`
+	Preset        string          `json:"preset,omitempty"`
+	Prompt        string          `json:"prompt,omitempty"`
+	Thinking      ThinkingMode    `json:"thinking,omitempty"`
+	Workspace     string          `json:"workspace,omitempty"`
 }
 
 func (v ClientMessageCreateSession) MarshalJSON() ([]byte, error) {
@@ -2296,6 +2380,21 @@ func (v *ClientMessageCreateSession) Normalize() error {
 	}
 	if len(v.Pictures) > 4 {
 		return fmt.Errorf("%s: at most 4", "pictures")
+	}
+	if len(v.PinnedTodoIds) > 20 {
+		return fmt.Errorf("%s: at most 20", "pinnedTodoIds")
+	}
+	if len(v.PinnedTodos) > 20 {
+		return fmt.Errorf("%s: at most 20", "pinnedTodos")
+	}
+	for index := range v.PinnedTodos {
+		v.PinnedTodos[index] = strings.TrimSpace(v.PinnedTodos[index])
+		if utf8.RuneCountInString(v.PinnedTodos[index]) < 1 {
+			return fmt.Errorf("%s: must not be empty", "pinnedTodos")
+		}
+		if utf8.RuneCountInString(v.PinnedTodos[index]) > 500 {
+			return fmt.Errorf("%s: at most 500 characters", "pinnedTodos")
+		}
 	}
 	v.Prompt = strings.TrimSpace(v.Prompt)
 	if v.Thinking != "" && !v.Thinking.Valid() {
@@ -2924,6 +3023,108 @@ func (v *ClientMessageSetProjectSkill) Normalize() error {
 		return fmt.Errorf("%s: must not be empty", "name")
 	}
 	return nil
+}
+
+type ClientMessageAddProjectTodo struct {
+	ProjectID string `json:"projectId"`
+	Text      string `json:"text"`
+}
+
+func (v ClientMessageAddProjectTodo) MarshalJSON() ([]byte, error) {
+	type plain ClientMessageAddProjectTodo
+	p := plain(v)
+	return json.Marshal(struct {
+		Key string `json:"type"`
+		plain
+	}{"addProjectTodo", p})
+}
+
+func (v *ClientMessageAddProjectTodo) UnmarshalJSON(data []byte) error {
+	type plain ClientMessageAddProjectTodo
+	p := plain{}
+	if err := json.Unmarshal(data, &p); err != nil {
+		return err
+	}
+	*v = ClientMessageAddProjectTodo(p)
+	return v.Normalize()
+}
+
+// Normalize trims and checks what the app sent, as its schema does.
+func (v *ClientMessageAddProjectTodo) Normalize() error {
+	v.Text = strings.TrimSpace(v.Text)
+	if utf8.RuneCountInString(v.Text) < 1 {
+		return fmt.Errorf("%s: must not be empty", "text")
+	}
+	if utf8.RuneCountInString(v.Text) > 500 {
+		return fmt.Errorf("%s: at most 500 characters", "text")
+	}
+	return nil
+}
+
+type ClientMessageSetProjectTodoDone struct {
+	Done      bool   `json:"done"`
+	ProjectID string `json:"projectId"`
+	TodoID    string `json:"todoId"`
+}
+
+func (v ClientMessageSetProjectTodoDone) MarshalJSON() ([]byte, error) {
+	type plain ClientMessageSetProjectTodoDone
+	p := plain(v)
+	return json.Marshal(struct {
+		Key string `json:"type"`
+		plain
+	}{"setProjectTodoDone", p})
+}
+
+type ClientMessageSetProjectTodoText struct {
+	ProjectID string `json:"projectId"`
+	Text      string `json:"text"`
+	TodoID    string `json:"todoId"`
+}
+
+func (v ClientMessageSetProjectTodoText) MarshalJSON() ([]byte, error) {
+	type plain ClientMessageSetProjectTodoText
+	p := plain(v)
+	return json.Marshal(struct {
+		Key string `json:"type"`
+		plain
+	}{"setProjectTodoText", p})
+}
+
+func (v *ClientMessageSetProjectTodoText) UnmarshalJSON(data []byte) error {
+	type plain ClientMessageSetProjectTodoText
+	p := plain{}
+	if err := json.Unmarshal(data, &p); err != nil {
+		return err
+	}
+	*v = ClientMessageSetProjectTodoText(p)
+	return v.Normalize()
+}
+
+// Normalize trims and checks what the app sent, as its schema does.
+func (v *ClientMessageSetProjectTodoText) Normalize() error {
+	v.Text = strings.TrimSpace(v.Text)
+	if utf8.RuneCountInString(v.Text) < 1 {
+		return fmt.Errorf("%s: must not be empty", "text")
+	}
+	if utf8.RuneCountInString(v.Text) > 500 {
+		return fmt.Errorf("%s: at most 500 characters", "text")
+	}
+	return nil
+}
+
+type ClientMessageRemoveProjectTodo struct {
+	ProjectID string `json:"projectId"`
+	TodoID    string `json:"todoId"`
+}
+
+func (v ClientMessageRemoveProjectTodo) MarshalJSON() ([]byte, error) {
+	type plain ClientMessageRemoveProjectTodo
+	p := plain(v)
+	return json.Marshal(struct {
+		Key string `json:"type"`
+		plain
+	}{"removeProjectTodo", p})
 }
 
 type ClientMessageListHosts struct {

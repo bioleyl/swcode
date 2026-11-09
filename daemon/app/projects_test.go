@@ -170,3 +170,53 @@ func TestAProjectKeepsWhatItsNewSessionsStartWithUntilItGoesBackToTheAppsDefault
 		t.Fatalf("still %+v", got)
 	}
 }
+
+func TestAProjectKeepsItsTodosUntilTheyGo(t *testing.T) {
+	first := Start(t, Options{})
+	project := first.App.Projects.Ensure(first.Workspace, protocol.LocalHost())
+	if problem := first.App.Projects.AddTodo(project.ID, "Write the tests"); problem != "" {
+		t.Fatal(problem)
+	}
+	todo := first.App.Projects.List()[0].Todos[0]
+	if todo.Text != "Write the tests" || todo.Done {
+		t.Fatalf("todo %+v", todo)
+	}
+	if problem := first.App.Projects.SetTodoDone(project.ID, todo.ID, true); problem != "" {
+		t.Fatal(problem)
+	}
+	if problem := first.App.Projects.SetTodoText(project.ID, todo.ID, "Write more tests"); problem != "" {
+		t.Fatal(problem)
+	}
+	if problem := first.App.Projects.LinkTodos(project.ID, []string{todo.ID}, "s1"); problem != "" {
+		t.Fatal(problem)
+	}
+	first.Stop()
+
+	again := Start(t, Options{DataDir: first.DataDir})
+	kept := again.App.Projects.List()[0].Todos
+	if len(kept) != 1 || kept[0].Text != "Write more tests" || !kept[0].Done || kept[0].SessionID != "s1" {
+		t.Fatalf("got %+v", kept)
+	}
+	if problem := again.App.Projects.RemoveTodo(project.ID, kept[0].ID); problem != "" {
+		t.Fatal(problem)
+	}
+	if got := again.App.Projects.List()[0].Todos; len(got) != 0 {
+		t.Fatalf("still %+v", got)
+	}
+	if problem := again.App.Projects.RemoveTodo(project.ID, kept[0].ID); problem == "" {
+		t.Fatal("an unknown todo was removed")
+	}
+}
+
+func TestANewSessionStartsOnTheProjectsPinnedTodos(t *testing.T) {
+	test := Start(t, Options{Replies: []fakellama.Reply{text("On it.")}})
+	session := test.NewSession(sessions.Request{PinnedTodos: []string{"Write the tests"}, Prompt: "Fix the bug"})
+	test.UntilIdle(session.ID)
+	want := "Fix the bug\n\nTodos pinned to this session:\n- Write the tests"
+	for _, event := range test.Events(session.ID) {
+		if message, ok := event.Value.(protocol.SessionEventUserMessage); ok && message.Text == want {
+			return
+		}
+	}
+	t.Fatalf("no pinned todos in %v", test.Events(session.ID))
+}

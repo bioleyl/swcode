@@ -3,7 +3,7 @@ import type { SkillSummary } from '../../../shared/protocol/skill.schema';
 import type { CommandLine, CommandSpec, MenuEntry } from '../types/commands.types';
 
 /** The composer's commands, in the order the menu and the help list them. */
-export const COMMAND_NAMES = ['new', 'compact', 'peek', 'help'] as const;
+export const COMMAND_NAMES = ['new', 'compact', 'todo', 'peek', 'help'] as const;
 export type CommandName = (typeof COMMAND_NAMES)[number];
 
 export const COMMANDS: Readonly<Record<CommandName, CommandSpec>> = {
@@ -11,6 +11,7 @@ export const COMMANDS: Readonly<Record<CommandName, CommandSpec>> = {
   help: { description: 'Show the commands and keys', icon: 'circle-question' },
   new: { description: 'Start a new session with the same settings', icon: 'square-pen' },
   peek: { argument: 'question', description: 'Ask aside, without interrupting the agent', icon: 'eye' },
+  todo: { argument: 'todo', description: 'Add a todo to this project', icon: 'list-checks' },
 };
 
 export const COMMAND_PREFIX = '/';

@@ -31,10 +31,11 @@ const (
 	allReported    = "All your subagents have reported."
 	othersWorking  = "Not reported yet: %s. Their reports wake you once they are done: do not look into what they look into meanwhile."
 	// restartedReport is the report of a subagent the daemon stopped by restarting.
-	restartedReport = "[The daemon restarted before this subagent finished.]"
-	projectWorking  = "A session of this project is working: stop it before removing the project."
-	blankMessage    = "Write a message or paste a picture first."
-	alreadyAnswered = "This request was already answered."
+	restartedReport    = "[The daemon restarted before this subagent finished.]"
+	projectWorking     = "A session of this project is working: stop it before removing the project."
+	blankMessage       = "Write a message or paste a picture first."
+	pinnedTodosHeading = "Todos pinned to this session:"
+	alreadyAnswered    = "This request was already answered."
 	// compactWorking: a turn compacts by itself when the context fills.
 	compactWorking   = "This session is working: wait for its turn to end, or stop it, before compacting."
 	nothingToCompact = "There is nothing new to summarize."
@@ -117,6 +118,8 @@ type Request struct {
 	Thinking  protocol.ThinkingMode
 	// Preset is the models it works with: the default preset when empty.
 	Preset string
+	// PinnedTodos are the project's todos this session starts on: their text opens the first message.
+	PinnedTodos []string
 	// Concise: token economy from the first message on.
 	Concise bool
 }
@@ -308,7 +311,7 @@ func (s *Service) Create(ctx context.Context, request Request) (protocol.Session
 	s.publishSessions()
 	s.mu.Unlock()
 	// A session may start without its first message: the problem of a blank one goes nowhere.
-	s.SendPrompt(meta.ID, request.Prompt, request.Pictures)
+	s.SendPrompt(meta.ID, withPinnedTodos(request.Prompt, request.PinnedTodos), request.Pictures)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return summaryOf(session), ""
@@ -341,6 +344,23 @@ func orKind(kind protocol.SessionKind) protocol.SessionKind {
 		return protocol.SessionKindCode
 	}
 	return kind
+}
+
+// withPinnedTodos puts the project's pinned todos after the first message, so the agent reads what was asked first
+// and the session is named after the start of that message.
+func withPinnedTodos(prompt string, todos []string) string {
+	if len(todos) == 0 {
+		return prompt
+	}
+	lines := make([]string, 0, len(todos)+3)
+	if prompt != "" {
+		lines = append(lines, prompt, "")
+	}
+	lines = append(lines, pinnedTodosHeading)
+	for _, todo := range todos {
+		lines = append(lines, "- "+todo)
+	}
+	return strings.Join(lines, "\n")
 }
 
 func orMode(mode protocol.PermissionMode) protocol.PermissionMode {

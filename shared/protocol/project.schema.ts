@@ -15,6 +15,22 @@ export const LOCAL_HOST: HostRef = { kind: 'local' };
 export const HostOptionSchema = z.object({ label: z.string(), ref: HostRefSchema });
 export type HostOption = z.infer<typeof HostOptionSchema>;
 
+/** How much a project's todo may say, and how many a new session may pin. */
+export const MAX_TODO_TEXT = 500;
+export const MAX_PINNED_TODOS = 20;
+export const TodoTextSchema = z.string().trim().min(1).max(MAX_TODO_TEXT);
+
+/** A todo of a project: what it has to do, whether it is done, and the session it was pinned to. */
+export const ProjectTodoSchema = z.object({
+  createdAt: z.iso.datetime(),
+  done: z.boolean().default(false),
+  id: z.string(),
+  // The session whose first message this todo was pinned to, once one started on it.
+  sessionId: z.string().optional(),
+  text: TodoTextSchema,
+});
+export type ProjectTodo = z.infer<typeof ProjectTodoSchema>;
+
 /** A folder sessions work in, on a host, with a name for people: the folder's, at first. */
 export const ProjectSchema = z.object({
   createdAt: z.iso.datetime(),
@@ -27,6 +43,8 @@ export const ProjectSchema = z.object({
   path: z.string(),
   // The skills its sessions are neither told of nor can run, by name: every skill found is on until turned off here.
   skillsOff: z.array(z.string()).default([]),
+  // What is left to do in the project, in the order it was added.
+  todos: z.array(ProjectTodoSchema).default([]),
 });
 export type Project = z.infer<typeof ProjectSchema>;
 

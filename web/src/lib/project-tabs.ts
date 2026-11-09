@@ -1,7 +1,7 @@
 import type { IconName } from './icons';
 
 /** A project page's tabs, in the order it shows them. */
-export const PROJECT_TABS = ['sessions', 'config', 'skills'] as const;
+export const PROJECT_TABS = ['sessions', 'todos', 'config', 'skills'] as const;
 export type ProjectTab = (typeof PROJECT_TABS)[number];
 
 export const DEFAULT_PROJECT_TAB: ProjectTab = 'sessions';
@@ -11,6 +11,7 @@ export const PROJECT_TAB_LABELS: Readonly<Record<ProjectTab, { label: string; ic
   config: { icon: 'sliders-horizontal', label: 'Config' },
   sessions: { icon: 'terminal', label: 'Sessions' },
   skills: { icon: 'book-open', label: 'Skills' },
+  todos: { icon: 'list-checks', label: 'Todos' },
 };
 
 export const isProjectTab = (value: string | null | undefined): value is ProjectTab =>

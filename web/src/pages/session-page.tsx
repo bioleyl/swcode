@@ -1,5 +1,5 @@
 import { css } from '@jadis/core';
-import { JlAlert, JlBadge, JlButton, JlIcon } from '@syware/jlib';
+import { JlAlert, JlBadge, JlButton, JlIcon, toast } from '@syware/jlib';
 
 import { ScElement } from '../base/sc-element';
 import { agentsOf } from '../lib/agents';
@@ -10,6 +10,7 @@ import { presetOf, presetStatusOf } from '../lib/presets';
 import { skillsOn } from '../lib/project-skills';
 import { sessionPlace } from '../lib/session-kinds';
 import { canDeleteSession, deleteHintOf, liveStatus, SESSION_STATUS_LOOKS } from '../lib/session-status';
+import { ScSessionTodos } from '../molecules/sc-session-todos';
 import { ScTitle } from '../molecules/sc-title';
 import { ScArcade } from '../organisms/sc-arcade';
 import { ScComposer } from '../organisms/sc-composer';
@@ -23,6 +24,7 @@ import { navigate, newPathOf } from '../services/navigation';
 import { presetChoices, presetsBus } from '../services/presets';
 import { projectAt, projectListBus } from '../services/project-list';
 import { foundSkills, projectSkillsBus, readProjectSkills } from '../services/project-skills';
+import { addProjectTodo } from '../services/project-todos';
 import { markSeen } from '../services/seen-sessions';
 import { deleteSession } from '../services/session-delete';
 import { findSession, sessionListBus } from '../services/session-list';
@@ -37,6 +39,7 @@ import type { PromptDraft } from '../types/composer.types';
 import type { ServerHandlers, ServerMessageMap } from '../types/page.types';
 
 const NOT_FOUND = 'This session is not on the daemon.';
+const NO_PROJECT = 'This session works in no project: a todo needs one.';
 const VISIBILITY_CHANGE = 'visibilitychange';
 // On the host while the side panel is hidden.
 const PANEL_CLOSED = 'panel-closed';
@@ -151,6 +154,7 @@ export class SessionPage extends ScElement {
     remove: ref<JlButton>('.delete'),
     status: ref(JlBadge),
     title: ref(ScTitle),
+    todos: ref(ScSessionTodos),
   }));
 
   templateHtml(): Node {
@@ -171,6 +175,7 @@ export class SessionPage extends ScElement {
           <JlAlert tone="danger" hidden />
           <ScPlan hidden />
           <ScPeek hidden />
+          <ScSessionTodos hidden />
           <ScComposer />
         </div>
         <ScSidePanel />
@@ -201,7 +206,10 @@ export class SessionPage extends ScElement {
     this.onBus(daemonBus, 'message', (message) => this.receive(message));
     this.onBus(daemonBus, 'online', (online) => this.reopen(online));
     this.onBus(sessionListBus, 'changed', () => this.renderSummary());
-    this.onBus(projectListBus, 'changed', () => this.renderSkills());
+    this.onBus(projectListBus, 'changed', () => {
+      this.renderSkills();
+      this.renderLinkedTodos();
+    });
     this.onBus(projectSkillsBus, 'changed', () => this.renderSkills());
     this.on(document, VISIBILITY_CHANGE, () => this.noteSeen());
     this.onBus(daemonStatusBus, 'changed', () => this.renderDaemon());
@@ -237,6 +245,7 @@ export class SessionPage extends ScElement {
     const { composer } = this._refs;
     composer.events.register('send', (draft) => this.send(draft));
     composer.events.register('peek', (question) => this.peek(question));
+    composer.events.register('todo', (text) => this.addTodo(text));
     composer.events.register('newSession', () => this.startNew());
     composer.events.register('compact', () => {
       this.showProblem('');
@@ -332,6 +341,19 @@ export class SessionPage extends ScElement {
     daemon.send({ peekId, question, sessionId: this._sessionId, type: 'peek' });
   }
 
+  /** /todo: the text joins the todos of the folder this session works in, which the daemon lists back. */
+  private addTodo(text: string): void {
+    this.showProblem('');
+    const session = findSession(this._sessionId);
+    const project = session?.kind === 'code' ? projectAt(session.workspace, session.host) : undefined;
+    if (!project) {
+      this.showProblem(NO_PROJECT);
+      return;
+    }
+    addProjectTodo(project.id, text);
+    toast({ heading: `Todo added to ${project.name}`, tone: 'ok' });
+  }
+
   private applyEvent(event: SessionEvent): void {
     this._events.push(event);
     this._refs.conversation.apply(event);
@@ -407,6 +429,7 @@ export class SessionPage extends ScElement {
     this._refs.composer.kind.set(kind);
     this._refs.composer.commands.set([...SESSION_COMMANDS[kind]]);
     this.renderSkills();
+    this.renderLinkedTodos();
     this._refs.composer.mode.set(session?.mode ?? 'auto');
     this._refs.composer.thinking.set(session?.thinking ?? 'full');
     this._refs.composer.preset.set(session?.preset ?? '');
@@ -446,6 +469,13 @@ export class SessionPage extends ScElement {
     }
     this._skillsOf = project.id;
     void readProjectSkills(project.id);
+  }
+
+  /** The project's todos this session was pinned to, in the order the project lists them. */
+  private renderLinkedTodos(): void {
+    const session = findSession(this._sessionId);
+    const project = session?.kind === 'code' ? projectAt(session.workspace, session.host) : undefined;
+    this._refs.todos.todos.set(project?.todos.filter((todo) => todo.sessionId === this._sessionId) ?? []);
   }
 
   /** The session in view is seen as it is now, while the window shows it: its icon in the navigation empties. */

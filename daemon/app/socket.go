@@ -98,16 +98,29 @@ func (h handlers) CreateProject(message protocol.ClientMessageCreateProject) str
 func (h handlers) CreateSession(message protocol.ClientMessageCreateSession) struct{} {
 	go func() {
 		session, refused := h.app.Sessions.Create(h.ctx, sessions.Request{
-			Concise: message.Concise, Host: message.Host, Kind: message.Kind, Mode: message.Mode, Pictures: message.Pictures, Preset: message.Preset,
+			Concise: message.Concise, Host: message.Host, Kind: message.Kind, Mode: message.Mode, Pictures: message.Pictures, PinnedTodos: message.PinnedTodos, Preset: message.Preset,
 			Prompt: message.Prompt, Thinking: message.Thinking, Workspace: message.Workspace,
 		})
 		if refused != "" {
 			h.reply(problem(refused))
 			return
 		}
+		h.linkPinnedTodos(session, message.PinnedTodoIds)
 		h.reply(protocol.ServerMessage{Value: protocol.ServerMessageSessionCreated{Session: session}})
 	}()
 	return struct{}{}
+}
+
+// linkPinnedTodos points the project's todos the session started on at it, for the project's page to link back.
+func (h handlers) linkPinnedTodos(session protocol.SessionSummary, todoIDs []string) {
+	if len(todoIDs) == 0 {
+		return
+	}
+	project, ok := h.app.Projects.Find(session.Workspace, session.Host)
+	if !ok {
+		return
+	}
+	h.problem(h.app.Projects.LinkTodos(project.ID, todoIDs, session.ID))
 }
 
 func (h handlers) DeleteSession(message protocol.ClientMessageDeleteSession) struct{} {
@@ -162,6 +175,22 @@ func (h handlers) SetProjectDefaults(message protocol.ClientMessageSetProjectDef
 
 func (h handlers) SetProjectSkill(message protocol.ClientMessageSetProjectSkill) struct{} {
 	return h.problem(h.app.Projects.SetSkill(message.ProjectID, message.Name, message.On))
+}
+
+func (h handlers) AddProjectTodo(message protocol.ClientMessageAddProjectTodo) struct{} {
+	return h.problem(h.app.Projects.AddTodo(message.ProjectID, message.Text))
+}
+
+func (h handlers) SetProjectTodoDone(message protocol.ClientMessageSetProjectTodoDone) struct{} {
+	return h.problem(h.app.Projects.SetTodoDone(message.ProjectID, message.TodoID, message.Done))
+}
+
+func (h handlers) SetProjectTodoText(message protocol.ClientMessageSetProjectTodoText) struct{} {
+	return h.problem(h.app.Projects.SetTodoText(message.ProjectID, message.TodoID, message.Text))
+}
+
+func (h handlers) RemoveProjectTodo(message protocol.ClientMessageRemoveProjectTodo) struct{} {
+	return h.problem(h.app.Projects.RemoveTodo(message.ProjectID, message.TodoID))
 }
 
 func (h handlers) RenameSession(message protocol.ClientMessageRenameSession) struct{} {

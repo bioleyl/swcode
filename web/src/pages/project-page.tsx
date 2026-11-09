@@ -4,6 +4,8 @@ import {
   JlButton,
   JlCard,
   JlEmpty,
+  JlField,
+  JlInput,
   JlLoadState,
   JlPage,
   JlSwitch,
@@ -12,6 +14,7 @@ import {
   toast,
 } from '@syware/jlib';
 
+import { MAX_TODO_TEXT } from '../../../shared/protocol/project.schema';
 import { ScElement } from '../base/sc-element';
 import { placeText } from '../lib/hosts';
 import { appDefaults } from '../lib/new-session';
@@ -21,20 +24,27 @@ import { DEFAULT_PROJECT_TAB, isProjectTab, PROJECT_TAB_LABELS } from '../lib/pr
 import { isSwcodeBaseIn } from '../lib/swcode-base';
 import { ScSessionChoices } from '../molecules/sc-session-choices';
 import { ScSessionRow } from '../molecules/sc-session-row';
+import { ScTodoRow } from '../molecules/sc-todo-row';
 import { daemon } from '../services/daemon';
 import { daemonState, daemonStatusBus } from '../services/daemon-status';
-import { hrefOf, newSessionPath, projectTabPath } from '../services/navigation';
+import { hrefOf, newSessionPath, projectTabPath, sessionPath } from '../services/navigation';
 import { presetChoices, presetsBus } from '../services/presets';
 import { askToRemoveProject, findProject, projectListBus } from '../services/project-list';
 import { foundSkills, readProjectSkills, setProjectSkill } from '../services/project-skills';
+import {
+  addProjectTodo,
+  removeProjectTodo,
+  setProjectTodoDone,
+  setProjectTodoText,
+} from '../services/project-todos';
 import { deleteSession } from '../services/session-delete';
-import { allSessions, sessionListBus } from '../services/session-list';
+import { allSessions, findSession, sessionListBus } from '../services/session-list';
 import { installSwcodeBase, readSwcodeBase, removeSwcodeBase, swcodeBaseBus } from '../services/swcode-base';
 import { BASE_STYLES } from '../styles/shared';
 import styles from './project-page.css?inline';
 
 import type { SessionDefaults } from '../../../shared/protocol/choices.schema';
-import type { Project } from '../../../shared/protocol/project.schema';
+import type { Project, ProjectTodo } from '../../../shared/protocol/project.schema';
 import type { SessionSummary } from '../../../shared/protocol/session.schema';
 import type { ProjectSkill, SwcodeBaseStatus } from '../../../shared/protocol/skill.schema';
 import type { ProjectTab } from '../lib/project-tabs';
@@ -78,6 +88,9 @@ const SWCODE_BASE_REMOVAL: Readonly<Record<SwcodeBasePlace, { confirm: string; h
     },
   };
 const UNREACHABLE = 'The daemon did not answer.';
+const TODOS_NOTE = 'What this project still has to do. A new session can pin them to its first message.';
+const TODO_PLACEHOLDER = 'What needs doing?';
+const TODO_DELETE_NOTE = 'It is removed from this project’s todos.';
 // A skill's line under its name: where it is, then the start of what it is for.
 const MAX_SKILL_LINE = 100;
 const ELLIPSIS = '…';
@@ -131,6 +144,10 @@ export class ProjectPage extends ScElement {
     swcodeBaseInHome: ref<JlButton>('.swcode-base .in-home'),
     swcodeBaseInProject: ref<JlButton>('.swcode-base .in-project'),
     tabs: ref(JlTabs),
+    todoForm: ref<HTMLFormElement>('.todo-form'),
+    todoInput: ref(JlInput),
+    todoList: ref('.todo-list'),
+    todosEmpty: ref<JlEmpty>('.todos-empty'),
   }));
 
   templateHtml(): Node {
@@ -149,6 +166,28 @@ export class ProjectPage extends ScElement {
               heading="No sessions yet"
               description="A new session works in this project’s folder."
             />
+          </JlTabPanel>
+          <JlTabPanel name="todos" label={PROJECT_TAB_LABELS.todos.label} icon={PROJECT_TAB_LABELS.todos.icon}>
+            <JlCard class="todos" heading="Todos" description={TODOS_NOTE}>
+              <form class="todo-form">
+                <JlField label="New todo">
+                  <JlInput
+                    class="todo-input"
+                    autocomplete="off"
+                    placeholder={TODO_PLACEHOLDER}
+                    maxlength={String(MAX_TODO_TEXT)}
+                  />
+                </JlField>
+                <JlButton type="submit" icon="plus" label="Add" />
+              </form>
+              <div class="todo-list" />
+              <JlEmpty
+                class="todos-empty"
+                icon="list-checks"
+                heading="No todos yet"
+                description="Add what this project needs doing."
+              />
+            </JlCard>
           </JlTabPanel>
           <JlTabPanel name="config" label={PROJECT_TAB_LABELS.config.label} icon={PROJECT_TAB_LABELS.config.icon}>
             <JlCard class="defaults" heading="New sessions start with">
@@ -196,6 +235,10 @@ export class ProjectPage extends ScElement {
     this._refs.skillsState.events.register('retry', () => this.loadSkills(this.route.id ?? ''));
     this._refs.swcodeBaseInProject.events.register('press', () => void this.changeSwcodeBase('project'));
     this._refs.swcodeBaseInHome.events.register('press', () => void this.changeSwcodeBase('home'));
+    this.on(this._refs.todoForm, 'submit', (event) => {
+      event.preventDefault();
+      this.addTodo();
+    });
     choices.events.register('preset', (preset) => this.changeDefault({ preset }));
     choices.events.register('mode', (mode) => this.changeDefault({ mode }));
     choices.events.register('thinking', (thinking) => this.changeDefault({ thinking }));
@@ -247,6 +290,7 @@ export class ProjectPage extends ScElement {
       return;
     }
     this.renderDefaults(project);
+    this.renderTodos(project);
     this.renderSkills(project);
     if (this._skillsOf !== project.id) {
       this.forgetSkills();
@@ -460,6 +504,54 @@ export class ProjectPage extends ScElement {
     panel.concise.set(defaults.concise);
     this._refs.defaults.description.set(project.defaults ? DEFAULTS_SET : DEFAULTS_APP);
     this._refs.reset.hidden = !project.defaults;
+  }
+
+  /** The project's todos, each done or not, with its delete button; what it still has to do, or nothing yet. */
+  private renderTodos(project: Project): void {
+    this._refs.todoList.replaceChildren(...project.todos.map((todo) => this.todoRowOf(project.id, todo)));
+    this._refs.todosEmpty.hidden = project.todos.length > 0;
+  }
+
+  private todoRowOf(projectId: string, todo: ProjectTodo): Node {
+    const session = todo.sessionId === undefined ? undefined : findSession(todo.sessionId);
+    const row = createElement(ScTodoRow, {
+      props: {
+        checked: todo.done,
+        editable: true,
+        removable: true,
+        todo,
+        ...(session === undefined
+          ? {}
+          : { sessionHref: hrefOf(sessionPath(session.id)), sessionTitle: session.title }),
+      },
+    });
+    row.events.register('change', (done) => setProjectTodoDone(projectId, todo.id, done));
+    row.events.register('remove', () => void this.deleteTodo(projectId, todo));
+    row.events.register('rename', (text) => setProjectTodoText(projectId, todo.id, text));
+    return row;
+  }
+
+  /** The todo typed in the card's form joins the project, at the end of its list. */
+  private addTodo(): void {
+    const project = this.project();
+    const text = this._refs.todoInput.value.get().trim();
+    if (!project || text === '') {
+      return;
+    }
+    addProjectTodo(project.id, text);
+    this._refs.todoInput.value.set('');
+  }
+
+  private async deleteTodo(projectId: string, todo: ProjectTodo): Promise<void> {
+    const agreed = await confirmDialog({
+      confirmLabel: 'Delete',
+      heading: `Delete “${todo.text}”?`,
+      text: TODO_DELETE_NOTE,
+      tone: 'danger',
+    });
+    if (agreed) {
+      removeProjectTodo(projectId, todo.id);
+    }
   }
 }
 

@@ -80,6 +80,8 @@ export class ScComposer extends ScElement {
     send: PromptDraft;
     /** A question beside the session: the composer's text after /peek. */
     peek: string;
+    /** /todo: a todo for the session's project. */
+    todo: string;
     /** /new: a new session with this one's settings. */
     newSession: undefined;
     /** /compact: the conversation summarized now. */
@@ -149,6 +151,7 @@ export class ScComposer extends ScElement {
     help: () => this.showHelp(),
     new: () => this.emitCommand('newSession'),
     peek: (question) => this.peek(question),
+    todo: (text) => this.addTodo(text),
   };
 
   // The keys of the field while the list shows, by their `key`; any other key types as usual.
@@ -588,6 +591,15 @@ export class ScComposer extends ScElement {
     }
     this.clearText();
     this.events.emit('peek', question);
+  }
+
+  /** The todo after /todo goes to the session's project; nothing typed leaves the words in the field. */
+  private addTodo(text: string): void {
+    if (text === '') {
+      return;
+    }
+    this.clearText();
+    this.events.emit('todo', text);
   }
 
   private renderStop(): void {

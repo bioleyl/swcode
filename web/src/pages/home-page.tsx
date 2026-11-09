@@ -1,5 +1,5 @@
-import { css } from '@jadis/core';
-import { JlAlert, JlButton, JlField, JlPage, JlSelect } from '@syware/jlib';
+import { createElement, css } from '@jadis/core';
+import { JlAlert, JlButton, JlCard, JlField, JlPage, JlSelect } from '@syware/jlib';
 
 import { hostLabel } from '../../../shared/hosts/host-key';
 import { ScElement } from '../base/sc-element';
@@ -9,6 +9,7 @@ import { presetOf, presetStatusOf } from '../lib/presets';
 import { preferredProject } from '../lib/project-groups';
 import { skillsOn } from '../lib/project-skills';
 import { sessionsOf } from '../lib/session-kinds';
+import { ScTodoRow } from '../molecules/sc-todo-row';
 import { ScComposer } from '../organisms/sc-composer';
 import { daemon, daemonBus } from '../services/daemon';
 import { daemonState, daemonStatusBus } from '../services/daemon-status';
@@ -21,13 +22,14 @@ import styles from './home-page.css?inline';
 
 import type { SelectOption } from '@syware/jlib';
 import type { SessionDefaults } from '../../../shared/protocol/choices.schema';
-import type { Project } from '../../../shared/protocol/project.schema';
+import type { Project, ProjectTodo } from '../../../shared/protocol/project.schema';
 import type { PromptDraft } from '../types/composer.types';
 
 const APP_NAME = 'swcode';
 // Without a project yet, a session goes in the daemon's folder, which then becomes one. jlib's select takes an empty
 // value for nothing chosen: this choice has a value of its own.
 const DAEMON_FOLDER = 'daemon-folder';
+const TODOS_NOTE = 'The ones you tick are given to the agent with your first message.';
 
 /** A project in the picker: its name, and its host when it is not this computer. */
 const projectLabel = (project: Project): string =>
@@ -48,6 +50,9 @@ export class HomePage extends ScElement {
   private _chosen: string | undefined;
   // The project whose skills this page read for the composer: they are read again for another one.
   private _skillsOf: string | undefined;
+  // The project whose todos are shown, and the ones the person pinned to this session.
+  private _todosOf: string | undefined;
+  private _pinned = new Set<string>();
 
   readonly route = this.useAttributes({
     project: (id) => {
@@ -61,6 +66,8 @@ export class HomePage extends ScElement {
     newProject: ref<JlButton>('.new-project'),
     problem: ref(JlAlert),
     project: ref(JlSelect),
+    todoList: ref('.todo-list'),
+    todos: ref(JlCard),
   }));
 
   templateHtml(): Node {
@@ -76,6 +83,9 @@ export class HomePage extends ScElement {
           </JlField>
           <JlButton class="new-project" icon="folder-plus" label="New project" />
         </div>
+        <JlCard class="todos" heading="Todos" description={TODOS_NOTE} hidden>
+          <div class="todo-list" />
+        </JlCard>
         <ScComposer concise={CONCISE_AT_FIRST} />
         <JlAlert tone="danger" hidden />
       </JlPage>
@@ -118,6 +128,7 @@ export class HomePage extends ScElement {
     this.showProblem('');
     const project = findProject(this._refs.project.value.get());
     const choices = this.choicesFor(project);
+    const pinned = this.pinnedTodos(project);
     daemon.send({
       concise: choices.concise,
       mode: choices.mode,
@@ -126,8 +137,19 @@ export class HomePage extends ScElement {
       type: 'createSession',
       ...(draft.pictures.length === 0 ? {} : { pictures: draft.pictures }),
       ...(choices.preset === '' ? {} : { preset: choices.preset }),
+      ...(pinned.length === 0
+        ? {}
+        : { pinnedTodoIds: pinned.map((todo) => todo.id), pinnedTodos: pinned.map((todo) => todo.text) }),
       ...(project === undefined ? {} : { host: project.host, workspace: project.path }),
     });
+  }
+
+  /** The project's open todos the person pinned, in the order the project lists them. */
+  private pinnedTodos(project: Project | undefined): ProjectTodo[] {
+    if (!project) {
+      return [];
+    }
+    return project.todos.filter((todo) => !todo.done && this._pinned.has(todo.id));
   }
 
   private pick(choice: Partial<SessionDefaults>): void {
@@ -169,6 +191,7 @@ export class HomePage extends ScElement {
     composer.thinking.set(choices.thinking);
     composer.concise.set(choices.concise);
     this.renderSkills();
+    this.renderTodos();
   }
 
   /** The skills of the project chosen, which the first message may run: read on its host once it is chosen. */
@@ -180,6 +203,28 @@ export class HomePage extends ScElement {
     }
     this._skillsOf = project.id;
     void readProjectSkills(project.id);
+  }
+
+  /** The open todos of the project chosen, each pinned or not; another project's pins are let go at once. */
+  private renderTodos(): void {
+    const project = findProject(this._refs.project.value.get());
+    const open = project?.todos.filter((todo) => !todo.done) ?? [];
+    if (project?.id !== this._todosOf) {
+      this._pinned.clear();
+      this._todosOf = project?.id;
+    }
+    this._refs.todos.hidden = open.length === 0;
+    this._refs.todoList.replaceChildren(...open.map((todo) => this.pinRowOf(todo)));
+  }
+
+  private pinRowOf(todo: ProjectTodo): Node {
+    const row = createElement(ScTodoRow, { props: { checked: this._pinned.has(todo.id), todo } });
+    row.events.register('change', (checked) => this.pin(todo.id, checked));
+    return row;
+  }
+
+  private pin(todoId: string, pinned: boolean): void {
+    pinned ? this._pinned.add(todoId) : this._pinned.delete(todoId);
   }
 
   /** What the daemon refused, under the message: nothing once a new one goes. */

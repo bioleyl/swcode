@@ -6,9 +6,29 @@ jl-tab-panel {
   padding-top: var(--jl-space-6);
 }
 
-/* What new sessions start with: one card, as wide as a form. */
-.defaults {
+/* What new sessions start with, and the todos: one card, as wide as a form. */
+.defaults,
+.todos {
   max-width: var(--jl-page-form);
+}
+
+/* The todos: the field that adds one, then the list under it. */
+.todo-form {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--jl-space-2);
+  margin-bottom: var(--jl-space-4);
+}
+
+.todo-form jl-field {
+  flex: 1;
+  min-width: 0;
+}
+
+.todo-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--jl-space-2);
 }
 
 /* The skills, and swcode-base under them. */

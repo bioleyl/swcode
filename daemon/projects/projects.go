@@ -19,6 +19,7 @@ import (
 
 const (
 	unknownProject = "There is no such project."
+	unknownTodo    = "There is no such todo."
 	homeMark       = "~"
 )
 
@@ -205,6 +206,99 @@ func withSkill(off []string, name string, turnedOff bool) []string {
 	}
 	slices.Sort(kept)
 	return kept
+}
+
+// AddTodo adds a todo to the project, at the end of its list.
+func (s *Service) AddTodo(projectID, text string) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	index := slices.IndexFunc(s.projects, func(project protocol.Project) bool { return project.ID == projectID })
+	if index < 0 {
+		return unknownProject
+	}
+	projects := append([]protocol.Project{}, s.projects...)
+	todo := protocol.ProjectTodo{CreatedAt: protocol.Timestamp(s.deps.Now()), ID: s.deps.NewID(), Text: text}
+	projects[index].Todos = append(slices.Clone(projects[index].Todos), todo)
+	s.change(projects)
+	return ""
+}
+
+// SetTodoDone marks one of the project's todos done or not.
+func (s *Service) SetTodoDone(projectID, todoID string, done bool) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	index, todoIndex, problem := s.todoAt(projectID, todoID)
+	if problem != "" {
+		return problem
+	}
+	projects := append([]protocol.Project{}, s.projects...)
+	projects[index].Todos = slices.Clone(projects[index].Todos)
+	projects[index].Todos[todoIndex].Done = done
+	s.change(projects)
+	return ""
+}
+
+// SetTodoText changes what one of the project's todos says.
+func (s *Service) SetTodoText(projectID, todoID, text string) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	index, todoIndex, problem := s.todoAt(projectID, todoID)
+	if problem != "" {
+		return problem
+	}
+	projects := append([]protocol.Project{}, s.projects...)
+	projects[index].Todos = slices.Clone(projects[index].Todos)
+	projects[index].Todos[todoIndex].Text = text
+	s.change(projects)
+	return ""
+}
+
+// LinkTodos makes the todos of the project that are in the list point at the session they started, and leaves the
+// others: one may have been deleted while the session was made.
+func (s *Service) LinkTodos(projectID string, todoIDs []string, sessionID string) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	index := slices.IndexFunc(s.projects, func(project protocol.Project) bool { return project.ID == projectID })
+	if index < 0 {
+		return unknownProject
+	}
+	todos := slices.Clone(s.projects[index].Todos)
+	for todoIndex := range todos {
+		if slices.Contains(todoIDs, todos[todoIndex].ID) {
+			todos[todoIndex].SessionID = sessionID
+		}
+	}
+	projects := append([]protocol.Project{}, s.projects...)
+	projects[index].Todos = todos
+	s.change(projects)
+	return ""
+}
+
+// RemoveTodo deletes one of the project's todos.
+func (s *Service) RemoveTodo(projectID, todoID string) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	index, todoIndex, problem := s.todoAt(projectID, todoID)
+	if problem != "" {
+		return problem
+	}
+	projects := append([]protocol.Project{}, s.projects...)
+	projects[index].Todos = slices.Delete(slices.Clone(projects[index].Todos), todoIndex, todoIndex+1)
+	s.change(projects)
+	return ""
+}
+
+// todoAt is the project's index, and its todo's, or the problem; the caller holds the lock.
+func (s *Service) todoAt(projectID, todoID string) (int, int, string) {
+	index := slices.IndexFunc(s.projects, func(project protocol.Project) bool { return project.ID == projectID })
+	if index < 0 {
+		return 0, 0, unknownProject
+	}
+	todoIndex := slices.IndexFunc(s.projects[index].Todos, func(todo protocol.ProjectTodo) bool { return todo.ID == todoID })
+	if todoIndex < 0 {
+		return 0, 0, unknownTodo
+	}
+	return index, todoIndex, ""
 }
 
 // Find is the project of a folder on a host, if it has one.

@@ -1,0 +1,46 @@
+:host {
+  display: block;
+}
+
+.row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--jl-space-2);
+}
+
+.view,
+.editor {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--jl-space-2);
+}
+
+.check {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.edit,
+.remove {
+  flex: none;
+}
+
+.session {
+  align-self: flex-start;
+  font-size: var(--jl-font-sm);
+}
+
+.editor jl-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.save,
+.cancel {
+  flex: none;
+}
+
+[hidden] {
+  display: none;
+}

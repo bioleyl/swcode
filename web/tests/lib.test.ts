@@ -164,6 +164,7 @@ describe('groupByProject', () => {
     name: id,
     path,
     skillsOff: [],
+    todos: [],
   });
   const Projects = [project('shop', '/w/shop'), project('api', '/w/api'), project('blog', '/w/blog')];
 
@@ -320,6 +321,7 @@ describe('the command palette', () => {
     name: 'shop',
     path: '/home/me/shop',
     skillsOff: [],
+    todos: [],
   };
   const session = (id: string, status: SessionSummary['status']): SessionSummary => ({
     concise: false,
@@ -392,6 +394,9 @@ describe('commands', () => {
     expect(commandLine('/peek', code)).toEqual({ argument: '', name: 'peek' });
     expect(commandLine('/peeking at it', code)).toBeUndefined();
     expect(commandLine('please /peek', code)).toBeUndefined();
+    expect(commandLine('/todo write the tests', code)).toEqual({ argument: 'write the tests', name: 'todo' });
+    expect(commandLine('/todo', code)).toEqual({ argument: '', name: 'todo' });
+    expect(commandLine('/todo take out the trash', SESSION_COMMANDS.chat)).toBeUndefined();
   });
 
   it('run a command that takes no words alone, and leave one that is not available here as words', () => {
@@ -403,7 +408,7 @@ describe('commands', () => {
   });
 
   it('list those starting as typed while a name is typed, in their order', () => {
-    expect(commandsMatching('/', code)).toEqual(['new', 'compact', 'peek', 'help']);
+    expect(commandsMatching('/', code)).toEqual(['new', 'compact', 'todo', 'peek', 'help']);
     expect(commandsMatching('/', SESSION_COMMANDS.chat)).toEqual(['new', 'compact', 'help']);
     expect(commandsMatching('/C', code)).toEqual(['compact']);
     expect(commandsMatching('/peek ', code)).toEqual([]);
@@ -446,6 +451,7 @@ describe('a project’s skills', () => {
     name: 'shop',
     path: '/w/shop',
     skillsOff: ['deploy'],
+    todos: [],
   };
   const found = [
     {
