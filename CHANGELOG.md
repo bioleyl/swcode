@@ -2,6 +2,23 @@
 
 All notable changes to swcode are documented here.
 
+## [0.7.0] - 2026-11-09
+
+### Added
+
+- A project keeps its todos on its page's Todos tab: add what needs doing, tick it done, change its words or delete it, with a confirmation for the delete. A todo a session started on links back to that session.
+- A new session's page lists the project's open todos, which you tick to pin them to its first message. The daemon appends the pinned todos to that message, so the agent reads the request first, and the session lists the todos it started on.
+- The composer's `/todo` adds a todo to the folder the session works in: `/todo Write the tests`.
+
+### Changed
+
+- A project inside a WSL distribution shows the folder icon, as a project on this computer does: it is a folder too. Its status light fills that same shape.
+
+### Maintenance
+
+- jlib 0.13.0 keeps the side nav's header and foot in place with the sections scrolling between them, so `sc-nav` no longer patches the side nav's shadow root for its layout.
+- The end-to-end tests split by area (`session`, `composer`, `projects`, `settings`, `navigation`, `layout`), with the viewports, flows and page helpers they share in `e2e/support.ts`.
+
 ## [0.6.0] - 2026-11-08
 
 ### Added
@@ -116,6 +133,7 @@ All notable changes to swcode are documented here.
 - Updated release workflow actions for Node 24.
 - Added protocol validation for numeric bounds and optional numbers.
 
+[0.7.0]: https://github.com/bioleyl/swcode/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/bioleyl/swcode/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/bioleyl/swcode/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/bioleyl/swcode/compare/v0.3.0...v0.4.0
