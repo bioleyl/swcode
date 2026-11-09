@@ -25,7 +25,6 @@ import { currentTheme, toggleTheme } from '../services/theme';
 import { BASE_STYLES } from '../styles/shared';
 import styles from './sc-nav.css?inline';
 import rowStyles from './sc-nav-rows.css?inline';
-import scrollStyles from './sc-nav-scroll.css?inline';
 
 import type { SegmentedOption, SideNavItem, SideNavSection } from '@syware/jlib';
 import type { Project } from '../../../shared/protocol/project.schema';
@@ -58,8 +57,6 @@ const PLUS_SIZE = 14;
 // What marks swcode's own nodes in jlib's side nav: its styles, and the + of each project row.
 const ROW_STYLES_CLASS = 'sc-rows';
 const NEW_SESSION_CLASS = 'sc-new-session';
-// What marks swcode's fix of jlib's side nav layout, its header and foot in place (see `sc-nav-scroll.css`).
-const SCROLL_STYLES_CLASS = 'sc-nav-scroll';
 // A project's row in jlib's side nav, not one of its sessions'.
 const PROJECT_ROWS = `.item[data-depth="0"][data-id^="${PROJECT_PREFIX}"]`;
 const SETTINGS = 'Settings';
@@ -114,14 +111,6 @@ const addRowStyles = (root: ShadowRoot): void => {
     return;
   }
   root.append(<style class={ROW_STYLES_CLASS}>{rowStyles}</style>);
-};
-
-/** swcode's fix for jlib's side nav scrolling as one column, its header and foot leaving with the sessions, once. */
-const addScrollStyles = (root: ShadowRoot): void => {
-  if (root.querySelector(`style.${SCROLL_STYLES_CLASS}`)) {
-    return;
-  }
-  root.append(<style class={SCROLL_STYLES_CLASS}>{scrollStyles}</style>);
 };
 
 /** What the nav lists in each mode: a new chat and the chats, or a new session and the projects with theirs. */
@@ -274,17 +263,15 @@ export class ScNav extends ScElement {
   }
 
   /**
-   * What swcode puts into jlib's side nav itself: its header and foot kept in place, the sections scrolling between
-   * them (`sc-nav-scroll.css`), and the + that starts a session in a project, swapped in on its row each time jlib
-   * draws the rows again (new sessions, folding, the phone's drawer), since jlib's items take no button of the app's
-   * on a row (0.11.1). Both go once jlib has them.
+   * What swcode puts into jlib's side nav itself: the + that starts a session in a project, swapped in on its row
+   * each time jlib draws the rows again (new sessions, folding, the phone's drawer), since jlib's items take no
+   * button of the app's on a row (0.11.1). It goes once jlib has it.
    */
   private patchSideNav(): void {
     const root = this._refs.nav.shadowRoot;
     if (!root) {
       return;
     }
-    addScrollStyles(root);
     const observer = new MutationObserver(() => this.addProjectStarts(root));
     observer.observe(root, { childList: true, subtree: true });
     this.killSignal.addEventListener('abort', () => observer.disconnect(), { once: true });
