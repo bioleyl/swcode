@@ -1,4 +1,4 @@
-import { Folder, MessageSquare, Server, Terminal } from 'lucide';
+import { Folder, MessageSquare, Server } from 'lucide';
 
 import { HOST_ICONS } from './hosts';
 import { liveStatus } from './session-status';
@@ -29,8 +29,13 @@ const LIGHT_TONES: Readonly<Record<SessionLight, string | undefined>> = {
 const HOST_SHAPES: Readonly<Record<HostRef['kind'], [string, IconNode]>> = {
   local: [HOST_ICONS.local, Folder],
   ssh: [HOST_ICONS.ssh, Server],
-  wsl: [HOST_ICONS.wsl, Terminal],
+  wsl: [HOST_ICONS.wsl, Folder],
 };
+
+// One shape per icon, since two hosts show the same one: a WSL project's light fills the folder as a local one's.
+const PROJECT_SHAPES: ReadonlyMap<string, IconNode> = new Map(
+  Object.values(HOST_SHAPES).map(([icon, node]) => [icon, node])
+);
 
 // A line keeps the icon's ink: the dots of the server's drawers stay seen over their fill.
 const UNFILLED_TAGS: ReadonlySet<string> = new Set(['line']);
@@ -60,7 +65,7 @@ const litVariants = (icon: string, node: IconNode): [string, IconNode][] =>
 /** The lit icons to register, by name: the session's bubble and each host's project icon, filled with each light. */
 export const LIT_ICONS: Readonly<Record<string, IconNode>> = Object.fromEntries([
   ...litVariants(SESSION_ICON, MessageSquare),
-  ...Object.values(HOST_SHAPES).flatMap(([icon, node]) => litVariants(icon, node)),
+  ...[...PROJECT_SHAPES].flatMap(([icon, node]) => litVariants(icon, node)),
 ]);
 
 /**
