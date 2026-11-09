@@ -91,6 +91,7 @@ const PLACES: Readonly<Record<RouteName, (params: Record<string, string>) => Pla
   newSession: () => ({ mode: 'code', nav: NAV_ID.newSession, tab: TAB.new }),
   notFound: () => ({ nav: '', tab: '' }),
   project: (params) => ({ mode: 'code', nav: projectNavId(params.id ?? ''), tab: TAB.sessions }),
+  projectTab: (params) => ({ mode: 'code', nav: projectNavId(params.id ?? ''), tab: TAB.sessions }),
   session: (params) => ({
     mode: findSession(params.id ?? '')?.kind,
     nav: sessionNavId(params.id ?? ''),

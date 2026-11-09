@@ -12,6 +12,7 @@ import { SettingsPage } from './pages/settings-page';
 export const ROUTES = defineRoutes({
   session: { page: SessionPage, path: '/sessions/:id' },
   sessions: { page: SessionsPage, path: '/sessions' },
+  projectTab: { page: ProjectPage, path: '/projects/:id/:tab' },
   project: { page: ProjectPage, path: '/projects/:id' },
   // The same page as home: the form for a new session.
   newInProject: { page: HomePage, path: '/new/:project' },

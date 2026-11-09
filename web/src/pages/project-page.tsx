@@ -1,17 +1,29 @@
 import { createElement, css } from '@jadis/core';
-import { confirmDialog, JlButton, JlCard, JlEmpty, JlLoadState, JlPage, JlSwitch, toast } from '@syware/jlib';
+import {
+  confirmDialog,
+  JlButton,
+  JlCard,
+  JlEmpty,
+  JlLoadState,
+  JlPage,
+  JlSwitch,
+  JlTabPanel,
+  JlTabs,
+  toast,
+} from '@syware/jlib';
 
 import { ScElement } from '../base/sc-element';
 import { placeText } from '../lib/hosts';
 import { appDefaults } from '../lib/new-session';
 import { presetOf } from '../lib/presets';
 import { isSkillOn, SKILL_ORIGIN_LABELS } from '../lib/project-skills';
+import { DEFAULT_PROJECT_TAB, isProjectTab, PROJECT_TAB_LABELS } from '../lib/project-tabs';
 import { isSwcodeBaseIn } from '../lib/swcode-base';
 import { ScSessionChoices } from '../molecules/sc-session-choices';
 import { ScSessionRow } from '../molecules/sc-session-row';
 import { daemon } from '../services/daemon';
 import { daemonState, daemonStatusBus } from '../services/daemon-status';
-import { hrefOf, newSessionPath } from '../services/navigation';
+import { hrefOf, newSessionPath, projectTabPath } from '../services/navigation';
 import { presetChoices, presetsBus } from '../services/presets';
 import { askToRemoveProject, findProject, projectListBus } from '../services/project-list';
 import { foundSkills, readProjectSkills, setProjectSkill } from '../services/project-skills';
@@ -25,6 +37,7 @@ import type { SessionDefaults } from '../../../shared/protocol/choices.schema';
 import type { Project } from '../../../shared/protocol/project.schema';
 import type { SessionSummary } from '../../../shared/protocol/session.schema';
 import type { ProjectSkill, SwcodeBaseStatus } from '../../../shared/protocol/skill.schema';
+import type { ProjectTab } from '../lib/project-tabs';
 import type { SwcodeBasePlace, SwcodeBaseRead } from '../types/swcode-base.types';
 
 const APP_NAME = 'swcode';
@@ -82,14 +95,18 @@ const skillLineOf = (skill: ProjectSkill): string =>
 class Unread extends Error {}
 
 /**
- * A project: where its folder is, its sessions, the newest first, each with its delete button, what its new sessions
- * start with (its preset, permissions, thinking and token economy), saved as they are picked, the skills its
- * sessions find, each turned on or off for them with its switch, and swcode-base, put in the project or in the home.
+ * A project, where its folder is, in tabs each with its own address: its sessions, the newest first, each with its
+ * delete button; what its new sessions start with (its preset, permissions, thinking and token economy), saved as
+ * they are picked; the skills its sessions find, each turned on or off for them with its switch, and swcode-base,
+ * put in the project or in the home.
  */
 export class ProjectPage extends ScElement {
   static readonly selector = 'project-page';
 
-  readonly route = this.useAttributes({ id: () => this.render() });
+  readonly route = this.useAttributes({
+    id: () => this.render(),
+    tab: (tab) => this.showTab(isProjectTab(tab) ? tab : DEFAULT_PROJECT_TAB),
+  });
 
   // The project whose skills are read, or being read: they are read again only for another one.
   private _skillsOf: string | undefined;
@@ -110,53 +127,59 @@ export class ProjectPage extends ScElement {
     remove: ref<JlButton>('.remove'),
     reset: ref<JlButton>('.reset'),
     skillList: ref('.skill-list'),
-    skills: ref<JlCard>('.skills'),
     skillsState: ref(JlLoadState),
-    swcodeBase: ref<JlCard>('.swcode-base'),
     swcodeBaseInHome: ref<JlButton>('.swcode-base .in-home'),
     swcodeBaseInProject: ref<JlButton>('.swcode-base .in-project'),
+    tabs: ref(JlTabs),
   }));
 
   templateHtml(): Node {
     return (
       <JlPage appName={APP_NAME} width="standard">
-        <JlButton slot="actions" class="remove" icon="trash" variant="ghost" label="Remove" />
-        <JlButton slot="actions" class="new-session" icon="plus" variant="primary" label="New session" />
-        <div class="layout">
-          <div class="column">
+        <JlButton slot="actions" class="remove" icon="trash" variant="ghost" hint="Remove the project" />
+        <JlButton slot="actions" class="new-session" icon="plus" variant="primary" hint="New session" />
+        <JlTabs label="Project">
+          <JlTabPanel
+            name="sessions"
+            label={PROJECT_TAB_LABELS.sessions.label}
+            icon={PROJECT_TAB_LABELS.sessions.icon}>
             <div class="sessions" />
             <JlEmpty
               icon="message"
               heading="No sessions yet"
               description="A new session works in this project’s folder."
             />
-          </div>
-          <div class="side">
+          </JlTabPanel>
+          <JlTabPanel name="config" label={PROJECT_TAB_LABELS.config.label} icon={PROJECT_TAB_LABELS.config.icon}>
             <JlCard class="defaults" heading="New sessions start with">
               <ScSessionChoices />
               <JlButton class="reset" variant="ghost" size="sm" icon="refresh" label="Use the app’s defaults" />
             </JlCard>
-            <JlCard class="skills" heading="Skills" description={SKILLS_NOTE}>
-              <JlLoadState skeleton="rows" count={3}>
-                <div class="skill-list" />
-                <JlEmpty
-                  slot="empty"
-                  icon="book-open"
-                  heading="No skills here"
-                  description="A skill is a folder with its SKILL.md, in .agents/skills of the project or of your home."
-                />
-              </JlLoadState>
-            </JlCard>
-            <JlCard class="swcode-base" heading="swcode-base" description={SWCODE_BASE_NOTE}>
-              <JlLoadState class="base-state" skeleton="rows" count={1}>
-                <div class="base-actions">
-                  <JlButton class="in-project" variant="ghost" />
-                  <JlButton class="in-home" variant="ghost" />
-                </div>
-              </JlLoadState>
-            </JlCard>
-          </div>
-        </div>
+          </JlTabPanel>
+          <JlTabPanel name="skills" label={PROJECT_TAB_LABELS.skills.label} icon={PROJECT_TAB_LABELS.skills.icon}>
+            <div class="side">
+              <JlCard class="skills" heading="Skills" description={SKILLS_NOTE}>
+                <JlLoadState skeleton="rows" count={3}>
+                  <div class="skill-list" />
+                  <JlEmpty
+                    slot="empty"
+                    icon="book-open"
+                    heading="No skills here"
+                    description="A skill is a folder with its SKILL.md, in .agents/skills of the project or of your home."
+                  />
+                </JlLoadState>
+              </JlCard>
+              <JlCard class="swcode-base" heading="swcode-base" description={SWCODE_BASE_NOTE}>
+                <JlLoadState class="base-state" skeleton="rows" count={1}>
+                  <div class="base-actions">
+                    <JlButton class="in-project" variant="ghost" />
+                    <JlButton class="in-home" variant="ghost" />
+                  </div>
+                </JlLoadState>
+              </JlCard>
+            </div>
+          </JlTabPanel>
+        </JlTabs>
       </JlPage>
     );
   }
@@ -167,6 +190,7 @@ export class ProjectPage extends ScElement {
 
   onConnect(): void {
     const { choices } = this._refs;
+    this._refs.tabs.events.register('change', (tab) => this.pickTab(tab));
     this._refs.remove.events.register('press', () => askToRemoveProject(this.route.id ?? ''));
     this._refs.reset.events.register('press', () => this.saveDefaults(undefined));
     this._refs.skillsState.events.register('retry', () => this.loadSkills(this.route.id ?? ''));
@@ -212,12 +236,10 @@ export class ProjectPage extends ScElement {
     const project = this.project();
     this._refs.page.heading.set(project?.name ?? NOT_FOUND);
     this._refs.page.description.set(project ? placeText(project.host, project.path) : '');
+    this._refs.tabs.hidden = !project;
     this._refs.newSession.href.set(project ? hrefOf(newSessionPath(project.id)) : '');
     this._refs.newSession.hidden = !project;
     this._refs.remove.hidden = !project;
-    this._refs.defaults.hidden = !project;
-    this._refs.skills.hidden = !project;
-    this._refs.swcodeBase.hidden = !project;
     const sessions = project ? allSessions().filter((session) => session.workspace === project.path) : [];
     this._refs.list.replaceChildren(...sessions.map((session) => this.rowOf(session)));
     this._refs.empty.hidden = !project || sessions.length > 0;
@@ -231,6 +253,19 @@ export class ProjectPage extends ScElement {
       this.loadSkills(project.id);
       this.loadSwcodeBase(project.id);
     }
+  }
+
+  /** The tab the page shows: the one its address names, or the sessions when it names none yet. */
+  private showTab(tab: ProjectTab): void {
+    this._refs.tabs.value.set(tab);
+  }
+
+  /** A tab picked: the address follows, without leaving the page and what it holds. */
+  private pickTab(tab: string): void {
+    if (!isProjectTab(tab)) {
+      return;
+    }
+    history.replaceState(history.state, '', hrefOf(projectTabPath(this.route.id ?? '', tab)));
   }
 
   /** Another project's skills leave at once: its switches would turn them on or off for that one. */

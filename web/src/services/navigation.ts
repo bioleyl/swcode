@@ -20,6 +20,9 @@ export const SESSIONS_PATH = '/sessions';
 /** A project: its sessions, and a new one in it. */
 export const projectPath = (id: string): string => `/projects/${encodeURIComponent(id)}`;
 
+/** A tab of the project's page: its sessions, the config of its new sessions, or its skills. */
+export const projectTabPath = (id: string, tab: string): string => `${projectPath(id)}/${encodeURIComponent(tab)}`;
+
 export const HOME_PATH = '/';
 
 export const NEW_SESSION_PATH = '/new';

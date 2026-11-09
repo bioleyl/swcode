@@ -2,14 +2,16 @@
   display: block;
 }
 
-/* The sessions, and beside them on a wide screen what new ones start with; under them on a narrow one. */
-.layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
-  align-items: start;
-  gap: var(--jl-space-6);
+jl-tab-panel {
+  padding-top: var(--jl-space-6);
 }
 
+/* What new sessions start with: one card, as wide as a form. */
+.defaults {
+  max-width: var(--jl-page-form);
+}
+
+/* The skills, and swcode-base under them. */
 .side,
 .skill-list {
   display: flex;
@@ -19,6 +21,7 @@
 
 .side {
   gap: var(--jl-space-6);
+  max-width: var(--jl-page-form);
 }
 
 .skill-list {
@@ -45,12 +48,6 @@
   flex-wrap: wrap;
   gap: var(--jl-space-2);
   margin-top: var(--jl-space-3);
-}
-
-@media (max-width: 900px) {
-  .layout {
-    grid-template-columns: minmax(0, 1fr);
-  }
 }
 
 [hidden] {

@@ -181,6 +181,10 @@ const topicTab = (page: Page, label: string, selected?: boolean) =>
     .locator('settings-page jl-tabs')
     .getByRole('tab', { exact: true, name: label, ...(selected ? { selected } : {}) });
 
+/** A tab of the project page, by its label. */
+const projectTab = (page: Page, label: string) =>
+  page.locator('project-page jl-tabs').getByRole('tab', { exact: true, name: label });
+
 /** A tab of a phone's bar under the page, by its label. */
 const tab = (page: Page, label: string) => page.locator('jl-tab-bar').getByText(label, { exact: true });
 
@@ -527,6 +531,8 @@ describe('a project’s page', () => {
   it('keeps what its new sessions start with, until it goes back to the app’s defaults', async () => {
     const rig = await start({ replies: [{ text: 'Hello there.' }, { text: 'Going.' }] });
     const page = await openProject(rig);
+    await projectTab(page, 'Config').click();
+    await settle(page);
     const card = page.locator('project-page .defaults');
     const reset = page.locator('project-page .reset');
     await card.getByText('until you pick otherwise here', { exact: false }).waitFor();
@@ -534,7 +540,7 @@ describe('a project’s page', () => {
 
     await card.locator('sc-session-choices .thinking').getByText('Low', { exact: true }).click();
     await settle(page);
-    await card.locator('sc-session-choices jl-switch').click();
+    await card.locator('sc-session-choices jl-switch').getByRole('switch').click();
     await settle(page);
     await card.getByText('Set for this project', { exact: false }).waitFor();
     expect(await reset.isVisible()).toBe(true);
@@ -555,6 +561,8 @@ describe('a project’s page', () => {
     expect(concise.sort()).toEqual(['Go: false', 'Hi: true']);
 
     await navItem(page, basename(rig.workspace)).click();
+    await settle(page);
+    await projectTab(page, 'Config').click();
     await settle(page);
     await reset.click();
     await settle(page);
@@ -580,6 +588,8 @@ describe('a project’s skills', () => {
     await page.locator('home-page textarea').press('Enter');
     await page.getByText('Hello there.').waitFor();
     await navItem(page, basename(rig.workspace)).click();
+    await settle(page);
+    await projectTab(page, 'Skills').click();
     await settle(page);
     const card = page.locator('project-page .skills');
     const deploy = card.locator('jl-switch[data-skill="deploy"]');
