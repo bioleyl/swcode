@@ -2,6 +2,23 @@
 
 All notable changes to swcode are documented here.
 
+## [0.8.0] - 2026-11-10
+
+### Added
+
+- Terminals: a session page's side panel lists the project's terminals, and opens a shell in the project's folder on its host — this computer, a WSL distribution or an SSH endpoint — on a pseudo-terminal of its own, drawn in a dialog with xterm.js. Type in it, rename it in the panel, close it; the scrollback comes back when you open it again, and light and dark follow the page.
+- The agent starts a terminal of its own with `terminal { command, title }`, which the person watches beside the session, and reads what any terminal of the workspace printed with `readterminal { terminal, lines }`: the last lines of a build's error, one the person ran included.
+- A turn's restore point opens as diffs: "Changes", beside "Restore" on the line saying how many files were saved, shows each file as it was before the turn and as it is now, one dialog with a diff per file.
+
+### Changed
+
+- The system prompt sends a server or a watcher the person should watch to `terminal` with a short title, and a command whose output only the agent needs to `bash` with `background`.
+
+### Maintenance
+
+- Terminals run on `github.com/aymanbagabas/go-pty` (ConPTY on Windows), drawn by `@xterm/xterm`.
+- The compaction tests' context sizes follow the longer prompt and tool list.
+
 ## [0.7.0] - 2026-11-09
 
 ### Added
