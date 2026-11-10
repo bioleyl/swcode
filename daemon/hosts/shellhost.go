@@ -346,6 +346,12 @@ func (h *ShellHost) StartJob(ctx context.Context, command, cwd string) (string, 
 	return id, nil
 }
 
+// StartTerminal starts a shell there, in the folder, on a pseudo-terminal of its own: ssh and wsl.exe ask the far
+// end for one, and this terminal keeps its size.
+func (h *ShellHost) StartTerminal(options TerminalOptions) (*Terminal, error) {
+	return StartTerminal(h.transport.TerminalCommand(options.Cwd), options)
+}
+
 func (h *ShellHost) ReadJob(ctx context.Context, id string, consume bool) (*JobState, error) {
 	h.mu.Lock()
 	job, ok := h.jobs[id]

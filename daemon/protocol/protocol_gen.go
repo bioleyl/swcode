@@ -43,9 +43,15 @@ var SessionKinds = []SessionKind{SessionKindCode, SessionKindChat}
 
 var SessionStatuses = []SessionStatus{SessionStatusIdle, SessionStatusWorking, SessionStatusWaiting}
 
-var ToolNames = []ToolName{ToolNameRead, ToolNameWrite, ToolNameEdit, ToolNameBash, ToolNameGrep, ToolNameGlob, ToolNameAgent, ToolNamePlan, ToolNameQuestion, ToolNameWebsearch, ToolNameWebfetch, ToolNameImage, ToolNameDraw, ToolNameOutput, ToolNameKill, ToolNameSkill, ToolNameNotes, ToolNameSaveskill, ToolNameScreenshot}
+var ToolNames = []ToolName{ToolNameRead, ToolNameWrite, ToolNameEdit, ToolNameBash, ToolNameGrep, ToolNameGlob, ToolNameAgent, ToolNamePlan, ToolNameQuestion, ToolNameWebsearch, ToolNameWebfetch, ToolNameImage, ToolNameDraw, ToolNameOutput, ToolNameKill, ToolNameTerminal, ToolNameReadterminal, ToolNameSkill, ToolNameNotes, ToolNameSaveskill, ToolNameScreenshot}
 
 var TurnOutcomes = []TurnOutcome{TurnOutcomeDone, TurnOutcomeStopped, TurnOutcomeFailed, TurnOutcomeLimit}
+
+const MaxTerminalColumns = 500
+
+const MaxTerminalRows = 200
+
+const MaxTerminalTitle = 60
 
 var PeekStates = []PeekState{PeekStateWaiting, PeekStateAnswering, PeekStateDone, PeekStateFailed}
 
@@ -219,31 +225,33 @@ func (v SessionStatus) Valid() bool {
 type ToolName string
 
 const (
-	ToolNameRead       ToolName = "read"
-	ToolNameWrite      ToolName = "write"
-	ToolNameEdit       ToolName = "edit"
-	ToolNameBash       ToolName = "bash"
-	ToolNameGrep       ToolName = "grep"
-	ToolNameGlob       ToolName = "glob"
-	ToolNameAgent      ToolName = "agent"
-	ToolNamePlan       ToolName = "plan"
-	ToolNameQuestion   ToolName = "question"
-	ToolNameWebsearch  ToolName = "websearch"
-	ToolNameWebfetch   ToolName = "webfetch"
-	ToolNameImage      ToolName = "image"
-	ToolNameDraw       ToolName = "draw"
-	ToolNameOutput     ToolName = "output"
-	ToolNameKill       ToolName = "kill"
-	ToolNameSkill      ToolName = "skill"
-	ToolNameNotes      ToolName = "notes"
-	ToolNameSaveskill  ToolName = "saveskill"
-	ToolNameScreenshot ToolName = "screenshot"
+	ToolNameRead         ToolName = "read"
+	ToolNameWrite        ToolName = "write"
+	ToolNameEdit         ToolName = "edit"
+	ToolNameBash         ToolName = "bash"
+	ToolNameGrep         ToolName = "grep"
+	ToolNameGlob         ToolName = "glob"
+	ToolNameAgent        ToolName = "agent"
+	ToolNamePlan         ToolName = "plan"
+	ToolNameQuestion     ToolName = "question"
+	ToolNameWebsearch    ToolName = "websearch"
+	ToolNameWebfetch     ToolName = "webfetch"
+	ToolNameImage        ToolName = "image"
+	ToolNameDraw         ToolName = "draw"
+	ToolNameOutput       ToolName = "output"
+	ToolNameKill         ToolName = "kill"
+	ToolNameTerminal     ToolName = "terminal"
+	ToolNameReadterminal ToolName = "readterminal"
+	ToolNameSkill        ToolName = "skill"
+	ToolNameNotes        ToolName = "notes"
+	ToolNameSaveskill    ToolName = "saveskill"
+	ToolNameScreenshot   ToolName = "screenshot"
 )
 
 // Valid tells whether v is one of the ToolName values.
 func (v ToolName) Valid() bool {
 	switch v {
-	case ToolNameRead, ToolNameWrite, ToolNameEdit, ToolNameBash, ToolNameGrep, ToolNameGlob, ToolNameAgent, ToolNamePlan, ToolNameQuestion, ToolNameWebsearch, ToolNameWebfetch, ToolNameImage, ToolNameDraw, ToolNameOutput, ToolNameKill, ToolNameSkill, ToolNameNotes, ToolNameSaveskill, ToolNameScreenshot:
+	case ToolNameRead, ToolNameWrite, ToolNameEdit, ToolNameBash, ToolNameGrep, ToolNameGlob, ToolNameAgent, ToolNamePlan, ToolNameQuestion, ToolNameWebsearch, ToolNameWebfetch, ToolNameImage, ToolNameDraw, ToolNameOutput, ToolNameKill, ToolNameTerminal, ToolNameReadterminal, ToolNameSkill, ToolNameNotes, ToolNameSaveskill, ToolNameScreenshot:
 		return true
 	}
 	return false

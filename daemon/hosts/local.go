@@ -3,6 +3,7 @@ package hosts
 import (
 	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"sync"
@@ -114,6 +115,13 @@ func (h *LocalHost) RemoveScratch(_ context.Context, sessionID string) error {
 
 func (h *LocalHost) StartJob(_ context.Context, command, cwd string) (string, error) {
 	return h.jobs.Start(command, cwd), nil
+}
+
+// StartTerminal starts this computer's shell in the folder, on a pseudo-terminal of its own.
+func (h *LocalHost) StartTerminal(options TerminalOptions) (*Terminal, error) {
+	command := exec.Command(h.shell.Program, h.shell.Interactive...)
+	command.Dir = options.Cwd
+	return StartTerminal(command, options)
 }
 
 func (h *LocalHost) ReadJob(_ context.Context, id string, consume bool) (*JobState, error) {

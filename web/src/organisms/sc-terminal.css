@@ -1,0 +1,29 @@
+:host {
+  display: contents;
+}
+
+/* The terminal fills its dialog, on the app's own ground: a whole window wide, most of it tall. */
+.screen {
+  box-sizing: border-box;
+  height: min(72vh, 760px);
+  padding: 8px 12px;
+  overflow: hidden;
+  border: 1px solid var(--jl-line);
+  border-radius: var(--jl-radius-md);
+  background: var(--jl-surface-2);
+}
+
+/* xterm fills the screen it was opened in, over that ground rather than a colour of its own. */
+.screen .xterm {
+  height: 100%;
+}
+
+.screen .xterm .xterm-viewport {
+  /* xterm's stylesheet paints it black; the ground of the card is the theme's, in light and dark alike. */
+  /* biome-ignore lint/complexity/noImportantStyles: xterm's own sheet sets #000, and the theme can switch while it is open. */
+  background-color: transparent !important;
+}
+
+[hidden] {
+  display: none;
+}

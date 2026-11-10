@@ -130,6 +130,9 @@ type Host interface {
 	RemoveScratch(ctx context.Context, sessionID string) error
 	// StartJob starts a command that runs on after this call (a server, a watcher) in a folder: its id there.
 	StartJob(ctx context.Context, command, cwd string) (string, error)
+	// StartTerminal starts an interactive shell in a folder there, on a pseudo-terminal: what people type in from a
+	// terminal of the app, and what the agent runs there to watch.
+	StartTerminal(options TerminalOptions) (*Terminal, error)
 	// ReadJob is a job's state, with what it printed since its output was last taken; consume takes it. Nil for a
 	// job it does not know.
 	ReadJob(ctx context.Context, id string, consume bool) (*JobState, error)

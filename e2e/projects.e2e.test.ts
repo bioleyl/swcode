@@ -149,7 +149,7 @@ describe('a project’s page', () => {
     await page.locator('home-page textarea').fill('Fix the bug');
     await page.locator('home-page textarea').press('Enter');
     await page.getByText('On it.').waitFor();
-    await expect.poll(() => page.locator('session-page sc-title button').textContent()).toBe('Fix the bug');
+    await expect.poll(() => page.locator('session-page header sc-title button').textContent()).toBe('Fix the bug');
     const linked = page.locator('session-page sc-session-todos');
     await linked.getByText('Linked todos').waitFor();
     await linked.getByText('Write better tests').waitFor();

@@ -18,6 +18,7 @@ import {
   SessionKindSchema,
   SessionSummarySchema,
   ThinkingModeSchema,
+  ToolDisplaySchema,
   ToolNameSchema,
 } from './session.schema.js';
 
@@ -35,6 +36,36 @@ export type PeekState = z.infer<typeof PeekStateSchema>;
  */
 export const SessionMatchSchema = z.object({ sessionId: z.string(), snippet: z.string() });
 export type SessionMatch = z.infer<typeof SessionMatchSchema>;
+
+/** How much of a terminal the app shows, in characters: a shell is kept the same size as the view that types in it. */
+export const MAX_TERMINAL_COLUMNS = 500;
+export const MAX_TERMINAL_ROWS = 200;
+const TerminalColumnsSchema = z.number().int().min(2).max(MAX_TERMINAL_COLUMNS);
+const TerminalRowsSchema = z.number().int().min(1).max(MAX_TERMINAL_ROWS);
+
+/** How long the name of a terminal may be: a few words, which the app lists in its side panel. */
+export const MAX_TERMINAL_TITLE = 60;
+
+/** Whether a terminal's shell is still there, and how it ended: a state of its own, since code 0 is an exit too. */
+export const TerminalStateSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('running') }),
+  z.object({ code: z.number().int(), kind: z.literal('exited') }),
+  // A signal ended it: a hangup when the daemon stops, or the person's kill.
+  z.object({ kind: z.literal('signalled') }),
+]);
+export type TerminalState = z.infer<typeof TerminalStateSchema>;
+
+/** A shell running in a project's folder, on its host: people type in it from the app, and the agent starts them too. */
+export const TerminalSchema = z.object({
+  // Where it runs: the project's folder, on the host that folder is on.
+  cwd: z.string(),
+  host: HostRefSchema,
+  id: z.string(),
+  state: TerminalStateSchema,
+  // What it is called in the app: a few words, or its number.
+  title: z.string(),
+});
+export type Terminal = z.infer<typeof TerminalSchema>;
 
 /** What the app sends the daemon over the socket. */
 export const ClientMessageSchema = z.discriminatedUnion('type', [

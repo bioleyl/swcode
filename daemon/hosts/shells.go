@@ -9,12 +9,18 @@ import (
 type Shell struct {
 	Program string
 	Args    func(command string) []string
+	// Interactive starts it for a person to type in, with no command: a terminal of the app runs one.
+	Interactive []string
 	// Label is said to the model beside the platform; empty when it is plain bash.
 	Label string
 }
 
-// Bash runs commands with bash -c.
-var Bash = Shell{Args: func(command string) []string { return []string{"-c", command} }, Program: "bash"}
+// Bash runs commands with bash -c, and starts bash -i for a terminal.
+var Bash = Shell{
+	Args:        func(command string) []string { return []string{"-c", command} },
+	Interactive: []string{"-i"},
+	Program:     "bash",
+}
 
 // Windows PowerShell 5.1 is on every Windows; its output is UTF-8 only when asked.
 var powerShell = Shell{
@@ -24,8 +30,9 @@ var powerShell = Shell{
 			"[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; " + command,
 		}
 	},
-	Label:   "commands run in Windows PowerShell 5.1: there is no bash here",
-	Program: "powershell.exe",
+	Interactive: []string{"-NoLogo"},
+	Label:       "commands run in Windows PowerShell 5.1: there is no bash here",
+	Program:     "powershell.exe",
 }
 
 // Where Git for Windows puts its bash: for everyone, for the 32-bit Program Files, or for this person only.
@@ -54,7 +61,7 @@ func gitBashPlaces(environment map[string]string) []string {
 func WindowsShell(environment map[string]string) Shell {
 	for _, place := range gitBashPlaces(environment) {
 		if _, err := os.Stat(place); err == nil {
-			return Shell{Args: Bash.Args, Label: "commands run in Git Bash", Program: place}
+			return Shell{Args: Bash.Args, Interactive: Bash.Interactive, Label: "commands run in Git Bash", Program: place}
 		}
 	}
 	return powerShell

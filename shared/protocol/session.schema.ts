@@ -23,6 +23,10 @@ export const TOOL_NAMES = [
   'draw',
   'output',
   'kill',
+  // A shell in a terminal of its own in the app, which the person watches and types in.
+  'terminal',
+  // The last lines a terminal printed, to read an error it shows.
+  'readterminal',
   'skill',
   // Adds what the agent found out about the project to its AGENTS.md, which every session starts from.
   'notes',

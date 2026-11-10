@@ -1,12 +1,14 @@
 import { createElement, css } from '@jadis/core';
 import { JlButton, JlProgress } from '@syware/jlib';
 
+import { MAX_TERMINAL_TITLE } from '../../../shared/protocol/messages.schema';
 import { ScElement } from '../base/sc-element';
 import { daemonLine, hostOf } from '../lib/daemon-lines';
 import { tokens } from '../lib/format';
 import { BASE_STYLES } from '../styles/shared';
 import styles from './sc-side-panel.css?inline';
 
+import type { Terminal } from '../../../shared/protocol/messages.schema';
 import type { PresetStatus, SourceStatus } from '../../../shared/protocol/models.schema';
 import type { SessionStatus, SessionSummary } from '../../../shared/protocol/session.schema';
 import type { AgentView } from '../types/conversation.types';
@@ -20,6 +22,9 @@ const ACTIVITY: Readonly<Record<SessionStatus, string>> = {
 
 // The list stays short: the working subagents, then the latest that finished.
 const MAX_AGENTS_SHOWN = 4;
+
+const ENTER = 'Enter';
+const ESCAPE = 'Escape';
 
 // What a subagent shows before its first call ends, by its state.
 const STARTING = 'Starting';
@@ -58,14 +63,20 @@ const serverNode = (source: SourceStatus): Node => (
 type SessionJob = SessionSummary['jobs'][number];
 
 /**
- * Beside a session on a wide screen: the agents at work, the commands they left running, the llm-servers and
- * whether they answer, how full the context is, and at the bottom which build of swcode runs. `stopJob` asks to stop
- * a command.
+ * Beside a session on a wide screen: the agents at work, the commands they left running, the project's terminals, the
+ * llm-servers and whether they answer, how full the context is, and at the bottom which build of swcode runs.
+ * `stopJob` asks to stop a command; a terminal row opens it, and its own button closes it.
  */
 export class ScSidePanel extends ScElement {
   static readonly selector = 'sc-side-panel';
 
-  readonly events = this.useEvents<{ stopJob: string }>();
+  readonly events = this.useEvents<{
+    closeTerminal: string;
+    newTerminal: undefined;
+    openTerminal: string;
+    renameTerminal: { terminalId: string; title: string };
+    stopJob: string;
+  }>();
 
   readonly status = this.useChange<SessionStatus>(
     'idle',
@@ -92,15 +103,22 @@ export class ScSidePanel extends ScElement {
   readonly main = this.useChange<PresetStatus | undefined>(undefined, () => this.render());
   /** The commands the agent left running in the background. */
   readonly jobs = this.useChange<SessionJob[]>([], (jobs) => this.renderJobs(jobs));
+  /** The project's terminals, as the daemon lists them: the section shows while the session has a project. */
+  readonly terminals = this.useChange<Terminal[]>([], () => this.renderTerminals(), { immediate: true });
+  /** Whether the session works in a project: a chat has none, and opens no terminal. */
+  readonly canTerminal = this.useChange(false, () => this.renderTerminals(), { immediate: true });
 
   private readonly _refs = this.useRefs((ref) => ({
     activity: ref('.main .activity'),
     context: ref(JlProgress),
     jobs: ref('.jobs'),
     jobsSection: ref('.background'),
+    newTerminal: ref<JlButton>('.new-terminal'),
     of: ref('.of'),
     servers: ref('.servers'),
     subagents: ref('.subagents'),
+    terminals: ref('.terminals'),
+    terminalsSection: ref('.terminals-section'),
     used: ref('.used'),
     version: ref('.version'),
   }));
@@ -125,6 +143,11 @@ export class ScSidePanel extends ScElement {
           <h2 class="label">Running in the background</h2>
           <div class="jobs" />
         </section>
+        <section class="terminals-section" hidden>
+          <h2 class="label">Terminals</h2>
+          <div class="terminals" />
+          <JlButton class="new-terminal" icon="plus" label="New terminal" variant="ghost" size="sm" />
+        </section>
         <section>
           <h2 class="label">llm-server</h2>
           <div class="servers" />
@@ -143,6 +166,94 @@ export class ScSidePanel extends ScElement {
 
   templateCss(): string {
     return css`${BASE_STYLES}${styles}`;
+  }
+
+  onConnect(): void {
+    this._refs.newTerminal.events.register('press', () => this.events.emit('newTerminal'));
+  }
+
+  /** A terminal: its name opens it, the pencil renames it in place, the × ends its shell. */
+  private terminalNode(terminal: Terminal): Node {
+    const open = createElement(JlButton, {
+      attrs: { class: 'open' },
+      props: { label: terminal.title, size: 'sm', variant: 'ghost' },
+    });
+    open.events.register('press', () => this.events.emit('openTerminal', terminal.id));
+    const name = document.createElement('input');
+    name.className = 'name';
+    name.hidden = true;
+    name.maxLength = MAX_TERMINAL_TITLE;
+    name.setAttribute('aria-label', `Rename ${terminal.title}`);
+    this.on(name, 'keydown', (event) => this.nameKeys(event, terminal, name, open));
+    this.on(name, 'blur', () => this.saveName(terminal, name, open));
+    const rename = createElement(JlButton, {
+      attrs: { class: 'rename' },
+      props: { hint: `Rename ${terminal.title}`, icon: 'pencil', size: 'sm', variant: 'ghost' },
+    });
+    rename.events.register('press', () => this.editName(terminal, name, open));
+    const close = createElement(JlButton, {
+      attrs: { class: 'close' },
+      props: { hint: `Close ${terminal.title}`, icon: 'x', size: 'sm', variant: 'ghost' },
+    });
+    close.events.register('press', () => this.events.emit('closeTerminal', terminal.id));
+    return (
+      <div
+        class="terminal"
+        data-failed={String(terminal.state.kind === 'exited' && terminal.state.code !== 0)}
+        data-state={terminal.state.kind}
+        title={terminal.cwd}>
+        <span class="dot" aria-hidden="true" />
+        {open}
+        {name}
+        {rename}
+        {close}
+      </div>
+    );
+  }
+
+  /** The name becomes a field, in the row it belongs to: Enter or leaving it keeps the new one. */
+  private editName(terminal: Terminal, name: HTMLInputElement, open: JlButton): void {
+    name.value = terminal.title;
+    open.hidden = true;
+    name.hidden = false;
+    name.focus();
+    name.select();
+  }
+
+  private nameKeys(event: KeyboardEvent, terminal: Terminal, name: HTMLInputElement, open: JlButton): void {
+    if (event.key === ESCAPE) {
+      this.cancelName(name, open);
+      return;
+    }
+    if (event.key !== ENTER) {
+      return;
+    }
+    event.preventDefault();
+    this.saveName(terminal, name, open);
+  }
+
+  /** Keeps a new, non-empty name; Enter then the blur that follows save once. */
+  private saveName(terminal: Terminal, name: HTMLInputElement, open: JlButton): void {
+    if (name.hidden) {
+      return;
+    }
+    const title = name.value.trim();
+    this.cancelName(name, open);
+    if (title === '' || title === terminal.title) {
+      return;
+    }
+    this.events.emit('renameTerminal', { terminalId: terminal.id, title });
+  }
+
+  private cancelName(name: HTMLInputElement, open: JlButton): void {
+    name.hidden = true;
+    open.hidden = false;
+  }
+
+  private renderTerminals(): void {
+    const terminals = this.terminals.get();
+    this._refs.terminalsSection.hidden = !this.canTerminal.get();
+    this._refs.terminals.replaceChildren(...terminals.map((terminal) => this.terminalNode(terminal)));
   }
 
   /** A command, and its stop button: a button keeps its clicks to itself, so each says which command it stops. */

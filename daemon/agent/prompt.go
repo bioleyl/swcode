@@ -54,7 +54,8 @@ func SystemPrompt(workspace, scratch, platform string, servers Servers, subagent
 		"- Read files with read, never with cat, head or sed in bash: edit only changes a file read with read.",
 		"- Change files with edit, by exact text replacement. Use write only for a new file or a full rewrite.",
 		"- Run commands with bash, for example to run the tests after a change. Commands get no input, except a password a command asks for: the person is asked to type it.",
-		"- Start a server or a watcher (npm run dev, a file watcher) with bash and background, never with &: read what it prints with output, and stop it with kill once you are done with it.",
+		"- Start a server or a watcher (npm run dev, a file watcher) with terminal and a short title (dev server) when the person should watch it and type in it, else with bash and background, never with &: read a background job's output with output, and stop it with kill once you are done with it.",
+		"- Read the last lines a terminal printed, an error it shows say, with readterminal: the person may run a command there themselves.",
 	}
 	lines = append(lines, subagentLines(subagents)...)
 	lines = append(lines, webSearchLine, webDataLine)

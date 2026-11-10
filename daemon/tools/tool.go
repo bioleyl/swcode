@@ -13,6 +13,7 @@ import (
 	"swcode/daemon/images"
 	"swcode/daemon/permissions"
 	"swcode/daemon/protocol"
+	"swcode/daemon/terminals"
 	"swcode/daemon/web"
 )
 
@@ -82,10 +83,14 @@ type Context struct {
 	Web *web.Port
 	// Images is pictures from the picture server, when there is one; subagents get none.
 	Images images.Port
+	// HostRef is where the session's project is: an agent's terminal runs there, in its folder.
+	HostRef protocol.HostRef
 	// Jobs is the session's background commands; subagents get none.
 	Jobs Jobs
 	// Screenshots is pages drawn by a browser, when the daemon has one; subagents get none.
 	Screenshots Screenshots
+	// Terminals are the shells of the app, where the agent runs what people watch; subagents get none.
+	Terminals terminals.Port
 	// Skills is the session's skills; subagents get none.
 	Skills catalog.Port
 }

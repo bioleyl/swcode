@@ -189,6 +189,7 @@ func (s *Service) hostFor(session *live, turn *runningTurn, ready prepared, sees
 			return got.text, got.gave
 		},
 		Host:        where.host,
+		HostRef:     session.meta.Host,
 		Images:      s.imagesFor(session),
 		Jobs:        &sessionJobs{host: where.host, service: s, session: session},
 		ReadFiles:   session.readFiles,
@@ -196,6 +197,7 @@ func (s *Service) hostFor(session *live, turn *runningTurn, ready prepared, sees
 		Screenshots: s.screenshotsFor(session, main, sees),
 		Skills:      where.skills,
 		Subagents:   subagents{limit: ready.subagents, service: s, session: session, subagent: subagent, where: where},
+		Terminals:   s.deps.Terminals,
 		Web:         s.webFor(subagent),
 		Workspace:   session.meta.Workspace,
 	}

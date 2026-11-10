@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"sync"
@@ -11,12 +12,14 @@ import (
 	"swcode/daemon/hosts"
 	"swcode/daemon/protocol"
 	"swcode/daemon/sessions"
+	"swcode/daemon/terminals"
 )
 
 const (
-	unknownSession = "There is no such session."
-	notUnderstood  = "The daemon did not understand that message."
-	maxMessage     = 64 << 20
+	unknownSession  = "There is no such session."
+	unknownTerminal = "There is no such terminal."
+	notUnderstood   = "The daemon did not understand that message."
+	maxMessage      = 64 << 20
 )
 
 // outbox is a socket's messages waiting to leave, in order, however many: the sessions tell it what happens with
@@ -53,11 +56,57 @@ func problem(text string) protocol.ServerMessage {
 	return protocol.ServerMessage{Value: protocol.ServerMessageProblem{Message: text}}
 }
 
+// terminalWatchers is the terminals one socket hears from, each watched until the person goes back to the
+// conversation, closes it, or the socket ends.
+type terminalWatchers struct {
+	mu     sync.Mutex
+	off    map[string]func()
+	closed bool
+}
+
+func newTerminalWatchers() *terminalWatchers {
+	return &terminalWatchers{off: map[string]func(){}}
+}
+
+// watch makes the socket hear a terminal's output from now on: the output it had before came with its attach.
+func (w *terminalWatchers) watch(service *terminals.Service, id string, deliver func([]byte)) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.closed {
+		return
+	}
+	if _, watching := w.off[id]; watching {
+		return
+	}
+	w.off[id] = service.Watch(id, deliver)
+}
+
+func (w *terminalWatchers) drop(id string) {
+	w.mu.Lock()
+	off, watching := w.off[id]
+	delete(w.off, id)
+	w.mu.Unlock()
+	if watching {
+		off()
+	}
+}
+
+func (w *terminalWatchers) close() {
+	w.mu.Lock()
+	off := w.off
+	w.off, w.closed = map[string]func(){}, true
+	w.mu.Unlock()
+	for _, each := range off {
+		each()
+	}
+}
+
 // handlers has a method per message the app sends: a new kind does not compile until it has one.
 type handlers struct {
-	app   *App
-	ctx   context.Context
-	reply func(protocol.ServerMessage)
+	app      *App
+	ctx      context.Context
+	reply    func(protocol.ServerMessage)
+	watchers *terminalWatchers
 }
 
 func (h handlers) problem(text string) struct{} {
@@ -266,6 +315,7 @@ func (a *App) socket(response http.ResponseWriter, request *http.Request) {
 		a.Sessions.Subscribe(func(message protocol.ServerMessage) { box.push(message) }),
 		a.Projects.Subscribe(func(message protocol.ServerMessage) { box.push(message) }),
 		a.Models.Subscribe(func(message protocol.ServerMessage) { box.push(message) }),
+		a.Terminals.Subscribe(func(message protocol.ServerMessage) { box.push(message) }),
 	}
 	defer func() {
 		for _, each := range unsubscribe {
@@ -275,8 +325,11 @@ func (a *App) socket(response http.ResponseWriter, request *http.Request) {
 	box.push(protocol.ServerMessage{Value: protocol.ServerMessageProjects{Projects: a.Projects.List()}})
 	box.push(protocol.ServerMessage{Value: protocol.ServerMessagePresets{Choices: a.Models.Choices()}})
 	box.push(protocol.ServerMessage{Value: protocol.ServerMessageSessions{Sessions: a.Sessions.List()}})
+	box.push(protocol.ServerMessage{Value: protocol.ServerMessageTerminals{Terminals: a.Terminals.List()}})
 	go a.send(ctx, cancel, connection, box)
-	reply := handlers{app: a, ctx: context.WithoutCancel(ctx), reply: box.push}
+	watchers := newTerminalWatchers()
+	defer watchers.close()
+	reply := handlers{app: a, ctx: context.WithoutCancel(ctx), reply: box.push, watchers: watchers}
 	for {
 		_, data, err := connection.Read(ctx)
 		if err != nil {

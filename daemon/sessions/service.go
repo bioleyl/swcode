@@ -20,6 +20,7 @@ import (
 	"swcode/daemon/llm"
 	"swcode/daemon/permissions"
 	"swcode/daemon/protocol"
+	"swcode/daemon/terminals"
 	"swcode/daemon/tools"
 	"swcode/daemon/web"
 )
@@ -82,6 +83,8 @@ type Deps struct {
 	// Search is the daemon's one web search, which keeps every session's searches apart in time.
 	Search web.Search
 	HTTP   *http.Client
+	// Terminals are the app's shells, which the agent opens in its folder for what people should watch.
+	Terminals terminals.Port
 	// ImageURL is the picture server, when there is one; ImagesFolder where the daemon keeps the pictures it shows,
 	// a folder per session.
 	ImageURL     string

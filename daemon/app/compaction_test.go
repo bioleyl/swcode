@@ -58,9 +58,9 @@ func TestTheConversationAfterACompactionStartsWithTheSummary(t *testing.T) {
 }
 
 func TestATurnSummarizesOnceTheConversationNearsTheEndOfTheContext(t *testing.T) {
-	// The system prompt and the tools take about 4,200 tokens; big.txt, about 4,000 more.
+	// The system prompt and the tools take about 4,900 tokens; big.txt, about 4,000 more.
 	test := Start(t, Options{
-		ContextTokens: 6000,
+		ContextTokens: 6400,
 		Files:         map[string]string{"big.txt": strings.Repeat(strings.Repeat("x", 60)+"\n", 200)},
 		Replies:       []fakellama.Reply{call("read", map[string]any{"path": "big.txt"}), text("It holds lines of x.")},
 		Scripts:       map[string][]fakellama.Reply{summaryRequest: {{Text: summary}}},

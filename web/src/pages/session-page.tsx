@@ -1,6 +1,7 @@
 import { css } from '@jadis/core';
 import { JlAlert, JlBadge, JlButton, JlIcon, toast } from '@syware/jlib';
 
+import { MAX_TERMINAL_TITLE } from '../../../shared/protocol/messages.schema';
 import { ScElement } from '../base/sc-element';
 import { agentsOf } from '../lib/agents';
 import { SESSION_COMMANDS } from '../lib/commands';
@@ -18,6 +19,7 @@ import { ScConversation } from '../organisms/sc-conversation';
 import { ScPeek } from '../organisms/sc-peek';
 import { ScPlan } from '../organisms/sc-plan';
 import { ScSidePanel } from '../organisms/sc-side-panel';
+import { ScTerminal } from '../organisms/sc-terminal';
 import { daemon, daemonBus } from '../services/daemon';
 import { daemonState, daemonStatusBus } from '../services/daemon-status';
 import { navigate, newPathOf } from '../services/navigation';
@@ -97,6 +99,13 @@ export class SessionPage extends ScElement {
   private _events: SessionEvent[] = [];
   // Whether this page has its history yet: the next answer is a page of older events, not the conversation itself.
   private _opened = false;
+  // The terminal drawn in the conversation's room, if one is; and whether the next terminalOpened is one this page
+  // just asked for, which it then shows.
+  private _shownTerminal = '';
+  private _openingTerminal = false;
+  // What the panel lists and the view shows of the terminals: drawn again only when it changes, since the session's
+  // list changes at every event of a turn.
+  private _terminalsKey = '';
 
   readonly route = this.useAttributes({
     id: (id) => {
@@ -136,6 +145,13 @@ export class SessionPage extends ScElement {
         this._refs.plan.show(currentPlan(this._events));
         this.showUsage(usedTokens(this._events));
       }),
+    terminalOpened: (message) => this.terminalOpened(message.terminal, message.output),
+    terminalOutput: (message) => {
+      if (message.terminalId === this._shownTerminal) {
+        this._refs.terminal.write(message.data);
+      }
+    },
+    terminals: () => this.renderTerminals(),
     toolCallWriting: (message) =>
       this.forThisSession(message.sessionId, () => this._refs.conversation.writingCall(message.tool)),
   };
@@ -153,6 +169,7 @@ export class SessionPage extends ScElement {
     problem: ref(JlAlert),
     remove: ref<JlButton>('.delete'),
     status: ref(JlBadge),
+    terminal: ref(ScTerminal),
     title: ref(ScTitle),
     todos: ref(ScSessionTodos),
   }));
@@ -172,6 +189,7 @@ export class SessionPage extends ScElement {
             <JlButton class="panel-toggle" variant="ghost" size="sm" />
           </header>
           <ScConversation />
+          <ScTerminal />
           <JlAlert tone="danger" hidden />
           <ScPlan hidden />
           <ScPeek hidden />
@@ -195,6 +213,7 @@ export class SessionPage extends ScElement {
     this.wireConversation();
     this.wireComposer();
     this.wireFrame();
+    this.wireTerminals();
     this.renderSummary();
     this.renderDaemon();
     this.openHistory();
@@ -278,6 +297,130 @@ export class SessionPage extends ScElement {
     this.renderPanel(sidePanelOpen());
   }
 
+  /** The terminals: the panel opens, ends and starts them; the view sends what the person types and how big it is. */
+  private wireTerminals(): void {
+    const { panel, terminal } = this._refs;
+    panel.events.register('newTerminal', () => this.openTerminal());
+    panel.events.register('openTerminal', (terminalId) => this.showTerminal(terminalId));
+    panel.events.register('closeTerminal', (terminalId) => daemon.send({ terminalId, type: 'closeTerminal' }));
+    panel.events.register('renameTerminal', ({ terminalId, title }) =>
+      daemon.send({ terminalId, title: title.slice(0, MAX_TERMINAL_TITLE), type: 'renameTerminal' })
+    );
+    terminal.events.register('input', (data) => this.typeInTerminal(data));
+    terminal.events.register('resize', (size) => this.resizeTerminal(size));
+    terminal.events.register('back', () => this.hideTerminal());
+    terminal.events.register('close', () => this.closeShownTerminal());
+    this.onBus(terminalListBus, 'changed', () => this.renderTerminals());
+    this.renderTerminals();
+  }
+
+  /**
+   * A terminal opened: the one this page asked for shows, sized to its view; another is one it asked to show again,
+   * and its kept output redraws the view.
+   */
+  private terminalOpened(terminal: Terminal, output: string): void {
+    if (this._openingTerminal) {
+      this._openingTerminal = false;
+      this.drawTerminal(terminal);
+      this.resizeTerminal(this._refs.terminal.size());
+      return;
+    }
+    if (terminal.id === this._shownTerminal) {
+      this._refs.terminal.replay(output);
+    }
+  }
+
+  /** The terminals of this session's project, as the daemon lists them; a chat has none. */
+  private renderTerminals(): void {
+    const session = findSession(this._sessionId);
+    const code = session?.kind === 'code';
+    const found = session && code ? terminalsIn(session.workspace, session.host) : [];
+    const key = `${code} ${found.map(terminalKey).join(',')}`;
+    if (key === this._terminalsKey) {
+      return;
+    }
+    this._terminalsKey = key;
+    this._refs.panel.canTerminal.set(code);
+    this._refs.panel.terminals.set(found);
+    if (this._shownTerminal === '') {
+      return;
+    }
+    const shown = found.find((terminal) => terminal.id === this._shownTerminal);
+    if (!shown) {
+      this.hideTerminal();
+      return;
+    }
+    this._refs.terminal.show(shown);
+  }
+
+  /** A terminal of the project, from the panel: its view draws it again from the output the daemon kept. */
+  private showTerminal(terminalId: string): void {
+    const terminal = allTerminals().find((each) => each.id === terminalId);
+    if (!terminal) {
+      return;
+    }
+    this.drawTerminal(terminal);
+    const size = this._refs.terminal.size();
+    daemon.send({ ...size, terminalId, type: 'attachTerminal' });
+  }
+
+  /** A terminal of the project's folder, with the number the daemon gives it, drawn as soon as it is open. */
+  private openTerminal(): void {
+    const session = findSession(this._sessionId);
+    if (session?.kind !== 'code') {
+      return;
+    }
+    this.showProblem('');
+    this._openingTerminal = true;
+    daemon.send({
+      columns: NEW_TERMINAL_COLUMNS,
+      cwd: session.workspace,
+      host: session.host,
+      rows: NEW_TERMINAL_ROWS,
+      type: 'openTerminal',
+    });
+  }
+
+  /** The terminal opens in its dialog over the session; the one shown before leaves. */
+  private drawTerminal(terminal: Terminal): void {
+    if (this._shownTerminal !== '' && this._shownTerminal !== terminal.id) {
+      daemon.send({ terminalId: this._shownTerminal, type: 'detachTerminal' });
+    }
+    this._shownTerminal = terminal.id;
+    this._refs.terminal.show(terminal);
+  }
+
+  /** Back to the conversation: this socket stops hearing the terminal, which keeps running for the next visit. */
+  private hideTerminal(): void {
+    if (this._shownTerminal !== '') {
+      daemon.send({ terminalId: this._shownTerminal, type: 'detachTerminal' });
+    }
+    this._shownTerminal = '';
+    this._openingTerminal = false;
+    this._refs.terminal.hide();
+  }
+
+  /** The terminal's own close button: its shell ends, and the list takes it out. */
+  private closeShownTerminal(): void {
+    const terminalId = this._shownTerminal;
+    this.hideTerminal();
+    daemon.send({ terminalId, type: 'closeTerminal' });
+  }
+
+  private typeInTerminal(data: string): void {
+    if (this._shownTerminal === '') {
+      return;
+    }
+    daemon.send({ data, terminalId: this._shownTerminal, type: 'terminalInput' });
+  }
+
+  private resizeTerminal(size: TerminalSize): void {
+    if (this._shownTerminal === '' || size.columns === 0) {
+      return;
+    }
+    daemon.send({ ...size, terminalId: this._shownTerminal, type: 'terminalResize' });
+  }
+
   private receive(message: ServerMessage): void {
     this.handle(message.type, message);
   }
@@ -296,11 +439,16 @@ export class SessionPage extends ScElement {
   /** Back online after the daemon went away: the conversation is drawn again from what the daemon kept, so the
    * older pages the person had scrolled to come with it. */
   private reopen(online: boolean): void {
+    // A terminal this page was opening when the socket went away never came: the next one is another page's.
+    this._openingTerminal = false;
     if (!online) {
       return;
     }
     this._opened = false;
     this.openHistory();
+    if (this._shownTerminal !== '') {
+      this.showTerminal(this._shownTerminal);
+    }
   }
 
   /** Asks for the end of the conversation, and for as much before it as the window already shows. */
@@ -395,6 +543,10 @@ export class SessionPage extends ScElement {
 
   /** What the daemon refused, over the composer: nothing once a new message goes. */
   private showProblem(text: string): void {
+    // A refusal ends whatever this page was waiting for, a terminal it asked to open included.
+    if (text !== '') {
+      this._openingTerminal = false;
+    }
     this._refs.problem.description.set(text);
     this._refs.problem.hidden = text === '';
   }
@@ -428,6 +580,7 @@ export class SessionPage extends ScElement {
     this._refs.conversation.workspace.set(session?.workspace ?? '');
     this._refs.composer.kind.set(kind);
     this._refs.composer.commands.set([...SESSION_COMMANDS[kind]]);
+    this.renderTerminals();
     this.renderSkills();
     this.renderLinkedTodos();
     this._refs.composer.mode.set(session?.mode ?? 'auto');

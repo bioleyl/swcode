@@ -28,6 +28,7 @@ import (
 	"swcode/daemon/protocol"
 	"swcode/daemon/sessions"
 	"swcode/daemon/swcodebase"
+	"swcode/daemon/terminals"
 	"swcode/daemon/tools"
 	"swcode/daemon/update"
 	"swcode/daemon/version"
@@ -102,8 +103,10 @@ type App struct {
 	Updates *update.Service
 	// SwcodeBase is where the swcode-base skill is, and the skills CLI that installs it.
 	SwcodeBase *swcodebase.Service
-	Token      string
-	LanURLs    []string
+	// Terminals are the shells people type in from the app, in their projects' folders.
+	Terminals *terminals.Service
+	Token     string
+	LanURLs   []string
 
 	config       config.Config
 	options      Options
@@ -190,12 +193,14 @@ func New(settings config.Config, options Options) (*App, error) {
 		ScratchRoot: filepath.Join(settings.DataDir, scratchFolder), Shell: localShell(options.Environment),
 	})
 	registry := hosts.NewRegistry(local, options.ConnectHost)
+	terminalService := terminals.NewService(terminals.Deps{Hosts: registry, NewID: options.NewID})
 	found := options.browser()
 	mainTools, exploreTools, chatTools := tools.Boxes(tools.Servers{Browser: found != nil, Images: settings.ImageURL != ""})
 	app := &App{
 		LanURLs: LANURLs(settings.Host, settings.Port, options.Interfaces()), Token: token,
 		Models: modelService, config: settings, hosts: registry, http: options.HTTP,
 		SwcodeBase:   swcodebase.NewService(registry, logger),
+		Terminals:    terminalService,
 		imagesFolder: filepath.Join(settings.DataDir, imagesFolder), logger: logger, options: options, workspace: workspace,
 		pairing: pairing.New(filepath.Join(settings.DataDir, devicesFile), options.Now, options.NewID),
 	}
@@ -228,7 +233,7 @@ func New(settings config.Config, options Options) (*App, error) {
 		Store:       sessions.NewStore(filepath.Join(settings.DataDir, sessionsFolder)),
 		Checkpoints: checkpoints.NewStore(filepath.Join(settings.DataDir, checkpointsFolder), logError),
 		ChatTools:   chatTools, SubagentTools: exploreTools, Thinking: sessions.Thinking{Session: settings.Thinking, Subagents: settings.SubagentThinking},
-		Tools: mainTools, Workspace: workspace,
+		Terminals: terminalService, Tools: mainTools, Workspace: workspace,
 	})
 	app.Sessions = service
 	service.Load()
@@ -301,6 +306,7 @@ func (a *App) routes() http.Handler {
 func (a *App) Close() {
 	a.stopWatching()
 	a.Sessions.StopAll()
+	a.Terminals.CloseAll()
 	a.hosts.Close()
 }
 
