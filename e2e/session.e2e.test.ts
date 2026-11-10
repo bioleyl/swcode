@@ -65,6 +65,34 @@ describe('on a computer', () => {
   });
 });
 
+describe('a turn’s changes', () => {
+  it('open in a dialog, each file as it was before the turn and as it is now', async () => {
+    const rig = await start(EDIT_FLOW);
+    const page = await rig.browser.newPage({ viewport: DESKTOP });
+    await page.goto(rig.link);
+    await askForTheEdit(page);
+    await page.locator('sc-permission .allow button').click();
+    await settle(page);
+    await page.getByText('it says').waitFor();
+    const checkpoint = page.locator('sc-conversation .checkpoint');
+    await checkpoint.getByText('1 file saved before this turn').waitFor();
+
+    await checkpoint.locator('.changes').click();
+    await settle(page);
+    const dialog = page.locator('sc-conversation sc-checkpoint-diff jl-dialog');
+    await expect.poll(async () => dialog.isVisible()).toBe(true);
+    expect(await dialog.locator('.path').textContent()).toBe('src/greet.ts');
+    // The line the turn changed: what it said, and what it says now.
+    await expect.poll(async () => dialog.locator('sc-diff .line[data-kind="remove"]').count()).toBe(1);
+    expect(await dialog.locator('sc-diff .line[data-kind="add"]').count()).toBe(1);
+
+    await dialog.getByRole('button', { exact: true, name: 'Close' }).click();
+    await settle(page);
+    expect(await dialog.isVisible()).toBe(false);
+    expect(await overflow(page)).toBe(0);
+  });
+});
+
 describe('the plan', () => {
   const step = (content: string, status: string) => ({ content, status });
 

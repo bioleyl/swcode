@@ -15,11 +15,13 @@ import { ScThinking } from '../molecules/sc-thinking';
 import { ScToolRow } from '../molecules/sc-tool-row';
 import { authorizedUrl } from '../services/access';
 import { BASE_STYLES } from '../styles/shared';
+import { ScCheckpointDiff } from './sc-checkpoint-diff';
 import styles from './sc-conversation.css?inline';
 
 import type { Streaming } from '../../../shared/protocol/messages.schema';
 import type { PictureRef } from '../../../shared/protocol/picture.schema';
 import type {
+  DiffDisplay,
   PermissionDecision,
   ReminderReason,
   SessionEvent,
@@ -78,6 +80,7 @@ const ENDINGS: Readonly<Record<TurnOutcome, string>> = {
 };
 
 const RESTORE_HINT = 'Restore the files this turn wrote or edited';
+const CHANGES_HINT = 'See the files as they were before this turn';
 
 const savedText = (count: number): string =>
   count === 1 ? '1 file saved before this turn' : `${count} files saved before this turn`;
@@ -95,6 +98,8 @@ export class ScConversation extends ScElement {
   readonly events = this.useEvents<{
     answer: { requestId: string; decision: PermissionDecision };
     cancelQueue: undefined;
+    /** The person asked to see the files a turn changed: its id. */
+    checkpointDiff: string;
     /** The person reached the top of what is shown: `older` events are missing above it. */
     older: number;
     password: { requestId: string; secret: string };
@@ -258,6 +263,7 @@ export class ScConversation extends ScElement {
 
   private readonly _refs = this.useRefs((ref) => ({
     cancel: ref<JlButton>('.cancel'),
+    diffs: ref(ScCheckpointDiff),
     empty: ref('.empty'),
     items: ref('.items'),
     queued: ref('.queued'),
@@ -290,6 +296,7 @@ export class ScConversation extends ScElement {
             <JlButton class="cancel" label="Cancel" variant="ghost" size="sm" />
           </p>
         </div>
+        <ScCheckpointDiff />
       </div>
     );
   }
@@ -576,8 +583,13 @@ export class ScConversation extends ScElement {
     this._refs.status.textContent = line;
   }
 
-  /** The files a turn changed, with the button that puts them back as they were before it. */
+  /** The files a turn changed, with the buttons that see them as they were, and put them back. */
   private checkpointNode(turnId: string, files: readonly string[]): Element {
+    const changes = createElement(JlButton, {
+      attrs: { class: 'changes' },
+      props: { hint: CHANGES_HINT, label: 'Changes', size: 'sm', variant: 'ghost' },
+    });
+    changes.events.register('press', () => this.events.emit('checkpointDiff', turnId));
     const restore = createElement(JlButton, {
       attrs: { class: 'restore' },
       props: { hint: RESTORE_HINT, label: 'Restore', size: 'sm', variant: 'ghost' },
@@ -588,8 +600,13 @@ export class ScConversation extends ScElement {
         <span class="checkpoint-text">{savedText(files.length)}</span>
       </p>
     );
-    row.append(restore);
+    row.append(changes, restore);
     return row;
+  }
+
+  /** The files of a turn's restore point, as diffs, in their dialog. */
+  showCheckpointDiff(diffs: readonly DiffDisplay[]): void {
+    this._refs.diffs.show(diffs);
   }
 
   private note(text: string, outcome: TurnOutcome): void {

@@ -282,6 +282,91 @@ func (h handlers) StopJob(message protocol.ClientMessageStopJob) struct{} {
 	return h.problem(h.app.Sessions.StopJob(message.SessionID, message.JobID))
 }
 
+// terminalOpened is a terminal and what it printed so far, as its bytes: a terminal's output is not always UTF-8.
+func terminalOpened(info protocol.Terminal, output []byte) protocol.ServerMessage {
+	return protocol.ServerMessage{Value: protocol.ServerMessageTerminalOpened{
+		Output: base64.StdEncoding.EncodeToString(output), Terminal: info,
+	}}
+}
+
+// watchTerminal makes this socket hear what the terminal prints from now on, until it is detached or closes.
+func (h handlers) watchTerminal(id string) {
+	h.watchers.watch(h.app.Terminals, id, func(data []byte) {
+		h.reply(protocol.ServerMessage{Value: protocol.ServerMessageTerminalOutput{
+			Data: base64.StdEncoding.EncodeToString(data), TerminalID: id,
+		}})
+	})
+}
+
+func (h handlers) AttachTerminal(message protocol.ClientMessageAttachTerminal) struct{} {
+	info, output, found := h.app.Terminals.Attach(message.TerminalID)
+	if !found {
+		return h.problem(unknownTerminal)
+	}
+	h.problem(h.app.Terminals.Resize(message.TerminalID, message.Columns, message.Rows))
+	h.watchTerminal(message.TerminalID)
+	h.reply(terminalOpened(info, output))
+	return struct{}{}
+}
+
+func (h handlers) DetachTerminal(message protocol.ClientMessageDetachTerminal) struct{} {
+	h.watchers.drop(message.TerminalID)
+	return struct{}{}
+}
+
+func (h handlers) OpenTerminal(message protocol.ClientMessageOpenTerminal) struct{} {
+	go func() {
+		host := protocol.LocalHost()
+		if message.Host != nil {
+			host = *message.Host
+		}
+		info, refused := h.app.Terminals.Open(h.ctx, terminals.Request{
+			Columns: message.Columns, Cwd: message.Cwd, Host: host, Rows: message.Rows, Title: message.Title,
+		})
+		if refused != "" {
+			h.reply(problem(refused))
+			return
+		}
+		h.watchTerminal(info.ID)
+		h.reply(terminalOpened(info, h.app.Terminals.Output(info.ID)))
+	}()
+	return struct{}{}
+}
+
+func (h handlers) TerminalInput(message protocol.ClientMessageTerminalInput) struct{} {
+	return h.problem(h.app.Terminals.Write(message.TerminalID, message.Data))
+}
+
+func (h handlers) TerminalResize(message protocol.ClientMessageTerminalResize) struct{} {
+	return h.problem(h.app.Terminals.Resize(message.TerminalID, message.Columns, message.Rows))
+}
+
+func (h handlers) RenameTerminal(message protocol.ClientMessageRenameTerminal) struct{} {
+	return h.problem(h.app.Terminals.Rename(message.TerminalID, message.Title))
+}
+
+// CheckpointDiff answers a page with the files of a turn's restore point, a diff each: what they were before the
+// turn, and what they are now.
+func (h handlers) CheckpointDiff(message protocol.ClientMessageCheckpointDiff) struct{} {
+	go func() {
+		files, refused := h.app.Sessions.CheckpointDiff(message.SessionID, message.TurnID)
+		if refused != "" {
+			h.reply(problem(refused))
+			return
+		}
+		h.reply(protocol.ServerMessage{Value: protocol.ServerMessageCheckpointDiff{
+			Files: files, SessionID: message.SessionID, TurnID: message.TurnID,
+		}})
+	}()
+	return struct{}{}
+}
+
+func (h handlers) CloseTerminal(message protocol.ClientMessageCloseTerminal) struct{} {
+	h.watchers.drop(message.TerminalID)
+	h.app.Terminals.Close(message.TerminalID)
+	return struct{}{}
+}
+
 func (h handlers) Peek(message protocol.ClientMessagePeek) struct{} {
 	return h.problem(h.app.Sessions.Peek(message.SessionID, message.PeekID, message.Question, h.reply))
 }

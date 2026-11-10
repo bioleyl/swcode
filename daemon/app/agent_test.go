@@ -400,6 +400,39 @@ func TestARestorePointPutsBackTheFilesATurnChanged(t *testing.T) {
 	}
 }
 
+func TestARestorePointSaysWhatEachFileHeldBeforeTheTurn(t *testing.T) {
+	test := Start(t, Options{Files: map[string]string{"app.ts": "answer = 41\n"}, Replies: []fakellama.Reply{
+		call("read", map[string]any{"path": "app.ts"}),
+		call("edit", map[string]any{"newString": "42", "oldString": "41", "path": "app.ts"}),
+		call("write", map[string]any{"content": "new\n", "path": "made.ts"}),
+		text("Done."),
+	}})
+	session := test.NewSession(sessions.Request{Mode: protocol.PermissionModeAcceptEdits})
+	if problem := test.App.Sessions.SendPrompt(session.ID, "Change it", nil); problem != "" {
+		t.Fatal(problem)
+	}
+	test.UntilIdle(session.ID)
+	saved := test.WaitForEvent("checkpointSaved", 1).Value.(protocol.SessionEventCheckpointSaved)
+	files, problem := test.App.Sessions.CheckpointDiff(session.ID, saved.TurnID)
+	if problem != "" {
+		t.Fatal(problem)
+	}
+	if len(files) != 2 {
+		t.Fatalf("%d files", len(files))
+	}
+	changed := files[0].Value.(protocol.ToolDisplayDiff)
+	if changed.Path != "app.ts" || changed.Added != 1 || changed.Removed != 1 {
+		t.Fatalf("app.ts diff %v", changed)
+	}
+	made := files[1].Value.(protocol.ToolDisplayDiff)
+	if made.Path != "made.ts" || made.Added != 1 || made.Removed != 0 {
+		t.Fatalf("made.ts diff %v", made)
+	}
+	if _, problem := test.App.Sessions.CheckpointDiff(session.ID, "no-such-turn"); problem == "" {
+		t.Fatal("a restore point that is gone answered")
+	}
+}
+
 func TestCommandsRunWithoutAskingByDefault(t *testing.T) {
 	test := Start(t, Options{Replies: []fakellama.Reply{call("bash", map[string]any{"command": "echo ran"}), text("Done.")}})
 	session := test.NewSession(sessions.Request{Prompt: "Run it"})

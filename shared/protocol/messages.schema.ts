@@ -156,6 +156,46 @@ export const ClientMessageSchema = z.discriminatedUnion('type', [
   }),
   // Stops a command the agent left running in the background.
   z.object({ jobId: z.string(), sessionId: z.string(), type: z.literal('stopJob') }),
+  // A shell in a project's folder, on its host, for the person to type in; the agent opens terminals too. The answer
+  // is a terminalOpened, with what it printed so far, and its output comes to this socket from then on.
+  z.object({
+    columns: TerminalColumnsSchema,
+    cwd: z.string().trim().min(1),
+    // This computer when left out.
+    host: HostRefSchema.optional(),
+    rows: TerminalRowsSchema,
+    // The daemon numbers it when left out: Terminal, Terminal 2…
+    title: z.string().trim().min(1).max(MAX_TERMINAL_TITLE).optional(),
+    type: z.literal('openTerminal'),
+  }),
+  // Shows a terminal again, after a page reload or a socket that went away: its kept output, then what comes next.
+  z.object({
+    columns: TerminalColumnsSchema,
+    rows: TerminalRowsSchema,
+    terminalId: z.string(),
+    type: z.literal('attachTerminal'),
+  }),
+  // Stops hearing its output, when the person goes back to the conversation.
+  z.object({ terminalId: z.string(), type: z.literal('detachTerminal') }),
+  // What the person typed: the terminal's input, as the shell reads it.
+  z.object({ data: z.string(), terminalId: z.string(), type: z.literal('terminalInput') }),
+  z.object({
+    columns: TerminalColumnsSchema,
+    rows: TerminalRowsSchema,
+    terminalId: z.string(),
+    type: z.literal('terminalResize'),
+  }),
+  // Ends the shell, and takes the terminal out of the list.
+  z.object({ terminalId: z.string(), type: z.literal('closeTerminal') }),
+  // The files of a turn's restore point, each as it was before the turn and as it is now: the answer is a
+  // checkpointDiff, to this socket alone.
+  z.object({ sessionId: z.string(), turnId: z.string(), type: z.literal('checkpointDiff') }),
+  // Names a terminal, as its page and the side panel list it.
+  z.object({
+    terminalId: z.string(),
+    title: z.string().trim().min(1).max(MAX_TERMINAL_TITLE),
+    type: z.literal('renameTerminal'),
+  }),
   z.object({ mode: PermissionModeSchema, sessionId: z.string(), type: z.literal('setMode') }),
   z.object({ sessionId: z.string(), thinking: ThinkingModeSchema, type: z.literal('setThinking') }),
   // The session's models from its next request on: a preset's id.
@@ -263,7 +303,19 @@ export const ServerMessageSchema = z.discriminatedUnion('type', [
   }),
   z.object({ peekId: z.string(), sessionId: z.string(), text: z.string(), type: z.literal('peekDelta') }),
   z.object({ projects: z.array(ProjectSchema), type: z.literal('projects') }),
-  // The presets a session can work with: at connection, and again when they change.
+  // Every terminal the daemon runs: at connection, and again when one opens, ends or closes.
+  z.object({ terminals: z.array(TerminalSchema), type: z.literal('terminals') }),
+  // The answer to openTerminal and attachTerminal: the terminal, and what it printed so far, as base64.
+  z.object({ output: z.string(), terminal: TerminalSchema, type: z.literal('terminalOpened') }),
+  // What it printed since, to the sockets showing it, as base64: a terminal's output is bytes, not always UTF-8.
+  z.object({ data: z.string(), terminalId: z.string(), type: z.literal('terminalOutput') }),
+  // A turn's restore point, a diff a file: what it was before the turn, and what it is now.
+  z.object({
+    files: z.array(ToolDisplaySchema),
+    sessionId: z.string(),
+    turnId: z.string(),
+    type: z.literal('checkpointDiff'),
+  }), // The presets a session can work with: at connection, and again when they change.
   z.object({ choices: PresetChoicesSchema, type: z.literal('presets') }),
   z.object({ hosts: z.array(HostOptionSchema), type: z.literal('hosts') }),
   z.object({ project: ProjectSchema, type: z.literal('projectCreated') }),

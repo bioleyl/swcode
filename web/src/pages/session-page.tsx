@@ -32,19 +32,29 @@ import { deleteSession } from '../services/session-delete';
 import { findSession, sessionListBus } from '../services/session-list';
 import { restoreCheckpoint } from '../services/session-restore';
 import { setSidePanelOpen, sidePanelOpen } from '../services/side-panel';
+import { allTerminals, terminalKey, terminalListBus, terminalsIn } from '../services/terminals';
 import { BASE_STYLES } from '../styles/shared';
 import styles from './session-page.css?inline';
 
-import type { ClientMessage, ServerMessage } from '../../../shared/protocol/messages.schema';
-import type { SessionEvent, SessionEventKind, SessionSummary } from '../../../shared/protocol/session.schema';
+import type { ClientMessage, ServerMessage, Terminal } from '../../../shared/protocol/messages.schema';
+import type {
+  DiffDisplay,
+  SessionEvent,
+  SessionEventKind,
+  SessionSummary,
+} from '../../../shared/protocol/session.schema';
 import type { PromptDraft } from '../types/composer.types';
 import type { ServerHandlers, ServerMessageMap } from '../types/page.types';
+import type { TerminalSize } from '../types/terminal.types';
 
 const NOT_FOUND = 'This session is not on the daemon.';
 const NO_PROJECT = 'This session works in no project: a todo needs one.';
 const VISIBILITY_CHANGE = 'visibilitychange';
 // On the host while the side panel is hidden.
 const PANEL_CLOSED = 'panel-closed';
+// What a terminal the person opens starts with, until its view says how big it is.
+const NEW_TERMINAL_COLUMNS = 80;
+const NEW_TERMINAL_ROWS = 24;
 // How many events a session page opens with, and how many each scroll to the top brings: the same for both, so a
 // page is enough to read through before the next is asked, and few enough for a long session to show at once.
 const HISTORY_EVENTS = 120;
@@ -117,6 +127,13 @@ export class SessionPage extends ScElement {
   private readonly _handlers: ServerHandlers = {
     assistantDelta: (message) =>
       this.forThisSession(message.sessionId, () => this._refs.conversation.delta(message.messageId, message.text)),
+    // A turn's restore point, as diffs, for the dialog the conversation shows.
+    checkpointDiff: (message) =>
+      this.forThisSession(message.sessionId, () =>
+        this._refs.conversation.showCheckpointDiff(
+          message.files.filter((file): file is DiffDisplay => file.kind === 'diff')
+        )
+      ),
     peekDelta: (message) =>
       this.forThisSession(message.sessionId, () => this._refs.peek.delta(message.peekId, message.text)),
     peekState: (message) =>
@@ -254,6 +271,9 @@ export class SessionPage extends ScElement {
       daemon.send({ sessionId: this._sessionId, type: 'sendQueueNow' })
     );
     conversation.events.register('restoreCheckpoint', (turnId) => void restoreCheckpoint(this._sessionId, turnId));
+    conversation.events.register('checkpointDiff', (turnId) =>
+      daemon.send({ sessionId: this._sessionId, turnId, type: 'checkpointDiff' })
+    );
     conversation.events.register('older', (older) =>
       daemon.send({ events: HISTORY_EVENTS, keptBack: older, sessionId: this._sessionId, type: 'olderEvents' })
     );

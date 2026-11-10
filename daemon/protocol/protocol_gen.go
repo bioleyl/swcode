@@ -1995,6 +1995,22 @@ func (ClientMessagePeek) isClientMessage() {}
 
 func (ClientMessageStopJob) isClientMessage() {}
 
+func (ClientMessageOpenTerminal) isClientMessage() {}
+
+func (ClientMessageAttachTerminal) isClientMessage() {}
+
+func (ClientMessageDetachTerminal) isClientMessage() {}
+
+func (ClientMessageTerminalInput) isClientMessage() {}
+
+func (ClientMessageTerminalResize) isClientMessage() {}
+
+func (ClientMessageCloseTerminal) isClientMessage() {}
+
+func (ClientMessageCheckpointDiff) isClientMessage() {}
+
+func (ClientMessageRenameTerminal) isClientMessage() {}
+
 func (ClientMessageSetMode) isClientMessage() {}
 
 func (ClientMessageSetThinking) isClientMessage() {}
@@ -2142,6 +2158,54 @@ func (u *ClientMessage) UnmarshalJSON(data []byte) error {
 			return err
 		}
 		u.Value = value
+	case "\"openTerminal\"":
+		var value ClientMessageOpenTerminal
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
+	case "\"attachTerminal\"":
+		var value ClientMessageAttachTerminal
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
+	case "\"detachTerminal\"":
+		var value ClientMessageDetachTerminal
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
+	case "\"terminalInput\"":
+		var value ClientMessageTerminalInput
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
+	case "\"terminalResize\"":
+		var value ClientMessageTerminalResize
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
+	case "\"closeTerminal\"":
+		var value ClientMessageCloseTerminal
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
+	case "\"checkpointDiff\"":
+		var value ClientMessageCheckpointDiff
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
+	case "\"renameTerminal\"":
+		var value ClientMessageRenameTerminal
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
 	case "\"setMode\"":
 		var value ClientMessageSetMode
 		if err := json.Unmarshal(data, &value); err != nil {
@@ -2257,6 +2321,14 @@ type ClientMessageMapper[R any] interface {
 	SearchSessions(ClientMessageSearchSessions) R
 	Peek(ClientMessagePeek) R
 	StopJob(ClientMessageStopJob) R
+	OpenTerminal(ClientMessageOpenTerminal) R
+	AttachTerminal(ClientMessageAttachTerminal) R
+	DetachTerminal(ClientMessageDetachTerminal) R
+	TerminalInput(ClientMessageTerminalInput) R
+	TerminalResize(ClientMessageTerminalResize) R
+	CloseTerminal(ClientMessageCloseTerminal) R
+	CheckpointDiff(ClientMessageCheckpointDiff) R
+	RenameTerminal(ClientMessageRenameTerminal) R
 	SetMode(ClientMessageSetMode) R
 	SetThinking(ClientMessageSetThinking) R
 	SetPreset(ClientMessageSetPreset) R
@@ -2311,6 +2383,22 @@ func MapClientMessage[R any](u ClientMessage, m ClientMessageMapper[R]) R {
 		return m.Peek(value)
 	case ClientMessageStopJob:
 		return m.StopJob(value)
+	case ClientMessageOpenTerminal:
+		return m.OpenTerminal(value)
+	case ClientMessageAttachTerminal:
+		return m.AttachTerminal(value)
+	case ClientMessageDetachTerminal:
+		return m.DetachTerminal(value)
+	case ClientMessageTerminalInput:
+		return m.TerminalInput(value)
+	case ClientMessageTerminalResize:
+		return m.TerminalResize(value)
+	case ClientMessageCloseTerminal:
+		return m.CloseTerminal(value)
+	case ClientMessageCheckpointDiff:
+		return m.CheckpointDiff(value)
+	case ClientMessageRenameTerminal:
+		return m.RenameTerminal(value)
 	case ClientMessageSetMode:
 		return m.SetMode(value)
 	case ClientMessageSetThinking:
@@ -2805,6 +2893,235 @@ func (v ClientMessageStopJob) MarshalJSON() ([]byte, error) {
 	}{"stopJob", p})
 }
 
+type ClientMessageOpenTerminal struct {
+	Columns int      `json:"columns"`
+	Cwd     string   `json:"cwd"`
+	Host    *HostRef `json:"host,omitempty"`
+	Rows    int      `json:"rows"`
+	Title   string   `json:"title,omitempty"`
+}
+
+func (v ClientMessageOpenTerminal) MarshalJSON() ([]byte, error) {
+	type plain ClientMessageOpenTerminal
+	p := plain(v)
+	return json.Marshal(struct {
+		Key string `json:"type"`
+		plain
+	}{"openTerminal", p})
+}
+
+func (v *ClientMessageOpenTerminal) UnmarshalJSON(data []byte) error {
+	type plain ClientMessageOpenTerminal
+	p := plain{}
+	if err := json.Unmarshal(data, &p); err != nil {
+		return err
+	}
+	*v = ClientMessageOpenTerminal(p)
+	return v.Normalize()
+}
+
+// Normalize trims and checks what the app sent, as its schema does.
+func (v *ClientMessageOpenTerminal) Normalize() error {
+	if v.Columns < 2 {
+		return fmt.Errorf("%s: at least 2", "columns")
+	}
+	if v.Columns > 500 {
+		return fmt.Errorf("%s: at most 500", "columns")
+	}
+	v.Cwd = strings.TrimSpace(v.Cwd)
+	if utf8.RuneCountInString(v.Cwd) < 1 {
+		return fmt.Errorf("%s: must not be empty", "cwd")
+	}
+	if v.Rows < 1 {
+		return fmt.Errorf("%s: at least 1", "rows")
+	}
+	if v.Rows > 200 {
+		return fmt.Errorf("%s: at most 200", "rows")
+	}
+	v.Title = strings.TrimSpace(v.Title)
+	if v.Title != "" && utf8.RuneCountInString(v.Title) < 1 {
+		return fmt.Errorf("%s: must not be empty", "title")
+	}
+	if utf8.RuneCountInString(v.Title) > 60 {
+		return fmt.Errorf("%s: at most 60 characters", "title")
+	}
+	return nil
+}
+
+type ClientMessageAttachTerminal struct {
+	Columns    int    `json:"columns"`
+	Rows       int    `json:"rows"`
+	TerminalID string `json:"terminalId"`
+}
+
+func (v ClientMessageAttachTerminal) MarshalJSON() ([]byte, error) {
+	type plain ClientMessageAttachTerminal
+	p := plain(v)
+	return json.Marshal(struct {
+		Key string `json:"type"`
+		plain
+	}{"attachTerminal", p})
+}
+
+func (v *ClientMessageAttachTerminal) UnmarshalJSON(data []byte) error {
+	type plain ClientMessageAttachTerminal
+	p := plain{}
+	if err := json.Unmarshal(data, &p); err != nil {
+		return err
+	}
+	*v = ClientMessageAttachTerminal(p)
+	return v.Normalize()
+}
+
+// Normalize trims and checks what the app sent, as its schema does.
+func (v *ClientMessageAttachTerminal) Normalize() error {
+	if v.Columns < 2 {
+		return fmt.Errorf("%s: at least 2", "columns")
+	}
+	if v.Columns > 500 {
+		return fmt.Errorf("%s: at most 500", "columns")
+	}
+	if v.Rows < 1 {
+		return fmt.Errorf("%s: at least 1", "rows")
+	}
+	if v.Rows > 200 {
+		return fmt.Errorf("%s: at most 200", "rows")
+	}
+	return nil
+}
+
+type ClientMessageDetachTerminal struct {
+	TerminalID string `json:"terminalId"`
+}
+
+func (v ClientMessageDetachTerminal) MarshalJSON() ([]byte, error) {
+	type plain ClientMessageDetachTerminal
+	p := plain(v)
+	return json.Marshal(struct {
+		Key string `json:"type"`
+		plain
+	}{"detachTerminal", p})
+}
+
+type ClientMessageTerminalInput struct {
+	Data       string `json:"data"`
+	TerminalID string `json:"terminalId"`
+}
+
+func (v ClientMessageTerminalInput) MarshalJSON() ([]byte, error) {
+	type plain ClientMessageTerminalInput
+	p := plain(v)
+	return json.Marshal(struct {
+		Key string `json:"type"`
+		plain
+	}{"terminalInput", p})
+}
+
+type ClientMessageTerminalResize struct {
+	Columns    int    `json:"columns"`
+	Rows       int    `json:"rows"`
+	TerminalID string `json:"terminalId"`
+}
+
+func (v ClientMessageTerminalResize) MarshalJSON() ([]byte, error) {
+	type plain ClientMessageTerminalResize
+	p := plain(v)
+	return json.Marshal(struct {
+		Key string `json:"type"`
+		plain
+	}{"terminalResize", p})
+}
+
+func (v *ClientMessageTerminalResize) UnmarshalJSON(data []byte) error {
+	type plain ClientMessageTerminalResize
+	p := plain{}
+	if err := json.Unmarshal(data, &p); err != nil {
+		return err
+	}
+	*v = ClientMessageTerminalResize(p)
+	return v.Normalize()
+}
+
+// Normalize trims and checks what the app sent, as its schema does.
+func (v *ClientMessageTerminalResize) Normalize() error {
+	if v.Columns < 2 {
+		return fmt.Errorf("%s: at least 2", "columns")
+	}
+	if v.Columns > 500 {
+		return fmt.Errorf("%s: at most 500", "columns")
+	}
+	if v.Rows < 1 {
+		return fmt.Errorf("%s: at least 1", "rows")
+	}
+	if v.Rows > 200 {
+		return fmt.Errorf("%s: at most 200", "rows")
+	}
+	return nil
+}
+
+type ClientMessageCloseTerminal struct {
+	TerminalID string `json:"terminalId"`
+}
+
+func (v ClientMessageCloseTerminal) MarshalJSON() ([]byte, error) {
+	type plain ClientMessageCloseTerminal
+	p := plain(v)
+	return json.Marshal(struct {
+		Key string `json:"type"`
+		plain
+	}{"closeTerminal", p})
+}
+
+type ClientMessageCheckpointDiff struct {
+	SessionID string `json:"sessionId"`
+	TurnID    string `json:"turnId"`
+}
+
+func (v ClientMessageCheckpointDiff) MarshalJSON() ([]byte, error) {
+	type plain ClientMessageCheckpointDiff
+	p := plain(v)
+	return json.Marshal(struct {
+		Key string `json:"type"`
+		plain
+	}{"checkpointDiff", p})
+}
+
+type ClientMessageRenameTerminal struct {
+	TerminalID string `json:"terminalId"`
+	Title      string `json:"title"`
+}
+
+func (v ClientMessageRenameTerminal) MarshalJSON() ([]byte, error) {
+	type plain ClientMessageRenameTerminal
+	p := plain(v)
+	return json.Marshal(struct {
+		Key string `json:"type"`
+		plain
+	}{"renameTerminal", p})
+}
+
+func (v *ClientMessageRenameTerminal) UnmarshalJSON(data []byte) error {
+	type plain ClientMessageRenameTerminal
+	p := plain{}
+	if err := json.Unmarshal(data, &p); err != nil {
+		return err
+	}
+	*v = ClientMessageRenameTerminal(p)
+	return v.Normalize()
+}
+
+// Normalize trims and checks what the app sent, as its schema does.
+func (v *ClientMessageRenameTerminal) Normalize() error {
+	v.Title = strings.TrimSpace(v.Title)
+	if utf8.RuneCountInString(v.Title) < 1 {
+		return fmt.Errorf("%s: must not be empty", "title")
+	}
+	if utf8.RuneCountInString(v.Title) > 60 {
+		return fmt.Errorf("%s: at most 60 characters", "title")
+	}
+	return nil
+}
+
 type ClientMessageSetMode struct {
 	Mode      PermissionMode `json:"mode"`
 	SessionID string         `json:"sessionId"`
@@ -3213,6 +3530,14 @@ func (ServerMessagePeekDelta) isServerMessage() {}
 
 func (ServerMessageProjects) isServerMessage() {}
 
+func (ServerMessageTerminals) isServerMessage() {}
+
+func (ServerMessageTerminalOpened) isServerMessage() {}
+
+func (ServerMessageTerminalOutput) isServerMessage() {}
+
+func (ServerMessageCheckpointDiff) isServerMessage() {}
+
 func (ServerMessagePresets) isServerMessage() {}
 
 func (ServerMessageHosts) isServerMessage() {}
@@ -3310,6 +3635,30 @@ func (u *ServerMessage) UnmarshalJSON(data []byte) error {
 			return err
 		}
 		u.Value = value
+	case "\"terminals\"":
+		var value ServerMessageTerminals
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
+	case "\"terminalOpened\"":
+		var value ServerMessageTerminalOpened
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
+	case "\"terminalOutput\"":
+		var value ServerMessageTerminalOutput
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
+	case "\"checkpointDiff\"":
+		var value ServerMessageCheckpointDiff
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
 	case "\"presets\"":
 		var value ServerMessagePresets
 		if err := json.Unmarshal(data, &value); err != nil {
@@ -3360,6 +3709,10 @@ type ServerMessageMapper[R any] interface {
 	PeekState(ServerMessagePeekState) R
 	PeekDelta(ServerMessagePeekDelta) R
 	Projects(ServerMessageProjects) R
+	Terminals(ServerMessageTerminals) R
+	TerminalOpened(ServerMessageTerminalOpened) R
+	TerminalOutput(ServerMessageTerminalOutput) R
+	CheckpointDiff(ServerMessageCheckpointDiff) R
 	Presets(ServerMessagePresets) R
 	Hosts(ServerMessageHosts) R
 	ProjectCreated(ServerMessageProjectCreated) R
@@ -3394,6 +3747,14 @@ func MapServerMessage[R any](u ServerMessage, m ServerMessageMapper[R]) R {
 		return m.PeekDelta(value)
 	case ServerMessageProjects:
 		return m.Projects(value)
+	case ServerMessageTerminals:
+		return m.Terminals(value)
+	case ServerMessageTerminalOpened:
+		return m.TerminalOpened(value)
+	case ServerMessageTerminalOutput:
+		return m.TerminalOutput(value)
+	case ServerMessageCheckpointDiff:
+		return m.CheckpointDiff(value)
 	case ServerMessagePresets:
 		return m.Presets(value)
 	case ServerMessageHosts:
@@ -3654,6 +4015,187 @@ func (v ServerMessageProjects) MarshalJSON() ([]byte, error) {
 		Key string `json:"type"`
 		plain
 	}{"projects", p})
+}
+
+type ServerMessageTerminals struct {
+	Terminals []Terminal `json:"terminals"`
+}
+
+func (v ServerMessageTerminals) MarshalJSON() ([]byte, error) {
+	type plain ServerMessageTerminals
+	p := plain(v)
+	if p.Terminals == nil {
+		p.Terminals = []Terminal{}
+	}
+	return json.Marshal(struct {
+		Key string `json:"type"`
+		plain
+	}{"terminals", p})
+}
+
+type Terminal struct {
+	Cwd   string        `json:"cwd"`
+	Host  HostRef       `json:"host"`
+	ID    string        `json:"id"`
+	State TerminalState `json:"state"`
+	Title string        `json:"title"`
+}
+
+// TerminalState holds one of its variants, told apart by "kind".
+type TerminalState struct {
+	Value TerminalStateVariant
+}
+
+type TerminalStateVariant interface {
+	isTerminalState()
+}
+
+func (TerminalStateRunning) isTerminalState() {}
+
+func (TerminalStateExited) isTerminalState() {}
+
+func (TerminalStateSignalled) isTerminalState() {}
+
+func (u TerminalState) MarshalJSON() ([]byte, error) {
+	if u.Value == nil {
+		return nil, errors.New("protocol: an empty TerminalState")
+	}
+	return json.Marshal(u.Value)
+}
+
+func (u *TerminalState) UnmarshalJSON(data []byte) error {
+	var head struct {
+		Key json.RawMessage `json:"kind"`
+	}
+	if err := json.Unmarshal(data, &head); err != nil {
+		return err
+	}
+	switch string(head.Key) {
+	case "\"running\"":
+		var value TerminalStateRunning
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
+	case "\"exited\"":
+		var value TerminalStateExited
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
+	case "\"signalled\"":
+		var value TerminalStateSignalled
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
+	default:
+		return fmt.Errorf("protocol: no TerminalState with kind %s", head.Key)
+	}
+	return nil
+}
+
+// TerminalStateMapper has a method per variant: a new variant does not compile until its mappers have one.
+type TerminalStateMapper[R any] interface {
+	Running(TerminalStateRunning) R
+	Exited(TerminalStateExited) R
+	Signalled(TerminalStateSignalled) R
+}
+
+// MapTerminalState calls the mapper's method for the variant u holds.
+func MapTerminalState[R any](u TerminalState, m TerminalStateMapper[R]) R {
+	switch value := u.Value.(type) {
+	case TerminalStateRunning:
+		return m.Running(value)
+	case TerminalStateExited:
+		return m.Exited(value)
+	case TerminalStateSignalled:
+		return m.Signalled(value)
+	}
+	panic(fmt.Sprintf("protocol: an empty or unknown TerminalState %T", u.Value))
+}
+
+type TerminalStateRunning struct {
+}
+
+func (v TerminalStateRunning) MarshalJSON() ([]byte, error) {
+	type plain TerminalStateRunning
+	p := plain(v)
+	return json.Marshal(struct {
+		Key string `json:"kind"`
+		plain
+	}{"running", p})
+}
+
+type TerminalStateExited struct {
+	Code int `json:"code"`
+}
+
+func (v TerminalStateExited) MarshalJSON() ([]byte, error) {
+	type plain TerminalStateExited
+	p := plain(v)
+	return json.Marshal(struct {
+		Key string `json:"kind"`
+		plain
+	}{"exited", p})
+}
+
+type TerminalStateSignalled struct {
+}
+
+func (v TerminalStateSignalled) MarshalJSON() ([]byte, error) {
+	type plain TerminalStateSignalled
+	p := plain(v)
+	return json.Marshal(struct {
+		Key string `json:"kind"`
+		plain
+	}{"signalled", p})
+}
+
+type ServerMessageTerminalOpened struct {
+	Output   string   `json:"output"`
+	Terminal Terminal `json:"terminal"`
+}
+
+func (v ServerMessageTerminalOpened) MarshalJSON() ([]byte, error) {
+	type plain ServerMessageTerminalOpened
+	p := plain(v)
+	return json.Marshal(struct {
+		Key string `json:"type"`
+		plain
+	}{"terminalOpened", p})
+}
+
+type ServerMessageTerminalOutput struct {
+	Data       string `json:"data"`
+	TerminalID string `json:"terminalId"`
+}
+
+func (v ServerMessageTerminalOutput) MarshalJSON() ([]byte, error) {
+	type plain ServerMessageTerminalOutput
+	p := plain(v)
+	return json.Marshal(struct {
+		Key string `json:"type"`
+		plain
+	}{"terminalOutput", p})
+}
+
+type ServerMessageCheckpointDiff struct {
+	Files     []ToolDisplay `json:"files"`
+	SessionID string        `json:"sessionId"`
+	TurnID    string        `json:"turnId"`
+}
+
+func (v ServerMessageCheckpointDiff) MarshalJSON() ([]byte, error) {
+	type plain ServerMessageCheckpointDiff
+	p := plain(v)
+	if p.Files == nil {
+		p.Files = []ToolDisplay{}
+	}
+	return json.Marshal(struct {
+		Key string `json:"type"`
+		plain
+	}{"checkpointDiff", p})
 }
 
 type ServerMessagePresets struct {

@@ -163,6 +163,45 @@ func (r *Recorder) keep(ctx context.Context, path string) {
 	r.files = append(r.files, kept)
 }
 
+// Snapshot is a file of a restore point: where it is from the workspace, and what it held before the turn.
+type Snapshot struct {
+	Existed bool
+	Path    string
+	Data    []byte
+}
+
+// Snapshot is a turn's restore point: its files as they were before it, ErrNoCheckpoint when it is gone.
+func (s *Store) Snapshot(sessionID, turnID string) ([]Snapshot, error) {
+	folder := filepath.Join(s.folder, sessionID, turnID)
+	data, err := os.ReadFile(filepath.Join(folder, manifestName))
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, ErrNoCheckpoint
+	}
+	if err != nil {
+		return nil, err
+	}
+	var manifest Manifest
+	if err := json.Unmarshal(data, &manifest); err != nil {
+		return nil, err
+	}
+	snapshots := make([]Snapshot, 0, len(manifest.Files))
+	for _, file := range manifest.Files {
+		snapshot := Snapshot{Existed: file.Existed, Path: file.Path}
+		if file.Existed {
+			if file.Stored == "" || filepath.Base(file.Stored) != file.Stored {
+				return nil, fmt.Errorf("%s has no copy to show", file.Path)
+			}
+			before, err := os.ReadFile(filepath.Join(folder, file.Stored))
+			if err != nil {
+				return nil, err
+			}
+			snapshot.Data = before
+		}
+		snapshots = append(snapshots, snapshot)
+	}
+	return snapshots, nil
+}
+
 // Restore puts a turn's files back as they were before it, and deletes those it made.
 func (s *Store) Restore(ctx context.Context, host hosts.Host, sessionID, turnID, workspace string) ([]string, error) {
 	folder := filepath.Join(s.folder, sessionID, turnID)

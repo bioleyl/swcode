@@ -622,6 +622,55 @@ func (s *Service) RestoreCheckpoint(sessionID, turnID string) string {
 	})
 }
 
+// CheckpointDiff is a turn's restore point, a diff a file: what it was before the turn and what it is now. A refusal
+// says why there is none.
+func (s *Service) CheckpointDiff(sessionID, turnID string) ([]protocol.ToolDisplay, string) {
+	s.mu.Lock()
+	session, ok := s.sessions[sessionID]
+	if !ok {
+		s.mu.Unlock()
+		return nil, unknownSession
+	}
+	workspace, host := session.meta.Workspace, s.hostOf(session)
+	s.mu.Unlock()
+	if s.deps.Checkpoints == nil || workspace == "" {
+		return nil, restoreNoFiles
+	}
+	snapshots, err := s.deps.Checkpoints.Snapshot(sessionID, turnID)
+	if err != nil {
+		return nil, err.Error()
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), restoreTimeout)
+	defer cancel()
+	paths := host.Paths()
+	diffs := make([]protocol.ToolDisplay, 0, len(snapshots))
+	for _, snapshot := range snapshots {
+		after, refused := currentText(ctx, host, paths.Resolve(workspace, snapshot.Path))
+		if refused != "" {
+			return nil, refused
+		}
+		diff := tools.FileDiff(snapshot.Path, string(snapshot.Data), after)
+		diffs = append(diffs, protocol.ToolDisplay{Value: diff})
+	}
+	return diffs, ""
+}
+
+// currentText is what a file says now, empty when it is gone: a refusal says why it cannot be read.
+func currentText(ctx context.Context, host hosts.Host, path string) (string, string) {
+	info, err := host.FileInfo(ctx, path)
+	if err != nil {
+		return "", err.Error()
+	}
+	if info.Kind != hosts.KindFile {
+		return "", ""
+	}
+	data, err := host.ReadFile(ctx, path)
+	if err != nil {
+		return "", err.Error()
+	}
+	return string(data), ""
+}
+
 func (s *Service) SetMode(sessionID string, mode protocol.PermissionMode) string {
 	return s.withSession(sessionID, func(session *live) string {
 		session.meta.Mode = mode
