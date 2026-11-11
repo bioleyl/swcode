@@ -1,5 +1,5 @@
 #!/bin/sh
-# swcode's installer for Linux, macOS and WSL: downloads the program built for this machine from the latest release,
+# swcode's installer for Linux and WSL: downloads the program built for this machine from the latest release,
 # checks it against the release's checksums, and has it install itself as ~/.local/bin/swcode (swcode install), with
 # its settings and, in WSL, a shortcut in Windows.
 #
@@ -13,9 +13,8 @@ checksums="SHA256SUMS"
 
 case "$(uname -s)" in
   Linux) system=linux ;;
-  Darwin) system=darwin ;;
   *)
-    echo "swcode is not built for $(uname -s). On Windows, install the desktop app with install.ps1." >&2
+    echo "swcode is built for Linux and WSL only. On Windows, install the desktop app with install.ps1." >&2
     exit 1
     ;;
 esac

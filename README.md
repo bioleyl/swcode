@@ -31,7 +31,7 @@ A coding agent for local models. It runs an LLM agent with file, terminal and we
 - **Search**: `Ctrl K` finds sessions, projects and settings, and searches inside the conversations.
 - **Web app**: follow what the agent does in real time, answer its questions, approve commands, chat with it. Works on desktop and phone, in light or dark.
 - **Phones**: pair a phone with a QR code from Settings → Phone, then follow and steer your sessions from it, on your network or over a tailnet.
-- **Remote projects**: work on projects over SSH or in WSL without moving the daemon, or run the daemon on an SSH host for a while with `swcode remote`.
+- **Remote projects**: work on projects over SSH or in WSL without moving the daemon.
 - **Windows desktop app**: the daemon inside a window, in the Start menu and the tray, for projects in Windows or in WSL; it pairs other computers' swcode and switches between them.
 - **Updates**: swcode looks for new releases and, on a computer, offers to install them.
 - **Games while it works**: a space shooter, vim motion drills and touch typing, a click away while a turn runs.
@@ -57,7 +57,7 @@ swcode needs an LLM server that supports tool calls. Set that up first, then ins
 Download the binary for your platform from the [latest release](https://github.com/bioleyl/swcode/releases/latest), or install with the script:
 
 ```bash
-# Linux / macOS
+# Linux / WSL
 curl -fsSL https://raw.githubusercontent.com/bioleyl/swcode/main/install.sh | sh
 ```
 
@@ -158,11 +158,14 @@ The skill is in [plugins/swcode-base](plugins/swcode-base/skills/swcode-base/SKI
 
 ```bash
 swcode              # open the web app (starts daemon if not running)
-swcode serve        # run the daemon in the foreground
+swcode start        # start the daemon in the background
 swcode stop         # stop the daemon
+swcode serve        # run the daemon in the foreground
 swcode pair         # generate a pairing code for phones or other computers
 swcode install      # install the binary and create shortcuts
-swcode remote user@host -w /path/to/project   # run on a remote machine over SSH
+swcode service install    # run swcode as a service, started when you log in
+swcode service uninstall  # remove the service, keeping settings and sessions
+swcode --update     # install the latest release and restart the running daemon
 ```
 
 ## Architecture

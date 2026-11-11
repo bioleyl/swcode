@@ -30,7 +30,7 @@ jobs:
       - run: npm run check
       - name: Build the command line for each platform, and the desktop app
         run: |
-          npm run build:binary -- linux-amd64 linux-arm64 darwin-amd64 darwin-arm64 windows-amd64
+          npm run build:binary -- linux-amd64 linux-arm64 windows-amd64
           node scripts/build-desktop.mjs
       - name: Checksums
         working-directory: dist

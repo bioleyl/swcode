@@ -28,7 +28,31 @@ const (
 	mismatch     = "the download does not match the release's checksum: try again"
 	// binaryMark is how sha256sum marks a file it read as binary, before its name.
 	binaryMark = "*"
+	// noUpdateFromSources is what the command line says to a build from the sources.
+	noUpdateFromSources = "This swcode is a build from the sources, which has no release to go to: install a release, then update."
 )
+
+// Apply installs the newest release in place of the program that runs, without a daemon: swcode --update. It gives the
+// version installed, empty when there is nothing newer; a build from the sources never updates.
+func Apply(ctx context.Context, client *http.Client, releasesURL, running string, program Program) (string, error) {
+	if fromSources(running) {
+		return "", errors.New(noUpdateFromSources)
+	}
+	if program.Path == "" {
+		return "", errors.New(noProgram)
+	}
+	release, err := newSource(releasesURL, client, running).latest(ctx)
+	if err != nil {
+		return "", err
+	}
+	if !Newer(release.Version, running) {
+		return "", nil
+	}
+	if err := install(ctx, client, release, program); err != nil {
+		return "", err
+	}
+	return release.Version, nil
+}
 
 // extensions is what the release's file for a system ends with.
 var extensions = map[string]string{"windows": ".exe"}

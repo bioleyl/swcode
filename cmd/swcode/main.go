@@ -1,15 +1,17 @@
-// Command swcode opens the app, runs the daemon, stops it, installs the program, or runs it on another machine.
+// Command swcode opens the app, runs the daemon, stops it, installs the program, runs it as a service, or updates it.
 package main
 
 import (
+	"context"
 	"fmt"
+	"net/http"
 	"os"
 	"runtime"
+	"time"
 
 	"swcode/daemon/cli"
 	"swcode/daemon/config"
 	"swcode/daemon/local"
-	"swcode/daemon/remote"
 	"swcode/daemon/serve"
 	"swcode/daemon/update"
 	"swcode/daemon/version"
@@ -18,6 +20,8 @@ import (
 const (
 	failed       = 1
 	wslDistroEnv = "WSL_DISTRO_NAME"
+	// updateLimit is far more than a download takes, even over a slow line.
+	updateLimit = 10 * time.Minute
 )
 
 func place(environment map[string]string) local.Place {
@@ -63,11 +67,33 @@ func runServe(command cli.Command, environment map[string]string) int {
 	if outcome == serve.Stopped {
 		return 0
 	}
-	// For a restart, on new settings or a newer version, a daemon in the background starts the next one.
+	// A service manager starts the daemon again on the version or the settings just put in place; without one, a
+	// daemon in the background starts the next one.
+	if command.Mode == cli.ModeService {
+		return failed
+	}
 	if !local.StartInBackground(where) {
 		return failed
 	}
 	return 0
+}
+
+// runUpdate installs the latest release in place of this program, then starts the daemon that runs on it.
+func runUpdate(environment map[string]string) int {
+	loaded := settings(environment)
+	ctx, cancel := context.WithTimeout(context.Background(), updateLimit)
+	defer cancel()
+	installed, err := update.Apply(ctx, http.DefaultClient, loaded.ReleasesURL, version.Build, commandLine())
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return failed
+	}
+	if installed == "" {
+		fmt.Printf("swcode %s is the latest version.\n", version.Build)
+		return 0
+	}
+	fmt.Printf("Updated swcode to %s.\n", installed)
+	return local.RestartAfterUpdate(loaded, place(environment))
 }
 
 func run(command cli.Command) int {
@@ -77,7 +103,7 @@ func run(command cli.Command) int {
 		if command.Problem != "" {
 			fmt.Fprintln(os.Stderr, command.Problem+"\n")
 		}
-		fmt.Println(cli.Usage)
+		fmt.Println(cli.Usage(version.Build))
 		if command.Problem != "" {
 			return failed
 		}
@@ -89,12 +115,18 @@ func run(command cli.Command) int {
 		return local.Install(environment, place(environment))
 	case cli.KindOpen:
 		return local.Open(settings(environment), place(environment))
-	case cli.KindRemote:
-		return remote.Run(command, settings(environment))
+	case cli.KindStart:
+		return local.Start(settings(environment), place(environment))
 	case cli.KindStop:
-		return local.Stop(settings(environment))
+		return local.Stop(settings(environment), place(environment))
+	case cli.KindServiceInstall:
+		return local.ServiceInstall(settings(environment), place(environment))
+	case cli.KindServiceUninstall:
+		return local.ServiceUninstall(settings(environment), place(environment))
 	case cli.KindPair:
 		return local.Pair(settings(environment))
+	case cli.KindUpdate:
+		return runUpdate(environment)
 	case cli.KindServe:
 		return runServe(command, environment)
 	}

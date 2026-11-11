@@ -256,6 +256,33 @@ func TestInstallNeedsANewerVersionFoundAndAProgramToReplace(t *testing.T) {
 	}
 }
 
+func TestTheCommandLineUpdatesItselfToTheNewerRelease(t *testing.T) {
+	fake := newFakeGitHub(t)
+	program := installedProgram(t)
+	installed, err := update.Apply(context.Background(), fake.server.Client(), fake.server.URL+"/latest", "0.3.0", program)
+	if err != nil || installed != "0.4.0" {
+		t.Fatalf("installed %q: %v", installed, err)
+	}
+	if data, _ := os.ReadFile(program.Path); string(data) != string(newProgram) {
+		t.Fatalf("the program is %q", data)
+	}
+}
+
+func TestTheCommandLineSaysWhenItIsTheLatestAndRefusesABuildFromTheSources(t *testing.T) {
+	fake := newFakeGitHub(t)
+	installed, err := update.Apply(context.Background(), fake.server.Client(), fake.server.URL+"/latest", "0.4.0+1a2b3c4", installedProgram(t))
+	if err != nil || installed != "" {
+		t.Fatalf("installed %q: %v", installed, err)
+	}
+	fromSources := newFakeGitHub(t)
+	if _, err := update.Apply(context.Background(), fromSources.server.Client(), fromSources.server.URL+"/latest", "dev", installedProgram(t)); err == nil {
+		t.Fatal("a build from the sources updated itself")
+	}
+	if len(fromSources.asked) != 0 {
+		t.Fatal("a build from the sources asked GitHub")
+	}
+}
+
 func TestLookingTurnedOffStaysOffAndTurnedOnLooksAtOnce(t *testing.T) {
 	fake := newFakeGitHub(t)
 	file := filepath.Join(t.TempDir(), "data", "updates.json")

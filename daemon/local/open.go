@@ -20,7 +20,7 @@ const (
 	stopLimit = 15 * time.Second
 )
 
-// LogFileOf is where the daemon in the background writes its log.
+// LogFileOf is where the daemon in the background or as a service writes its log.
 func LogFileOf(settings config.Config) string {
 	return filepath.Join(settings.DataDir, logName)
 }
@@ -54,12 +54,20 @@ func openApp(link string, place Place) Result {
 	return Result{OK: true}
 }
 
+// startDaemon starts the daemon: a service starts it when one is installed, else it runs in the background.
+func startDaemon(place Place) bool {
+	if ServiceInstalled(place) {
+		return StartService(place)
+	}
+	return StartInBackground(place)
+}
+
 // Open opens the app in the browser. The daemon starts in the background first when it does not answer, so opening
 // it again only opens the browser, and it keeps running with no browser open.
 func Open(settings config.Config, place Place) int {
 	control := app.ControlURL(settings.Host, settings.Port)
 	running := IsUp(control)
-	if !running && !(StartInBackground(place) && WaitFor(func() bool { return IsUp(control) }, startLimit)) {
+	if !running && !(startDaemon(place) && WaitFor(func() bool { return IsUp(control) }, startLimit)) {
 		fmt.Fprintf(os.Stderr, "swcode did not start: its log is %s.\n", LogFileOf(settings))
 		return failed
 	}
@@ -79,6 +87,36 @@ func Open(settings config.Config, place Place) int {
 	return 0
 }
 
+// Start runs the daemon without a service: swcode start. When swcode is installed as a service, it starts that
+// instead, so that one daemon only ever listens.
+func Start(settings config.Config, place Place) int {
+	control := app.ControlURL(settings.Host, settings.Port)
+	if IsUp(control) {
+		fmt.Println("swcode is already running.")
+		return 0
+	}
+	if !startDaemon(place) || !WaitFor(func() bool { return IsUp(control) }, startLimit) {
+		fmt.Fprintf(os.Stderr, "swcode did not start: its log is %s.\n", LogFileOf(settings))
+		return failed
+	}
+	fmt.Println("swcode started.")
+	return 0
+}
+
+// RestartAfterUpdate starts the daemon that ran on the version just put in place: the one running is stopped, then
+// started again. Nothing runs when none did.
+func RestartAfterUpdate(settings config.Config, place Place) int {
+	control := app.ControlURL(settings.Host, settings.Port)
+	if !IsUp(control) {
+		fmt.Println("swcode was not running: start it with swcode start.")
+		return 0
+	}
+	if stopped := Stop(settings, place); stopped != 0 {
+		return stopped
+	}
+	return Start(settings, place)
+}
+
 var stopMessages = map[StopAnswer]string{
 	StopAsked:      "swcode stopped.",
 	StopNotRunning: "swcode is not running.",
@@ -86,8 +124,12 @@ var stopMessages = map[StopAnswer]string{
 	StopRefused:    "The daemon refused: it runs with another access token (SWCODE_TOKEN or another data folder).",
 }
 
-// Stop stops the daemon in the background, once its sessions are closed.
-func Stop(settings config.Config) int {
+// Stop stops the daemon, once its sessions are closed: a service's, else the one in the background.
+func Stop(settings config.Config, place Place) int {
+	if ServiceInstalled(place) && StopService(place) {
+		fmt.Println("swcode stopped.")
+		return 0
+	}
 	token, err := app.AccessToken(settings.DataDir, settings.Token)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)

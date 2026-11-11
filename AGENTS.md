@@ -33,6 +33,7 @@ Read `README.md` first.
 - The agent reads what a terminal printed with `readterminal { terminal?, lines? }` (`daemon/tools/terminaltools.go`): `terminal` takes a name or an id, and is left out for the workspace's only terminal — with several, the refusal lists their names. It resolves them from `terminals.Port.List()` filtered by the session's workspace and host, reads the end of the scrollback (100 lines, 500 at most, ANSI stripped at 12k characters) and is a read, so it needs no approval. It reads terminals the person opened too.
 - Tool names stay one lowercase word (`websearch`, `readterminal`): biome's `useNamingConvention` refuses a snake_case key such as `terminal_output` in the app's label maps, and `pascal()` in `scripts/protocol-go.ts` would name the constant `ToolNameTerminalOutput` only with the underscore.
 - A turn's restore point is shown as diffs: `checkpointDiff { sessionId, turnId }` answers only the asking socket with `checkpointDiff { files }` (`ToolDisplay` diffs), and `sc-conversation` opens `sc-checkpoint-diff` (a `JlDialog` of `sc-diff` per file) from the “Changes” button beside “Restore”. The daemon builds it in `sessions.Service.CheckpointDiff`: `checkpoints.Store.Snapshot` reads the pre-images, `currentText` reads each file as it is now, `tools.FileDiff` makes the hunks.
+- The command line (`daemon/cli`) has one kind per action: `swcode` opens, `start`/`stop` run the daemon without a service, `serve` is the foreground daemon, `install` copies the program, `service install|uninstall` registers it, and `--update` (`update.Apply`) replaces the running binary. `daemon` is internal: it is the background process `StartInBackground` spawns, and `serve --service` is what a service manager runs. A service run exits 1 on a restart or update so the manager starts it again (systemd's `Restart=on-failure`, Windows' `RestartCount`); a clean stop keeps it stopped. Linux gets a systemd **user** unit (`~/.config/systemd/user/swcode.service`), Windows a logon Task Scheduler task that runs a hidden PowerShell; macOS is no longer built.
 
 ## Gotchas met so far
 
@@ -69,8 +70,8 @@ Read `README.md` first.
   daemon's hidden `wsl.exe` is made through WMI (`Win32_Process.Create`) to outlive a shortcut's session. From the
   agent's shell, `Start-Process` on a shortcut or a new console does nothing: to test a double-click, have WMI
   start `explorer.exe "<the .lnk>"`.
-- **The daemon stops when its terminal goes away** (a hangup, as when the SSH connection of `swcode remote`
-  drops): whatever starts it detached from a terminal (`swcode daemon`) gives it a session of its own and sends its
+- **The daemon stops when its terminal goes away** (a hangup): whatever starts it detached from a terminal
+  (`swcode daemon`, which a service's `serve --service` does not use) gives it a session of its own and sends its
   output to a file.
 - **The tools never touch the disk themselves**: they go through the context's `Host` (`hosts.LocalHost`, or a
   `hosts.ShellHost` for WSL and SSH), and paths use the host's style (`Paths()`, POSIX or Windows).
@@ -120,6 +121,7 @@ Read `README.md` first.
   prompt** (`daemon/agent/skills.go`, `daemon/agent/notes.go`): two user messages in a row are joined into one
   (`ConversationOf`), since some chat templates want the roles to alternate.
 - Commit only after `npm run check` passed: it stops at the first failing step.
+- **On a clean HEAD 960eaca (2026-11-11) `check:go` fails before any change**: `gofmt -l .` lists `daemon/tools/toolbox.go` (the tool map's alignment), and `daemon/app`'s `TestATurnSummarizesOnceTheConversationNearsTheEndOfTheContext` and `TestTheNotesAreReadAgainAfterACompaction` fail (the prompt's token window). Check a baseline worktree before attributing either to your change.
 - **A settings panel removed in a browser takes its ref with it**: `useRefs` resolves lazily and `getElement` throws once the element is gone, so `SettingsPage.renderTopic` touches `_refs.computers` only under `inDesktopApp()` (the panel is removed otherwise).
 - **The e2e rig serves `dist/web`**: running `npx vitest --config vitest.e2e.config.ts` alone tests the last `npm run build`, so build after a web change (or use `npm run test:e2e`, which builds first).
 - A new request from the page to the desktop app (`shared/protocol/desktop.schema.ts`) needs `npm run protocol`, then a method on `bridge` in `desktop/bridge.go`. That file is Windows-only, so plain `go vet ./...` on Linux skips it: use `GOOS=windows go vet -unsafeptr=false ./...` to compile it.

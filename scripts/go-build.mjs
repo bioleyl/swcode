@@ -24,7 +24,7 @@ const buildId = () => {
   return `${packageVersion()}+${commit}`;
 };
 
-/** Where the command line for a platform goes: swcode remote copies the ones beside it to other machines. */
+/** Where the command line for a platform goes: the release publishes each one. */
 export const binaryOf = (platform) =>
   join('dist', `swcode-${platform}${platform.startsWith(WINDOWS) ? '.exe' : ''}`);
 

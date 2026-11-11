@@ -58,7 +58,12 @@ func logOf(options Options) (io.Writer, func(), error) {
 	if err := os.MkdirAll(filepath.Dir(options.LogFile), 0o755); err != nil {
 		return nil, nil, err
 	}
-	file, err := os.Create(options.LogFile)
+	// A service starts again on new settings and new versions: its log keeps what the runs before said.
+	flags := os.O_CREATE | os.O_TRUNC | os.O_WRONLY
+	if options.Mode == cli.ModeService {
+		flags = os.O_CREATE | os.O_APPEND | os.O_WRONLY
+	}
+	file, err := os.OpenFile(options.LogFile, flags, 0o644)
 	if err != nil {
 		return nil, nil, err
 	}
