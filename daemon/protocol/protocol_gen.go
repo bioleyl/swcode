@@ -43,7 +43,7 @@ var SessionKinds = []SessionKind{SessionKindCode, SessionKindChat}
 
 var SessionStatuses = []SessionStatus{SessionStatusIdle, SessionStatusWorking, SessionStatusWaiting}
 
-var ToolNames = []ToolName{ToolNameRead, ToolNameWrite, ToolNameEdit, ToolNameBash, ToolNameGrep, ToolNameGlob, ToolNameAgent, ToolNamePlan, ToolNameQuestion, ToolNameWebsearch, ToolNameWebfetch, ToolNameImage, ToolNameDraw, ToolNameOutput, ToolNameKill, ToolNameTerminal, ToolNameReadterminal, ToolNameSkill, ToolNameNotes, ToolNameSaveskill, ToolNameScreenshot}
+var ToolNames = []ToolName{ToolNameRead, ToolNameWrite, ToolNameEdit, ToolNameBash, ToolNameGrep, ToolNameGlob, ToolNameAgent, ToolNamePlan, ToolNameQuestion, ToolNameWebsearch, ToolNameWebfetch, ToolNameImage, ToolNameDraw, ToolNameOutput, ToolNameKill, ToolNameTerminal, ToolNameReadterminal, ToolNameSkill, ToolNameNotes, ToolNameTodo, ToolNameClosetodo, ToolNameSaveskill, ToolNameScreenshot}
 
 var TurnOutcomes = []TurnOutcome{TurnOutcomeDone, TurnOutcomeStopped, TurnOutcomeFailed, TurnOutcomeLimit}
 
@@ -244,6 +244,8 @@ const (
 	ToolNameReadterminal ToolName = "readterminal"
 	ToolNameSkill        ToolName = "skill"
 	ToolNameNotes        ToolName = "notes"
+	ToolNameTodo         ToolName = "todo"
+	ToolNameClosetodo    ToolName = "closetodo"
 	ToolNameSaveskill    ToolName = "saveskill"
 	ToolNameScreenshot   ToolName = "screenshot"
 )
@@ -251,7 +253,7 @@ const (
 // Valid tells whether v is one of the ToolName values.
 func (v ToolName) Valid() bool {
 	switch v {
-	case ToolNameRead, ToolNameWrite, ToolNameEdit, ToolNameBash, ToolNameGrep, ToolNameGlob, ToolNameAgent, ToolNamePlan, ToolNameQuestion, ToolNameWebsearch, ToolNameWebfetch, ToolNameImage, ToolNameDraw, ToolNameOutput, ToolNameKill, ToolNameTerminal, ToolNameReadterminal, ToolNameSkill, ToolNameNotes, ToolNameSaveskill, ToolNameScreenshot:
+	case ToolNameRead, ToolNameWrite, ToolNameEdit, ToolNameBash, ToolNameGrep, ToolNameGlob, ToolNameAgent, ToolNamePlan, ToolNameQuestion, ToolNameWebsearch, ToolNameWebfetch, ToolNameImage, ToolNameDraw, ToolNameOutput, ToolNameKill, ToolNameTerminal, ToolNameReadterminal, ToolNameSkill, ToolNameNotes, ToolNameTodo, ToolNameClosetodo, ToolNameSaveskill, ToolNameScreenshot:
 		return true
 	}
 	return false

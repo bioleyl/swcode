@@ -198,6 +198,7 @@ func (s *Service) hostFor(session *live, turn *runningTurn, ready prepared, sees
 		Skills:      where.skills,
 		Subagents:   subagents{limit: ready.subagents, service: s, session: session, subagent: subagent, where: where},
 		Terminals:   s.deps.Terminals,
+		Todos:       s.deps.Todos,
 		Web:         s.webFor(subagent),
 		Workspace:   session.meta.Workspace,
 	}

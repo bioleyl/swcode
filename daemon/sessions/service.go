@@ -36,7 +36,9 @@ const (
 	projectWorking     = "A session of this project is working: stop it before removing the project."
 	blankMessage       = "Write a message or paste a picture first."
 	pinnedTodosHeading = "Todos pinned to this session:"
-	alreadyAnswered    = "This request was already answered."
+	// pinnedTodosHint tells the model how to close one it did, or open one the work needs: it has the tools for both.
+	pinnedTodosHint = "Close each with closetodo when it is done, and open another with todo when the work needs it."
+	alreadyAnswered = "This request was already answered."
 	// compactWorking: a turn compacts by itself when the context fills.
 	compactWorking   = "This session is working: wait for its turn to end, or stop it, before compacting."
 	nothingToCompact = "There is nothing new to summarize."
@@ -94,6 +96,8 @@ type Deps struct {
 	Skills  *catalog.Catalog
 	// SkillsOff is the skills a folder's project turned off, by name: its sessions are neither told of them nor run them.
 	SkillsOff func(path string, host protocol.HostRef) []string
+	// Todos are the projects' todos, which the agent opens and closes.
+	Todos     tools.ProjectTodos
 	Workspace string
 	Thinking  Thinking
 	// OnWorkspace is told the folder of each new session, and its host: every folder sessions work in has a project.
@@ -355,7 +359,7 @@ func withPinnedTodos(prompt string, todos []string) string {
 	if len(todos) == 0 {
 		return prompt
 	}
-	lines := make([]string, 0, len(todos)+3)
+	lines := make([]string, 0, len(todos)+5)
 	if prompt != "" {
 		lines = append(lines, prompt, "")
 	}
@@ -363,6 +367,7 @@ func withPinnedTodos(prompt string, todos []string) string {
 	for _, todo := range todos {
 		lines = append(lines, "- "+todo)
 	}
+	lines = append(lines, "", pinnedTodosHint)
 	return strings.Join(lines, "\n")
 }
 

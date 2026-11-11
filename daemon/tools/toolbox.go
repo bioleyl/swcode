@@ -14,8 +14,8 @@ var all = map[protocol.ToolName]Tool{
 	protocol.ToolNameKill: killTool, protocol.ToolNameNotes: notesTool, protocol.ToolNameOutput: outputTool, protocol.ToolNamePlan: planTool,
 	protocol.ToolNameQuestion: questionTool, protocol.ToolNameRead: readTool,
 	protocol.ToolNameScreenshot: screenshotTool, protocol.ToolNameSkill: skillTool, protocol.ToolNameTerminal: terminalTool,
-	protocol.ToolNameReadterminal: terminalOutputTool,
-	protocol.ToolNameWebfetch:       webfetchTool, protocol.ToolNameWebsearch: websearchTool, protocol.ToolNameWrite: writeTool,
+	protocol.ToolNameReadterminal: terminalOutputTool, protocol.ToolNameTodo: todoTool, protocol.ToolNameClosetodo: closeTodoTool,
+	protocol.ToolNameWebfetch: webfetchTool, protocol.ToolNameWebsearch: websearchTool, protocol.ToolNameWrite: writeTool,
 }
 
 var (

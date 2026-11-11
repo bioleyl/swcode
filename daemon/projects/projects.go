@@ -288,6 +288,46 @@ func (s *Service) RemoveTodo(projectID, todoID string) string {
 	return ""
 }
 
+// OpenTodo adds a todo to the project of a folder on a host, at the end of its list, and answers its todos.
+func (s *Service) OpenTodo(folder string, host protocol.HostRef, text string) ([]protocol.ProjectTodo, string) {
+	project, found := s.Find(folder, host)
+	if !found {
+		return nil, unknownProject
+	}
+	if slices.ContainsFunc(project.Todos, func(todo protocol.ProjectTodo) bool { return todo.Text == text }) {
+		return project.Todos, "The project already has a todo “" + text + "”."
+	}
+	if problem := s.AddTodo(project.ID, text); problem != "" {
+		return nil, problem
+	}
+	return s.todosOf(project.ID)
+}
+
+// CloseTodo marks done the todo of the project of a folder on a host that says text, and answers its todos.
+func (s *Service) CloseTodo(folder string, host protocol.HostRef, text string) ([]protocol.ProjectTodo, string) {
+	project, found := s.Find(folder, host)
+	if !found {
+		return nil, unknownProject
+	}
+	index := slices.IndexFunc(project.Todos, func(todo protocol.ProjectTodo) bool { return todo.Text == text })
+	if index < 0 {
+		return project.Todos, "The project has no todo “" + text + "”."
+	}
+	if problem := s.SetTodoDone(project.ID, project.Todos[index].ID, true); problem != "" {
+		return nil, problem
+	}
+	return s.todosOf(project.ID)
+}
+
+// todosOf is the project's todos by its id, or why none.
+func (s *Service) todosOf(projectID string) ([]protocol.ProjectTodo, string) {
+	project, found := s.ByID(projectID)
+	if !found {
+		return nil, unknownProject
+	}
+	return project.Todos, ""
+}
+
 // todoAt is the project's index, and its todo's, or the problem; the caller holds the lock.
 func (s *Service) todoAt(projectID, todoID string) (int, int, string) {
 	index := slices.IndexFunc(s.projects, func(project protocol.Project) bool { return project.ID == projectID })

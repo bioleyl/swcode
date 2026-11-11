@@ -54,6 +54,14 @@ type Subagents interface {
 	Start(task SubagentTask) Outcome
 }
 
+// ProjectTodos are the todos of the project a session works in: the agent opens one, and closes one.
+type ProjectTodos interface {
+	// OpenTodo adds a todo to the project of a folder on a host, and answers its todos; or why not, with them.
+	OpenTodo(folder string, host protocol.HostRef, text string) ([]protocol.ProjectTodo, string)
+	// CloseTodo marks done the todo that says text, and answers the project's todos; or why not, with them.
+	CloseTodo(folder string, host protocol.HostRef, text string) ([]protocol.ProjectTodo, string)
+}
+
 // Jobs is a session's background commands, on its host, in its workspace.
 type Jobs interface {
 	Start(ctx context.Context, command string) (string, error)
@@ -93,6 +101,8 @@ type Context struct {
 	Terminals terminals.Port
 	// Skills is the session's skills; subagents get none.
 	Skills catalog.Port
+	// Todos are the project's todos, which the agent opens and closes; nil in a chat, which works in no project.
+	Todos ProjectTodos
 }
 
 // Outcome is how a call ended.

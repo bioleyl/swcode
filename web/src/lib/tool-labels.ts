@@ -18,6 +18,13 @@ const TOOL_LABELS: Readonly<Record<ToolName, ToolLabel>> = {
     question: 'Run this command?',
     writing: 'Writing a command',
   },
+  closetodo: {
+    doing: 'Closing',
+    icon: 'check',
+    name: 'Close todo',
+    question: 'Close this todo?',
+    writing: 'Closing a todo',
+  },
   draw: {
     doing: 'Drawing',
     icon: 'image',
@@ -130,6 +137,13 @@ const TOOL_LABELS: Readonly<Record<ToolName, ToolLabel>> = {
     question: 'Run this in a terminal?',
     writing: 'Opening a terminal',
   },
+  todo: {
+    doing: 'Opening',
+    icon: 'list-checks',
+    name: 'Todo',
+    question: 'Open this todo?',
+    writing: 'Opening a todo',
+  },
   webfetch: {
     doing: 'Reading',
     icon: 'link',
@@ -175,6 +189,7 @@ const programsGrant = (command: string): string | undefined => {
 const SESSION_GRANTS: Readonly<Record<ToolName, (summary: string) => string | undefined>> = {
   agent: never,
   bash: programsGrant,
+  closetodo: never,
   draw: never,
   edit: () => ALL_EDITS,
   glob: never,
@@ -191,6 +206,7 @@ const SESSION_GRANTS: Readonly<Record<ToolName, (summary: string) => string | un
   screenshot: never,
   skill: never,
   terminal: programsGrant,
+  todo: never,
   webfetch: never,
   websearch: never,
   write: () => ALL_EDITS,

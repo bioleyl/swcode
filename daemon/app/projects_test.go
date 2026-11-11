@@ -212,7 +212,7 @@ func TestANewSessionStartsOnTheProjectsPinnedTodos(t *testing.T) {
 	test := Start(t, Options{Replies: []fakellama.Reply{text("On it.")}})
 	session := test.NewSession(sessions.Request{PinnedTodos: []string{"Write the tests"}, Prompt: "Fix the bug"})
 	test.UntilIdle(session.ID)
-	want := "Fix the bug\n\nTodos pinned to this session:\n- Write the tests"
+	want := "Fix the bug\n\nTodos pinned to this session:\n- Write the tests\n\nClose each with closetodo when it is done, and open another with todo when the work needs it."
 	for _, event := range test.Events(session.ID) {
 		if message, ok := event.Value.(protocol.SessionEventUserMessage); ok && message.Text == want {
 			return

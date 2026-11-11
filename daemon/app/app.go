@@ -233,7 +233,7 @@ func New(settings config.Config, options Options) (*App, error) {
 		Store:       sessions.NewStore(filepath.Join(settings.DataDir, sessionsFolder)),
 		Checkpoints: checkpoints.NewStore(filepath.Join(settings.DataDir, checkpointsFolder), logError),
 		ChatTools:   chatTools, SubagentTools: exploreTools, Thinking: sessions.Thinking{Session: settings.Thinking, Subagents: settings.SubagentThinking},
-		Terminals: terminalService, Tools: mainTools, Workspace: workspace,
+		Terminals: terminalService, Todos: app.Projects, Tools: mainTools, Workspace: workspace,
 	})
 	app.Sessions = service
 	service.Load()
