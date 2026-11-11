@@ -222,6 +222,34 @@ section {
   flex: none;
 }
 
+/* A pin: its message's first words open it, its × takes it off. */
+.pins {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pin {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.pin .open {
+  flex: 1;
+  min-width: 0;
+}
+
+.pin .close {
+  flex: none;
+}
+
+.pins-empty {
+  font-size: 12px;
+  color: var(--jl-muted);
+}
+
 .new-terminal {
   align-self: flex-start;
 }

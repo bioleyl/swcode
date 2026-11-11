@@ -11,6 +11,7 @@ const session = (id: string, kind: SessionKind, workspace: string): SessionSumma
   jobs: [],
   kind,
   mode: 'auto',
+  pins: [],
   queued: [],
   queuedNow: false,
   status: 'idle',

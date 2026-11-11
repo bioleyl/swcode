@@ -49,6 +49,10 @@ const (
 	restoreWorking = "This session is working: wait for its turn to end, or stop it, before restoring files."
 	restoreNoFiles = "This session works in no folder: it has no files to restore."
 	restoreTimeout = 30 * time.Second
+	unknownPin     = "There is no such message in this session."
+	// noPinLabel labels a pin on a message that has no words: one with pictures alone.
+	noPinLabel    = "Message"
+	pinLabelRunes = 80
 	// jobWatch is how often the jobs of a session are looked at, for the list to drop the ones that ended.
 	jobWatch = 5 * time.Second
 )
@@ -409,6 +413,67 @@ func (s *Service) Rename(sessionID, title string) string {
 		s.publishSessions()
 		return ""
 	})
+}
+
+// Pin marks a message of the session, to jump back to it from the side panel: its first words label the pin.
+func (s *Service) Pin(sessionID, eventID string) string {
+	return s.withSession(sessionID, func(session *live) string {
+		label, found := pinLabelOf(session.events, eventID)
+		if !found {
+			return unknownPin
+		}
+		if slices.ContainsFunc(session.meta.Pins, func(pin protocol.SessionPin) bool { return pin.ID == eventID }) {
+			return ""
+		}
+		session.meta.Pins = append(session.meta.Pins, protocol.SessionPin{ID: eventID, Label: label})
+		s.saveMeta(session.meta)
+		s.publishSessions()
+		return ""
+	})
+}
+
+// Unpin takes a pin off a message; one that is not there leaves the session as it is.
+func (s *Service) Unpin(sessionID, eventID string) string {
+	return s.withSession(sessionID, func(session *live) string {
+		kept := slices.DeleteFunc(session.meta.Pins, func(pin protocol.SessionPin) bool { return pin.ID == eventID })
+		if len(kept) == len(session.meta.Pins) {
+			return ""
+		}
+		session.meta.Pins = kept
+		s.saveMeta(session.meta)
+		s.publishSessions()
+		return ""
+	})
+}
+
+// pinLabelOf is the first words of the message an event id names: a pin's label, and whether the session has it.
+func pinLabelOf(events []protocol.SessionEvent, eventID string) (string, bool) {
+	for _, event := range events {
+		switch message := event.Value.(type) {
+		case protocol.SessionEventUserMessage:
+			if message.ID == eventID {
+				return pinLabel(message.Text), true
+			}
+		case protocol.SessionEventAssistantMessage:
+			if message.ID == eventID {
+				return pinLabel(message.Text), true
+			}
+		}
+	}
+	return "", false
+}
+
+// pinLabel is the first line of a message, cut short: enough to tell it in the side panel.
+func pinLabel(text string) string {
+	line := strings.TrimSpace(strings.SplitN(strings.TrimSpace(text), "\n", 2)[0])
+	runes := []rune(line)
+	if len(runes) == 0 {
+		return noPinLabel
+	}
+	if len(runes) <= pinLabelRunes {
+		return line
+	}
+	return string(runes[:pinLabelRunes]) + "…"
 }
 
 func (s *Service) Remove(sessionID string) string {
@@ -893,7 +958,8 @@ func summaryOf(session *live) protocol.SessionSummary {
 	}
 	return protocol.SessionSummary{
 		Host: session.meta.Host, ID: session.meta.ID, Jobs: append([]protocol.SessionSummaryJob{}, session.jobs...), Kind: session.meta.Kind,
-		Concise: session.meta.Concise, Mode: session.meta.Mode, Preset: session.meta.Preset, Queued: queued, QueuedNow: session.queueNow,
+		Concise: session.meta.Concise, Mode: session.meta.Mode, Pins: append([]protocol.SessionPin{}, session.meta.Pins...),
+		Preset: session.meta.Preset, Queued: queued, QueuedNow: session.queueNow,
 		SeenAt: session.meta.SeenAt, Status: status,
 		Subagents: subagentsLeft(session),
 		Thinking:  session.meta.Thinking, Title: session.meta.Title, UpdatedAt: lastActivity(session.meta, session.events),

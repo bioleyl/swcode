@@ -1,5 +1,6 @@
 :host {
   display: block;
+  position: relative;
   font-size: 15px;
   line-height: 1.6;
 }
@@ -8,6 +9,26 @@
   padding: 14px 16px;
   border-radius: var(--jl-radius);
   background: var(--jl-surface-2);
+}
+
+/* The pin, at the message's corner: quiet until the message is pointed at or reached with the keyboard, and always
+   shown while a pin points here. */
+.pin {
+  position: absolute;
+  top: calc(-1 * var(--jl-space-2));
+  right: calc(-1 * var(--jl-space-2));
+  opacity: 0.45;
+  transition: opacity 120ms var(--jl-ease);
+}
+
+:host(:hover) .pin,
+:host([pinned]) .pin,
+.pin:focus-visible {
+  opacity: 1;
+}
+
+:host([pinned]) .pin {
+  color: var(--jl-accent);
 }
 
 .body {

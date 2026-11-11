@@ -230,6 +230,7 @@ export class SessionPage extends ScElement {
     this.wireConversation();
     this.wireComposer();
     this.wireFrame();
+    this.wirePins();
     this.wireTerminals();
     this.renderSummary();
     this.renderDaemon();
@@ -315,6 +316,25 @@ export class SessionPage extends ScElement {
       daemon.send({ jobId, sessionId: this._sessionId, type: 'stopJob' })
     );
     this.renderPanel(sidePanelOpen());
+  }
+
+  /**
+   * The pins: a message's own button adds or takes off its pin, the side panel opens a pinned message or takes its
+   * pin off, and the daemon keeps them with the session.
+   */
+  private wirePins(): void {
+    const { conversation, panel } = this._refs;
+    conversation.events.register('togglePin', ({ eventId, pinned }) =>
+      daemon.send(
+        pinned
+          ? { eventId, sessionId: this._sessionId, type: 'pinEvent' }
+          : { eventId, sessionId: this._sessionId, type: 'unpinEvent' }
+      )
+    );
+    panel.events.register('showPin', (eventId) => conversation.reveal(eventId));
+    panel.events.register('removePin', (eventId) =>
+      daemon.send({ eventId, sessionId: this._sessionId, type: 'unpinEvent' })
+    );
   }
 
   /** The terminals: the panel opens, ends and starts them; the view sends what the person types and how big it is. */
@@ -594,6 +614,9 @@ export class SessionPage extends ScElement {
     this._refs.conversation.queued.set(session?.queued ?? []);
     this._refs.conversation.queuedNow.set(session?.queuedNow ?? false);
     this._refs.panel.jobs.set(session?.jobs ?? []);
+    const pins = session?.pins ?? [];
+    this._refs.panel.pins.set(pins);
+    this._refs.conversation.pinned.set(pins.map((pin) => pin.id));
     const kind = session?.kind ?? 'code';
     this._refs.place.hidden = kind === 'chat';
     this._refs.path.textContent = session ? sessionPlace(session) : '';

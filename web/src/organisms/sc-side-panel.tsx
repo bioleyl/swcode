@@ -10,7 +10,7 @@ import styles from './sc-side-panel.css?inline';
 
 import type { Terminal } from '../../../shared/protocol/messages.schema';
 import type { PresetStatus, SourceStatus } from '../../../shared/protocol/models.schema';
-import type { SessionStatus, SessionSummary } from '../../../shared/protocol/session.schema';
+import type { SessionPin, SessionStatus, SessionSummary } from '../../../shared/protocol/session.schema';
 import type { AgentView } from '../types/conversation.types';
 import type { DaemonState } from '../types/daemon.types';
 
@@ -74,7 +74,11 @@ export class ScSidePanel extends ScElement {
     closeTerminal: string;
     newTerminal: undefined;
     openTerminal: string;
+    /** The person takes a pin off: its event's id. */
+    removePin: string;
     renameTerminal: { terminalId: string; title: string };
+    /** The person wants to see a pinned message: its event's id. */
+    showPin: string;
     stopJob: string;
   }>();
 
@@ -107,6 +111,8 @@ export class ScSidePanel extends ScElement {
   readonly terminals = this.useChange<Terminal[]>([], () => this.renderTerminals(), { immediate: true });
   /** Whether the session works in a project: a chat has none, and opens no terminal. */
   readonly canTerminal = this.useChange(false, () => this.renderTerminals(), { immediate: true });
+  /** The messages the person pinned, in the order they pinned them. */
+  readonly pins = this.useChange<SessionPin[]>([], (pins) => this.renderPins(pins), { immediate: true });
 
   private readonly _refs = this.useRefs((ref) => ({
     activity: ref('.main .activity'),
@@ -115,6 +121,8 @@ export class ScSidePanel extends ScElement {
     jobsSection: ref('.background'),
     newTerminal: ref<JlButton>('.new-terminal'),
     of: ref('.of'),
+    pins: ref('.pins'),
+    pinsEmpty: ref('.pins-empty'),
     servers: ref('.servers'),
     subagents: ref('.subagents'),
     terminals: ref('.terminals'),
@@ -126,6 +134,11 @@ export class ScSidePanel extends ScElement {
   templateHtml(): Node {
     return (
       <>
+        <section>
+          <h2 class="label">Pins</h2>
+          <div class="pins" />
+          <p class="pins-empty">Pin a message to jump back to it.</p>
+        </section>
         <section>
           <h2 class="label">Agents</h2>
           <div class="agent main">
@@ -254,6 +267,31 @@ export class ScSidePanel extends ScElement {
     const terminals = this.terminals.get();
     this._refs.terminalsSection.hidden = !this.canTerminal.get();
     this._refs.terminals.replaceChildren(...terminals.map((terminal) => this.terminalNode(terminal)));
+  }
+
+  /** A pin: its message's first words open it, the × takes it off. */
+  private pinNode(pin: SessionPin): Node {
+    const open = createElement(JlButton, {
+      attrs: { class: 'open' },
+      props: { hint: 'Go to this message', label: pin.label, size: 'sm', variant: 'ghost' },
+    });
+    open.events.register('press', () => this.events.emit('showPin', pin.id));
+    const remove = createElement(JlButton, {
+      attrs: { class: 'close' },
+      props: { hint: 'Remove this pin', icon: 'x', size: 'sm', variant: 'ghost' },
+    });
+    remove.events.register('press', () => this.events.emit('removePin', pin.id));
+    return (
+      <div class="pin" title={pin.label}>
+        {open}
+        {remove}
+      </div>
+    );
+  }
+
+  private renderPins(pins: readonly SessionPin[]): void {
+    this._refs.pinsEmpty.hidden = pins.length > 0;
+    this._refs.pins.replaceChildren(...pins.map((pin) => this.pinNode(pin)));
   }
 
   /** A command, and its stop button: a button keeps its clicks to itself, so each says which command it stops. */

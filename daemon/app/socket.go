@@ -246,6 +246,14 @@ func (h handlers) RenameSession(message protocol.ClientMessageRenameSession) str
 	return h.problem(h.app.Sessions.Rename(message.SessionID, message.Title))
 }
 
+func (h handlers) PinEvent(message protocol.ClientMessagePinEvent) struct{} {
+	return h.problem(h.app.Sessions.Pin(message.SessionID, message.EventID))
+}
+
+func (h handlers) UnpinEvent(message protocol.ClientMessageUnpinEvent) struct{} {
+	return h.problem(h.app.Sessions.Unpin(message.SessionID, message.EventID))
+}
+
 func (h handlers) RestoreCheckpoint(message protocol.ClientMessageRestoreCheckpoint) struct{} {
 	return h.problem(h.app.Sessions.RestoreCheckpoint(message.SessionID, message.TurnID))
 }

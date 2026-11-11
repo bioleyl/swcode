@@ -18,6 +18,8 @@ import {
   tab,
 } from './support.js';
 
+import type { Locator } from 'playwright-core';
+
 afterEach(stopRigs);
 
 // Long enough to read the working line between two chunks of a reply.
@@ -445,6 +447,100 @@ describe('a session whose shown page draws nothing', () => {
 
     // The page it shows draws no row: the first message comes from a page above, asked by the conversation itself.
     await page.locator('session-page sc-conversation').getByText('Start', { exact: true }).waitFor();
+    expect(await overflow(page)).toBe(0);
+  });
+});
+
+// A reply long enough for the conversation to have to scroll.
+const LONG_REPLY = `${Array.from({ length: 40 }, (_, index) => `Paragraph ${index}.`).join('\n\n')}\n\nThe end.`;
+
+/** Run in the conversation's scroller: its end comes into view. */
+const scrollToEnd = (element: { scrollHeight: number; scrollTop: number }): void => {
+  element.scrollTop = element.scrollHeight;
+};
+
+/** Whether an element is in the part of the conversation the window shows. */
+const inConversationView = async (element: Locator, conversation: Locator): Promise<boolean> => {
+  const box = await element.boundingBox();
+  const view = await conversation.boundingBox();
+  return box !== null && view !== null && box.y >= view.y && box.y < view.y + view.height;
+};
+
+describe('pins', () => {
+  it('are listed beside the session, jump back to their message, and come off again', async () => {
+    const rig = await start({ replies: [{ text: LONG_REPLY }] });
+    const page = await rig.browser.newPage({ viewport: DESKTOP });
+    await page.goto(rig.link);
+    await page.locator('home-page textarea').fill('Pin this one');
+    await page.locator('home-page textarea').press('Enter');
+    await page.getByText('The end.').waitFor();
+
+    const conversation = page.locator('session-page sc-conversation');
+    const message = conversation.locator('.items sc-message[author="user"]').first();
+    await message.hover();
+    await message.locator('jl-button.pin').click();
+    await settle(page);
+
+    // The pin lists the message's first words beside the session.
+    const pin = page.locator('sc-side-panel .pin');
+    await expect.poll(() => pin.count()).toBe(1);
+    const open = pin.getByRole('button', { name: 'Pin this one' });
+    await open.waitFor();
+    expect(await message.getAttribute('pinned')).not.toBeNull();
+
+    // It goes back to the message, from the end of the conversation.
+    await conversation.evaluate(scrollToEnd);
+    await open.click();
+    await settle(page);
+    await expect.poll(() => inConversationView(message, conversation)).toBe(true);
+
+    // The message's own pin again takes the pin off.
+    await message.hover();
+    await message.locator('jl-button.pin').click();
+    await settle(page);
+    await expect.poll(() => pin.count()).toBe(0);
+    expect(await message.getAttribute('pinned')).toBeNull();
+    expect(await overflow(page)).toBe(0);
+  });
+
+  it('bring a message the page no longer shows back, from the older pages before it', async () => {
+    // Enough calls for the message pinned first to fall behind the page a session page opens with.
+    const calls = Array.from({ length: 50 }, () => ({
+      arguments: { path: 'src/greet.ts' },
+      name: 'read',
+    }));
+    const rig = await start({
+      files: { 'src/greet.ts': GREET },
+      replies: [{ text: 'The first answer.' }, { toolCalls: calls }, { text: 'The end.' }],
+    });
+    const page = await rig.browser.newPage({ viewport: DESKTOP });
+    await page.goto(rig.link);
+    await page.locator('home-page textarea').fill('Pin this one');
+    await page.locator('home-page textarea').press('Enter');
+    await page.getByText('The first answer.').waitFor();
+    const composer = page.locator('session-page sc-composer textarea');
+    await composer.fill('And again');
+    await composer.press('Enter');
+    await page.getByText('The end.').waitFor({ timeout: 30_000 });
+
+    const conversation = page.locator('session-page sc-conversation');
+    const first = conversation.locator('.items sc-message[author="user"]').first();
+    await first.hover();
+    await first.locator('jl-button.pin').click();
+    await settle(page);
+
+    // Another session and back: only the end of this one's conversation is drawn.
+    await navItem(page, 'New session').click();
+    await settle(page);
+    await navItem(page, 'Pin this one').click();
+    await page.evaluate('0');
+    await conversation.locator('.items sc-tool-row').first().waitFor();
+    expect(await conversation.locator('.items sc-message[author="user"]').count()).toBe(0);
+
+    await page.locator('sc-side-panel .pin').getByRole('button', { name: 'Pin this one' }).click();
+    const pinned = conversation.locator('.items').getByText('Pin this one', { exact: true });
+    await pinned.waitFor();
+    await expect.poll(() => inConversationView(pinned, conversation)).toBe(true);
     expect(await overflow(page)).toBe(0);
   });
 });

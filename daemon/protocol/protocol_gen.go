@@ -1888,6 +1888,11 @@ func (v *SessionEventTurnFinished) Normalize() error {
 	return nil
 }
 
+type SessionPin struct {
+	ID    string `json:"id"`
+	Label string `json:"label"`
+}
+
 type SessionSummary struct {
 	Concise   bool                `json:"concise"`
 	Host      HostRef             `json:"host"`
@@ -1895,6 +1900,7 @@ type SessionSummary struct {
 	Jobs      []SessionSummaryJob `json:"jobs"`
 	Kind      SessionKind         `json:"kind"`
 	Mode      PermissionMode      `json:"mode"`
+	Pins      []SessionPin        `json:"pins"`
 	Preset    string              `json:"preset,omitempty"`
 	Queued    []string            `json:"queued"`
 	QueuedNow bool                `json:"queuedNow"`
@@ -1913,6 +1919,9 @@ func (v SessionSummary) MarshalJSON() ([]byte, error) {
 	if p.Jobs == nil {
 		p.Jobs = []SessionSummaryJob{}
 	}
+	if p.Pins == nil {
+		p.Pins = []SessionPin{}
+	}
 	if p.Queued == nil {
 		p.Queued = []string{}
 	}
@@ -1921,7 +1930,7 @@ func (v SessionSummary) MarshalJSON() ([]byte, error) {
 
 func (v *SessionSummary) UnmarshalJSON(data []byte) error {
 	type plain SessionSummary
-	p := plain{Concise: false, Host: HostRef{Value: HostRefLocal{}}, Jobs: []SessionSummaryJob{}, Kind: "code", QueuedNow: false, Subagents: 0}
+	p := plain{Concise: false, Host: HostRef{Value: HostRefLocal{}}, Jobs: []SessionSummaryJob{}, Kind: "code", Pins: []SessionPin{}, QueuedNow: false, Subagents: 0}
 	if err := json.Unmarshal(data, &p); err != nil {
 		return err
 	}
@@ -1968,6 +1977,10 @@ func (ClientMessageCreateSession) isClientMessage() {}
 func (ClientMessageRenameSession) isClientMessage() {}
 
 func (ClientMessageDeleteSession) isClientMessage() {}
+
+func (ClientMessagePinEvent) isClientMessage() {}
+
+func (ClientMessageUnpinEvent) isClientMessage() {}
 
 func (ClientMessageClearQueue) isClientMessage() {}
 
@@ -2072,6 +2085,18 @@ func (u *ClientMessage) UnmarshalJSON(data []byte) error {
 		u.Value = value
 	case "\"deleteSession\"":
 		var value ClientMessageDeleteSession
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
+	case "\"pinEvent\"":
+		var value ClientMessagePinEvent
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
+	case "\"unpinEvent\"":
+		var value ClientMessageUnpinEvent
 		if err := json.Unmarshal(data, &value); err != nil {
 			return err
 		}
@@ -2309,6 +2334,8 @@ type ClientMessageMapper[R any] interface {
 	CreateSession(ClientMessageCreateSession) R
 	RenameSession(ClientMessageRenameSession) R
 	DeleteSession(ClientMessageDeleteSession) R
+	PinEvent(ClientMessagePinEvent) R
+	UnpinEvent(ClientMessageUnpinEvent) R
 	ClearQueue(ClientMessageClearQueue) R
 	SendQueueNow(ClientMessageSendQueueNow) R
 	OpenSession(ClientMessageOpenSession) R
@@ -2357,6 +2384,10 @@ func MapClientMessage[R any](u ClientMessage, m ClientMessageMapper[R]) R {
 		return m.RenameSession(value)
 	case ClientMessageDeleteSession:
 		return m.DeleteSession(value)
+	case ClientMessagePinEvent:
+		return m.PinEvent(value)
+	case ClientMessageUnpinEvent:
+		return m.UnpinEvent(value)
 	case ClientMessageClearQueue:
 		return m.ClearQueue(value)
 	case ClientMessageSendQueueNow:
@@ -2552,6 +2583,70 @@ func (v ClientMessageDeleteSession) MarshalJSON() ([]byte, error) {
 		Key string `json:"type"`
 		plain
 	}{"deleteSession", p})
+}
+
+type ClientMessagePinEvent struct {
+	EventID   string `json:"eventId"`
+	SessionID string `json:"sessionId"`
+}
+
+func (v ClientMessagePinEvent) MarshalJSON() ([]byte, error) {
+	type plain ClientMessagePinEvent
+	p := plain(v)
+	return json.Marshal(struct {
+		Key string `json:"type"`
+		plain
+	}{"pinEvent", p})
+}
+
+func (v *ClientMessagePinEvent) UnmarshalJSON(data []byte) error {
+	type plain ClientMessagePinEvent
+	p := plain{}
+	if err := json.Unmarshal(data, &p); err != nil {
+		return err
+	}
+	*v = ClientMessagePinEvent(p)
+	return v.Normalize()
+}
+
+// Normalize trims and checks what the app sent, as its schema does.
+func (v *ClientMessagePinEvent) Normalize() error {
+	if utf8.RuneCountInString(v.EventID) < 1 {
+		return fmt.Errorf("%s: must not be empty", "eventId")
+	}
+	return nil
+}
+
+type ClientMessageUnpinEvent struct {
+	EventID   string `json:"eventId"`
+	SessionID string `json:"sessionId"`
+}
+
+func (v ClientMessageUnpinEvent) MarshalJSON() ([]byte, error) {
+	type plain ClientMessageUnpinEvent
+	p := plain(v)
+	return json.Marshal(struct {
+		Key string `json:"type"`
+		plain
+	}{"unpinEvent", p})
+}
+
+func (v *ClientMessageUnpinEvent) UnmarshalJSON(data []byte) error {
+	type plain ClientMessageUnpinEvent
+	p := plain{}
+	if err := json.Unmarshal(data, &p); err != nil {
+		return err
+	}
+	*v = ClientMessageUnpinEvent(p)
+	return v.Normalize()
+}
+
+// Normalize trims and checks what the app sent, as its schema does.
+func (v *ClientMessageUnpinEvent) Normalize() error {
+	if utf8.RuneCountInString(v.EventID) < 1 {
+		return fmt.Errorf("%s: must not be empty", "eventId")
+	}
+	return nil
 }
 
 type ClientMessageClearQueue struct {

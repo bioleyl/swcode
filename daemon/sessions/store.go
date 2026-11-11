@@ -25,7 +25,9 @@ type Meta struct {
 	ID        string                  `json:"id"`
 	Kind      protocol.SessionKind    `json:"kind"`
 	Mode      protocol.PermissionMode `json:"mode"`
-	Preset    string                  `json:"preset,omitempty"`
+	// Pins are the messages the person marked, to jump back to them: their event's id and first words.
+	Pins   []protocol.SessionPin `json:"pins,omitempty"`
+	Preset string                `json:"preset,omitempty"`
 	// SeenAt is the session's last activity the person saw, on any device; empty in a session from before it was kept.
 	SeenAt    string                `json:"seenAt,omitempty"`
 	Thinking  protocol.ThinkingMode `json:"thinking"`

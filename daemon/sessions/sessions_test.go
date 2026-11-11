@@ -350,6 +350,91 @@ func TestAMessageOfNothingIsRefused(t *testing.T) {
 	}
 }
 
+// userMessageID is the event of the person's latest message in a session's history.
+func userMessageID(t *testing.T, service *Service, sessionID string) string {
+	t.Helper()
+	found := ""
+	for _, event := range history(t, service, sessionID) {
+		if message, ok := event.Value.(protocol.SessionEventUserMessage); ok {
+			found = message.ID
+		}
+	}
+	if found == "" {
+		t.Fatal("the session holds no message of the person")
+	}
+	return found
+}
+
+func TestAPinKeepsAMessageAndItsFirstWords(t *testing.T) {
+	service, store, listener := chats(t, &words{replies: []string{"All good."}})
+	sessionID := newChat(t, service)
+	if problem := service.SendPrompt(sessionID, "Fix the notes\nand say why", nil); problem != "" {
+		t.Fatal(problem)
+	}
+	until(t, service, sessionID, protocol.SessionStatusIdle)
+	messageID := userMessageID(t, service, sessionID)
+
+	if problem := service.Pin(sessionID, messageID); problem != "" {
+		t.Fatal(problem)
+	}
+	want := []protocol.SessionPin{{ID: messageID, Label: "Fix the notes"}}
+	if meta, _ := store.metaOf(sessionID); !reflect.DeepEqual(meta.Pins, want) {
+		t.Fatalf("the file holds %+v", meta.Pins)
+	}
+	if got := service.List()[0].Pins; !reflect.DeepEqual(got, want) {
+		t.Fatalf("summary %+v", got)
+	}
+	if len(listener.ofType("sessions")) == 0 {
+		t.Fatal("the apps were never told")
+	}
+
+	// Pinning the same message again keeps one pin.
+	if problem := service.Pin(sessionID, messageID); problem != "" {
+		t.Fatal(problem)
+	}
+	if got := service.List()[0].Pins; len(got) != 1 {
+		t.Fatalf("pins %+v", got)
+	}
+	if problem := service.Unpin(sessionID, messageID); problem != "" {
+		t.Fatal(problem)
+	}
+	if got := service.List()[0].Pins; len(got) != 0 {
+		t.Fatalf("after taking it off: %+v", got)
+	}
+}
+
+func TestAPinNeedsAMessageOfTheSession(t *testing.T) {
+	service, store, _ := chats(t, &words{})
+	sessionID := newChat(t, service)
+	if problem := service.Pin(sessionID, "nope"); problem != unknownPin {
+		t.Fatalf("another event: %q", problem)
+	}
+	if problem := service.Pin("nope", "nope"); problem != unknownSession {
+		t.Fatalf("another session: %q", problem)
+	}
+	if meta, _ := store.metaOf(sessionID); len(meta.Pins) != 0 {
+		t.Fatalf("pins %+v", meta.Pins)
+	}
+}
+
+func TestAPinIsLabelledByTheFirstWordsOfItsMessage(t *testing.T) {
+	long := strings.Repeat("é", pinLabelRunes+5)
+	cases := []struct{ name, text, want string }{
+		{name: "one line", text: "Fix the notes", want: "Fix the notes"},
+		{name: "first line of several", text: "Fix the notes\nand say why", want: "Fix the notes"},
+		{name: "nothing", text: "", want: noPinLabel},
+		{name: "only spaces before the words", text: "  \n  second", want: "second"},
+		{name: "a long line, cut short", text: long, want: string([]rune(long)[:pinLabelRunes]) + "…"},
+	}
+	for _, test := range cases {
+		t.Run(test.name, func(t *testing.T) {
+			if got := pinLabel(test.text); got != test.want {
+				t.Fatalf("label %q, want %q", got, test.want)
+			}
+		})
+	}
+}
+
 func TestWhatIsSentWhileATurnRunsWaitsForTheNextOne(t *testing.T) {
 	service, store, _ := chats(t, &words{replies: []string{"First.", "Second."}})
 	sessionID := newChat(t, service)

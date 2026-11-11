@@ -311,6 +311,10 @@ export type SessionEvent = z.infer<typeof SessionEventSchema>;
 export type UserMessageEvent = Extract<SessionEvent, { kind: 'userMessage' }>;
 export type SessionEventKind = SessionEvent['kind'];
 
+/** A spot of the conversation the person pins, to jump back to it: the message's event, and its first words. */
+export const SessionPinSchema = z.object({ id: z.string(), label: z.string() });
+export type SessionPin = z.infer<typeof SessionPinSchema>;
+
 export const SessionSummarySchema = z.object({
   // Token economy: each message sent asks the model to be concise.
   concise: z.boolean().default(false),
@@ -321,6 +325,8 @@ export const SessionSummarySchema = z.object({
   // A chat works in no folder: its workspace is empty, its host this computer.
   kind: SessionKindSchema.default('code'),
   mode: PermissionModeSchema,
+  // The messages the person pinned, in the order they pinned them, to jump back to them.
+  pins: z.array(SessionPinSchema).default([]),
   // The preset whose models the session works with; the default preset when left out, or when this one was removed.
   preset: z.string().optional(),
   // Messages sent while a turn ran: they start the next turn together.

@@ -1,4 +1,5 @@
 import { css } from '@jadis/core';
+import { JlButton } from '@syware/jlib';
 
 import { oneOf, ScElement } from '../base/sc-element';
 import { blocksOf } from '../lib/markdown';
@@ -9,6 +10,9 @@ import type { Block, BlockMap, LinkLook, Span, SpanMap } from '../types/markdown
 
 export const MESSAGE_AUTHORS = ['assistant', 'user'] as const;
 export type MessageAuthor = (typeof MESSAGE_AUTHORS)[number];
+
+const PIN_HINT = 'Pin this message';
+const UNPIN_HINT = 'Remove this pin';
 
 // A link written all as code or all in bold keeps that look inside the link.
 const LINK_LOOKS: Readonly<Record<LinkLook, (text: string) => Node>> = {
@@ -86,10 +90,30 @@ const blockNode = (block: Block): Node => nodeOf(block.kind, block);
 export class ScMessage extends ScElement {
   static readonly selector = 'sc-message';
 
+  readonly events = this.useEvents<{ pin: undefined }>();
+
   readonly author = this.useChange<MessageAuthor>('assistant', (value) => this.reflect('author', value), {
     attribute: 'author',
     parse: oneOf(MESSAGE_AUTHORS, 'assistant'),
   });
+  /** Whether the message can be pinned: the conversation's can, what waits in the queue cannot. */
+  readonly pinnable = this.useChange(
+    false,
+    (pinnable) => {
+      this._refs.pin.hidden = !pinnable;
+    },
+    { attribute: 'pinnable' }
+  );
+  /** Whether a pin points here: the button is shown, and takes it off. */
+  readonly pinned = this.useChange(
+    false,
+    (pinned) => {
+      this.reflect('pinned', pinned);
+      this._refs.pin.icon.set(pinned ? 'pin-off' : 'pin');
+      this._refs.pin.hint.set(pinned ? UNPIN_HINT : PIN_HINT);
+    },
+    { attribute: 'pinned' }
+  );
   readonly text = this.useChange('', (value) =>
     this._refs.body.replaceChildren(...blocksOf(value).map(blockNode))
   );
@@ -105,16 +129,25 @@ export class ScMessage extends ScElement {
     );
   });
 
-  private readonly _refs = this.useRefs((ref) => ({ body: ref('.body'), pictures: ref('.pictures') }));
+  private readonly _refs = this.useRefs((ref) => ({
+    body: ref('.body'),
+    pictures: ref('.pictures'),
+    pin: ref(JlButton),
+  }));
 
   /** Adds a piece of an answer as it streams in. */
   append(text: string): void {
     this.text.set((sofar) => `${sofar}${text}`);
   }
 
+  onConnect(): void {
+    this._refs.pin.events.register('press', () => this.events.emit('pin'));
+  }
+
   templateHtml(): Node {
     return (
       <>
+        <JlButton class="pin" variant="ghost" size="sm" icon="pin" hidden />
         <div class="body" />
         <div class="pictures" hidden />
       </>

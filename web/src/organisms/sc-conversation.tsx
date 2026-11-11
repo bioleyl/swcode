@@ -29,6 +29,7 @@ import type {
   TurnOutcome,
 } from '../../../shared/protocol/session.schema';
 import type { SkillSummary } from '../../../shared/protocol/skill.schema';
+import type { MessageAuthor } from '../molecules/sc-message';
 import type { Activity } from '../types/activity.types';
 import type { SessionEventHandlers, SessionEventMap } from '../types/conversation.types';
 
@@ -40,6 +41,8 @@ const TOP_DISTANCE_PX = 120;
 // What the top of the conversation says while the older events come. Once they are all here the line goes away: the
 // beginning of the conversation is then simply what is at the top.
 const TOP_LOADING = 'Looking for earlier messages…';
+// How long the message a pin points at stays marked once the view reached it.
+const PIN_FLASH_MS = 1_200;
 
 /** Holds rows together, for one of the rare events that draws several (a subagent's report has its note). */
 const fragmentOf = (nodes: readonly Element[]): DocumentFragment => {
@@ -107,12 +110,16 @@ export class ScConversation extends ScElement {
     /** The person asked to put back the files a turn changed: its id. */
     restoreCheckpoint: string;
     sendQueueNow: undefined;
+    /** The person pinned a message, or took its pin off: which, and whether it is pinned now. */
+    togglePin: { eventId: string; pinned: boolean };
   }>();
 
   /** Messages sent while a turn runs, waiting for the next one. */
   readonly queued = this.useChange<string[]>([], (messages) => this.renderQueued(messages));
   /** The person asked for them now: they go in at the agent's next step. */
   readonly queuedNow = this.useChange(false, (now) => this.renderQueueNote(now), { immediate: true });
+  /** The messages the person pinned: each one's pin button says it. */
+  readonly pinned = this.useChange<string[]>([], (ids) => this.renderPinned(ids), { immediate: true });
 
   /** Where the agent works, for the empty conversation's invitation. */
   readonly workspace = this.useChange('', (value) => {
@@ -127,8 +134,12 @@ export class ScConversation extends ScElement {
   private _topState: 'loading' | 'none' = 'none';
   // The rows added since the last turn of the handlers: an older page takes them from the end and puts them above.
   private _pending: Element[] = [];
+  // The ids of the pinned messages, and the message a pin asked to reach before its page came.
+  private _pinned = new Set<string>();
+  private _reveal = '';
 
   private readonly _messages = new Map<string, ScMessage>();
+  // The thoughts above them, by their event's id, which streams as one message's does.
   private readonly _thoughts = new Map<string, ScThinking>();
   private readonly _rows = new Map<string, ScToolRow>();
   // What waits for the person, by request: an approval, the agent's questions, or a password a command asked for.
@@ -251,14 +262,13 @@ export class ScConversation extends ScElement {
       this.doing({ kind: 'working' });
       this.working(true);
     },
-    userMessage: (event) =>
-      this.add(
-        <ScMessage
-          author="user"
-          text={event.text}
-          pictures={(event.pictures ?? []).map((picture) => this.pictureUrl(picture))}
-        />
-      ),
+    userMessage: (event) => {
+      const message = this.pinnableMessage(event.id, 'user');
+      message.text.set(event.text);
+      message.pictures.set((event.pictures ?? []).map((picture) => this.pictureUrl(picture)));
+      this._messages.set(event.id, message);
+      this.add(message);
+    },
   };
 
   private readonly _refs = this.useRefs((ref) => ({
@@ -315,6 +325,7 @@ export class ScConversation extends ScElement {
   /** Draws the end of a session again, from the history the daemon answered, and the answer being written. */
   load(events: readonly SessionEvent[], older: number, streaming: Streaming | undefined): void {
     this._older = older;
+    this._reveal = '';
     this._messages.clear();
     this._thoughts.clear();
     this._rows.clear();
@@ -350,6 +361,7 @@ export class ScConversation extends ScElement {
     this._topState = 'none';
     this.showTop();
     this.askForRoom();
+    this.revealShown();
   }
 
   apply(event: SessionEvent): void {
@@ -393,9 +405,46 @@ export class ScConversation extends ScElement {
     if (this._older === 0 || this._topState !== 'none' || !atTop(this, TOP_DISTANCE_PX)) {
       return;
     }
+    this.askOlder();
+  }
+
+  /** Asks for the page of older events above what is shown, once: its answer is added above it. */
+  private askOlder(): void {
     this._topState = 'loading';
     this.showTop();
     this.events.emit('older', this._older);
+  }
+
+  /** Brings the message a pin points at into view, asking for the older pages before it while it is not drawn. */
+  reveal(eventId: string): void {
+    this._reveal = eventId;
+    this.revealShown();
+  }
+
+  private revealShown(): void {
+    if (this._reveal === '') {
+      return;
+    }
+    const row = this._refs.items.querySelector<HTMLElement>(`[data-event="${CSS.escape(this._reveal)}"]`);
+    if (row) {
+      this._reveal = '';
+      this.shine(row);
+      return;
+    }
+    if (this._older === 0) {
+      this._reveal = '';
+      return;
+    }
+    if (this._topState === 'none') {
+      this.askOlder();
+    }
+  }
+
+  /** Marks a message a moment, where the view landed. */
+  private shine(row: HTMLElement): void {
+    row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    row.classList.add('found');
+    setTimeout(() => row.classList.remove('found'), PIN_FLASH_MS);
   }
 
   /** The beginning of a conversation too short to fill the window comes by itself: no scrollbar to reach it with. */
@@ -474,9 +523,21 @@ export class ScConversation extends ScElement {
     if (known) {
       return known;
     }
-    const message: ScMessage = <ScMessage author="assistant" />;
+    const message = this.pinnableMessage(id, 'assistant');
     this._messages.set(id, message);
     this.add(message);
+    return message;
+  }
+
+  /** A message of the conversation, which can be pinned: its event is where a pin points, and the button toggles it. */
+  private pinnableMessage(id: string, author: MessageAuthor): ScMessage {
+    const message: ScMessage = <ScMessage author={author} />;
+    message.dataset.event = id;
+    message.pinnable.set(true);
+    message.pinned.set(this._pinned.has(id));
+    message.events.register('pin', () =>
+      this.events.emit('togglePin', { eventId: id, pinned: !message.pinned.get() })
+    );
     return message;
   }
 
@@ -558,6 +619,13 @@ export class ScConversation extends ScElement {
   private renderQueueNote(now: boolean): void {
     this._refs.queuedWhen.textContent = now ? QUEUE_NOTES.now : QUEUE_NOTES.later;
     this._refs.sendNow.hidden = now;
+  }
+
+  private renderPinned(ids: readonly string[]): void {
+    this._pinned = new Set(ids);
+    for (const [id, message] of this._messages) {
+      message.pinned.set(this._pinned.has(id));
+    }
   }
 
   private renderQueued(messages: readonly string[]): void {
