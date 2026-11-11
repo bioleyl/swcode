@@ -2,6 +2,16 @@
 
 All notable changes to swcode are documented here.
 
+## [0.10.0] - 2026-11-11
+
+### Changed
+
+- A search result in a conversation opens the session on the message that says the words, scrolled to it and marked a moment, instead of at the end of the conversation. It finds a tool call's line and a summarized stretch of the conversation too, even when the message sits many pages up in a long session.
+
+### Maintenance
+
+- jlib 0.14.0: the side nav, the tables, the dialogs and the palette these views are built from keep their inputs, events and methods. Its marked table rows now tell a screen reader with `aria-selected`, and its skeleton rows are hidden from it.
+
 ## [0.9.0] - 2026-11-11
 
 ### Added
