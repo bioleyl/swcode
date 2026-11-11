@@ -142,6 +142,8 @@ Read `README.md` first.
 - **A terminal is renamed from its side panel row** (the pencil: an input replaces the name; Enter or leaving it saves, Escape cancels), which sends `renameTerminal`; the daemon's list broadcast redraws the row and the open dialog's heading. `sc-terminal` serves every terminal with one xterm and keeps the last shown id across closing, clearing the screen when another terminal is shown, or the next one would draw over the previous one's screen.
 - **The settings e2e tests fail under the full suite's load** (`expect.poll` on the composer summary times out) and pass when run alone or on a rerun; two of them alternating, not the same one, so it is timing, not a regression. The suite builds first: `npm run test:e2e`.
 - **A new protocol message cannot reference a named zod object with a `kind` literal** (`scripts/protocol-go.ts` throws "zod literal has no Go type"): reuse a named union such as `ToolDisplaySchema` and filter its variants in the app (`DiffDisplay` is `Extract<ToolDisplay, { kind: 'diff' }>`).
+- **A project is its host and folder**, so a session is in it only when both match (`sessionInProject`/`sessionsInProject` in `web/src/lib/project-groups.ts`). Comparing `workspace` alone mixes a remote (SSH/WSL) project with a local one at the same path: the project page's session list, the removal dialog and `preferredProject` did, and now all go through the helper.
+- **This machine's node is not on PATH**: `npm` and `npx` are not found in a plain shell; run `export PATH="$HOME/.nvm/versions/node/v26.12.0/bin:$PATH"` first.
 
 ## Commands
 

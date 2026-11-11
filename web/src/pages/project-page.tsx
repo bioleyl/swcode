@@ -19,6 +19,7 @@ import { ScElement } from '../base/sc-element';
 import { placeText } from '../lib/hosts';
 import { appDefaults } from '../lib/new-session';
 import { presetOf } from '../lib/presets';
+import { sessionsInProject } from '../lib/project-groups';
 import { isSkillOn, SKILL_ORIGIN_LABELS } from '../lib/project-skills';
 import { DEFAULT_PROJECT_TAB, isProjectTab, PROJECT_TAB_LABELS } from '../lib/project-tabs';
 import { isSwcodeBaseIn } from '../lib/swcode-base';
@@ -283,7 +284,7 @@ export class ProjectPage extends ScElement {
     this._refs.newSession.href.set(project ? hrefOf(newSessionPath(project.id)) : '');
     this._refs.newSession.hidden = !project;
     this._refs.remove.hidden = !project;
-    const sessions = project ? allSessions().filter((session) => session.workspace === project.path) : [];
+    const sessions = project ? sessionsInProject(project, allSessions()) : [];
     this._refs.list.replaceChildren(...sessions.map((session) => this.rowOf(session)));
     this._refs.empty.hidden = !project || sessions.length > 0;
     if (!project) {

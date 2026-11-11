@@ -16,12 +16,22 @@ const placeKey = (place: Place): string => `${hostKey(place.host)}|${place.path}
 const isIn = (session: SessionSummary, place: Place): boolean =>
   session.workspace === place.path && sameHost(session.host, place.host);
 
+/** Whether a session works in a project's folder on the project's host: the same path on two hosts is two projects. */
+export const sessionInProject = (project: Pick<Project, 'host' | 'path'>, session: SessionSummary): boolean =>
+  isIn(session, project);
+
+/** The sessions working in a project, only those: a session of the same folder on another host stays there. */
+export const sessionsInProject = (
+  project: Pick<Project, 'host' | 'path'>,
+  sessions: readonly SessionSummary[]
+): SessionSummary[] => sessions.filter((session) => sessionInProject(project, session));
+
 const groupOf = (project: Project, sessions: readonly SessionSummary[]): ProjectGroup => ({
   host: project.host,
   name: project.name,
   path: project.path,
   projectId: project.id,
-  sessions: sessions.filter((session) => isIn(session, project)),
+  sessions: sessionsInProject(project, sessions),
 });
 
 // A session whose folder has no project yet, between two lists from the daemon.
@@ -71,6 +81,7 @@ export function preferredProject(
   askedId: string | undefined
 ): Project | undefined {
   const asked = projects.find((project) => project.id === askedId);
-  const last = projects.find((project) => project.path === sessions[0]?.workspace);
+  const latest = sessions[0];
+  const last = latest === undefined ? undefined : projects.find((project) => sessionInProject(project, latest));
   return asked ?? last ?? projects[0];
 }

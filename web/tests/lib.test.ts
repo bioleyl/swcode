@@ -18,14 +18,19 @@ import { ago, contextText, folderName, percent, tokens } from '../src/lib/format
 import { atTop, fillsWindow, scrollAfterOlder } from '../src/lib/history-window';
 import { blocksOf } from '../src/lib/markdown';
 import { matchCommands, paletteCommands, paletteTarget } from '../src/lib/palette';
-import { groupByProject, preferredProject, removalConsequence } from '../src/lib/project-groups';
+import {
+  groupByProject,
+  preferredProject,
+  removalConsequence,
+  sessionsInProject,
+} from '../src/lib/project-groups';
 import { isSkillOn, skillsOn } from '../src/lib/project-skills';
 import { SESSION_STATUS_ICONS } from '../src/lib/session-status';
 import { sshHostProblem, sshHostsLine, sshHostsOf } from '../src/lib/ssh-hosts';
 import { sessionGrantLabel, toolLabel } from '../src/lib/tool-labels';
 import { toolMeta } from '../src/lib/tool-meta';
 
-import type { Project } from '../../shared/protocol/project.schema';
+import type { HostRef, Project } from '../../shared/protocol/project.schema';
 import type { SessionSummary } from '../../shared/protocol/session.schema';
 
 describe('blocksOf', () => {
@@ -141,9 +146,9 @@ describe('activityLine', () => {
 });
 
 describe('groupByProject', () => {
-  const session = (id: string, workspace: string): SessionSummary => ({
+  const session = (id: string, workspace: string, host: HostRef = { kind: 'local' }): SessionSummary => ({
     concise: false,
-    host: { kind: 'local' },
+    host,
     id,
     jobs: [],
     kind: 'code',
@@ -157,15 +162,16 @@ describe('groupByProject', () => {
     updatedAt: '2026-10-23T12:00:00.000Z',
     workspace,
   });
-  const project = (id: string, path: string): Project => ({
+  const project = (id: string, path: string, host: HostRef = { kind: 'local' }): Project => ({
     createdAt: '2026-10-23T12:00:00.000Z',
-    host: { kind: 'local' },
+    host,
     id,
     name: id,
     path,
     skillsOff: [],
     todos: [],
   });
+  const box: HostRef = { endpoint: 'build-box', kind: 'ssh' };
   const Projects = [project('shop', '/w/shop'), project('api', '/w/api'), project('blog', '/w/blog')];
 
   it('lists the projects worked in last first, then the others by name', () => {
@@ -187,12 +193,36 @@ describe('groupByProject', () => {
     ]);
   });
 
+  it('keeps the same folder on two hosts apart', () => {
+    const here = project('here', '/w/app');
+    const there = project('there', '/w/app', box);
+    const sessions = [session('local', '/w/app'), session('remote', '/w/app', box)];
+    expect(sessionsInProject(there, sessions).map((each) => each.id)).toEqual(['remote']);
+    expect(sessionsInProject(here, sessions).map((each) => each.id)).toEqual(['local']);
+    expect(
+      groupByProject([here, there], sessions).map((group) => [
+        group.projectId,
+        group.sessions.map((each) => each.id),
+      ])
+    ).toEqual([
+      [here.id, ['local']],
+      [there.id, ['remote']],
+    ]);
+  });
+
   it('starts a new session in the project asked for, else the last one worked in, else the first', () => {
     const sessions = [session('a', '/w/api')];
     expect(preferredProject(Projects, sessions, 'blog')?.id).toBe('blog');
     expect(preferredProject(Projects, sessions, undefined)?.id).toBe('api');
     expect(preferredProject(Projects, [], 'gone')?.id).toBe('shop');
     expect(preferredProject([], [], undefined)).toBeUndefined();
+  });
+
+  it('starts it in the project of the host the last session worked on', () => {
+    const here = project('here', '/w/app');
+    const there = project('there', '/w/app', box);
+    expect(preferredProject([here, there], [session('a', '/w/app', box)], undefined)?.id).toBe('there');
+    expect(preferredProject([here, there], [session('a', '/w/app')], undefined)?.id).toBe('here');
   });
 });
 

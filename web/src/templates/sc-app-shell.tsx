@@ -14,7 +14,7 @@ import { ScBrand } from '../atoms/sc-brand';
 import { ScElement } from '../base/sc-element';
 import { daemonLine } from '../lib/daemon-lines';
 import { matchCommands, PALETTE_ACTION, paletteCommands, paletteTarget } from '../lib/palette';
-import { removalConsequence } from '../lib/project-groups';
+import { removalConsequence, sessionInProject, sessionsInProject } from '../lib/project-groups';
 import { PHONE_TOPIC, SETTINGS_TOPICS } from '../lib/settings-topics';
 import { NAV_ID, projectNavId, ScNav, sessionNavId } from '../organisms/sc-nav';
 import { ScProjectDialog } from '../organisms/sc-project-dialog';
@@ -323,7 +323,7 @@ export class ScAppShell extends ScElement {
     if (!project) {
       return;
     }
-    const sessions = allSessions().filter((session) => session.workspace === project.path).length;
+    const sessions = sessionsInProject(project, allSessions()).length;
     const confirmed = await confirmDialog({
       confirmLabel: 'Remove',
       heading: `Remove ${project.name}?`,
@@ -336,7 +336,8 @@ export class ScAppShell extends ScElement {
     daemon.send({ projectId, type: 'removeProject' });
     const shown = this._route;
     const onProject = shown?.name === 'project' && shown.params.id === projectId;
-    const inProject = shown?.name === 'session' && findSession(shown.params.id ?? '')?.workspace === project.path;
+    const openSession = shown?.name === 'session' ? findSession(shown.params.id ?? '') : undefined;
+    const inProject = openSession !== undefined && sessionInProject(project, openSession);
     if (onProject || inProject) {
       navigate(HOME_PATH);
     }
