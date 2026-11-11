@@ -2,6 +2,29 @@
 
 All notable changes to swcode are documented here.
 
+## [0.9.0] - 2026-11-11
+
+### Added
+
+- Pins: hover a message of a session and pin it, and the side panel lists it by its first words. A pin opens the conversation back at that message, even when it sits many pages up, and the message's own pin takes it off again.
+- The agent opens and closes the project's todos with `todo` and `closetodo`: ask it to plan the work and the project's Todo tab lists what it wrote, ticked as it goes.
+- The command line runs swcode as a service: `swcode service install` registers the daemon to start when you log in — a systemd user unit on Linux, a logon task on Windows — and `swcode service uninstall` takes it out, keeping settings and sessions. `swcode start` and `swcode stop` run the daemon in the background without a service, and `swcode --update` installs the latest release and restarts the running daemon.
+
+### Removed
+
+- `swcode remote`, which ran the daemon on an SSH host for a while: projects on that host still open over SSH from the daemon on this computer.
+- The macOS build, which is no longer published: `install.sh` installs on Linux and WSL.
+
+### Fixed
+
+- A project is its host and folder: a WSL or SSH project and a local one at the same path no longer list each other's sessions, in the project's page, the removal dialog or the new-session pick.
+- A session opened while it works is never blank: the conversation measures what it drew and asks for older events until they fill the window.
+- The desktop app asks a computer's swcode before switching to it, and stays on the one shown, saying which computer did not answer, instead of replacing the app with Edge's own error page.
+
+### Maintenance
+
+- The compaction tests' context sizes and file follow the longer prompt and tool list: the turn compacts after the read, as intended, instead of before it.
+
 ## [0.8.0] - 2026-11-10
 
 ### Added
