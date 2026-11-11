@@ -1,5 +1,5 @@
 import { css } from '@jadis/core';
-import { JlIcon, JlSelect } from '@syware/jlib';
+import { JlIcon, JlSelect, toast } from '@syware/jlib';
 
 import { THIS_COMPUTER } from '../../../shared/protocol/desktop.schema';
 import { ScElement } from '../base/sc-element';
@@ -10,14 +10,17 @@ import { BASE_STYLES, PILL_SELECT_STYLES } from '../styles/shared';
 import styles from './sc-computer-switch.css?inline';
 
 import type { SelectOption } from '@syware/jlib';
-import type { Computer } from '../../../shared/protocol/desktop.schema';
+import type { Computer, DesktopAnswer } from '../../../shared/protocol/desktop.schema';
 import type { IconName } from '../lib/icons';
+import type { ComputerAnswers, DesktopAnswerMap } from '../types/desktop.types';
 
 const MANAGE = 'manage';
 const MANAGE_LABEL = 'Manage computers…';
 const COMPUTERS_TOPIC = 'computers';
 const UNREACHABLE = ' (not reachable)';
 const THIS_COMPUTER_NAME = 'This computer';
+const DID_NOT_ANSWER = 'did not answer';
+const CHECK_SWCODE = 'Is swcode running there, and listening on the network?';
 const LOOPBACK_NAMES: ReadonlySet<string> = new Set(['localhost', '127.0.0.1', '[::1]']);
 const PLACE_ICONS: Readonly<Record<'local' | 'remote', IconName>> = { local: 'laptop', remote: 'server' };
 
@@ -42,6 +45,12 @@ export class ScComputerSwitch extends ScElement {
   readonly computer = this.useChange('', () => this.renderBrowser());
 
   private _current: string = THIS_COMPUTER;
+
+  // The answers about the computers this switch shows; a refused one comes from the settings' form.
+  private readonly _answers: ComputerAnswers = {
+    computers: (answer) => this.renderComputers(answer.computers, answer.current),
+    computerUnreachable: (answer) => this.refuse(answer),
+  };
 
   private readonly _refs = this.useRefs((ref) => ({
     badge: ref('.badge'),
@@ -76,12 +85,19 @@ export class ScComputerSwitch extends ScElement {
     this._refs.name.hidden = true;
     this._refs.select.hidden = false;
     this._refs.select.events.register('change', (value) => this.choose(value));
-    onDesktopAnswer((answer) => {
-      if (answer.type === 'computers') {
-        this.renderComputers(answer.computers, answer.current);
-      }
-    }, this.killSignal);
+    onDesktopAnswer((answer) => this.hear(answer), this.killSignal);
     askDesktop({ type: 'listComputers' });
+  }
+
+  private hear(answer: DesktopAnswer): void {
+    if (answer.type === 'computerRefused') {
+      return;
+    }
+    this.handle(answer.type, answer);
+  }
+
+  private handle<Type extends keyof ComputerAnswers>(type: Type, answer: DesktopAnswerMap[Type]): void {
+    this._answers[type](answer);
   }
 
   private renderComputers(computers: readonly Computer[], current: string): void {
@@ -90,6 +106,12 @@ export class ScComputerSwitch extends ScElement {
     this._refs.select.value.set(current);
     this.renderPlace(current !== THIS_COMPUTER);
     applyComputerColor(computers.find((computer) => computer.id === current)?.color);
+  }
+
+  /** A computer that is off cannot be shown: the pill goes back to the one the window is on, and says which. */
+  private refuse(answer: DesktopAnswerMap['computerUnreachable']): void {
+    this._refs.select.value.set(this._current);
+    toast({ heading: `${answer.name} ${DID_NOT_ANSWER}`, text: CHECK_SWCODE, tone: 'danger' });
   }
 
   /** A browser knows the daemon's machine, and whether the page came from this one. */

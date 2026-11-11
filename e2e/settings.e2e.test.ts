@@ -14,11 +14,12 @@ afterEach(stopRigs);
 const KEPT_TOKEN = "localStorage.getItem('swcode.token') !== null";
 
 const GMKTEC = { address: 'http://gmktec:4500', id: 'g1', name: 'gmktec', reachable: true };
+const OFFLINE = { address: 'http://offline:4500', id: 'o1', name: 'offline', reachable: false };
 
 /**
  * Run in the page before it loads: the desktop app around it, as WebView2 lets the page talk to it, showing a
  * computer among those it knows. It keeps what the page asked, sends each message back as WebView2 does, and pairs
- * with gmktec on the code 123456.
+ * with gmktec on the code 123456. Opening one that is not reachable answers as the app does: it did not answer.
  */
 const fakeDesktopApp = (current = 'local', others: readonly object[] = []): string => `(() => {
   const listeners = [];
@@ -40,6 +41,11 @@ const fakeDesktopApp = (current = 'local', others: readonly object[] = []): stri
       }
       if (request.type === 'addComputer') {
         computers.push(${JSON.stringify(GMKTEC)});
+      }
+      const opened = request.type === 'openComputer' ? computers.find((computer) => computer.id === request.id) : undefined;
+      if (opened && !opened.reachable) {
+        answer({ id: opened.id, name: opened.name, type: 'computerUnreachable' });
+        return;
       }
       answer({ computers, current: '${current}', type: 'computers' });
     },
@@ -268,6 +274,21 @@ describe('the computer', () => {
     await phone.goto(rig.link);
     await phone.locator('sc-computer-switch .badge', { hasText: 'Remote' }).waitFor({ state: 'attached' });
     expect(await overflow(phone)).toBe(0);
+  });
+
+  it('stays on the one it shows when the computer picked does not answer, and says which', async () => {
+    const rig = await start({ replies: [] });
+    const page = await rig.browser.newPage({ viewport: DESKTOP });
+    await page.addInitScript(fakeDesktopApp('local', [OFFLINE]));
+    await page.goto(rig.link);
+    const where = page.locator('sc-nav sc-computer-switch');
+    const computers = where.locator('jl-select select');
+    await where.locator('option[value="o1"]').waitFor({ state: 'attached' });
+
+    await computers.selectOption('o1');
+    await page.getByText('offline did not answer').waitFor();
+    expect(await computers.inputValue()).toBe('local');
+    expect(await page.getByText('Is swcode running there, and listening on the network?').isVisible()).toBe(true);
   });
 });
 

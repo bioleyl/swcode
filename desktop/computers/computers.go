@@ -42,6 +42,9 @@ const (
 	linkRefused = "That computer's swcode refused the link's token."
 	notSwcode   = "%s answered, but not as swcode does."
 	unreachable = "%s did not answer: is swcode running there, and listening on the network (SWCODE_HOST)?"
+
+	// probeLimit is how long swcode at another computer has to answer before the app says it does not.
+	probeLimit = 2 * time.Second
 )
 
 // Computer is another computer's swcode, as this app reaches it.
@@ -215,6 +218,23 @@ func check(ctx context.Context, client *http.Client, address, token string) erro
 		return fmt.Errorf(notSwcode, address)
 	}
 	return nil
+}
+
+// Answers tells whether swcode at another computer answers within probeLimit: its health route, which needs no
+// token. The window asks before it shows that computer, whose swcode may be off.
+func Answers(ctx context.Context, client *http.Client, address string) bool {
+	ctx, cancel := context.WithTimeout(ctx, probeLimit)
+	defer cancel()
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, address+protocol.EndpointHealth, nil)
+	if err != nil {
+		return false
+	}
+	response, err := client.Do(request)
+	if err != nil {
+		return false
+	}
+	_ = response.Body.Close()
+	return response.StatusCode == http.StatusOK
 }
 
 func call(ctx context.Context, client *http.Client, method, target, token string, body []byte) (int, []byte, error) {

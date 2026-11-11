@@ -110,6 +110,10 @@ export class ScComputers extends ScElement {
       this._refs.address.value.set('');
       this._refs.code.value.set('');
     },
+    computerUnreachable: () => {
+      // The switch says that computer did not answer; the list says which ones are not reachable.
+      askDesktop({ type: 'listComputers' });
+    },
   };
 
   private readonly _refs = this.useRefs((ref) => ({

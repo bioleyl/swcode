@@ -3,9 +3,11 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -38,6 +40,8 @@ const (
 	wmDaemonStarted = wmApp + 2
 	// A second start of the app asks the first to open its window.
 	wmOpen = wmApp + 6
+	// Another computer answered the app's question whether it is there.
+	wmComputerTried = wmApp + 7
 
 	computersFile = "computers.json"
 	// The app told once that it stays in the notification area.
@@ -92,6 +96,10 @@ type window struct {
 	places    string
 	computers *computers.Store
 	pairings  chan added
+	// The chosen computer's answer, from the goroutine that asks it, and the computer chosen last: only that one
+	// moves the window.
+	tried  chan tried
+	chosen string
 	// The computer the page shows: this one, or another paired with the app.
 	shown   string
 	tray    trayIcon
@@ -103,6 +111,14 @@ type window struct {
 type restart struct {
 	run *daemonRun
 	err error
+}
+
+// tried is a computer the person chose, and whether its swcode answered.
+type tried struct {
+	id      string
+	name    string
+	link    string
+	answers bool
 }
 
 var app *window
@@ -122,6 +138,7 @@ var handlers = map[uint32]func(w *window, hwnd, wParam, lParam uintptr) uintptr{
 	wmTray:            (*window).trayEvent,
 	wmNotice:          (*window).noticesCame,
 	wmComputerAdded:   (*window).computerAdded,
+	wmComputerTried:   (*window).computerTried,
 	wmOpen:            (*window).openAsked,
 }
 
@@ -157,7 +174,7 @@ func openWindow(d *daemon, first *daemonRun, folders appFolders, opened bool) er
 	app = &window{
 		computers: computers.Load(filepath.Join(folders.data, computersFile)), current: first, daemon: d,
 		folders: folders, look: look, pairings: make(chan added, 1), places: filepath.Join(folders.data, placeFile),
-		restarted: make(chan restart, 1),
+		restarted: make(chan restart, 1), tried: make(chan tried, 1),
 	}
 	hwnd, err := createWindow(look)
 	if err != nil {
@@ -228,12 +245,58 @@ func (w *window) display(id string) {
 	w.tray.setTip(title)
 }
 
-// showComputer opens the window on a computer's swcode, at a page of it.
+// showComputer opens the window on a computer's swcode, at a page of it. Another computer is asked first whether
+// it answers: one that is off leaves the window where it is, and the page says why, rather than Edge's own error
+// page.
 func (w *window) showComputer(id, path string) {
 	link, known := w.linkOf(id, path)
 	if !known {
 		return
 	}
+	w.chosen = id
+	if id == protocol.ThisComputer {
+		w.showComputerNow(id, link)
+		return
+	}
+	computer, other := w.computers.Find(id)
+	if !other {
+		return
+	}
+	go w.tryComputer(computer, link)
+}
+
+// tryComputer asks another computer's swcode whether it answers, away from the window's thread, which is told
+// either way.
+func (w *window) tryComputer(computer computers.Computer, link string) {
+	answers := computers.Answers(context.Background(), http.DefaultClient, computer.Address)
+	w.tried <- tried{answers: answers, id: computer.ID, link: link, name: computer.Name}
+	postMessage(w.hwnd, wmComputerTried, 0)
+}
+
+// computerTried: the chosen computer answers, and the window shows it, or it does not, and the page the person is
+// on says so.
+func (w *window) computerTried(_, _, _ uintptr) uintptr {
+	result := <-w.tried
+	if result.id != w.chosen {
+		return 0
+	}
+	if result.answers {
+		w.showComputerNow(result.id, result.link)
+		return 0
+	}
+	if w.webview == nil {
+		// No page is there to say it: the window opens on the computer it shows.
+		w.openOrSay()
+		return 0
+	}
+	// The page the person is on says why it stays: the window comes up when the choice was the icon's menu.
+	w.bringUp()
+	w.answer(protocol.DesktopAnswer{Value: protocol.DesktopAnswerComputerUnreachable{ID: result.id, Name: result.name}})
+	return 0
+}
+
+// showComputerNow puts a page of a computer's swcode in the window, and names that computer in the window's title.
+func (w *window) showComputerNow(id, link string) {
 	w.display(id)
 	_ = w.computers.SetCurrent(id)
 	if w.webview == nil {

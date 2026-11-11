@@ -146,6 +146,7 @@ Read `README.md` first.
 - **A project is its host and folder**, so a session is in it only when both match (`sessionInProject`/`sessionsInProject` in `web/src/lib/project-groups.ts`). Comparing `workspace` alone mixes a remote (SSH/WSL) project with a local one at the same path: the project page's session list, the removal dialog and `preferredProject` did, and now all go through the helper.
 - **This machine's node is not on PATH**: `npm` and `npx` are not found in a plain shell; run `export PATH="$HOME/.nvm/versions/node/v26.12.0/bin:$PATH"` first.
 - **On a clean HEAD 16dffb8 (2026-11-11) `check:go` still fails only in `daemon/app`**: `TestATurnSummarizesOnceTheConversationNearsTheEndOfTheContext` and `TestTheNotesAreReadAgainAfterACompaction` fail (the prompt's token window); `gofmt -l` and both vets are clean. At 960eaca `gofmt` also listed `daemon/tools/toolbox.go`. Check a baseline worktree before attributing either to your change.
+- The desktop app asks a computer's open `/api/health` (`computers.Answers`, 2s) before it navigates the window to it, and answers the page `computerUnreachable { id, name }` instead when nothing answers: `sc-computer-switch` puts the pill back on the computer shown and toasts why, `sc-computers` reads its list again. Without this Edge shows its own "can't reach this page". Only choosing asks: `window.navigate` at startup still opens a last-shown remote that is off on Edge's error page.
 
 ## Commands
 

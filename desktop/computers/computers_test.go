@@ -69,6 +69,16 @@ func TestAComputerNoSwcodeAnswersOnSaysSo(t *testing.T) {
 	}
 }
 
+func TestAComputerAnswersOnlyWhileItsSwcodeIsThere(t *testing.T) {
+	test := Start(t, Options{})
+	if !computers.Answers(context.Background(), http.DefaultClient, test.Server.URL) {
+		t.Fatal("the running swcode did not answer")
+	}
+	if computers.Answers(context.Background(), http.DefaultClient, "http://127.0.0.1:1") {
+		t.Fatal("a computer with no swcode answered")
+	}
+}
+
 func TestAComputerKeepsTheNameAndColourThePersonGivesIt(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "computers.json")
 	store := computers.Load(file)

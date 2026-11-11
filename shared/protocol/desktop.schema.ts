@@ -54,9 +54,13 @@ export const DesktopRequestSchema = z.discriminatedUnion('type', [
 ]);
 export type DesktopRequest = z.infer<typeof DesktopRequestSchema>;
 
-/** What the app answers: the computers after any change, or why one could not be added. */
+/**
+ * What the app answers: the computers after any change, why one could not be added, or that the one asked for
+ * did not answer, so the window stays where it was.
+ */
 export const DesktopAnswerSchema = z.discriminatedUnion('type', [
   z.object({ computers: z.array(ComputerSchema), current: z.string(), type: z.literal('computers') }),
   z.object({ message: z.string(), type: z.literal('computerRefused') }),
+  z.object({ id: z.string(), name: z.string(), type: z.literal('computerUnreachable') }),
 ]);
 export type DesktopAnswer = z.infer<typeof DesktopAnswerSchema>;

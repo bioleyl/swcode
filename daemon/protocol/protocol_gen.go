@@ -5353,6 +5353,8 @@ func (DesktopAnswerComputers) isDesktopAnswer() {}
 
 func (DesktopAnswerComputerRefused) isDesktopAnswer() {}
 
+func (DesktopAnswerComputerUnreachable) isDesktopAnswer() {}
+
 func (u DesktopAnswer) MarshalJSON() ([]byte, error) {
 	if u.Value == nil {
 		return nil, errors.New("protocol: an empty DesktopAnswer")
@@ -5380,6 +5382,12 @@ func (u *DesktopAnswer) UnmarshalJSON(data []byte) error {
 			return err
 		}
 		u.Value = value
+	case "\"computerUnreachable\"":
+		var value DesktopAnswerComputerUnreachable
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
 	default:
 		return fmt.Errorf("protocol: no DesktopAnswer with type %s", head.Key)
 	}
@@ -5390,6 +5398,7 @@ func (u *DesktopAnswer) UnmarshalJSON(data []byte) error {
 type DesktopAnswerMapper[R any] interface {
 	Computers(DesktopAnswerComputers) R
 	ComputerRefused(DesktopAnswerComputerRefused) R
+	ComputerUnreachable(DesktopAnswerComputerUnreachable) R
 }
 
 // MapDesktopAnswer calls the mapper's method for the variant u holds.
@@ -5399,6 +5408,8 @@ func MapDesktopAnswer[R any](u DesktopAnswer, m DesktopAnswerMapper[R]) R {
 		return m.Computers(value)
 	case DesktopAnswerComputerRefused:
 		return m.ComputerRefused(value)
+	case DesktopAnswerComputerUnreachable:
+		return m.ComputerUnreachable(value)
 	}
 	panic(fmt.Sprintf("protocol: an empty or unknown DesktopAnswer %T", u.Value))
 }
@@ -5431,6 +5442,20 @@ func (v DesktopAnswerComputerRefused) MarshalJSON() ([]byte, error) {
 		Key string `json:"type"`
 		plain
 	}{"computerRefused", p})
+}
+
+type DesktopAnswerComputerUnreachable struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+func (v DesktopAnswerComputerUnreachable) MarshalJSON() ([]byte, error) {
+	type plain DesktopAnswerComputerUnreachable
+	p := plain(v)
+	return json.Marshal(struct {
+		Key string `json:"type"`
+		plain
+	}{"computerUnreachable", p})
 }
 
 // DesktopRequest holds one of its variants, told apart by "type".
