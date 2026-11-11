@@ -6,6 +6,9 @@
 /** What a scrolling element says about itself while it holds a page of a conversation. */
 export type WindowScroller = Pick<Element, 'clientHeight' | 'scrollHeight' | 'scrollTop'>;
 
+/** The window a conversation is shown in: the room it has. */
+export type WindowRoom = Pick<Element, 'clientHeight'>;
+
 /**
  * Whether the top of what a scrolling element holds is in view: the end of the events it holds, where older ones
  * would be added. `top` is how far below the top still counts as reaching it.
@@ -21,8 +24,9 @@ export const scrollAfterOlder = (scroller: Pick<Element, 'scrollHeight' | 'scrol
   atEnd ? scroller.scrollHeight : scroller.scrollTop;
 
 /**
- * Whether a conversation opened on its end should ask for older events at once: what it holds does not fill the
- * window, so people see empty space above rather than the beginning of what the session holds.
+ * Whether a conversation opened on its end should ask for older events at once: what it holds is shorter than the
+ * window, so people see empty space above rather than the beginning of what the session holds. `content` is the
+ * height of what was drawn, which the element's own `scrollHeight` never tells: it is at least the client height.
  */
-export const fillsWindow = (scroller: WindowScroller, olderLeft: number): boolean =>
-  olderLeft > 0 && scroller.scrollHeight < scroller.clientHeight;
+export const fillsWindow = (room: WindowRoom, olderLeft: number, content: number): boolean =>
+  olderLeft > 0 && content < room.clientHeight;

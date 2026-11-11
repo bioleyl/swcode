@@ -263,6 +263,7 @@ export class ScConversation extends ScElement {
 
   private readonly _refs = this.useRefs((ref) => ({
     cancel: ref<JlButton>('.cancel'),
+    column: ref('.column'),
     diffs: ref(ScCheckpointDiff),
     empty: ref('.empty'),
     items: ref('.items'),
@@ -399,7 +400,8 @@ export class ScConversation extends ScElement {
 
   /** The beginning of a conversation too short to fill the window comes by itself: no scrollbar to reach it with. */
   private askForRoom(): void {
-    if (this._topState === 'none' && fillsWindow(this, this._older)) {
+    const drawn = this._refs.column.getBoundingClientRect().height;
+    if (this._topState === 'none' && fillsWindow(this, this._older, drawn)) {
       this.watchTop();
     }
   }

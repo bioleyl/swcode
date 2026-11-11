@@ -9,6 +9,7 @@ import {
   EDIT_FLOW,
   GREET,
   LAPTOP,
+  navItem,
   overflow,
   PHONE,
   settle,
@@ -388,5 +389,62 @@ describe('subagents', () => {
     expect(await page.locator('session-page sc-tool-row[open]').count()).toBe(0);
     await page.getByText('Report of “Find the store”, given to the agent').waitFor();
     expect(JSON.stringify(rig.llama.requests.at(-1))).toContain('src/tools.ts lists them.');
+  });
+});
+
+// The events a session page opens with (`HISTORY_EVENTS` in session-page.tsx): a session's history comes a page
+// that long at a time.
+const SHOWN_EVENTS = 120;
+// Subagents whose activity alone fills that page: none of their events draws a row of the conversation.
+const QUIET_SUBAGENTS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+// How long each of their steps takes, and how many they take: they run past the page they fill.
+const QUIET_STEP_MS = 250;
+const QUIET_STEPS = 30;
+
+/** Whether the page of events a session shows holds only subagent activity, which the conversation draws nothing for. */
+const quietPage = (events: readonly { kind: string }[]): boolean =>
+  events.length === SHOWN_EVENTS && events.every((event) => event.kind === 'subagentActivity');
+
+describe('a session whose shown page draws nothing', () => {
+  it('brings the older events by itself rather than showing an empty conversation', async () => {
+    const rig = await start({
+      files: { 'src/greet.ts': GREET },
+      replies: [
+        {
+          toolCalls: QUIET_SUBAGENTS.map((name) => ({
+            arguments: { description: name, prompt: `QUIET-${name}` },
+            name: 'agent',
+          })),
+        },
+        { delayMs: QUIET_STEP_MS * QUIET_STEPS * 2, text: 'The end.' },
+      ],
+      scripts: Object.fromEntries(
+        QUIET_SUBAGENTS.map((name) => [
+          `QUIET-${name}`,
+          Array.from({ length: QUIET_STEPS }, () => ({
+            delayMs: QUIET_STEP_MS,
+            toolCalls: [{ arguments: { path: 'src/greet.ts' }, name: 'read' }],
+          })),
+        ])
+      ),
+      slots: QUIET_SUBAGENTS.length + 1,
+    });
+    const page = await rig.browser.newPage({ viewport: DESKTOP });
+    await page.goto(rig.link);
+    await page.locator('home-page textarea').fill('Start');
+    await page.locator('home-page textarea').press('Enter');
+
+    // The subagents' activities fill the page the session shows while they run.
+    await expect
+      .poll(() => quietPage(rig.events().slice(-SHOWN_EVENTS)), { timeout: QUIET_STEP_MS * QUIET_STEPS })
+      .toBe(true);
+    await navItem(page, 'New session').click();
+    await settle(page);
+    await navItem(page, 'Start').click();
+    await page.evaluate('0');
+
+    // The page it shows draws no row: the first message comes from a page above, asked by the conversation itself.
+    await page.locator('session-page sc-conversation').getByText('Start', { exact: true }).waitFor();
+    expect(await overflow(page)).toBe(0);
   });
 });

@@ -255,17 +255,18 @@ describe('the conversation’s window of events', () => {
   });
 
   describe('fillsWindow', () => {
+    // What a page drew, in pixels: an element's own scroll height never says it, being the window at least.
     it('asks for older events while what is shown is shorter than the window', () => {
-      expect(fillsWindow(box(0, 40), 300)).toBe(true);
+      expect(fillsWindow(box(0), 300, 40)).toBe(true);
     });
 
     it('never asks when the session holds nothing older', () => {
-      expect(fillsWindow(box(0, 40), 0)).toBe(false);
+      expect(fillsWindow(box(0), 0, 40)).toBe(false);
     });
 
     it('never asks once the window is full of events', () => {
-      expect(fillsWindow(box(0, 100), 300)).toBe(false);
-      expect(fillsWindow(box(0, 500), 300)).toBe(false);
+      expect(fillsWindow(box(0), 300, 100)).toBe(false);
+      expect(fillsWindow(box(0), 300, 500)).toBe(false);
     });
   });
 });
