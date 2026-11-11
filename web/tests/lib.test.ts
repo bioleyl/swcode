@@ -391,7 +391,7 @@ describe('the command palette', () => {
 
   it('says what a command stands for', () => {
     expect(paletteTarget('session:b')).toEqual({ id: 'b', kind: 'session' });
-    expect(paletteTarget('match:b')).toEqual({ id: 'b', kind: 'session' });
+    expect(paletteTarget('match:b|cache')).toEqual({ eventId: 'cache', id: 'b', kind: 'match' });
     expect(paletteTarget('settings:plugins')).toEqual({ id: 'plugins', kind: 'topic' });
     expect(paletteTarget('phone')).toEqual({ action: 'phone', kind: 'action' });
     expect(paletteTarget('elsewhere')).toBeUndefined();
@@ -399,15 +399,15 @@ describe('the command palette', () => {
 
   it('lists the sessions found in their conversations, where and the words around, leaving out those it does not know', () => {
     const matches = [
-      { sessionId: 'b', snippet: '…the prompt cache is lost…' },
-      { sessionId: 'gone', snippet: 'cache' },
+      { eventId: 'e1', sessionId: 'b', snippet: '…the prompt cache is lost…' },
+      { eventId: 'e2', sessionId: 'gone', snippet: 'cache' },
     ];
     expect(matchCommands(matches, [session('a', 'idle'), session('b', 'working')])).toEqual([
       {
         description: 'shop · …the prompt cache is lost…',
         group: 'In conversations',
         icon: SESSION_STATUS_ICONS.working,
-        id: 'match:b',
+        id: 'match:b|e1',
         label: 'Session b',
         result: true,
       },

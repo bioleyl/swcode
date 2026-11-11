@@ -40,6 +40,7 @@ import {
 import { allProjects, askForProject, findProject, projectListBus } from '../services/project-list';
 import { seenBus, seenSessions } from '../services/seen-sessions';
 import { allSessions, findSession, sessionListBus } from '../services/session-list';
+import { revealInSession } from '../services/session-reveal';
 import { searchSessions, sessionSearchBus } from '../services/session-search';
 import { loadStartup } from '../services/startup';
 import { offerSwcodeBase, readSwcodeBase } from '../services/swcode-base';
@@ -122,6 +123,7 @@ export class ScAppShell extends ScElement {
 
   private readonly _palette: { [Kind in keyof PaletteTargetMap]: (target: PaletteTargetMap[Kind]) => void } = {
     action: (target) => this.runAction(target.action),
+    match: (target) => this.openMatch(target),
     project: (target) => navigate(projectPath(target.id)),
     session: (target) => navigate(sessionPath(target.id)),
     topic: (target) => navigate(settingsPath(target.id)),
@@ -295,6 +297,12 @@ export class ScAppShell extends ScElement {
 
   private goTo<Kind extends keyof PaletteTargetMap>(kind: Kind, target: PaletteTargetMap[Kind]): void {
     this._palette[kind](target);
+  }
+
+  /** A session found by its conversation: it opens on the event that says the words, which the page marks. */
+  private openMatch(target: PaletteTargetMap['match']): void {
+    revealInSession(target.id, target.eventId);
+    navigate(sessionPath(target.id));
   }
 
   private runAction(action: PaletteTargetMap['action']['action']): void {

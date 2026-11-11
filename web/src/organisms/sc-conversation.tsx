@@ -43,6 +43,8 @@ const TOP_DISTANCE_PX = 120;
 const TOP_LOADING = 'Looking for earlier messages…';
 // How long the message a pin points at stays marked once the view reached it.
 const PIN_FLASH_MS = 1_200;
+// A search's match is marked longer: the view may scroll a long way, through older pages, to reach it.
+const MATCH_FLASH_MS = 2_400;
 
 /** Holds rows together, for one of the rare events that draws several (a subagent's report has its note). */
 const fragmentOf = (nodes: readonly Element[]): DocumentFragment => {
@@ -137,6 +139,8 @@ export class ScConversation extends ScElement {
   // The ids of the pinned messages, and the message a pin asked to reach before its page came.
   private _pinned = new Set<string>();
   private _reveal = '';
+  // How long the row reached stays marked: a search's match a while longer than a pin's.
+  private _flash = PIN_FLASH_MS;
 
   private readonly _messages = new Map<string, ScMessage>();
   // The thoughts above them, by their event's id, which streams as one message's does.
@@ -161,13 +165,16 @@ export class ScConversation extends ScElement {
     },
     checkpointRestored: (event) => this.note(restoredText(event.files.length), 'done'),
     checkpointSaved: (event) => this.add(this.checkpointNode(event.turnId, event.files)),
-    contextCompacted: (event) =>
-      this.add(
+    contextCompacted: (event) => {
+      const summary = (
         <details class="compaction">
           <summary>Earlier messages were summarized to save context</summary>
           <p>{event.summary}</p>
         </details>
-      ),
+      );
+      summary.dataset.event = event.id;
+      this.add(summary);
+    },
     passwordAnswered: (event) => this.closeRequest(event.requestId),
     passwordRequested: (event) => this.openPassword(event),
     permissionAnswered: (event) => this.closeRequest(event.requestId),
@@ -239,6 +246,7 @@ export class ScConversation extends ScElement {
     },
     toolCall: (event) => {
       const row: ScToolRow = <ScToolRow tool={event.tool} summary={event.summary} />;
+      row.dataset.event = event.callId;
       this._rows.set(event.callId, row);
       this.add(row);
       this.doing({ kind: 'running', summary: event.summary, tool: event.tool });
@@ -417,7 +425,17 @@ export class ScConversation extends ScElement {
 
   /** Brings the message a pin points at into view, asking for the older pages before it while it is not drawn. */
   reveal(eventId: string): void {
+    this.revealRow(eventId, PIN_FLASH_MS);
+  }
+
+  /** Brings the event a search found into view, marked longer: the view may scroll a long way to reach it. */
+  revealMatch(eventId: string): void {
+    this.revealRow(eventId, MATCH_FLASH_MS);
+  }
+
+  private revealRow(eventId: string, flashMs: number): void {
     this._reveal = eventId;
+    this._flash = flashMs;
     this.revealShown();
   }
 
@@ -442,9 +460,13 @@ export class ScConversation extends ScElement {
 
   /** Marks a message a moment, where the view landed. */
   private shine(row: HTMLElement): void {
+    // A summary's words are folded: the row opens, so what a search found shows.
+    if (row instanceof HTMLDetailsElement) {
+      row.open = true;
+    }
     row.scrollIntoView({ behavior: 'smooth', block: 'center' });
     row.classList.add('found');
-    setTimeout(() => row.classList.remove('found'), PIN_FLASH_MS);
+    setTimeout(() => row.classList.remove('found'), this._flash);
   }
 
   /** The beginning of a conversation too short to fill the window comes by itself: no scrollbar to reach it with. */

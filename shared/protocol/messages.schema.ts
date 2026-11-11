@@ -31,10 +31,14 @@ export const PeekStateSchema = z.enum(PEEK_STATES);
 export type PeekState = z.infer<typeof PeekStateSchema>;
 
 /**
- * A session whose conversation says what the palette's search typed: where it says it, a line around the words (the
- * person's message, the model's answer, a summary, or a tool call's file or command).
+ * A session whose conversation says what the palette's search typed: the event that says it last, a line around the
+ * words there (the person's message, the model's answer, a summary, or a tool call's file or command).
  */
-export const SessionMatchSchema = z.object({ sessionId: z.string(), snippet: z.string() });
+export const SessionMatchSchema = z.object({
+  eventId: z.string(),
+  sessionId: z.string(),
+  snippet: z.string(),
+});
 export type SessionMatch = z.infer<typeof SessionMatchSchema>;
 
 /** How much of a terminal the app shows, in characters: a shell is kept the same size as the view that types in it. */

@@ -21,8 +21,10 @@ export const PALETTE_ACTION = {
 type PaletteAction = (typeof PALETTE_ACTION)[keyof typeof PALETTE_ACTION];
 
 const SESSION_PREFIX = 'session:';
-// A session found in its conversation: the same session may be listed by its title too.
+// A session found in its conversation: the same session may be listed by its title too. Its id names the session and
+// the event the words are in.
 const MATCH_PREFIX = 'match:';
+const MATCH_SEPARATOR = '|';
 const PROJECT_PREFIX = 'project:';
 const TOPIC_PREFIX = 'settings:';
 const GROUP = {
@@ -81,11 +83,15 @@ const sessionCommand = (session: SessionSummary): PaletteCommand => ({
   label: session.title,
 });
 
+/** The id of the command that opens a session on the event its conversation says the search words in. */
+const matchId = (sessionId: string, eventId: string): string =>
+  `${MATCH_PREFIX}${encodeURIComponent(sessionId)}${MATCH_SEPARATOR}${encodeURIComponent(eventId)}`;
+
 const matchCommand = (session: SessionSummary, match: SessionMatch): PaletteCommand => ({
   description: `${sessionPlaceName(session)} · ${match.snippet}`,
   group: GROUP.conversations,
   icon: SESSION_STATUS_ICONS[liveStatus(session)],
-  id: `${MATCH_PREFIX}${session.id}`,
+  id: matchId(session.id, match.eventId),
   label: session.title,
   result: true,
 });
@@ -134,15 +140,23 @@ export function matchCommands(
   });
 }
 
+/** The session a found conversation is in, and the event the palette found it in. */
+const matchTarget = (rest: string): PaletteTarget | undefined => {
+  const [sessionId, eventId] = rest.split(MATCH_SEPARATOR).map(decodeURIComponent);
+  return sessionId === undefined || eventId === undefined ? undefined : { eventId, id: sessionId, kind: 'match' };
+};
+
 /** What a command the palette gave stands for; nothing for an id it never made. */
 export function paletteTarget(id: string): PaletteTarget | undefined {
   if (isAction(id)) {
     return { action: id, kind: 'action' };
   }
+  if (id.startsWith(MATCH_PREFIX)) {
+    return matchTarget(id.slice(MATCH_PREFIX.length));
+  }
   const prefixed = (
     [
       [SESSION_PREFIX, 'session'],
-      [MATCH_PREFIX, 'session'],
       [PROJECT_PREFIX, 'project'],
       [TOPIC_PREFIX, 'topic'],
     ] as const

@@ -31,6 +31,7 @@ import { markSeen } from '../services/seen-sessions';
 import { deleteSession } from '../services/session-delete';
 import { findSession, sessionListBus } from '../services/session-list';
 import { restoreCheckpoint } from '../services/session-restore';
+import { sessionRevealBus, takeReveal } from '../services/session-reveal';
 import { setSidePanelOpen, sidePanelOpen } from '../services/side-panel';
 import { allTerminals, terminalKey, terminalListBus, terminalsIn } from '../services/terminals';
 import { BASE_STYLES } from '../styles/shared';
@@ -109,6 +110,8 @@ export class SessionPage extends ScElement {
   private _events: SessionEvent[] = [];
   // Whether this page has its history yet: the next answer is a page of older events, not the conversation itself.
   private _opened = false;
+  // The event a search found in this session, until the conversation is drawn and marks it.
+  private _found = '';
   // The terminal drawn in the conversation's room, if one is; and whether the next terminalOpened is one this page
   // just asked for, which it then shows.
   private _shownTerminal = '';
@@ -157,6 +160,7 @@ export class SessionPage extends ScElement {
           this._opened = true;
           this._events = [...message.events];
           this._refs.conversation.load(message.events, message.keptBack, message.streaming);
+          this.revealFound();
         }
         this._refs.panel.agents.set(agentsOf(this._events));
         this._refs.plan.show(currentPlan(this._events));
@@ -225,6 +229,7 @@ export class SessionPage extends ScElement {
 
   onConnect(): void {
     this._opened = false;
+    this._found = takeReveal(this._sessionId) ?? '';
     this._events = [];
     this.watchDaemon();
     this.wireConversation();
@@ -278,6 +283,27 @@ export class SessionPage extends ScElement {
     conversation.events.register('older', (older) =>
       daemon.send({ events: HISTORY_EVENTS, keptBack: older, sessionId: this._sessionId, type: 'olderEvents' })
     );
+    this.onBus(sessionRevealBus, 'asked', ({ eventId, sessionId }) =>
+      this.forThisSession(sessionId, () => this.showFound(eventId))
+    );
+  }
+
+  /** A search found an event in this session: it is marked now, or once the conversation is drawn. */
+  private showFound(eventId: string): void {
+    this._found = eventId;
+    // This page has it now: the next page of this session has not to mark it again.
+    takeReveal(this._sessionId);
+    this.revealFound();
+  }
+
+  /** Brings the event a search found into view, once its row is drawn: the conversation marks it a moment. */
+  private revealFound(): void {
+    if (!this._opened || this._found === '') {
+      return;
+    }
+    const eventId = this._found;
+    this._found = '';
+    this._refs.conversation.revealMatch(eventId);
   }
 
   /** The composer: its message, its commands, and the session settings its chip changes. */

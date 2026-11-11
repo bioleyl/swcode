@@ -36,7 +36,7 @@ describe('the command palette', () => {
     await page.locator('session-page').getByText('Tidied.').waitFor();
   });
 
-  it('finds a session by what its conversation says, the words around shown under its title', async () => {
+  it('finds a session by what its conversation says, and opens on the message it found, marked', async () => {
     const rig = await start({ replies: [{ text: 'The badge now reads green on main.' }] });
     const page = await rig.browser.newPage({ viewport: DESKTOP });
     await page.goto(rig.link);
@@ -55,6 +55,9 @@ describe('the command palette', () => {
     await page.keyboard.press('Enter');
     await settle(page);
     await page.locator('session-page').getByText('The badge now reads green').waitFor();
+    const marked = page.locator('sc-conversation .items > .found');
+    await marked.waitFor();
+    expect(await marked.locator('.body').textContent()).toContain('The badge now reads green');
   });
 });
 

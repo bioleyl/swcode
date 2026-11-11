@@ -15,10 +15,10 @@ const (
 	snippetSide = 40
 )
 
-// Search is the sessions whose conversation says every word of the query, the newest first, each with a line around
-// the words where it says them last. It reads the person's messages, the model's answers, the summaries of compacted
-// conversations and the tool calls' few words (a file, a command), not the tools' results: they hold whole files and
-// outputs. The sessions are in memory already, so a search takes no model and no disk.
+// Search is the sessions whose conversation says every word of the query, the newest first, each with the event
+// that says them last and a line around the words in it. It reads the person's messages, the model's answers, the
+// summaries of compacted conversations and the tool calls' few words (a file, a command), not the tools' results:
+// they hold whole files and outputs. The sessions are in memory already, so a search takes no model and no disk.
 func (s *Service) Search(query string) []protocol.SessionMatch {
 	words := strings.Fields(lowered(query))
 	matches := []protocol.SessionMatch{}
@@ -28,11 +28,11 @@ func (s *Service) Search(query string) []protocol.SessionMatch {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, summary := range s.list() {
-		snippet, found := lastSaying(s.sessions[summary.ID].events, words)
+		eventID, snippet, found := lastSaying(s.sessions[summary.ID].events, words)
 		if !found {
 			continue
 		}
-		matches = append(matches, protocol.SessionMatch{SessionID: summary.ID, Snippet: snippet})
+		matches = append(matches, protocol.SessionMatch{EventID: eventID, SessionID: summary.ID, Snippet: snippet})
 		if len(matches) == maxMatches {
 			break
 		}
@@ -40,33 +40,34 @@ func (s *Service) Search(query string) []protocol.SessionMatch {
 	return matches
 }
 
-// lastSaying is a line around the words in the last of the events that says them all.
-func lastSaying(events []protocol.SessionEvent, words []string) (string, bool) {
+// lastSaying is the event that says the words last, and a line around them in it.
+func lastSaying(events []protocol.SessionEvent, words []string) (string, string, bool) {
 	for index := len(events) - 1; index >= 0; index-- {
-		text := searchedText(events[index])
+		rowID, text := searched(events[index])
 		if text == "" {
 			continue
 		}
 		if snippet, found := snippetOf(text, words); found {
-			return snippet, true
+			return rowID, snippet, true
 		}
 	}
-	return "", false
+	return "", "", false
 }
 
-// searchedText is what a search reads of an event: nothing of the events that only say how a turn went.
-func searchedText(event protocol.SessionEvent) string {
+// searched is what a search reads of an event, and the id the app draws its row by: a tool call's row is its call's,
+// the other events' their own. Nothing of the events that only say how a turn went.
+func searched(event protocol.SessionEvent) (string, string) {
 	switch value := event.Value.(type) {
 	case protocol.SessionEventUserMessage:
-		return value.Text
+		return value.ID, value.Text
 	case protocol.SessionEventAssistantMessage:
-		return value.Text
+		return value.ID, value.Text
 	case protocol.SessionEventContextCompacted:
-		return value.Summary
+		return value.ID, value.Summary
 	case protocol.SessionEventToolCall:
-		return strings.TrimSpace(string(value.Tool) + " " + value.Summary)
+		return value.CallID, strings.TrimSpace(string(value.Tool) + " " + value.Summary)
 	}
-	return ""
+	return "", ""
 }
 
 // lowered is text in small letters, letter for letter, so that a place in it is the same place in the text.

@@ -3913,6 +3913,7 @@ func (v ServerMessageSessionMatches) MarshalJSON() ([]byte, error) {
 }
 
 type SessionMatch struct {
+	EventID   string `json:"eventId"`
 	SessionID string `json:"sessionId"`
 	Snippet   string `json:"snippet"`
 }

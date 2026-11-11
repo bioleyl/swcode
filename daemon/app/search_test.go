@@ -35,9 +35,23 @@ func TestASearchFindsTheConversationsThatSayEveryWordNewestFirst(t *testing.T) {
 	if matches[0].Snippet != "The prompt CACHE is lost when the system prompt changes." {
 		t.Fatalf("snippet %q", matches[0].Snippet)
 	}
+	if answer := lastAnswer(test.Events(newer)); matches[0].EventID != answer.ID {
+		t.Fatalf("event id %q, want the answer %q", matches[0].EventID, answer.ID)
+	}
 	if len(test.App.Sessions.Search("cache France")) != 0 {
 		t.Fatal("found words said in two conversations")
 	}
+}
+
+// lastAnswer is the model's last answer of a session.
+func lastAnswer(events []protocol.SessionEvent) protocol.SessionEventAssistantMessage {
+	var answer protocol.SessionEventAssistantMessage
+	for _, event := range events {
+		if value, ok := event.Value.(protocol.SessionEventAssistantMessage); ok {
+			answer = value
+		}
+	}
+	return answer
 }
 
 func TestASearchReadsTheToolCallsButNotWhatTheyGaveBack(t *testing.T) {
@@ -50,9 +64,23 @@ func TestASearchReadsTheToolCallsButNotWhatTheyGaveBack(t *testing.T) {
 	if len(matches) != 1 || matches[0].SessionID != sessionID || !strings.Contains(matches[0].Snippet, "read src/session-store.ts") {
 		t.Fatalf("matches %+v", matches)
 	}
+	if call := lastCall(test.Events(sessionID)); matches[0].EventID != call.CallID {
+		t.Fatalf("event id %q, want the call %q", matches[0].EventID, call.CallID)
+	}
 	if len(test.App.Sessions.Search("secretWord")) != 0 {
 		t.Fatal("found a word of a file the tool read")
 	}
+}
+
+// lastCall is the agent's last tool call in a session.
+func lastCall(events []protocol.SessionEvent) protocol.SessionEventToolCall {
+	var call protocol.SessionEventToolCall
+	for _, event := range events {
+		if value, ok := event.Value.(protocol.SessionEventToolCall); ok {
+			call = value
+		}
+	}
+	return call
 }
 
 func TestASnippetKeepsAFewWordsAroundOnOneLine(t *testing.T) {
