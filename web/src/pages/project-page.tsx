@@ -130,6 +130,8 @@ export class ProjectPage extends ScElement {
   private _swcodeBaseState?: JlLoadState;
   // Each skill's switch, by its name, as last drawn.
   private readonly _switches = new Map<string, JlSwitch>();
+  // Each todo's row, by its id: a row stays itself when the lists change, so one being edited keeps what was typed.
+  private readonly _todoRows = new Map<string, ScTodoRow>();
 
   private readonly _refs = this.useRefs((ref) => ({
     choices: ref(ScSessionChoices),
@@ -509,26 +511,39 @@ export class ProjectPage extends ScElement {
 
   /** The project's todos, each done or not, with its delete button; what it still has to do, or nothing yet. */
   private renderTodos(project: Project): void {
-    this._refs.todoList.replaceChildren(...project.todos.map((todo) => this.todoRowOf(project.id, todo)));
+    const ids = new Set(project.todos.map((todo) => todo.id));
+    for (const [id, row] of this._todoRows) {
+      if (!ids.has(id)) {
+        row.remove();
+        this._todoRows.delete(id);
+      }
+    }
+    for (const [index, todo] of project.todos.entries()) {
+      this.placeTodoRow(project.id, todo, index);
+    }
     this._refs.todosEmpty.hidden = project.todos.length > 0;
   }
 
-  private todoRowOf(projectId: string, todo: ProjectTodo): Node {
+  /** A todo's row, drawn as the todo is now, at its place in the list: one already there is left where it is. */
+  private placeTodoRow(projectId: string, todo: ProjectTodo, index: number): void {
+    const row = this._todoRows.get(todo.id) ?? this.todoRowOf(projectId, todo.id);
     const session = todo.sessionId === undefined ? undefined : findSession(todo.sessionId);
-    const row = createElement(ScTodoRow, {
-      props: {
-        checked: todo.done,
-        editable: true,
-        removable: true,
-        todo,
-        ...(session === undefined
-          ? {}
-          : { sessionHref: hrefOf(sessionPath(session.id)), sessionTitle: session.title }),
-      },
-    });
-    row.events.register('change', (done) => setProjectTodoDone(projectId, todo.id, done));
-    row.events.register('remove', () => void this.deleteTodo(projectId, todo));
-    row.events.register('rename', (text) => setProjectTodoText(projectId, todo.id, text));
+    row.todo.set(todo);
+    row.checked.set(todo.done);
+    row.sessionHref.set(session ? hrefOf(sessionPath(session.id)) : '');
+    row.sessionTitle.set(session?.title ?? '');
+    const current = this._refs.todoList.children.item(index);
+    if (current !== row) {
+      this._refs.todoList.insertBefore(row, current);
+    }
+  }
+
+  private todoRowOf(projectId: string, todoId: string): ScTodoRow {
+    const row = createElement(ScTodoRow, { props: { editable: true, removable: true } });
+    row.events.register('change', (done) => setProjectTodoDone(projectId, todoId, done));
+    row.events.register('remove', () => void this.deleteTodo(projectId, row.todo.get()));
+    row.events.register('rename', (text) => setProjectTodoText(projectId, todoId, text));
+    this._todoRows.set(todoId, row);
     return row;
   }
 
@@ -543,7 +558,10 @@ export class ProjectPage extends ScElement {
     this._refs.todoInput.value.set('');
   }
 
-  private async deleteTodo(projectId: string, todo: ProjectTodo): Promise<void> {
+  private async deleteTodo(projectId: string, todo: ProjectTodo | undefined): Promise<void> {
+    if (!todo) {
+      return;
+    }
     const agreed = await confirmDialog({
       confirmLabel: 'Delete',
       heading: `Delete “${todo.text}”?`,

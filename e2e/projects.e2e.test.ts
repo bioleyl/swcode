@@ -163,6 +163,23 @@ describe('a project’s page', () => {
     await row.getByRole('checkbox').click();
     await settle(page);
 
+    // A todo being edited keeps what was typed while the page hears of another change: a todo added elsewhere.
+    await row.getByRole('button', { name: 'Edit “Write better tests”' }).click();
+    await row.locator('.editor input').fill('Write the best tests');
+    const other = await rig.browser.newPage({ viewport: DESKTOP });
+    // A new page is a new browser profile: the link brings its token first.
+    await other.goto(rig.link);
+    await other.goto(page.url());
+    await other.locator('project-page .todos .todo-input input').fill('Ship it');
+    await other.locator('project-page .todos').getByRole('button', { name: 'Add' }).click();
+    await card.locator('sc-todo-row').nth(1).getByText('Ship it').waitFor();
+    expect(await row.locator('.editor input').inputValue()).toBe('Write the best tests');
+    await row.getByRole('button', { name: 'Cancel' }).click();
+    await other.close();
+    await card.getByRole('button', { name: 'Delete “Ship it”' }).click();
+    await page.locator('jl-confirm').getByRole('button', { name: 'Delete' }).click();
+    await card.getByText('Ship it').waitFor({ state: 'detached' });
+
     await page.locator('project-page .new-session').click();
     await settle(page);
     const todos = page.locator('home-page .todos');
