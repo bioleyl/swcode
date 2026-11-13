@@ -112,3 +112,24 @@ func TestANoteInAnEmptySectionIsSetApartFromItsHeading(t *testing.T) {
 		t.Fatalf("%q", got)
 	}
 }
+
+func TestANotesFileThatIsALinkIsNeitherReadNorTakenForTheProjects(t *testing.T) {
+	folder, outside := t.TempDir(), filepath.Join(t.TempDir(), "secret.txt")
+	if err := os.WriteFile(outside, []byte("a key the repository must not read"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(folder, FileName)); err != nil {
+		t.Skip("links cannot be made here")
+	}
+	host := hosts.NewLocalHost(hosts.LocalOptions{Home: folder})
+	if found := Find(context.Background(), host, folder); len(found) != 0 {
+		t.Fatalf("a linked file was read as the project's notes: %+v", found)
+	}
+	if !Linked(context.Background(), host, filepath.Join(folder, FileName)) || Linked(context.Background(), host, outside) {
+		t.Fatal("a link was not told from a file")
+	}
+	// A file not made yet is no link: the first notes are written there.
+	if Linked(context.Background(), host, filepath.Join(t.TempDir(), FileName)) {
+		t.Fatal("a file not made yet counts as a link")
+	}
+}

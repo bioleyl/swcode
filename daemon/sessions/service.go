@@ -89,6 +89,8 @@ type Deps struct {
 	// Search is the daemon's one web search, which keeps every session's searches apart in time.
 	Search web.Search
 	HTTP   *http.Client
+	// Pages is what the web tools read pages with: a client that reaches the public web only.
+	Pages *http.Client
 	// Terminals are the app's shells, which the agent opens in its folder for what people should watch.
 	Terminals terminals.Port
 	// ImageURL is the picture server, when there is one; ImagesFolder where the daemon keeps the pictures it shows,
@@ -170,12 +172,15 @@ type live struct {
 	// every change of any session lists them all.
 	updatedAt string
 	// queue is the messages sent while a turn ran, for the next one; queueNow, the person asked for them now.
-	queue     []agent.PromptMessage
-	queueNow  bool
-	jobs      []protocol.SessionSummaryJob
-	grants    permissions.Grants
-	readFiles *tools.ReadFiles
-	turn      *runningTurn
+	queue    []agent.PromptMessage
+	queueNow bool
+	jobs     []protocol.SessionSummaryJob
+	// startedJobs is every background command the session started, running or not: the only ones its agent reads
+	// and stops, a job's id being its host's, the same for every session there.
+	startedJobs map[string]bool
+	grants      permissions.Grants
+	readFiles   *tools.ReadFiles
+	turn        *runningTurn
 	// subagents is the subagents at work in the background, to stop each: they outlive the turn that started them.
 	subagents map[string]runningSubagent
 	// waiting is the subagents past the preset's limit, in the order they start.
@@ -241,7 +246,8 @@ func revive(stored Stored) *live {
 	return &live{
 		events: append([]protocol.SessionEvent{}, stored.Events...), grants: permissions.Grants{Programs: map[string]bool{}},
 		jobs: []protocol.SessionSummaryJob{}, meta: stored.Meta, readFiles: tools.NewReadFiles(),
-		subagents: map[string]runningSubagent{}, updatedAt: lastActivity(stored.Meta, stored.Events),
+		startedJobs: map[string]bool{},
+		subagents:   map[string]runningSubagent{}, updatedAt: lastActivity(stored.Meta, stored.Events),
 	}
 }
 

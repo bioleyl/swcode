@@ -40,6 +40,11 @@ func Find(ctx context.Context, host hosts.Host, workspace string) []protocol.Pro
 	found := []protocol.ProjectNote{}
 	for index := len(folders) - 1; index >= 0; index-- {
 		path := host.Paths().Join(folders[index], FileName)
+		// A notes file that is a link leads anywhere: a repository can bring one, and what it leads to would be read
+		// to the model as the project's own words.
+		if Linked(ctx, host, path) {
+			continue
+		}
 		data, err := host.ReadFile(ctx, path)
 		if err != nil || strings.TrimSpace(string(data)) == "" {
 			continue
@@ -48,6 +53,18 @@ func Find(ctx context.Context, host hosts.Host, workspace string) []protocol.Pro
 		found = append(found, protocol.ProjectNote{LeftOut: leftOut, Path: path, Text: text})
 	}
 	return found
+}
+
+// Linked tells whether a notes file is a link to another file, rather than a file of its folder: one that cannot
+// be told is taken for one.
+func Linked(ctx context.Context, host hosts.Host, path string) bool {
+	paths := host.Paths()
+	folder, err := host.RealPath(ctx, paths.Dir(path))
+	if err != nil {
+		return true
+	}
+	real, err := host.RealPath(ctx, path)
+	return err != nil || real != paths.Join(folder, paths.Base(path))
 }
 
 // Target is the AGENTS.md the agent's notes go to: the nearest one from the project's folder up to the repository's

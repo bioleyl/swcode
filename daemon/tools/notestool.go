@@ -43,6 +43,9 @@ type notesInput struct {
 var notesTool = Define(Spec[notesInput]{
 	Check: func(ctx context.Context, input notesInput, tc *Context) Check {
 		path := notes.Target(ctx, tc.Host, tc.Workspace)
+		if notes.Linked(ctx, tc.Host, path) {
+			return Refuse(path + " is a link to another file: the notes are written to a file of the project only.")
+		}
 		info, err := tc.Host.FileInfo(ctx, path)
 		if err != nil {
 			return Refuse(err.Error())

@@ -718,3 +718,32 @@ func TestWhatACommandPrintsShowsWhileItStillRuns(t *testing.T) {
 	// The result still holds all the command printed.
 	Expect(t, OfKind(test.Events(session.ID), "toolFinished"), `[{"output":"first\nsecond"}]`)
 }
+
+func TestASessionReadsAndStopsOnlyTheBackgroundCommandsItStarted(t *testing.T) {
+	test := Start(t, Options{Replies: []fakellama.Reply{
+		call("bash", map[string]any{"background": true, "command": "echo mine; sleep 30"}), text("Started."),
+		call("output", map[string]any{"id": "1"}), call("kill", map[string]any{"id": "1"}), text("Not mine."),
+	}})
+	first := test.NewSession(sessions.Request{})
+	test.App.Sessions.SendPrompt(first.ID, "Start it", nil)
+	test.WaitForEvent("turnFinished", 1)
+
+	// Another session of the same folder names the first one's job by its id: it is not there for it.
+	second := test.NewSession(sessions.Request{})
+	test.App.Sessions.SendPrompt(second.ID, "Read job 1", nil)
+	test.WaitForEvent("turnFinished", 2)
+	for _, finished := range OfKind(test.Events(second.ID), "toolFinished") {
+		Expect(t, finished, `{"meta":"unknown job","ok":false}`)
+	}
+	// The job still runs for the session that started it.
+	jobs := 0
+	for _, summary := range test.App.Sessions.List() {
+		if summary.ID == first.ID {
+			jobs = len(summary.Jobs)
+		}
+	}
+	if jobs != 1 {
+		t.Fatalf("the first session has %d jobs after another one tried to stop it", jobs)
+	}
+	test.App.Sessions.StopJob(first.ID, "1")
+}

@@ -453,6 +453,7 @@ func (j *sessionJobs) Start(ctx context.Context, command string) (string, error)
 		return "", err
 	}
 	j.service.mu.Lock()
+	j.session.startedJobs[id] = true
 	j.session.jobs = append(j.session.jobs, protocol.SessionSummaryJob{Command: command, ID: id})
 	j.service.publishSessions()
 	j.service.watchJobs(j.session, j.host)
@@ -460,7 +461,17 @@ func (j *sessionJobs) Start(ctx context.Context, command string) (string, error)
 	return id, nil
 }
 
+// started tells whether a job is one this session started: another session's is not there for it.
+func (j *sessionJobs) started(id string) bool {
+	j.service.mu.Lock()
+	defer j.service.mu.Unlock()
+	return j.session.startedJobs[id]
+}
+
 func (j *sessionJobs) Read(ctx context.Context, id string, consume bool) (*hosts.JobState, error) {
+	if !j.started(id) {
+		return nil, nil
+	}
 	state, err := j.host.ReadJob(ctx, id, consume)
 	if err == nil {
 		j.service.noteJob(j.session, id, state)
@@ -470,6 +481,9 @@ func (j *sessionJobs) Read(ctx context.Context, id string, consume bool) (*hosts
 
 // Stop stops a job: it leaves the list at once, its group ends within a moment.
 func (j *sessionJobs) Stop(ctx context.Context, id string) (*hosts.JobState, error) {
+	if !j.started(id) {
+		return nil, nil
+	}
 	state, err := j.host.StopJob(ctx, id)
 	j.service.mu.Lock()
 	j.service.dropJob(j.session, id)
@@ -573,7 +587,7 @@ func (s *Service) imagesFor(session *live) images.Port {
 
 // webFor is the web for a turn's tools: pages are read by the subagents' model, which is faster.
 func (s *Service) webFor(subagent llm.Choice) *web.Port {
-	port := web.NewPort(s.deps.Search, s.deps.HTTP, web.Reader{
+	port := web.NewPort(s.deps.Search, s.deps.Pages, web.Reader{
 		Model: s.deps.Model, ModelName: subagent.Model, NewID: s.deps.NewID, Source: subagent.Source, Thinking: s.deps.Thinking.Subagents,
 	})
 	return &port

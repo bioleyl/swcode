@@ -231,13 +231,16 @@ func New(settings config.Config, options Options) (*App, error) {
 	if options.MaxSteps != 0 {
 		maxSteps = options.MaxSteps
 	}
+	// The web tools reach the public web only: the model writes the addresses they read.
+	pages := web.PublicClient()
 	service = sessions.NewService(sessions.Deps{
 		Browser: found, HTTP: options.HTTP, Hosts: registry, ImageURL: settings.ImageURL,
 		ImagesFolder: app.imagesFolder, LogError: logError, MaxSteps: maxSteps, MaxSubagentSteps: settings.SubagentMaxSteps,
 		Model: servers, Models: modelService, NewID: options.NewID, Now: options.Now,
 		OnWorkspace: func(path string, host protocol.HostRef) { app.Projects.Ensure(path, host) },
+		Pages:       pages,
 		Search: web.Paced(func(ctx context.Context, query string) web.SearchOutcome {
-			return web.SearchWeb(ctx, query, options.HTTP)
+			return web.SearchWeb(ctx, query, pages)
 		}, web.SearchGap),
 		Skills: catalog.New(logError), SkillsOff: func(path string, host protocol.HostRef) []string {
 			project, _ := app.Projects.Find(path, host)
