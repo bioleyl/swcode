@@ -319,6 +319,9 @@ export const ServerMessageSchema = z.discriminatedUnion('type', [
     tool: ToolNameSchema,
     type: z.literal('toolCallWriting'),
   }),
+  // What a command printed since the last of these, while it still runs: shown under its call until its result
+  // takes its place. Never kept: the result holds what the command printed in all.
+  z.object({ callId: z.string(), sessionId: z.string(), text: z.string(), type: z.literal('toolOutput') }),
   z.object({ message: z.string(), type: z.literal('problem') }),
   // The answer to a `ping`, to the socket that asked.
   z.object({ type: z.literal('pong') }),

@@ -124,8 +124,10 @@ var bashTool = Define(Spec[bashInput]{
 		}
 		timeoutMs := whole(input.TimeoutMs, defaultTimeoutMs)
 		return Ready(func(ctx context.Context) Outcome {
+			live := liveOutputOf(tc)
+			defer live.close()
 			options := hosts.CommandOptions{
-				Cwd: tc.Workspace, Passwords: passwordsOf(tc), Timeout: time.Duration(timeoutMs) * time.Millisecond,
+				Cwd: tc.Workspace, Live: live.writer(), Passwords: passwordsOf(tc), Timeout: time.Duration(timeoutMs) * time.Millisecond,
 			}
 			return commandOutcome(tc.Host.Run(ctx, input.Command, options), timeoutMs)
 		}, preview)

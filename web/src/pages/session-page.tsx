@@ -181,6 +181,10 @@ export class SessionPage extends ScElement {
     terminals: () => this.renderTerminals(),
     toolCallWriting: (message) =>
       this.forThisSession(message.sessionId, () => this._refs.conversation.writingCall(message.tool)),
+    toolOutput: (message) =>
+      this.forThisSession(message.sessionId, () =>
+        this._refs.conversation.showOutput(message.callId, message.text)
+      ),
   };
 
   // A part of the session's history, by which part it is: the end draws the conversation, an older page goes above

@@ -461,6 +461,11 @@ export class ScConversation extends ScElement {
     this._streamed.clear();
   }
 
+  /** What a call's command printed since the last time, while it runs: its row shows the end of it. */
+  showOutput(callId: string, text: string): void {
+    this.following(() => this._rows.get(callId)?.printed(text));
+  }
+
   /** The model started writing a call to this tool: its arguments come unseen, until the call is whole. */
   writingCall(tool: ToolName): void {
     this.doing({ kind: 'calling', tool });

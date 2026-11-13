@@ -188,8 +188,13 @@ func (s *Service) hostFor(session *live, turn *runningTurn, ready prepared, sees
 			got := s.ask(ctx, session, turn, passwordAsk{callID: callID, prompt: prompt, service: s}).secret
 			return got.text, got.gave
 		},
-		Host:        where.host,
-		HostRef:     session.meta.Host,
+		Host:    where.host,
+		HostRef: session.meta.Host,
+		ShowOutput: func(callID, text string) {
+			s.mu.Lock()
+			defer s.mu.Unlock()
+			s.publish(protocol.ServerMessage{Value: protocol.ServerMessageToolOutput{CallID: callID, SessionID: session.meta.ID, Text: text}})
+		},
 		Images:      s.imagesFor(session),
 		Jobs:        &sessionJobs{host: where.host, service: s, session: session},
 		ReadFiles:   session.readFiles,

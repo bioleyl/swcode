@@ -50,8 +50,8 @@ func RunCommandAsks(ctx context.Context, command string, options CommandOptions,
 func runCommand(ctx context.Context, command string, options CommandOptions, shell Shell, askpass string) CommandResult {
 	output := NewOutputBuffer(headChars, tailChars)
 	cmd := commandOf(shell, command, options.Cwd)
-	cmd.Stdout = output
-	cmd.Stderr = output
+	cmd.Stdout = heard(output, options.Live)
+	cmd.Stderr = cmd.Stdout
 	cmd.WaitDelay = exitGrace
 	// askedAbout is nil where nobody can answer what the command asks: its output is then never looked at, and it
 	// has no input at all, as it always had.

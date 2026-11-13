@@ -5,6 +5,7 @@ package hosts
 
 import (
 	"context"
+	"io"
 	"time"
 )
 
@@ -57,6 +58,16 @@ type CommandOptions struct {
 	// Passwords answers what the command asks for when it stops to ask for a password: nil where nobody can, which
 	// is how commands on another host run, and how a subagent's do.
 	Passwords Passwords
+	// Live hears what the command prints as it prints it, beside the output kept for its result: nil for nobody.
+	Live io.Writer
+}
+
+// heard is where a command's output goes: the buffer its result is read from, and whoever follows it live.
+func heard(output *OutputBuffer, live io.Writer) io.Writer {
+	if live == nil {
+		return output
+	}
+	return io.MultiWriter(output, live)
 }
 
 // CommandResult is how a command ended: its exit code (none when a signal ended it), what it printed, and why it

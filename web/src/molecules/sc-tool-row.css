@@ -119,6 +119,11 @@ pre {
   color: var(--jl-text-2);
 }
 
+/* What a command prints while it runs: its last lines, under its row, until its result takes their place. */
+.live {
+  border-top: 1px solid var(--jl-line);
+}
+
 .picture {
   display: block;
   padding: 10px 14px;

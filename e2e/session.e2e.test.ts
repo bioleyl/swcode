@@ -650,3 +650,30 @@ describe('a long session', () => {
     expect(await conversation.evaluate((element: { scrollTop: number }) => element.scrollTop)).toBe(0);
   });
 });
+
+describe('a command that takes a while', () => {
+  it('shows what it prints while it runs, under its call, until its result takes its place', async () => {
+    const rig = await start({
+      replies: [
+        { toolCalls: [{ arguments: { command: 'echo compiling; sleep 3; echo done' }, name: 'bash' }] },
+        { text: 'It ran.' },
+      ],
+    });
+    const page = await rig.browser.newPage({ viewport: DESKTOP });
+    await page.goto(rig.link);
+    await page.locator('home-page textarea').fill('Build it');
+    await page.locator('home-page textarea').press('Enter');
+
+    const row = page.locator('session-page sc-tool-row');
+    await row.locator('.live').getByText('compiling').waitFor();
+    expect(await row.getAttribute('state')).toBe('running');
+    expect(await row.locator('.live').textContent()).not.toContain('done');
+
+    await page.getByText('It ran.').waitFor();
+    expect(await row.locator('.live').isHidden()).toBe(true);
+    await row.locator('.head').click();
+    await row.locator('.details pre').getByText('compiling').waitFor();
+    expect(await row.locator('.details pre').textContent()).toContain('done');
+    expect(await overflow(page)).toBe(0);
+  });
+});

@@ -690,3 +690,31 @@ func TestTheReadsOfOneReplyRunTogetherAndTheirResultsStayUnderTheirCalls(t *test
 		t.Fatalf("the results the model read: %q", results)
 	}
 }
+
+func TestWhatACommandPrintsShowsWhileItStillRuns(t *testing.T) {
+	test := Start(t, Options{Replies: []fakellama.Reply{
+		call("bash", map[string]any{"command": "echo first; sleep 0.5; echo second"}), text("Ran."),
+	}})
+	session := test.NewSession(sessions.Request{})
+	test.App.Sessions.SendPrompt(session.ID, "Run it", nil)
+	test.WaitForEvent("turnFinished", 1)
+
+	shown, finished := -1, -1
+	for index, message := range test.Messages() {
+		switch value := message.Value.(type) {
+		case protocol.ServerMessageToolOutput:
+			if shown < 0 && strings.Contains(value.Text, "first") && !strings.Contains(value.Text, "second") {
+				shown = index
+			}
+		case protocol.ServerMessageSessionEvent:
+			if _, done := value.Event.Value.(protocol.SessionEventToolFinished); done {
+				finished = index
+			}
+		}
+	}
+	if shown < 0 || finished < shown {
+		t.Fatalf("the first line showed at message %d, the result came at %d", shown, finished)
+	}
+	// The result still holds all the command printed.
+	Expect(t, OfKind(test.Events(session.ID), "toolFinished"), `[{"output":"first\nsecond"}]`)
+}

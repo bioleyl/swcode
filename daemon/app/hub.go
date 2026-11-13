@@ -88,6 +88,8 @@ func streamOf(message protocol.ServerMessage) (string, stream) {
 		return value.SessionID, writing
 	case protocol.ServerMessageToolCallWriting:
 		return value.SessionID, writing
+	case protocol.ServerMessageToolOutput:
+		return value.SessionID, writing
 	}
 	return "", noStream
 }

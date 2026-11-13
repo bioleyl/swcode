@@ -2,6 +2,7 @@ import { css } from '@jadis/core';
 import { JlIcon } from '@syware/jlib';
 
 import { ScElement } from '../base/sc-element';
+import { lastLines } from '../lib/format';
 import { toolLabel } from '../lib/tool-labels';
 import { toolMeta } from '../lib/tool-meta';
 import { authorizedUrl } from '../services/access';
@@ -15,6 +16,9 @@ import type { SubagentLine, ToolResult, ToolRowState } from '../types/conversati
 
 const OPEN = 'open';
 const CALL_ICON_SIZE = 14;
+// What a running command shows of what it printed: its last lines, from the end of what came.
+const LIVE_LINES = 8;
+const LIVE_CHARS = 4000;
 
 const callNode = (line: SubagentLine): Node => {
   const label = toolLabel(line.tool);
@@ -55,6 +59,9 @@ export class ScToolRow extends ScElement {
   readonly result = this.useChange<ToolResult | undefined>(undefined, (result) => {
     this.renderState();
     this.renderDisplay(result?.display);
+    // The result holds all the command printed: what showed while it ran goes.
+    this._live = '';
+    this.renderLive();
   });
   /** The calls of the subagent an agent call started, as they finish. */
   readonly activity = this.useChange<SubagentLine[]>([], (lines) => this.renderActivity(lines));
@@ -66,14 +73,29 @@ export class ScToolRow extends ScElement {
     head: ref<HTMLButtonElement>('.head'),
     icon: ref<JlIcon>('.icon'),
     image: ref('img'),
+    live: ref('.live'),
     meta: ref('.meta-text'),
     name: ref('.name'),
-    output: ref('pre'),
+    output: ref('.details pre'),
     picture: ref('a'),
     plan: ref<ScPlanSteps>('sc-plan-steps'),
     stateIcon: ref<JlIcon>('.state-icon'),
     summary: ref('.summary'),
   }));
+
+  // The end of what the call's command printed so far, while it runs.
+  private _live = '';
+
+  /** What the call's command printed since the last time: the row shows the end of it until the result comes. */
+  printed(text: string): void {
+    this._live = `${this._live}${text}`.slice(-LIVE_CHARS);
+    this.renderLive();
+  }
+
+  private renderLive(): void {
+    this._refs.live.textContent = lastLines(this._live, LIVE_LINES);
+    this._refs.live.hidden = this._live === '';
+  }
 
   templateHtml(): Node {
     return (
@@ -89,6 +111,7 @@ export class ScToolRow extends ScElement {
           </span>
           <JlIcon class="chevron" name="chevron-down" size={14} />
         </button>
+        <pre class="live" aria-live="off" hidden />
         <div class="details" hidden>
           <div class="calls" hidden />
           <ScDiff hidden />

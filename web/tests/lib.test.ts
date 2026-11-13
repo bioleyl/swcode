@@ -14,7 +14,7 @@ import {
 import { daemonLine } from '../src/lib/daemon-lines';
 import { childPath } from '../src/lib/folders';
 import { keepingEnd } from '../src/lib/follow-end';
-import { ago, contextText, folderName, percent, speedLine, tokens } from '../src/lib/format';
+import { ago, contextText, folderName, lastLines, percent, speedLine, tokens } from '../src/lib/format';
 import { atTop, fillsWindow, scrollAfterOlder } from '../src/lib/history-window';
 import { blocksOf } from '../src/lib/markdown';
 import { tailnetLine } from '../src/lib/pairing-view';
@@ -555,5 +555,16 @@ describe('speedLine', () => {
   it('gives no speed to a reply that wrote nothing, or took no time', () => {
     expect(speedLine({ completionTokens: 0, predictedMs: 10, promptTokens: 10 })).toBe('');
     expect(speedLine({ completionTokens: 5, predictedMs: 0, promptTokens: 10 })).toBe('');
+  });
+});
+
+describe('lastLines', () => {
+  it('keeps the end of what was printed, whole lines', () => {
+    expect(lastLines('one\ntwo\nthree\nfour\n', 2)).toBe('three\nfour');
+  });
+
+  it('keeps a text of fewer lines as it is, without the line break that ends it', () => {
+    expect(lastLines('one\ntwo\n', 8)).toBe('one\ntwo');
+    expect(lastLines('', 8)).toBe('');
   });
 });

@@ -84,6 +84,9 @@ type Context struct {
 	// AskPassword asks the person, under a call, the password one of its commands asked for, and waits: the words
 	// typed, and whether any were. Nil where there is no one to ask, which is how a subagent's commands run.
 	AskPassword func(ctx context.Context, callID, prompt string) (string, bool)
+	// ShowOutput shows the person what a call's command prints while it runs; nil where nobody watches (a
+	// subagent).
+	ShowOutput func(callID, text string)
 	// CallID is the call being prepared: a subagent's work shows under it.
 	CallID    string
 	Subagents Subagents

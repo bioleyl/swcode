@@ -3710,6 +3710,8 @@ func (ServerMessageReasoningDelta) isServerMessage() {}
 
 func (ServerMessageToolCallWriting) isServerMessage() {}
 
+func (ServerMessageToolOutput) isServerMessage() {}
+
 func (ServerMessageProblem) isServerMessage() {}
 
 func (ServerMessagePong) isServerMessage() {}
@@ -3797,6 +3799,12 @@ func (u *ServerMessage) UnmarshalJSON(data []byte) error {
 		u.Value = value
 	case "\"toolCallWriting\"":
 		var value ServerMessageToolCallWriting
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
+	case "\"toolOutput\"":
+		var value ServerMessageToolOutput
 		if err := json.Unmarshal(data, &value); err != nil {
 			return err
 		}
@@ -3901,6 +3909,7 @@ type ServerMessageMapper[R any] interface {
 	AssistantDelta(ServerMessageAssistantDelta) R
 	ReasoningDelta(ServerMessageReasoningDelta) R
 	ToolCallWriting(ServerMessageToolCallWriting) R
+	ToolOutput(ServerMessageToolOutput) R
 	Problem(ServerMessageProblem) R
 	Pong(ServerMessagePong) R
 	PeekState(ServerMessagePeekState) R
@@ -3936,6 +3945,8 @@ func MapServerMessage[R any](u ServerMessage, m ServerMessageMapper[R]) R {
 		return m.ReasoningDelta(value)
 	case ServerMessageToolCallWriting:
 		return m.ToolCallWriting(value)
+	case ServerMessageToolOutput:
+		return m.ToolOutput(value)
 	case ServerMessageProblem:
 		return m.Problem(value)
 	case ServerMessagePong:
@@ -4141,6 +4152,21 @@ func (v *ServerMessageToolCallWriting) Normalize() error {
 		return fmt.Errorf("%s: unknown value %q", "tool", v.Tool)
 	}
 	return nil
+}
+
+type ServerMessageToolOutput struct {
+	CallID    string `json:"callId"`
+	SessionID string `json:"sessionId"`
+	Text      string `json:"text"`
+}
+
+func (v ServerMessageToolOutput) MarshalJSON() ([]byte, error) {
+	type plain ServerMessageToolOutput
+	p := plain(v)
+	return json.Marshal(struct {
+		Key string `json:"type"`
+		plain
+	}{"toolOutput", p})
 }
 
 type ServerMessageProblem struct {

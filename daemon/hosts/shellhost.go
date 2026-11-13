@@ -293,7 +293,7 @@ func (h *ShellHost) Run(ctx context.Context, command string, options CommandOpti
 	output := NewOutputBuffer(headChars, tailChars)
 	errors := &groupOutput{known: make(chan struct{}), output: output}
 	cmd := h.transport.Command(script)
-	cmd.Stdout = output
+	cmd.Stdout = heard(output, options.Live)
 	cmd.Stderr = errors
 	cmd.WaitDelay = exitGrace
 	if err := cmd.Start(); err != nil {

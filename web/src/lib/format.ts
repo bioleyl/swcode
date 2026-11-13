@@ -66,3 +66,7 @@ export function speedLine(usage: Usage | undefined): string {
       : [`${percent(usage.cachedTokens, usage.promptTokens)}% of the prompt from the cache`];
   return [...speed, ...cached].join(' · ');
 }
+
+/** The last lines of a text, at most `count`: the end of what a command printed, where it says how it stands. */
+export const lastLines = (text: string, count: number): string =>
+  text.trimEnd().split('\n').slice(-count).join('\n');
