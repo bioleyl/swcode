@@ -22,6 +22,19 @@
   gap: 16px;
 }
 
+/*
+ * A long conversation lays out and paints only the rows near the window: the others keep the height they last had.
+ * Not the last rows: a row is sized for real when it is added and while an answer streams into it, or the end the
+ * view follows would be a guess.
+ */
+.items > * {
+  contain-intrinsic-block-size: auto 64px;
+}
+
+.items > :nth-last-child(n + 41) {
+  content-visibility: auto;
+}
+
 /* The message a pin led to: marked a moment, where the view landed. */
 .items > .found {
   border-radius: var(--jl-radius);
