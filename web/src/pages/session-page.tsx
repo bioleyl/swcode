@@ -18,6 +18,7 @@ import { ScComposer } from '../organisms/sc-composer';
 import { ScConversation } from '../organisms/sc-conversation';
 import { ScPeek } from '../organisms/sc-peek';
 import { ScPlan } from '../organisms/sc-plan';
+import { ScReview } from '../organisms/sc-review';
 import { ScSidePanel } from '../organisms/sc-side-panel';
 import { ScTerminal } from '../organisms/sc-terminal';
 import { daemon, daemonBus } from '../services/daemon';
@@ -56,6 +57,8 @@ import type { TerminalSize } from '../types/terminal.types';
 
 const NOT_FOUND = 'This session is not on the daemon.';
 const NO_PROJECT = 'This session works in no project: a todo needs one.';
+const REVIEW_HINT = 'What the workspace has uncommitted, to review and commit';
+const COMMITTED = 'The changes are committed';
 const VISIBILITY_CHANGE = 'visibilitychange';
 // On the host while the side panel is hidden.
 const PANEL_CLOSED = 'panel-closed';
@@ -145,6 +148,9 @@ export class SessionPage extends ScElement {
   private readonly _handlers: ServerHandlers = {
     assistantDelta: (message) =>
       this.forThisSession(message.sessionId, () => this._refs.conversation.delta(message.messageId, message.text)),
+    // How a commit of the workspace went, for the review that asked for it.
+    changesCommitted: (message) =>
+      this.forThisSession(message.sessionId, () => this.committed(message.problem ?? '')),
     // A turn's restore point, as diffs, for the dialog the conversation shows.
     checkpointDiff: (message) =>
       this.forThisSession(message.sessionId, () =>
@@ -163,6 +169,8 @@ export class SessionPage extends ScElement {
       this.forThisSession(message.sessionId, () =>
         this._refs.conversation.reasoning(message.messageId, message.text)
       ),
+    // What the workspace has uncommitted, for the review the person opened.
+    reviewChanges: (message) => this.forThisSession(message.sessionId, () => this._refs.review.show(message)),
     sessionEvent: (message) => this.forThisSession(message.sessionId, () => this.applyEvent(message.event)),
     sessionHistory: (message) =>
       this.forThisSession(message.sessionId, () => {
@@ -224,6 +232,8 @@ export class SessionPage extends ScElement {
     plan: ref(ScPlan),
     problem: ref(JlAlert),
     remove: ref<JlButton>('.delete'),
+    review: ref(ScReview),
+    reviewOpen: ref<JlButton>('.review'),
     status: ref(JlBadge),
     terminal: ref(ScTerminal),
     title: ref(ScTitle),
@@ -241,6 +251,7 @@ export class SessionPage extends ScElement {
               <JlIcon name="laptop" size={14} />
               <span class="path" />
             </span>
+            <JlButton class="review" icon="file-diff" variant="ghost" size="sm" hint={REVIEW_HINT} hidden />
             <JlButton class="delete" icon="trash" variant="ghost" size="sm" hidden />
             <JlButton class="panel-toggle" variant="ghost" size="sm" />
           </header>
@@ -254,6 +265,7 @@ export class SessionPage extends ScElement {
         </div>
         <ScSidePanel />
         <ScArcade />
+        <ScReview />
       </>
     );
   }
@@ -391,11 +403,33 @@ export class SessionPage extends ScElement {
       daemon.send({ sessionId: this._sessionId, title, type: 'renameSession' })
     );
     this._refs.remove.events.register('press', () => void this.deleteSession());
+    this.wireReview();
     this._refs.panelToggle.events.register('press', () => this.showPanel(!sidePanelOpen()));
     this._refs.panel.events.register('stopJob', (jobId) =>
       daemon.send({ jobId, sessionId: this._sessionId, type: 'stopJob' })
     );
     this.renderPanel(sidePanelOpen());
+  }
+
+  /**
+   * The review of the workspace: its button opens it, it asks for the changes and gives the commit's message, and
+   * the daemon's answers come back to it through the handlers.
+   */
+  private wireReview(): void {
+    const { review } = this._refs;
+    this._refs.reviewOpen.events.register('press', () => review.open());
+    review.events.register('ask', () => daemon.send({ sessionId: this._sessionId, type: 'reviewChanges' }));
+    review.events.register('commit', (message) =>
+      daemon.send({ message, sessionId: this._sessionId, type: 'commitChanges' })
+    );
+  }
+
+  /** A commit of the workspace was made, or git refused it: the review says which, and a toast that it is done. */
+  private committed(problem: string): void {
+    this._refs.review.committed(problem);
+    if (problem === '') {
+      toast({ heading: COMMITTED, tone: 'ok' });
+    }
   }
 
   /**
@@ -706,6 +740,8 @@ export class SessionPage extends ScElement {
     this._refs.conversation.pinned.set(pins.map((pin) => pin.id));
     const kind = session?.kind ?? 'code';
     this._refs.place.hidden = kind === 'chat';
+    // A chat works in no folder: it has nothing to review.
+    this._refs.reviewOpen.hidden = session === undefined || kind === 'chat';
     this._refs.path.textContent = session ? sessionPlace(session) : '';
     this._refs.conversation.workspace.set(session?.workspace ?? '');
     this._refs.composer.kind.set(kind);

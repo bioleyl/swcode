@@ -404,6 +404,31 @@ func (h handlers) RenameTerminal(message protocol.ClientMessageRenameTerminal) s
 	return h.problem(h.app.Terminals.Rename(message.TerminalID, message.Title))
 }
 
+// ReviewChanges answers a page with what the session's workspace has uncommitted, a diff a file.
+func (h handlers) ReviewChanges(message protocol.ClientMessageReviewChanges) struct{} {
+	go func() {
+		review, refused := h.app.Sessions.Review(message.SessionID)
+		if refused != "" {
+			h.reply(problem(refused))
+			return
+		}
+		h.reply(protocol.ServerMessage{Value: protocol.ServerMessageReviewChanges{
+			Branch: review.Branch, Files: review.Files, More: review.More, Problem: review.Problem, SessionID: message.SessionID,
+		}})
+	}()
+	return struct{}{}
+}
+
+// CommitChanges commits what the session's workspace has uncommitted, and tells the page how it went.
+func (h handlers) CommitChanges(message protocol.ClientMessageCommitChanges) struct{} {
+	go func() {
+		h.reply(protocol.ServerMessage{Value: protocol.ServerMessageChangesCommitted{
+			Problem: h.app.Sessions.Commit(message.SessionID, message.Message), SessionID: message.SessionID,
+		}})
+	}()
+	return struct{}{}
+}
+
 // CheckpointDiff answers a page with the files of a turn's restore point, a diff each: what they were before the
 // turn, and what they are now.
 func (h handlers) CheckpointDiff(message protocol.ClientMessageCheckpointDiff) struct{} {

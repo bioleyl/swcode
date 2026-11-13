@@ -24,6 +24,9 @@ import {
   ToolNameSchema,
 } from './session.schema.js';
 
+/** The most a commit's message holds, as the review's field takes it. */
+export const MAX_COMMIT_MESSAGE = 5000;
+
 /**
  * Where a question beside the session (/peek) is: waiting for the agent's request running to end, being answered,
  * answered, or failed (its `message` says why).
@@ -208,6 +211,16 @@ export const ClientMessageSchema = z.discriminatedUnion('type', [
   // The files of a turn's restore point, each as it was before the turn and as it is now: the answer is a
   // checkpointDiff, to this socket alone.
   z.object({ sessionId: z.string(), turnId: z.string(), type: z.literal('checkpointDiff') }),
+  // Asks what the session's workspace has uncommitted in its git repository, a diff a file: the daemon answers
+  // reviewChanges, to this socket alone.
+  z.object({ sessionId: z.string(), type: z.literal('reviewChanges') }),
+  // Commits everything the session's workspace has uncommitted, with this message: the daemon answers
+  // changesCommitted, to this socket alone.
+  z.object({
+    message: z.string().trim().min(1).max(MAX_COMMIT_MESSAGE),
+    sessionId: z.string(),
+    type: z.literal('commitChanges'),
+  }),
   // Names a terminal, as its page and the side panel list it.
   z.object({
     terminalId: z.string(),
@@ -366,7 +379,20 @@ export const ServerMessageSchema = z.discriminatedUnion('type', [
     sessionId: z.string(),
     turnId: z.string(),
     type: z.literal('checkpointDiff'),
-  }), // The presets a session can work with: at connection, and again when they change.
+  }),
+  // What a session's workspace has uncommitted: its branch, a diff a file (what HEAD holds, and what the file is
+  // now), how many more files changed than are shown, or why there is nothing to show (no repository, no git).
+  z.object({
+    branch: z.string(),
+    files: z.array(ToolDisplaySchema),
+    more: z.number().int().optional(),
+    problem: z.string().optional(),
+    sessionId: z.string(),
+    type: z.literal('reviewChanges'),
+  }),
+  // A commit of the session's workspace was made, or git refused it and said why.
+  z.object({ problem: z.string().optional(), sessionId: z.string(), type: z.literal('changesCommitted') }),
+  // The presets a session can work with: at connection, and again when they change.
   z.object({ choices: PresetChoicesSchema, type: z.literal('presets') }),
   z.object({ hosts: z.array(HostOptionSchema), type: z.literal('hosts') }),
   z.object({ project: ProjectSchema, type: z.literal('projectCreated') }),

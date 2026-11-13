@@ -51,6 +51,8 @@ var ToolNames = []ToolName{ToolNameRead, ToolNameWrite, ToolNameEdit, ToolNameBa
 
 var TurnOutcomes = []TurnOutcome{TurnOutcomeDone, TurnOutcomeStopped, TurnOutcomeFailed, TurnOutcomeLimit}
 
+const MaxCommitMessage = 5000
+
 const MaxTerminalColumns = 500
 
 const MaxTerminalRows = 200
@@ -2182,6 +2184,10 @@ func (ClientMessageCloseTerminal) isClientMessage() {}
 
 func (ClientMessageCheckpointDiff) isClientMessage() {}
 
+func (ClientMessageReviewChanges) isClientMessage() {}
+
+func (ClientMessageCommitChanges) isClientMessage() {}
+
 func (ClientMessageRenameTerminal) isClientMessage() {}
 
 func (ClientMessageSetMode) isClientMessage() {}
@@ -2401,6 +2407,18 @@ func (u *ClientMessage) UnmarshalJSON(data []byte) error {
 			return err
 		}
 		u.Value = value
+	case "\"reviewChanges\"":
+		var value ClientMessageReviewChanges
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
+	case "\"commitChanges\"":
+		var value ClientMessageCommitChanges
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
 	case "\"renameTerminal\"":
 		var value ClientMessageRenameTerminal
 		if err := json.Unmarshal(data, &value); err != nil {
@@ -2562,6 +2580,8 @@ type ClientMessageMapper[R any] interface {
 	TerminalResize(ClientMessageTerminalResize) R
 	CloseTerminal(ClientMessageCloseTerminal) R
 	CheckpointDiff(ClientMessageCheckpointDiff) R
+	ReviewChanges(ClientMessageReviewChanges) R
+	CommitChanges(ClientMessageCommitChanges) R
 	RenameTerminal(ClientMessageRenameTerminal) R
 	SetMode(ClientMessageSetMode) R
 	SetThinking(ClientMessageSetThinking) R
@@ -2642,6 +2662,10 @@ func MapClientMessage[R any](u ClientMessage, m ClientMessageMapper[R]) R {
 		return m.CloseTerminal(value)
 	case ClientMessageCheckpointDiff:
 		return m.CheckpointDiff(value)
+	case ClientMessageReviewChanges:
+		return m.ReviewChanges(value)
+	case ClientMessageCommitChanges:
+		return m.CommitChanges(value)
 	case ClientMessageRenameTerminal:
 		return m.RenameTerminal(value)
 	case ClientMessageSetMode:
@@ -3422,6 +3446,55 @@ func (v ClientMessageCheckpointDiff) MarshalJSON() ([]byte, error) {
 	}{"checkpointDiff", p})
 }
 
+type ClientMessageReviewChanges struct {
+	SessionID string `json:"sessionId"`
+}
+
+func (v ClientMessageReviewChanges) MarshalJSON() ([]byte, error) {
+	type plain ClientMessageReviewChanges
+	p := plain(v)
+	return json.Marshal(struct {
+		Key string `json:"type"`
+		plain
+	}{"reviewChanges", p})
+}
+
+type ClientMessageCommitChanges struct {
+	Message   string `json:"message"`
+	SessionID string `json:"sessionId"`
+}
+
+func (v ClientMessageCommitChanges) MarshalJSON() ([]byte, error) {
+	type plain ClientMessageCommitChanges
+	p := plain(v)
+	return json.Marshal(struct {
+		Key string `json:"type"`
+		plain
+	}{"commitChanges", p})
+}
+
+func (v *ClientMessageCommitChanges) UnmarshalJSON(data []byte) error {
+	type plain ClientMessageCommitChanges
+	p := plain{}
+	if err := json.Unmarshal(data, &p); err != nil {
+		return err
+	}
+	*v = ClientMessageCommitChanges(p)
+	return v.Normalize()
+}
+
+// Normalize trims and checks what the app sent, as its schema does.
+func (v *ClientMessageCommitChanges) Normalize() error {
+	v.Message = strings.TrimSpace(v.Message)
+	if utf8.RuneCountInString(v.Message) < 1 {
+		return fmt.Errorf("%s: must not be empty", "message")
+	}
+	if utf8.RuneCountInString(v.Message) > 5000 {
+		return fmt.Errorf("%s: at most 5000 characters", "message")
+	}
+	return nil
+}
+
 type ClientMessageRenameTerminal struct {
 	TerminalID string `json:"terminalId"`
 	Title      string `json:"title"`
@@ -3987,6 +4060,10 @@ func (ServerMessageTerminalOutput) isServerMessage() {}
 
 func (ServerMessageCheckpointDiff) isServerMessage() {}
 
+func (ServerMessageReviewChanges) isServerMessage() {}
+
+func (ServerMessageChangesCommitted) isServerMessage() {}
+
 func (ServerMessagePresets) isServerMessage() {}
 
 func (ServerMessageHosts) isServerMessage() {}
@@ -4120,6 +4197,18 @@ func (u *ServerMessage) UnmarshalJSON(data []byte) error {
 			return err
 		}
 		u.Value = value
+	case "\"reviewChanges\"":
+		var value ServerMessageReviewChanges
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
+	case "\"changesCommitted\"":
+		var value ServerMessageChangesCommitted
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
 	case "\"presets\"":
 		var value ServerMessagePresets
 		if err := json.Unmarshal(data, &value); err != nil {
@@ -4176,6 +4265,8 @@ type ServerMessageMapper[R any] interface {
 	TerminalOpened(ServerMessageTerminalOpened) R
 	TerminalOutput(ServerMessageTerminalOutput) R
 	CheckpointDiff(ServerMessageCheckpointDiff) R
+	ReviewChanges(ServerMessageReviewChanges) R
+	ChangesCommitted(ServerMessageChangesCommitted) R
 	Presets(ServerMessagePresets) R
 	Hosts(ServerMessageHosts) R
 	ProjectCreated(ServerMessageProjectCreated) R
@@ -4222,6 +4313,10 @@ func MapServerMessage[R any](u ServerMessage, m ServerMessageMapper[R]) R {
 		return m.TerminalOutput(value)
 	case ServerMessageCheckpointDiff:
 		return m.CheckpointDiff(value)
+	case ServerMessageReviewChanges:
+		return m.ReviewChanges(value)
+	case ServerMessageChangesCommitted:
+		return m.ChangesCommitted(value)
 	case ServerMessagePresets:
 		return m.Presets(value)
 	case ServerMessageHosts:
@@ -4695,6 +4790,40 @@ func (v ServerMessageCheckpointDiff) MarshalJSON() ([]byte, error) {
 		Key string `json:"type"`
 		plain
 	}{"checkpointDiff", p})
+}
+
+type ServerMessageReviewChanges struct {
+	Branch    string        `json:"branch"`
+	Files     []ToolDisplay `json:"files"`
+	More      int           `json:"more,omitempty"`
+	Problem   string        `json:"problem,omitempty"`
+	SessionID string        `json:"sessionId"`
+}
+
+func (v ServerMessageReviewChanges) MarshalJSON() ([]byte, error) {
+	type plain ServerMessageReviewChanges
+	p := plain(v)
+	if p.Files == nil {
+		p.Files = []ToolDisplay{}
+	}
+	return json.Marshal(struct {
+		Key string `json:"type"`
+		plain
+	}{"reviewChanges", p})
+}
+
+type ServerMessageChangesCommitted struct {
+	Problem   string `json:"problem,omitempty"`
+	SessionID string `json:"sessionId"`
+}
+
+func (v ServerMessageChangesCommitted) MarshalJSON() ([]byte, error) {
+	type plain ServerMessageChangesCommitted
+	p := plain(v)
+	return json.Marshal(struct {
+		Key string `json:"type"`
+		plain
+	}{"changesCommitted", p})
 }
 
 type ServerMessagePresets struct {

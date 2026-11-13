@@ -1,0 +1,58 @@
+:host {
+  display: contents;
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--jl-space-4);
+}
+
+.reading,
+.more {
+  font-size: var(--jl-font-md);
+  color: var(--jl-text-2);
+}
+
+.files {
+  display: flex;
+  flex-direction: column;
+  gap: var(--jl-space-4);
+}
+
+/* A file's path and its counts over the lines it changed. */
+.head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--jl-space-2);
+  margin-bottom: var(--jl-space-1);
+  font-family: var(--jl-font-mono);
+  font-size: var(--jl-font-sm);
+}
+
+.path {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-weight: 600;
+}
+
+.counts {
+  flex: none;
+  color: var(--jl-muted);
+}
+
+.file sc-diff {
+  box-sizing: border-box;
+  max-height: 320px;
+  overflow: auto;
+  border: 1px solid var(--jl-line);
+  border-radius: var(--jl-radius-md);
+}
+
+jl-textarea {
+  width: 100%;
+}
+
+[hidden] {
+  display: none;
+}

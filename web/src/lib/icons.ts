@@ -18,6 +18,7 @@ import {
   Copy,
   CornerLeftUp,
   Cpu,
+  FileDiff,
   FilePlus,
   FileText,
   Folder,
@@ -109,6 +110,8 @@ const ICONS = {
   copy: Copy,
   'corner-left-up': CornerLeftUp,
   cpu: Cpu,
+  // What a session's workspace has uncommitted.
+  'file-diff': FileDiff,
   'file-plus': FilePlus,
   'file-text': FileText,
   'fold-vertical': FoldVertical,
