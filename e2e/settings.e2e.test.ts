@@ -173,6 +173,25 @@ describe('settings', () => {
     expect(await startup.getByRole('radio', { name: 'In the notification area' }).isChecked()).toBe(true);
   });
 
+  it('offer no install and no web notifications in the desktop app, which is installed and notifies by itself', async () => {
+    const rig = await start({ replies: [] });
+    const app = await rig.browser.newPage({ viewport: DESKTOP });
+    await app.addInitScript(fakeDesktopApp());
+    await app.goto(`${rig.link}#/settings/phone`);
+    const phone = app.locator('sc-phone');
+    await phone.getByText('Pair a phone', { exact: true }).waitFor();
+    await phone.getByText('Over HTTPS, on your tailnet', { exact: true }).waitFor();
+    expect(await phone.locator('.install').isHidden()).toBe(true);
+    expect(await phone.locator('.notifications').isHidden()).toBe(true);
+
+    // A browser has both: there, swcode is a page until it is installed.
+    const browser = await rig.browser.newPage({ viewport: DESKTOP });
+    await browser.goto(rig.link);
+    await browser.goto(`${rig.link.split('?')[0]}#/settings/phone`);
+    await browser.locator('sc-phone').getByText('Install on this device', { exact: true }).waitFor();
+    await browser.locator('sc-phone').getByText('Notifications on this device', { exact: true }).waitFor();
+  });
+
   it('list the desktop app’s computers, pair another one with its code, and open it', async () => {
     const rig = await start({ replies: [] });
     const page = await rig.browser.newPage({ viewport: DESKTOP });

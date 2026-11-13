@@ -8,7 +8,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -24,19 +27,60 @@ const (
 	// Tailscale leaves its usual HTTPS port out of an address, as a browser does.
 	usualPort    = ":443"
 	notInstalled = "Tailscale is not on this computer. With it, swcode gets an HTTPS address on your tailnet, which a phone reaches from anywhere."
-	notConnected = "Tailscale is on this computer, but not connected to a tailnet."
-	noHTTPS      = "This tailnet gives no HTTPS certificates yet: turn them on in Tailscale’s admin console (DNS, then HTTPS Certificates)."
-	notServed    = "Tailscale did not serve swcode: %s"
+	// On Windows the tailnet is often a WSL distribution's, which this swcode cannot use: it says so, and what to do.
+	notInstalledOnWindows = "Tailscale is not installed on Windows here. With it, swcode gets an HTTPS address on your tailnet, which a phone reaches from anywhere. A Tailscale inside WSL gives its address only to what runs in that distribution: install Tailscale for Windows, or run swcode in the distribution (swcode service install there) and add it here under Settings → Computers."
+	windowsSystem         = "windows"
+	// Where Tailscale's installer puts its command line on Windows, under Program Files.
+	windowsFolder   = "Tailscale"
+	windowsProgram  = "tailscale.exe"
+	programFilesVar = "ProgramFiles"
+	notConnected    = "Tailscale is on this computer, but not connected to a tailnet."
+	noHTTPS         = "This tailnet gives no HTTPS certificates yet: turn them on in Tailscale’s admin console (DNS, then HTTPS Certificates)."
+	notServed       = "Tailscale did not serve swcode: %s"
 )
 
 // Run runs Tailscale's command line with these arguments: what it printed.
 type Run func(ctx context.Context, args ...string) ([]byte, error)
 
+// programPath is where Tailscale's command line is: on the PATH, else on Windows where its installer puts it, since
+// a program started from a shortcut does not always have that folder on its PATH. exec.ErrNotFound when it is
+// nowhere.
+func programPath(system string, onPath func(string) (string, error), variable func(string) string, exists func(string) bool) (string, error) {
+	if found, err := onPath(program); err == nil {
+		return found, nil
+	}
+	if system != windowsSystem || variable(programFilesVar) == "" {
+		return "", exec.ErrNotFound
+	}
+	installed := filepath.Join(variable(programFilesVar), windowsFolder, windowsProgram)
+	if !exists(installed) {
+		return "", exec.ErrNotFound
+	}
+	return installed, nil
+}
+
+func isFile(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir()
+}
+
 // Command is Tailscale's own command line, where this computer has it.
 func Command(ctx context.Context, args ...string) ([]byte, error) {
+	path, err := programPath(runtime.GOOS, exec.LookPath, os.Getenv, isFile)
+	if err != nil {
+		return nil, err
+	}
 	ctx, cancel := context.WithTimeout(ctx, commandLimit)
 	defer cancel()
-	return exec.CommandContext(ctx, program, args...).CombinedOutput()
+	return exec.CommandContext(ctx, path, args...).CombinedOutput()
+}
+
+// notInstalledOn is what to say where Tailscale is not installed, by system.
+func notInstalledOn(system string) string {
+	if system == windowsSystem {
+		return notInstalledOnWindows
+	}
+	return notInstalled
 }
 
 // The parts of `tailscale status --json` and `tailscale serve status --json` read here.
@@ -84,7 +128,7 @@ func unavailable(problem string) protocol.Tailnet {
 func Read(ctx context.Context, run Run, port int) protocol.Tailnet {
 	data, err := run(ctx, "status", "--json")
 	if errors.Is(err, exec.ErrNotFound) {
-		return unavailable(notInstalled)
+		return unavailable(notInstalledOn(runtime.GOOS))
 	}
 	var found status
 	if err != nil || json.Unmarshal(data, &found) != nil || found.BackendState != running {

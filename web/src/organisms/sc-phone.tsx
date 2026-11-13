@@ -10,10 +10,11 @@ import {
   secondsUntilRenewal,
   tailnetLine,
 } from '../lib/pairing-view';
-import { PUSH_BUTTONS, PUSH_LINES } from '../lib/push-view';
+import { PUSH_BUTTONS, PUSH_LINES, pushProblemShown } from '../lib/push-view';
 import { qrElement } from '../lib/qr';
 import { daemonOrigin } from '../services/access';
 import { daemonState, daemonStatusBus, refreshStatus } from '../services/daemon-status';
+import { inDesktopApp } from '../services/desktop';
 import { installApp, installBus, installState } from '../services/install';
 import { forgetDevice, NO_CODE, newPairingCode, pairedDevices, pairingLink } from '../services/pairing';
 import { pushState, turnPushOff, turnPushOn } from '../services/push';
@@ -62,8 +63,10 @@ export class ScPhone extends ScElement {
     expires: ref('.expires'),
     install: ref<JlButton>('.install-now'),
     installLine: ref('.install-line'),
+    installSection: ref('.install'),
     link: ref('.link'),
     note: ref('.note'),
+    notifications: ref('.notifications'),
     push: ref<JlButton>('.push'),
     pushLine: ref('.push-line'),
     pushProblem: ref('.push-problem'),
@@ -98,12 +101,12 @@ export class ScPhone extends ScElement {
           <p class="note tailnet-problem" hidden />
           <JlButton class="serve" label="Serve swcode on the tailnet" hidden />
         </section>
-        <section>
+        <section class="install">
           <h2>Install on this device</h2>
           <p class="lead install-line" />
           <JlButton class="install-now" icon="download" label="Install swcode" hidden />
         </section>
-        <section>
+        <section class="notifications">
           <h2>Notifications on this device</h2>
           <p class="lead push-line" />
           <p class="note push-problem" hidden />
@@ -118,6 +121,10 @@ export class ScPhone extends ScElement {
   }
 
   onConnect(): void {
+    // The desktop app is installed already, and tells the person of a session that waits through Windows itself:
+    // its window offers neither an install nor web notifications, which it refuses.
+    this._refs.installSection.hidden = inDesktopApp();
+    this._refs.notifications.hidden = inDesktopApp();
     this._refs.install.events.register('press', () => void installApp());
     this._refs.serve.events.register('press', () => void this.serve());
     this._refs.push.events.register('press', () => void this.togglePush());
@@ -148,9 +155,11 @@ export class ScPhone extends ScElement {
     }
     this._pushState = state;
     const label = PUSH_BUTTONS[state];
+    // A refusal that left notifications blocked is what the line itself says: it is said once.
+    const said = pushProblemShown(state, problem);
     this._refs.pushLine.textContent = PUSH_LINES[state];
-    this._refs.pushProblem.textContent = problem;
-    this._refs.pushProblem.hidden = problem === '';
+    this._refs.pushProblem.textContent = said;
+    this._refs.pushProblem.hidden = said === '';
     this._refs.push.hidden = label === undefined;
     this._refs.push.label.set(label ?? '');
   }

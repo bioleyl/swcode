@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { isAppleMobile, keyBytes, PUSH_BUTTONS, PUSH_LINES } from '../src/lib/push-view';
+import { isAppleMobile, keyBytes, PUSH_BUTTONS, PUSH_LINES, pushProblemShown } from '../src/lib/push-view';
 
 const IPHONE =
   'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148';
@@ -25,6 +25,15 @@ describe('notifications on this device', () => {
     expect(PUSH_LINES.needsInstall).toContain('Home Screen');
     expect(PUSH_LINES.denied).toContain('blocked');
     expect(new Set(Object.values(PUSH_LINES)).size).toBe(Object.keys(PUSH_LINES).length);
+  });
+
+  it('say a refusal once: blocked notifications are what the line already reads', () => {
+    const refused = 'Notifications were not allowed: nothing changed.';
+    expect(pushProblemShown('denied', refused)).toBe('');
+    expect(pushProblemShown('off', 'The daemon did not give its push key.')).toBe(
+      'The daemon did not give its push key.'
+    );
+    expect(pushProblemShown('on', '')).toBe('');
   });
 
   it('know an iPhone and an iPad, which says it is a Mac but has a touch screen', () => {

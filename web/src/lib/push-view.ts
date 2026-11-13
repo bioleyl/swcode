@@ -23,6 +23,12 @@ export const PUSH_BUTTONS: Readonly<Record<PushState, string | undefined>> = {
   unsupported: undefined,
 };
 
+/**
+ * What to say under the line once a press did not go through: why, unless the line already says it — a request
+ * the browser refused leaves notifications blocked, which is what the line then reads.
+ */
+export const pushProblemShown = (state: PushState, problem: string): string => (state === 'denied' ? '' : problem);
+
 const APPLE_PHONE = /iPhone|iPad|iPod/;
 const APPLE_COMPUTER = /Macintosh/;
 
