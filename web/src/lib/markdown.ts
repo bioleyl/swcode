@@ -1,7 +1,16 @@
-import type { Block, LineGroup, LinkLook, Span, SpanMap, TableAlign } from '../types/markdown.types';
+import type {
+  Block,
+  LineGroup,
+  LinkLook,
+  ListBlock,
+  ListLine,
+  Span,
+  SpanMap,
+  TableAlign,
+} from '../types/markdown.types';
 
 const FENCE = '```';
-const LANGUAGE_LINE = /^[^\n]*\n/;
+const LANGUAGE_LINE = /^([^\n]*)\n/;
 const BLANK_LINES = /\n{2,}/;
 const CODE_SPAN = /`[^`\n]+`/;
 const STRONG_SPAN = /\*\*[^*\n]+\*\*/;
@@ -9,10 +18,20 @@ const STRONG_SPAN = /\*\*[^*\n]+\*\*/;
 const LINK_SPAN = /\[[^\]\n]+\]\(https?:\/\/[^\s)]+\)/;
 // A bare address ends before the punctuation that ends a sentence or closes a bracket around it.
 const BARE_URL = /https?:\/\/[^\s<>()[\]"']*[^\s<>()[\]"'.,;:!?]/;
-// One group around all of them: split keeps the parts they match.
+const STRIKE_SPAN = /~~[^~\n]+~~/;
+// Italics, by stars or by underscores: the marks touch the words they hold and nothing beside them, so a product
+// (2 * 3 * 4), a glob (*.ts) and a name (my_file_name) stay as they are written.
+const EM_STAR_SPAN = /(?<![*\w])\*(?![\s*])[^*\n]*[^\s*]\*(?![*\w])/;
+const EM_UNDERSCORE_SPAN = /(?<![\w_])_(?![\s_])[^_\n]*[^\s_]_(?![\w_])/;
+// One group around all of them: split keeps the parts they match. Where two start at the same place, the first
+// listed wins: bold before italics.
 const INLINE = new RegExp(
-  `(${[CODE_SPAN, STRONG_SPAN, LINK_SPAN, BARE_URL].map(({ source }) => source).join('|')})`
+  `(${[CODE_SPAN, STRONG_SPAN, LINK_SPAN, BARE_URL, STRIKE_SPAN, EM_STAR_SPAN, EM_UNDERSCORE_SPAN]
+    .map(({ source }) => source)
+    .join('|')})`
 );
+const STRIKE_MARK = '~~';
+const EM_MARK_LENGTH = 1;
 const CODE_MARK = '`';
 const STRONG_MARK = '**';
 const LINK_OPEN = '[';
@@ -20,6 +39,13 @@ const LINK_MIDDLE = '](';
 const LINK_CLOSE = ')';
 const BULLET = /^\s*[-*+]\s+/;
 const NUMBER = /^\s*\d+[.)]\s+/;
+const QUOTE = /^\s*>\s?/;
+// A rule across the message: a line of three dashes, stars or underscores or more, alone between blank lines
+// (right under a line of text, dashes are that line's own).
+const RULE = /^(?:-{3,}|\*{3,}|_{3,})$/;
+const INDENT = /^[ \t]*/;
+const TAB = '\t';
+const TAB_WIDTH = 4;
 const HEADING = /^(#{1,6})\s+/;
 const PIPE = '|';
 const ESCAPED_PIPE = '\\|';
@@ -34,6 +60,8 @@ const TABLE_HEAD_LINES = 2;
 const matchesWhole = (pattern: RegExp): RegExp => new RegExp(`^${pattern.source}$`);
 const WHOLE_LINK = matchesWhole(LINK_SPAN);
 const WHOLE_URL = matchesWhole(BARE_URL);
+const WHOLE_STRIKE = matchesWhole(STRIKE_SPAN);
+const WHOLE_EM = new RegExp(`^(?:${EM_STAR_SPAN.source}|${EM_UNDERSCORE_SPAN.source})$`);
 
 /** `[text](href)`: the text has no `]`, so the first `](` ends it. */
 const linkOf = (part: string): SpanMap['link'] => {
@@ -66,10 +94,16 @@ const spanOf = (part: string): Span => {
   if (WHOLE_URL.test(part)) {
     return { href: part, kind: 'link', text: part };
   }
+  if (WHOLE_STRIKE.test(part)) {
+    return { kind: 'strike', text: part.slice(STRIKE_MARK.length, -STRIKE_MARK.length) };
+  }
+  if (WHOLE_EM.test(part)) {
+    return { kind: 'em', text: part.slice(EM_MARK_LENGTH, -EM_MARK_LENGTH) };
+  }
   return { kind: 'text', text: part };
 };
 
-/** A paragraph's text, with its `inline code`, **bold** and links to web pages apart. */
+/** A paragraph's text, with its `inline code`, **bold**, *italics*, ~~struck~~ words and links to web pages apart. */
 export const spansOf = (text: string): Span[] =>
   text
     .split(INLINE)
@@ -144,11 +178,64 @@ const kindOf = (line: string): LineGroup['kind'] => {
   if (HEADING.test(line)) {
     return 'heading';
   }
-  if (BULLET.test(line)) {
-    return 'bullet';
+  if (QUOTE.test(line)) {
+    return 'quote';
   }
-  return NUMBER.test(line) ? 'number' : 'text';
+  return BULLET.test(line) || NUMBER.test(line) ? 'list' : 'text';
 };
+
+/** How far a line is indented, in spaces: a tab counts for four. */
+const indentOf = (line: string): number =>
+  [...(INDENT.exec(line)?.[0] ?? '')].reduce((width, mark) => width + (mark === TAB ? TAB_WIDTH : 1), 0);
+
+const listLineOf = (line: string): ListLine => {
+  const ordered = NUMBER.test(line);
+  return { indent: indentOf(line), ordered, text: line.replace(ordered ? NUMBER : BULLET, '') };
+};
+
+/** A list with its nested lists, which it names only when an item has one. */
+const listOf = (ordered: boolean, items: Span[][], nested: ListBlock[][]): ListBlock => ({
+  items,
+  kind: 'list',
+  ordered,
+  ...(nested.some((lists) => lists.length > 0) ? { nested } : {}),
+});
+
+/**
+ * The lists a run of list lines makes: the lines indented as the first one are items, the deeper lines after an
+ * item are the lists nested in it, and a list ends where bullets turn to numbers or back.
+ */
+function listsOf(lines: readonly ListLine[]): ListBlock[] {
+  const base = lines[0]?.indent ?? 0;
+  const lists: ListBlock[] = [];
+  const open = { items: [] as Span[][], nested: [] as ListBlock[][], ordered: lines[0]?.ordered ?? false };
+  const close = (): void => {
+    if (open.items.length > 0) {
+      lists.push(listOf(open.ordered, open.items, open.nested));
+    }
+  };
+  let index = 0;
+  while (index < lines.length) {
+    const line = lines[index];
+    if (!line) {
+      break;
+    }
+    const after = lines.slice(index + 1);
+    const deeper = after.findIndex((next) => next.indent <= base);
+    const under = deeper < 0 ? after : after.slice(0, deeper);
+    if (line.ordered !== open.ordered) {
+      close();
+      open.items = [];
+      open.nested = [];
+      open.ordered = line.ordered;
+    }
+    open.items.push(spansOf(line.text));
+    open.nested.push(listsOf(under));
+    index += 1 + under.length;
+  }
+  close();
+  return lists;
+}
 
 /** Adds a line to the group it reads like, the last one; each heading stands alone. */
 function addLine(groups: LineGroup[], line: string): void {
@@ -178,47 +265,55 @@ function groupsOf(lines: readonly string[]): LineGroup[] {
   return groups;
 }
 
-const BLOCKS_OF_GROUPS: Readonly<Record<LineGroup['kind'], (lines: readonly string[]) => Block>> = {
-  bullet: (lines) => ({
-    items: lines.map((line) => spansOf(line.replace(BULLET, ''))),
-    kind: 'list',
-    ordered: false,
-  }),
+const BLOCKS_OF_GROUPS: Readonly<Record<LineGroup['kind'], (lines: readonly string[]) => Block[]>> = {
   heading: (lines) => {
     const line = lines[0] ?? '';
-    return {
-      kind: 'heading',
-      level: HEADING.exec(line)?.[1]?.length ?? 1,
-      spans: spansOf(line.replace(HEADING, '')),
-    };
+    return [
+      {
+        kind: 'heading',
+        level: HEADING.exec(line)?.[1]?.length ?? 1,
+        spans: spansOf(line.replace(HEADING, '')),
+      },
+    ];
   },
-  number: (lines) => ({
-    items: lines.map((line) => spansOf(line.replace(NUMBER, ''))),
-    kind: 'list',
-    ordered: true,
-  }),
-  table: tableOf,
-  text: (lines) => ({ kind: 'paragraph', spans: spansOf(lines.join('\n')) }),
+  list: (lines) => listsOf(lines.map(listLineOf)),
+  // What a quote holds is markdown of its own, under its marks.
+  quote: (lines) => [
+    { blocks: paragraphsOf(lines.map((line) => line.replace(QUOTE, '')).join('\n')), kind: 'quote' },
+  ],
+  table: (lines) => [tableOf(lines)],
+  text: (lines) => [{ kind: 'paragraph', spans: spansOf(lines.join('\n').trimStart()) }],
 };
 
-const paragraphsOf = (prose: string): Block[] =>
-  prose
+// A paragraph keeps the indentation of its first line: a list may start indented, and its nesting is read from it.
+const EDGES = /^\n+|\s+$/g;
+
+function paragraphsOf(prose: string): Block[] {
+  return prose
     .split(BLANK_LINES)
-    .map((paragraph) => paragraph.trim())
-    .filter((paragraph) => paragraph !== '')
-    .flatMap((paragraph) =>
-      groupsOf(paragraph.split('\n')).map((group) => BLOCKS_OF_GROUPS[group.kind](group.lines))
+    .map((paragraph) => paragraph.replace(EDGES, ''))
+    .filter((paragraph) => paragraph.trim() !== '')
+    .flatMap((paragraph): Block[] =>
+      RULE.test(paragraph.trim())
+        ? [{ kind: 'rule' }]
+        : groupsOf(paragraph.split('\n')).flatMap((group) => BLOCKS_OF_GROUPS[group.kind](group.lines))
     );
+}
 
 // The text after an opening fence starts with the language ("ts"), not with code.
-const codeOf = (part: string): Block => ({
-  kind: 'code',
-  text: part.replace(LANGUAGE_LINE, '').replace(/\n$/, ''),
-});
+const codeOf = (part: string): Block => {
+  const language = LANGUAGE_LINE.exec(part)?.[1]?.trim().toLowerCase() ?? '';
+  return {
+    kind: 'code',
+    text: part.replace(LANGUAGE_LINE, '').replace(/\n$/, ''),
+    ...(language === '' ? {} : { language }),
+  };
+};
 
 /**
- * The little markdown models write: code fences, headings, lists, tables, paragraphs, inline code, bold and links.
- * A fence still open while the answer streams shows as code already.
+ * The markdown models write: code fences, headings, lists and the lists nested in them, tables, quotes, rules,
+ * paragraphs, inline code, bold, italics, struck words and links. A fence still open while the answer streams
+ * shows as code already.
  */
 export const blocksOf = (text: string): Block[] =>
   text.split(FENCE).flatMap((part, index) => (index % 2 === 1 ? [codeOf(part)] : paragraphsOf(part)));

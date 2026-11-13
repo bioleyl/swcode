@@ -1,18 +1,26 @@
-import { css } from '@jadis/core';
+import { createElement, css } from '@jadis/core';
 import { JlButton } from '@syware/jlib';
 
 import { oneOf, ScElement } from '../base/sc-element';
+import { copyText } from '../lib/clipboard';
+import { tokensOf } from '../lib/highlight';
 import { blockKey, blocksOf, sameBlocks } from '../lib/markdown';
 import { BASE_STYLES } from '../styles/shared';
 import styles from './sc-message.css?inline';
 
-import type { Block, BlockMap, LinkLook, Span, SpanMap } from '../types/markdown.types';
+import type { Token } from '../types/highlight.types';
+import type { Block, BlockMap, LinkLook, ListBlock, Span, SpanMap } from '../types/markdown.types';
 
 export const MESSAGE_AUTHORS = ['assistant', 'user'] as const;
 export type MessageAuthor = (typeof MESSAGE_AUTHORS)[number];
 
 const PIN_HINT = 'Pin this message';
 const UNPIN_HINT = 'Remove this pin';
+const COPY_HINT = 'Copy';
+const COPIED_HINT = 'Copied';
+const NOT_COPIED_HINT = 'The browser did not let swcode copy';
+// How long a code block's button says its text was copied.
+const COPIED_MS = 1500;
 
 // A link written all as code or all in bold keeps that look inside the link.
 const LINK_LOOKS: Readonly<Record<LinkLook, (text: string) => Node>> = {
@@ -22,12 +30,14 @@ const LINK_LOOKS: Readonly<Record<LinkLook, (text: string) => Node>> = {
 
 const SPAN_NODES: { [Kind in keyof SpanMap]: (span: SpanMap[Kind]) => Node | string } = {
   code: (span) => <code>{span.text}</code>,
+  em: (span) => <em>{span.text}</em>,
   // In a tab of its own: the session stays open behind it.
   link: (span) => (
     <a href={span.href} target="_blank" rel="noopener">
       {span.look ? LINK_LOOKS[span.look](span.text) : span.text}
     </a>
   ),
+  strike: (span) => <del>{span.text}</del>,
   strong: (span) => <strong>{span.text}</strong>,
   text: (span) => span.text,
 };
@@ -40,23 +50,62 @@ const spanNode = (span: Span): Node | string => spanNodeOf(span.kind, span);
 // Headings stay modest inside a message: two sizes only.
 const MAJOR_HEADING_LEVEL = 2;
 
+/** A piece of code: in its colour when the language says what it is, as it is otherwise. */
+const tokenNode = (token: Token): Node | string =>
+  token.kind ? <span class={`tok-${token.kind}`}>{token.text}</span> : token.text;
+
+/** Copies a code block, and says so on its button for a moment. */
+async function copyCode(button: JlButton, text: string): Promise<void> {
+  const copied = await copyText(text);
+  button.icon.set(copied ? 'check' : 'circle-alert');
+  button.hint.set(copied ? COPIED_HINT : NOT_COPIED_HINT);
+  setTimeout(() => {
+    button.icon.set('copy');
+    button.hint.set(COPY_HINT);
+  }, COPIED_MS);
+}
+
+/** A code block: its text in the colours of its language, and a button that copies it. One node, as every block. */
+function codeNode(block: BlockMap['code']): Node {
+  // A button keeps its clicks to itself, so each knows its block.
+  const copy = createElement(JlButton, {
+    attrs: { class: 'copy' },
+    props: { hint: COPY_HINT, icon: 'copy', size: 'sm', variant: 'ghost' },
+  });
+  copy.events.register('press', () => void copyCode(copy, block.text));
+  return (
+    <div class="code">
+      {copy}
+      <pre>
+        <code>{tokensOf(block.text, block.language).map(tokenNode)}</code>
+      </pre>
+    </div>
+  );
+}
+
+/** A list, each item with the lists nested in it. */
+function listNode(block: ListBlock): Node {
+  const items = block.items.map((spans, index) => (
+    <li>
+      {spans.map(spanNode)}
+      {(block.nested?.[index] ?? []).map(listNode)}
+    </li>
+  ));
+  return block.ordered ? <ol>{items}</ol> : <ul>{items}</ul>;
+}
+
 const BLOCK_NODES: { [Kind in keyof BlockMap]: (block: BlockMap[Kind]) => Node } = {
-  code: (block) => (
-    <pre>
-      <code>{block.text}</code>
-    </pre>
-  ),
+  code: codeNode,
   heading: (block) =>
     block.level <= MAJOR_HEADING_LEVEL ? (
       <h3>{block.spans.map(spanNode)}</h3>
     ) : (
       <h4>{block.spans.map(spanNode)}</h4>
     ),
-  list: (block) => {
-    const items = block.items.map((spans) => <li>{spans.map(spanNode)}</li>);
-    return block.ordered ? <ol>{items}</ol> : <ul>{items}</ul>;
-  },
+  list: listNode,
   paragraph: (block) => <p>{block.spans.map(spanNode)}</p>,
+  quote: (block) => <blockquote>{block.blocks.map(blockNode)}</blockquote>,
+  rule: () => <hr />,
   // In a box of its own, which scrolls sideways when the table is wider than the message.
   table: (block) => (
     <div class="table">
@@ -84,7 +133,9 @@ const BLOCK_NODES: { [Kind in keyof BlockMap]: (block: BlockMap[Kind]) => Node }
 
 const nodeOf = <Kind extends keyof BlockMap>(kind: Kind, block: BlockMap[Kind]): Node => BLOCK_NODES[kind](block);
 
-const blockNode = (block: Block): Node => nodeOf(block.kind, block);
+function blockNode(block: Block): Node {
+  return nodeOf(block.kind, block);
+}
 
 /** A message of the conversation: the person's, in a quiet box, or the agent's, as plain text. */
 export class ScMessage extends ScElement {

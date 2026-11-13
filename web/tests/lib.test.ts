@@ -49,16 +49,16 @@ describe('blocksOf', () => {
     ]);
   });
 
-  it('reads a code fence without its language line', () => {
+  it('reads a code fence, its language line apart from its code', () => {
     expect(blocksOf('Here:\n```ts\nconst a = 1;\n```\nThat is all.')).toEqual([
       { kind: 'paragraph', spans: [{ kind: 'text', text: 'Here:' }] },
-      { kind: 'code', text: 'const a = 1;' },
+      { kind: 'code', language: 'ts', text: 'const a = 1;' },
       { kind: 'paragraph', spans: [{ kind: 'text', text: 'That is all.' }] },
     ]);
   });
 
   it('shows a fence still open while the answer streams as code', () => {
-    expect(blocksOf('```sh\nnpm run')).toEqual([{ kind: 'code', text: 'npm run' }]);
+    expect(blocksOf('```sh\nnpm run')).toEqual([{ kind: 'code', language: 'sh', text: 'npm run' }]);
   });
 });
 

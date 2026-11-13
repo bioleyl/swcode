@@ -73,6 +73,101 @@ pre code {
   background: none;
 }
 
+/* A code block and the button that copies it, at its corner: quiet until the block is pointed at or reached with
+   the keyboard, and always there where nothing points (a phone). */
+.code {
+  position: relative;
+  min-width: 0;
+}
+
+.copy {
+  position: absolute;
+  top: var(--jl-space-1);
+  right: var(--jl-space-1);
+  border-radius: var(--jl-radius-sm);
+  background: var(--jl-surface-2);
+  opacity: 0;
+  transition: opacity 120ms var(--jl-ease);
+}
+
+.code:hover .copy,
+.code:focus-within .copy {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .copy {
+    opacity: 0.8;
+  }
+}
+
+/* What a piece of code is, in jlib's code colours; a diff's lines in the colours of what went well and what did not. */
+.tok-comment {
+  color: var(--jl-code-comment);
+  font-style: italic;
+}
+
+.tok-string {
+  color: var(--jl-code-string);
+}
+
+.tok-number {
+  color: var(--jl-code-number);
+}
+
+.tok-keyword {
+  color: var(--jl-code-keyword);
+}
+
+.tok-function {
+  color: var(--jl-code-function);
+}
+
+.tok-property {
+  color: var(--jl-code-property);
+}
+
+.tok-tag {
+  color: var(--jl-code-tag);
+}
+
+.tok-attribute {
+  color: var(--jl-code-attribute);
+}
+
+.tok-added {
+  color: var(--jl-ok);
+}
+
+.tok-removed {
+  color: var(--jl-danger);
+}
+
+.tok-meta {
+  color: var(--jl-info);
+}
+
+blockquote {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding-left: 14px;
+  border-left: 3px solid var(--jl-line-strong);
+  color: var(--jl-text-2);
+}
+
+hr {
+  width: 100%;
+  margin: 4px 0;
+  border: 0;
+  border-top: 1px solid var(--jl-line);
+}
+
+del {
+  color: var(--jl-muted);
+}
+
 h3,
 h4 {
   margin: 4px 0 0;
@@ -100,6 +195,12 @@ li {
 
 li::marker {
   color: var(--jl-muted);
+}
+
+/* A list inside an item sits right under the item's own words. */
+li > ul,
+li > ol {
+  margin-top: 4px;
 }
 
 .table {
