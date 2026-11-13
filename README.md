@@ -17,8 +17,8 @@ A coding agent for local models. It runs an LLM agent with file, terminal and we
 
 - **Local-first**: works with [llama.cpp's llm-server](https://github.com/ggml-org/llama.cpp/tree/master/tools/server), vLLM, or any OpenAI-compatible API. Runs on your machine, stays on your machine.
 - **Code and Chat**: a Code session puts the agent to work in a project; a Chat is a conversation with the model in no project, which searches and reads the web and draws pictures, but touches no files and runs no commands.
-- **Agent with tools**: reads, writes and edits files, runs commands (foreground and background), searches code with grep/glob, browses the web, takes screenshots, draws images.
-- **Plans and questions**: for a task of several steps the agent keeps a plan you watch it work through; it asks you multiple-choice questions when a decision is yours, and a command that asks for a password (`sudo`, ssh) shows a card where you type it.
+- **Agent with tools**: reads, writes and edits files, runs commands (foreground and background, their output shown as it comes), searches code with grep/glob, browses the web, takes screenshots, draws images. Reads of one reply run together, an edit forgives a difference of indentation, and a project can run a formatter or a linter after each edit, whose findings go back to the agent.
+- **Plans and questions**: for a task of several steps the agent keeps a plan you watch it work through; it asks you multiple-choice questions when a decision is yours, and a command that asks for a password (`sudo`, ssh) runs in a terminal of the app, where you type it while the agent waits for the result.
 - **Subagents**: the agent can spin up parallel explore subagents to search the codebase or the web while it keeps working, on a smaller model if you give them one.
 - **Permissions**: choose how much the agent can do without asking — run everything, ask before commands, or ask for everything. A request is answered for this call, for the session, or for the project: its Config tab lists what its sessions do without asking.
 - **Trust**: a folder you add as a project speaks for itself only once you trust it: until then its `AGENTS.md` and its skills are kept from the agent, and its commands keep their sandbox.
@@ -27,14 +27,14 @@ A coding agent for local models. It runs an LLM agent with file, terminal and we
 - **Skills**: reusable instructions for recurring tasks, loaded from your home folder or the project, and run as `/<skill>`.
 - **MCP servers**: list [Model Context Protocol](https://modelcontextprotocol.io) servers in a file and the agent has their tools beside its own, asking before it calls one.
 - **Slash commands**: `/new` starts a session with the same settings, `/compact` summarizes the conversation now, `/peek` asks the agent something beside its work without entering the conversation, `/help` lists them all.
-- **Composer**: paste or drop pictures for models that see them, dictate your message with the microphone (your browser's speech recognition), and queue messages while a turn runs.
+- **Composer**: paste or drop pictures for models that see them, dictate your message with the microphone (your browser's speech recognition), and queue messages while a turn runs. What you were typing is still there when you come back to a page.
 - **Models and presets**: several llm-servers and models side by side, presets that pick the main agent's model and the subagents', a thinking level per session, and a token economy mode that asks for shorter answers.
-- **Prompt cache**: each agent keeps its own llm-server slot, so a long conversation only processes what is new.
+- **Prompt cache**: each agent keeps its own llm-server slot, so a long conversation only processes what is new; the side panel shows how much of the prompt the cache served, and the model's speed.
 - **Restore points**: each turn keeps the files it changes as they were, to show what it changed and put it back — the files its tools wrote, and in a git repository those its commands changed too.
 - **Context management**: automatic conversation compaction when approaching the model's context limit.
 - **Search**: `Ctrl K` finds sessions, projects and settings, and searches inside the conversations.
 - **Web app**: follow what the agent does in real time, answer its questions, approve commands, chat with it. Works on desktop and phone, in light or dark.
-- **Phones**: pair a phone with a QR code from Settings → Phone, then follow and steer your sessions from it, on your network or over a tailnet.
+- **Phones**: pair a phone with a QR code from Settings → Phone, then follow and steer your sessions from it, on your network or over a tailnet (one press has Tailscale serve swcode over HTTPS). swcode installs on the phone as an app, and a browser adds other computers' swcode by scanning their code, as the desktop app does.
 - **Remote projects**: work on projects over SSH or in WSL without moving the daemon.
 - **Windows desktop app**: the daemon inside a window, in the Start menu and the tray, for projects in Windows or in WSL; it pairs other computers' swcode and switches between them.
 - **Updates**: swcode looks for new releases and, on a computer, offers to install them.
@@ -74,7 +74,7 @@ The script installs `swcode` to `~/.local/bin/swcode`; on Windows, the desktop a
 
 ### From source
 
-Requires Go 1.21+ and Node 24+.
+Requires Node 24+ and Go 1.27 (any Go from 1.21 fetches it by itself, from `go.mod`'s toolchain line).
 
 ```bash
 git clone https://github.com/bioleyl/swcode.git && cd swcode
