@@ -498,6 +498,45 @@ func TestApplyEdit(t *testing.T) {
 	}
 }
 
+// goFile is a file indented with tabs, as gofmt leaves it.
+const goFile = "func greet(name string) string {\n\tif name == \"\" {\n\t\treturn \"Hello\"\n\t}\n\treturn \"Hello, \" + name\n}\n"
+
+func TestAnEditFindsItsTextByItsWordsWhenTheIndentationDiffersAndKeepsTheFiles(t *testing.T) {
+	// The model wrote the block with four spaces, from memory: the file has tabs, and keeps them.
+	wrote := "    if name == \"\" {\n        return \"Hello\"\n    }"
+	with := "    if name == \"\" {\n        return \"Hi\"\n    }\n    name = strings.TrimSpace(name)"
+	edited := ApplyEdit(goFile, wrote, with, false)
+	want := "func greet(name string) string {\n\tif name == \"\" {\n\t\treturn \"Hi\"\n\t}\n\tname = strings.TrimSpace(name)\n\treturn \"Hello, \" + name\n}\n"
+	if !edited.OK || edited.Replaced != 1 || edited.Text != want || edited.Note == "" {
+		t.Fatalf("got %+v", edited)
+	}
+	// Text that is in the file as written is replaced as written, and says nothing of how it was found.
+	if exact := ApplyEdit(goFile, "\treturn \"Hello, \" + name", "\treturn \"Hi, \" + name", false); !exact.OK || exact.Note != "" {
+		t.Fatalf("got %+v", exact)
+	}
+}
+
+func TestAnEditByItsWordsStillTakesOnePlaceUnlessAllAreAsked(t *testing.T) {
+	twice := "a:\n\tx = 1\n\ty = 2\nb:\n\t\tx = 1\n\t\ty = 2\n"
+	if refused := ApplyEdit(twice, "  x = 1\n  y = 2", "  x = 3", false); refused.OK || !strings.Contains(refused.Problem, "appears 2 times, indentation aside") {
+		t.Fatalf("got %+v", refused)
+	}
+	all := ApplyEdit(twice, "  x = 1\n  y = 2", "  x = 3", true)
+	if !all.OK || all.Replaced != 2 || all.Text != "a:\n\tx = 3\nb:\n\t\tx = 3\n" {
+		t.Fatalf("got %+v", all)
+	}
+}
+
+func TestTextThatIsNotInTheFileSaysWhereItsFirstLineIs(t *testing.T) {
+	refused := ApplyEdit(goFile, "\tif name == \"\" {\n\t\treturn \"Bonjour\"", "x", false)
+	if refused.OK || !strings.Contains(refused.Problem, "Its first line is at line 2 of the file") {
+		t.Fatalf("got %+v", refused)
+	}
+	if nowhere := ApplyEdit(goFile, "nothing like it", "x", false); nowhere.OK || nowhere.Problem != notFound {
+		t.Fatalf("got %+v", nowhere)
+	}
+}
+
 func TestFileDiffNumbersTheLinesAroundEachChangeAGapBetween(t *testing.T) {
 	before := strings.Join([]string{"1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"}, "\n") + "\n"
 	after := strings.Replace(strings.Replace(before, "2\n", "two\n", 1), "11\n", "eleven\n", 1)

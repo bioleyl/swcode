@@ -172,6 +172,16 @@ type editInput struct {
 	ReplaceAll bool   `json:"replaceAll"`
 }
 
+// editedOutput is what the model reads of an edit made: where, how many replacements, and how the text was found
+// when not as it was written.
+func editedOutput(label string, edit EditResult) string {
+	said := fmt.Sprintf("Edited %s: %s", label, counted(edit.Replaced, "replacement", "replacements"))
+	if edit.Note != "" {
+		said += " (" + edit.Note + ")"
+	}
+	return said + "."
+}
+
 var editTool = Define(Spec[editInput]{
 	Check: func(ctx context.Context, input editInput, tc *Context) Check {
 		path, problem := resolveTarget(ctx, tc, input.Path)
@@ -202,7 +212,7 @@ var editTool = Define(Spec[editInput]{
 			if problem := saveFile(ctx, tc, path, []byte(edit.Text), info, label); problem != "" {
 				return Failure(problem, "")
 			}
-			return Outcome{Display: diff, OK: true, Output: fmt.Sprintf("Edited %s: %s.", label, counted(edit.Replaced, "replacement", "replacements"))}
+			return Outcome{Display: diff, OK: true, Output: editedOutput(label, edit)}
 		}, diff)
 	},
 	Description: "Replaces exact text in a file you read: oldString must appear once, unless replaceAll is set. Prefer it to write for changes.",
