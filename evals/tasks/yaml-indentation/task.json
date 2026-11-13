@@ -1,0 +1,5 @@
+{
+  "check": "awk '/^  worker:$/{w=NR} /^    restart: always$/{r=NR} /^    environment:$/{e=NR} /^      (- )?QUEUE[:=] ?\"?jobs\"?$/{q=NR} END{exit !(w && r>w && e>w && q>e)}' deploy.yml && [ \"$(grep -c 'restart:' deploy.yml)\" = 1 ] && grep -q '^      - \"8080:80\"$' deploy.yml && grep -q '^    image: shop-worker:1.4$' deploy.yml",
+  "prompt": "In deploy.yml, give the worker service an environment with QUEUE set to jobs, and a restart policy of always, indented as the other keys of the file are. Leave the web service as it is.",
+  "timeoutSeconds": 300
+}

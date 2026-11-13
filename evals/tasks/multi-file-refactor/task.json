@@ -1,0 +1,5 @@
+{
+  "check": "[ -f src/dates.mjs ] && [ \"$(grep -lE '(const|function) formatDate' src/*.mjs | wc -l | tr -d ' ')\" = 1 ] && grep -q 'dates.mjs' src/users.mjs && grep -q 'dates.mjs' src/orders.mjs && node -e \"Promise.all([import('./src/users.mjs'), import('./src/orders.mjs'), import('./src/dates.mjs')]).then(([m0, m1, m2]) => process.exit((m0.userLine({ name: 'Ada', joined: '2024-03-05' }) === 'Ada, since 05.03.2024' && m1.orderLine({ id: 7, placed: '2025-12-31' }) === '#7 on 31.12.2025' && m2.formatDate('2024-01-02') === '02.01.2024') ? 0 : 1)).catch(() => process.exit(1))\"",
+  "prompt": "src/users.mjs and src/orders.mjs each define the same formatDate. Move it to a new src/dates.mjs that exports it, and have both files import it from there.",
+  "timeoutSeconds": 300
+}

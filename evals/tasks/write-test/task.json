@@ -1,0 +1,5 @@
+{
+  "check": "[ -f clamp.test.mjs ] && grep -q 'clamp.mjs' clamp.test.mjs && [ \"$(grep -cE '(test|it)\\(' clamp.test.mjs)\" -ge 3 ] && node --test clamp.test.mjs >/dev/null 2>&1 && node -e \"Promise.all([import('./clamp.mjs')]).then(([m0]) => process.exit((m0.clamp(5, 0, 3) === 3) ? 0 : 1)).catch(() => process.exit(1))\"",
+  "prompt": "Write clamp.test.mjs: tests of clamp.mjs with node:test, at least three, covering a value under the range, one inside it and one over it. `node --test` must pass.",
+  "timeoutSeconds": 300
+}

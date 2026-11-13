@@ -22,6 +22,7 @@
     "e2e:install": "playwright-core install chromium-headless-shell",
     "typecheck": "tsc --noEmit -p web && tsc --noEmit -p e2e",
     "protocol": "tsx scripts/protocol-go.ts",
+    "eval": "tsx scripts/eval.ts",
     "check:go": "tsx scripts/protocol-go.ts --check && $(go env GOROOT)/bin/gofmt -l . | (! grep .) && go vet ./... && GOOS=windows go vet -unsafeptr=false ./... && go test -race ./...",
     "lint": "biome check .",
     "format": "biome format --write .",

@@ -1,0 +1,6 @@
+{
+  "name": "shop",
+  "port": "8080",
+  "debug": false
+  "features": ["search", "export",],
+}

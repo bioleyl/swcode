@@ -1,0 +1,5 @@
+{
+  "check": "node -e \"Promise.all([import('./strings.mjs')]).then(([m0]) => process.exit((m0.slugify('Hello, World!') === 'hello-world' && m0.slugify('  A  b__c ') === 'a-b-c' && m0.slugify('Release 2.0') === 'release-2-0' && m0.capitalize('ada') === 'Ada') ? 0 : 1)).catch(() => process.exit(1))\"",
+  "prompt": "Add a function `slugify(text)` to strings.mjs and export it: the text in lowercase, every run of characters that are not letters or digits turned into one hyphen, and no hyphen at either end. slugify('Hello, World!') is 'hello-world'.",
+  "timeoutSeconds": 300
+}

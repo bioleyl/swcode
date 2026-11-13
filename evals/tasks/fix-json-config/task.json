@@ -1,0 +1,5 @@
+{
+  "check": "node -e \"const c = JSON.parse(require('fs').readFileSync('config.json', 'utf8')); process.exit(c.port === 8080 && c.name === 'shop' && c.debug === false && c.features.length === 2 && c.features[1] === 'export' ? 0 : 1)\"",
+  "prompt": "config.json no longer parses, and its port must be the number 8080, not a text. Fix the file without dropping any of its settings.",
+  "timeoutSeconds": 300
+}

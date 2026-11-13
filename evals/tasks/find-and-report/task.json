@@ -1,0 +1,5 @@
+{
+  "check": "[ \"$(sed -n 1p answer.txt 2>/dev/null | tr -d '[:space:]' | sed 's#^\\./##')\" = 'src/net/limits.mjs' ] && [ \"$(sed -n 2p answer.txt | tr -d '[:space:]')\" = '4500' ]",
+  "prompt": "Find where REQUEST_TIMEOUT_MS is defined. Write answer.txt with two lines: the path of that file from the workspace, then the value it has.",
+  "timeoutSeconds": 300
+}

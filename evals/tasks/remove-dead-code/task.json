@@ -1,0 +1,5 @@
+{
+  "check": "! grep -qE 'legacyArea|debugDump|node:util' shapes.mjs && node --test >/dev/null 2>&1 && node -e \"Promise.all([import('./shapes.mjs')]).then(([m0]) => process.exit((m0.area({ w: 2, h: 3 }) === 6 && m0.perimeter({ w: 2, h: 3 }) === 10) ? 0 : 1)).catch(() => process.exit(1))\"",
+  "prompt": "Remove the dead code from shapes.mjs: the functions nothing uses or exports, and the import nothing uses. `node --test` must still pass.",
+  "timeoutSeconds": 300
+}

@@ -1,0 +1,5 @@
+{
+  "check": "node -e \"Promise.all([import('./paginate.mjs')]).then(([m0]) => process.exit((JSON.stringify(m0.page([1, 2, 3, 4, 5], 1, 2)) === '[1,2]' && JSON.stringify(m0.page([1, 2, 3, 4, 5], 3, 2)) === '[5]' && m0.pageCount(5, 2) === 3 && m0.pageCount(4, 2) === 2 && m0.pageCount(0, 2) === 0) ? 0 : 1)).catch(() => process.exit(1))\"",
+  "prompt": "paginate.mjs counts pages from 1, but page(items, 1, 2) gives the second page, and pageCount is wrong when the items fill the last page exactly, or when there are none. Fix both.",
+  "timeoutSeconds": 300
+}

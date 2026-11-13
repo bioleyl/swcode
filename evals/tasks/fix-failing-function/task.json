@@ -1,0 +1,5 @@
+{
+  "check": "node -e \"Promise.all([import('./sum.mjs')]).then(([m0]) => process.exit((m0.sum([1, 2, 3]) === 6 && m0.sum([]) === 0 && m0.sum([-2, 2]) === 0) ? 0 : 1)).catch(() => process.exit(1))\"",
+  "prompt": "The tests in sum.test.mjs fail. Fix sum.mjs so that `node --test` passes. Do not change the test.",
+  "timeoutSeconds": 300
+}

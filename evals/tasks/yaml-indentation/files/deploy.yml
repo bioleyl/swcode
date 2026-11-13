@@ -1,0 +1,7 @@
+services:
+  web:
+    image: shop:1.4
+    ports:
+      - "8080:80"
+  worker:
+    image: shop-worker:1.4

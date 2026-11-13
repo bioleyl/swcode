@@ -1,0 +1,5 @@
+{
+  "check": "! grep -rq calcPrice src && grep -q 'priceWithTax' src/price.mjs && node -e \"Promise.all([import('./src/cart.mjs'), import('./src/report.mjs'), import('./src/price.mjs')]).then(([m0, m1, m2]) => process.exit((m0.cartTotal([{ price: 100 }, { price: 50 }]) === 162 && m1.reportLine({ name: 'Tea', price: 100 }) === 'Tea: 108' && m2.priceWithTax(100) === 108) ? 0 : 1)).catch(() => process.exit(1))\"",
+  "prompt": "Rename the function calcPrice to priceWithTax everywhere: where it is defined and where it is used.",
+  "timeoutSeconds": 300
+}

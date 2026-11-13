@@ -1,0 +1,5 @@
+{
+  "check": "grep -q '^## Options' README.md && grep -q '^## Install' README.md && grep -q -- '--port' README.md && grep -q -- '--host' README.md && grep -q -- '--quiet' README.md && grep -q '8080' README.md && grep -q '127.0.0.1' README.md && ! grep -q '3000' README.md",
+  "prompt": "README.md's Options section is out of date. Make it list every option cli.mjs defines, each with its flag and its default as the code has them. Leave the other sections as they are.",
+  "timeoutSeconds": 300
+}
