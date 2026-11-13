@@ -26,6 +26,8 @@ type Place struct {
 	Host      hosts.Host
 	Workspace string
 	Off       []string
+	// PersonalOnly leaves out the project's own skills: those of a folder the person has not trusted.
+	PersonalOnly bool
 }
 
 // Port is a session's skills, for the main agent's tools.
@@ -136,7 +138,10 @@ func (c *Catalog) hostSkills(ctx context.Context, place Place) []HostSkill {
 		c.logError(err)
 		return nil
 	}
-	return found
+	if !place.PersonalOnly {
+		return found
+	}
+	return slices.DeleteFunc(found, func(skill HostSkill) bool { return skill.Origin != protocol.SkillOriginPersonal })
 }
 
 // hostSkillFiles is the files of a skill's folder on its host, by their path there, written with slashes.

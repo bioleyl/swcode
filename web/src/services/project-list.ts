@@ -50,3 +50,10 @@ export const setProjectAfterEdit = (projectId: string, command: string): void =>
 /** Takes back what the project's sessions did without asking: they ask again from their next call. */
 export const removeProjectAllowed = (projectId: string, rule: AllowedRule, name: string): void =>
   daemon.send({ name, projectId, rule, type: 'removeProjectAllowed' });
+
+/**
+ * Says whether the person trusts the project's folder: the notes and skills it brings are given to the agent from
+ * its sessions' next turn, or kept from it.
+ */
+export const setProjectTrust = (projectId: string, trusted: boolean): void =>
+  daemon.send({ projectId, trusted, type: 'setProjectTrust' });

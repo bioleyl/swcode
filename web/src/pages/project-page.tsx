@@ -1,6 +1,7 @@
 import { createElement, css } from '@jadis/core';
 import {
   confirmDialog,
+  JlAlert,
   JlButton,
   JlCard,
   JlEmpty,
@@ -32,7 +33,13 @@ import { daemon } from '../services/daemon';
 import { daemonState, daemonStatusBus } from '../services/daemon-status';
 import { hrefOf, newSessionPath, projectTabPath, sessionPath } from '../services/navigation';
 import { presetChoices, presetsBus } from '../services/presets';
-import { askToRemoveProject, findProject, projectListBus, setProjectAfterEdit } from '../services/project-list';
+import {
+  askToRemoveProject,
+  findProject,
+  projectListBus,
+  setProjectAfterEdit,
+  setProjectTrust,
+} from '../services/project-list';
 import { foundSkills, readProjectSkills, setProjectSkill } from '../services/project-skills';
 import {
   addProjectTodo,
@@ -94,6 +101,8 @@ const UNREACHABLE = 'The daemon did not answer.';
 const TODOS_NOTE = 'What this project still has to do. A new session can pin them to its first message.';
 const TODO_PLACEHOLDER = 'What needs doing?';
 const TODO_DELETE_NOTE = 'It is removed from this project’s todos.';
+const UNTRUSTED_NOTE =
+  'Its AGENTS.md and its own skills are kept from the agent, and its commands keep their sandbox. Trust a folder whose files you know: the agent follows what they say as your instructions.';
 const AFTER_EDIT_NOTE =
   'A command run in the project’s folder after each file the agent writes or edits: a formatter, a linter, a type check. What it says goes back to the agent with its edit, so it corrects itself without being asked.';
 const AFTER_EDIT_SAVED = 'The check after each edit is saved';
@@ -163,6 +172,8 @@ export class ProjectPage extends ScElement {
     todoInput: ref(JlInput),
     todoList: ref('.todo-list'),
     todosEmpty: ref<JlEmpty>('.todos-empty'),
+    trust: ref<JlButton>('.trust'),
+    untrusted: ref<JlAlert>('.untrusted'),
   }));
 
   templateHtml(): Node {
@@ -170,6 +181,10 @@ export class ProjectPage extends ScElement {
       <JlPage appName={APP_NAME} width="standard">
         <JlButton slot="actions" class="remove" icon="trash" variant="ghost" hint="Remove the project" />
         <JlButton slot="actions" class="new-session" icon="plus" variant="primary" hint="New session" />
+        <JlAlert class="untrusted" tone="warn" heading="You have not trusted this folder" hidden>
+          {UNTRUSTED_NOTE}
+          <JlButton slot="actions" class="trust" label="Trust this folder" size="sm" />
+        </JlAlert>
         <JlTabs label="Project">
           <JlTabPanel
             name="sessions"
@@ -261,6 +276,7 @@ export class ProjectPage extends ScElement {
     const { choices } = this._refs;
     this._refs.tabs.events.register('change', (tab) => this.pickTab(tab));
     this._refs.remove.events.register('press', () => askToRemoveProject(this.route.id ?? ''));
+    this._refs.trust.events.register('press', () => setProjectTrust(this.route.id ?? '', true));
     this._refs.reset.events.register('press', () => this.saveDefaults(undefined));
     this._refs.skillsState.events.register('retry', () => this.loadSkills(this.route.id ?? ''));
     this._refs.swcodeBaseInProject.events.register('press', () => void this.changeSwcodeBase('project'));
@@ -325,6 +341,7 @@ export class ProjectPage extends ScElement {
     }
     this.renderDefaults(project);
     this.renderAfterEdit(project);
+    this._refs.untrusted.hidden = project.untrusted !== true;
     this._refs.sandbox.project.set(project);
     this._refs.allowed.project.set(project);
     this.renderTodos(project);

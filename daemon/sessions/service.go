@@ -111,6 +111,9 @@ type Deps struct {
 	// person answers a request with "in this project".
 	Allowed        func(path string, host protocol.HostRef) permissions.Allowed
 	AllowInProject func(path string, host protocol.HostRef, allowed permissions.Allowed)
+	// Untrusted tells whether a folder's project is one the person has not trusted: its notes and its own skills
+	// are then kept from the agent, and its commands keep their sandbox.
+	Untrusted func(path string, host protocol.HostRef) bool
 	// Sandboxes knows which hosts can run commands in a sandbox; nil, and none is: every command runs as the person.
 	Sandboxes *hosts.Sandboxes
 	// SandboxOff tells whether a folder's project turned the sandbox off for its sessions.

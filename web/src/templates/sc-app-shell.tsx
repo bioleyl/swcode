@@ -37,7 +37,13 @@ import {
   sessionPath,
   settingsPath,
 } from '../services/navigation';
-import { allProjects, askForProject, findProject, projectListBus } from '../services/project-list';
+import {
+  allProjects,
+  askForProject,
+  findProject,
+  projectListBus,
+  setProjectTrust,
+} from '../services/project-list';
 import { seenBus, seenSessions } from '../services/seen-sessions';
 import { allSessions, findSession, sessionListBus } from '../services/session-list';
 import { revealInSession } from '../services/session-reveal';
@@ -52,6 +58,7 @@ import styles from './sc-app-shell.css?inline';
 
 import type { ActiveRoute } from '@jadis/core';
 import type { PaletteCommand, TabBarItem } from '@syware/jlib';
+import type { Project } from '../../../shared/protocol/project.schema';
 import type { SessionKind } from '../../../shared/protocol/session.schema';
 import type { SettingsTopic } from '../lib/settings-topics';
 import type { RouteName } from '../routes';
@@ -59,6 +66,8 @@ import type { DaemonState } from '../types/daemon.types';
 import type { PaletteTarget, PaletteTargetMap } from '../types/palette.types';
 
 const HASH_CHANGE = 'hashchange';
+const TRUST_QUESTION =
+  'Its AGENTS.md and its own skills are instructions the agent follows as if they were yours. Trust a folder whose files you know. Otherwise they are kept from the agent and its commands keep their sandbox, until its Config tab says you trust it.';
 // A window as narrow as a phone's, where the session page puts its composer along the bottom.
 const PHONE_QUERY = '(max-width: 720px)';
 
@@ -220,7 +229,7 @@ export class ScAppShell extends ScElement {
 
   /** The project dialog the palette and the pages open, and what a new or removed project does. */
   private wireProjects(): void {
-    this._refs.projectDialog.events.register('created', (project) => navigate(newSessionPath(project.id)));
+    this._refs.projectDialog.events.register('created', (project) => void this.openNewProject(project));
     this.onBus(projectListBus, 'open', () => this._refs.projectDialog.open());
     this.onBus(projectListBus, 'remove', (projectId) => void this.removeProject(projectId));
     this.onBus(projectListBus, 'changed', () => this._refs.nav.projects.set([...allProjects()]));
@@ -328,6 +337,26 @@ export class ScAppShell extends ScElement {
   }
 
   /** Removes a project once the person confirms; leaves its page, and its session when one of them is open. */
+  /**
+   * A project just added: a folder that was already there may bring instructions of its own (its AGENTS.md, its
+   * skills), which the agent follows as the person's, so the person says first whether they trust it. Not now keeps
+   * them from the agent until the project's Config says otherwise.
+   */
+  private async openNewProject(project: Project): Promise<void> {
+    if (project.untrusted === true) {
+      const trusted = await confirmDialog({
+        cancelLabel: 'Not now',
+        confirmLabel: 'Trust this folder',
+        heading: `Trust ${project.name}?`,
+        text: TRUST_QUESTION,
+      });
+      if (trusted) {
+        setProjectTrust(project.id, true);
+      }
+    }
+    navigate(newSessionPath(project.id));
+  }
+
   private async removeProject(projectId: string): Promise<void> {
     const project = findProject(projectId);
     if (!project) {

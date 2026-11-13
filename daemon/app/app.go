@@ -267,6 +267,10 @@ func New(settings config.Config, options Options) (*App, error) {
 		AllowInProject: func(path string, host protocol.HostRef, allowed permissions.Allowed) {
 			app.Projects.Allow(path, host, allowed.Programs, allowed.Outside, allowed.Servers)
 		},
+		Untrusted: func(path string, host protocol.HostRef) bool {
+			project, _ := app.Projects.Find(path, host)
+			return project.Untrusted
+		},
 		Sandboxes: app.sandboxes,
 		SandboxOff: func(path string, host protocol.HostRef) bool {
 			project, _ := app.Projects.Find(path, host)

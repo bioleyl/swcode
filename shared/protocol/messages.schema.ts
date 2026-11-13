@@ -250,6 +250,8 @@ export const ClientMessageSchema = z.discriminatedUnion('type', [
     rule: AllowedRuleSchema,
     type: z.literal('removeProjectAllowed'),
   }),
+  // The person trusts the project's folder, or no longer does: its notes and skills are given to the agent or not.
+  z.object({ projectId: z.string(), trusted: z.boolean(), type: z.literal('setProjectTrust') }),
   // Whether the commands of the project's sessions run in a sandbox, where its host can make one.
   z.object({ on: z.boolean(), projectId: z.string(), type: z.literal('setProjectSandbox') }),
   // Turns one of the skills the project's sessions find on or off for them, from their next turn on.

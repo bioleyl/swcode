@@ -784,6 +784,7 @@ type Project struct {
 	SandboxOff bool             `json:"sandboxOff,omitempty"`
 	SkillsOff  []string         `json:"skillsOff"`
 	Todos      []ProjectTodo    `json:"todos"`
+	Untrusted  bool             `json:"untrusted,omitempty"`
 }
 
 func (v Project) MarshalJSON() ([]byte, error) {
@@ -2202,6 +2203,8 @@ func (ClientMessageSetProjectAfterEdit) isClientMessage() {}
 
 func (ClientMessageRemoveProjectAllowed) isClientMessage() {}
 
+func (ClientMessageSetProjectTrust) isClientMessage() {}
+
 func (ClientMessageSetProjectSandbox) isClientMessage() {}
 
 func (ClientMessageSetProjectSkill) isClientMessage() {}
@@ -2463,6 +2466,12 @@ func (u *ClientMessage) UnmarshalJSON(data []byte) error {
 			return err
 		}
 		u.Value = value
+	case "\"setProjectTrust\"":
+		var value ClientMessageSetProjectTrust
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
 	case "\"setProjectSandbox\"":
 		var value ClientMessageSetProjectSandbox
 		if err := json.Unmarshal(data, &value); err != nil {
@@ -2563,6 +2572,7 @@ type ClientMessageMapper[R any] interface {
 	SetProjectDefaults(ClientMessageSetProjectDefaults) R
 	SetProjectAfterEdit(ClientMessageSetProjectAfterEdit) R
 	RemoveProjectAllowed(ClientMessageRemoveProjectAllowed) R
+	SetProjectTrust(ClientMessageSetProjectTrust) R
 	SetProjectSandbox(ClientMessageSetProjectSandbox) R
 	SetProjectSkill(ClientMessageSetProjectSkill) R
 	AddProjectTodo(ClientMessageAddProjectTodo) R
@@ -2653,6 +2663,8 @@ func MapClientMessage[R any](u ClientMessage, m ClientMessageMapper[R]) R {
 		return m.SetProjectAfterEdit(value)
 	case ClientMessageRemoveProjectAllowed:
 		return m.RemoveProjectAllowed(value)
+	case ClientMessageSetProjectTrust:
+		return m.SetProjectTrust(value)
 	case ClientMessageSetProjectSandbox:
 		return m.SetProjectSandbox(value)
 	case ClientMessageSetProjectSkill:
@@ -3707,6 +3719,20 @@ func (v *ClientMessageRemoveProjectAllowed) Normalize() error {
 		return fmt.Errorf("%s: unknown value %q", "rule", v.Rule)
 	}
 	return nil
+}
+
+type ClientMessageSetProjectTrust struct {
+	ProjectID string `json:"projectId"`
+	Trusted   bool   `json:"trusted"`
+}
+
+func (v ClientMessageSetProjectTrust) MarshalJSON() ([]byte, error) {
+	type plain ClientMessageSetProjectTrust
+	p := plain(v)
+	return json.Marshal(struct {
+		Key string `json:"type"`
+		plain
+	}{"setProjectTrust", p})
 }
 
 type ClientMessageSetProjectSandbox struct {

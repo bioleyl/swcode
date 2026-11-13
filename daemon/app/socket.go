@@ -261,6 +261,10 @@ func (h handlers) RemoveProjectAllowed(message protocol.ClientMessageRemoveProje
 	return h.problem(h.app.Projects.RemoveAllowed(message.ProjectID, message.Rule, message.Name))
 }
 
+func (h handlers) SetProjectTrust(message protocol.ClientMessageSetProjectTrust) struct{} {
+	return h.problem(h.app.Projects.SetTrust(message.ProjectID, message.Trusted))
+}
+
 func (h handlers) SetProjectSandbox(message protocol.ClientMessageSetProjectSandbox) struct{} {
 	return h.problem(h.app.Projects.SetSandbox(message.ProjectID, message.On))
 }

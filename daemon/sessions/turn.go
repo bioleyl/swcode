@@ -27,6 +27,8 @@ type place struct {
 	skills   catalog.Port
 	// sandbox is where the session's commands run; nil where they run as the person does.
 	sandbox *hosts.Sandbox
+	// untrusted: the folder is one the person has not trusted, and what it says of itself is not given to the agent.
+	untrusted bool
 }
 
 // The agent call's result: the subagent works, or waits its turn, and its report comes later in any case.
@@ -68,18 +70,25 @@ func (s *Service) prepare(ctx context.Context, session *live) (prepared, error) 
 	if err != nil {
 		return prepared{}, err
 	}
-	where := place{host: host, platform: platform, sandbox: s.sandboxFor(ctx, session, meta, host, scratch), scratch: scratch, skills: s.deps.Skills.PortFor(catalog.Place{
-		Host: host, Off: s.deps.SkillsOff(meta.Workspace, meta.Host), Workspace: meta.Workspace,
-	})}
+	untrusted := s.deps.Untrusted != nil && s.deps.Untrusted(meta.Workspace, meta.Host)
+	where := place{
+		host: host, platform: platform, sandbox: s.sandboxFor(ctx, session, meta, host, scratch, untrusted), scratch: scratch,
+		skills: s.deps.Skills.PortFor(catalog.Place{
+			Host: host, Off: s.deps.SkillsOff(meta.Workspace, meta.Host), PersonalOnly: untrusted, Workspace: meta.Workspace,
+		}),
+		untrusted: untrusted,
+	}
 	return prepared{
 		main: main, setup: s.setupFor(session, meta, main, where, main.Vision, limit), subagent: subagent, subagents: limit, where: where,
 	}, nil
 }
 
 // sandboxFor is where the session's commands run: in a sandbox, when its host can make one and neither the daemon
-// nor the session's project turned it off; nil otherwise, and they run as the person does.
-func (s *Service) sandboxFor(ctx context.Context, session *live, meta Meta, host hosts.Host, scratch string) *hosts.Sandbox {
-	if s.deps.Sandboxes == nil || (s.deps.SandboxOff != nil && s.deps.SandboxOff(meta.Workspace, meta.Host)) {
+// nor the session's project turned it off; nil otherwise, and they run as the person does. A folder that is not
+// trusted keeps its sandbox whatever its project says.
+func (s *Service) sandboxFor(ctx context.Context, session *live, meta Meta, host hosts.Host, scratch string, untrusted bool) *hosts.Sandbox {
+	turnedOff := !untrusted && s.deps.SandboxOff != nil && s.deps.SandboxOff(meta.Workspace, meta.Host)
+	if s.deps.Sandboxes == nil || turnedOff {
 		return nil
 	}
 	state := s.deps.Sandboxes.Of(ctx, hosts.Key(meta.Host), host)
@@ -190,6 +199,10 @@ func (s *Service) setupFor(session *live, meta Meta, main llm.Choice, where plac
 		Pictures:      &agent.PictureView{Folder: s.picturesFolderOf(session), Seen: sees},
 		LoadSkill:     where.skills.Load,
 		Notes: func(ctx context.Context) []protocol.ProjectNote {
+			// The notes of a folder that is not trusted are its own words, not the person's.
+			if where.untrusted {
+				return nil
+			}
 			return notes.Find(ctx, where.host, meta.Workspace)
 		},
 		Skills: where.skills.List,

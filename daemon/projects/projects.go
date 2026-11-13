@@ -140,7 +140,8 @@ func (s *Service) Create(ctx context.Context, folder string, host *protocol.Host
 	if problem != "" {
 		return protocol.Project{}, problem
 	}
-	return s.Ensure(path, ref), ""
+	// A folder that was already there may bring instructions of its own: the person says whether they trust it.
+	return s.ensure(path, ref, true), ""
 }
 
 func (s *Service) Remove(projectID string) string {
@@ -256,6 +257,21 @@ func (s *Service) RemoveAllowed(projectID string, rule protocol.AllowedRule, nam
 		allowed.Servers = without(allowed.Servers, name)
 	}
 	projects[index].Allowed = &allowed
+	s.change(projects)
+	return ""
+}
+
+// SetTrust says whether the person trusts the project's folder: the notes and skills it brings are given to the
+// agent from its sessions' next turn, or kept from it.
+func (s *Service) SetTrust(projectID string, trusted bool) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	index := slices.IndexFunc(s.projects, func(project protocol.Project) bool { return project.ID == projectID })
+	if index < 0 {
+		return unknownProject
+	}
+	projects := append([]protocol.Project{}, s.projects...)
+	projects[index].Untrusted = !trusted
 	s.change(projects)
 	return ""
 }
@@ -457,6 +473,11 @@ func (s *Service) ByID(projectID string) (protocol.Project, bool) {
 
 // Ensure is the project of a folder on a host, made for it when there is none yet.
 func (s *Service) Ensure(folder string, host protocol.HostRef) protocol.Project {
+	return s.ensure(folder, host, false)
+}
+
+// ensure is the project of a folder on a host: a new one starts untrusted when said so.
+func (s *Service) ensure(folder string, host protocol.HostRef, untrusted bool) protocol.Project {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, project := range s.projects {
@@ -466,6 +487,7 @@ func (s *Service) Ensure(folder string, host protocol.HostRef) protocol.Project 
 	}
 	project := protocol.Project{
 		CreatedAt: protocol.Timestamp(s.deps.Now()), Host: host, ID: s.deps.NewID(), Name: baseName(folder), Path: folder,
+		Untrusted: untrusted,
 	}
 	s.change(append(append([]protocol.Project{}, s.projects...), project))
 	return project

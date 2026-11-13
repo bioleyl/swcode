@@ -25,6 +25,10 @@ describe('projects', () => {
     await settle(page);
     await page.locator('sc-project-dialog .confirm button', { hasText: 'Use src' }).click();
     await settle(page);
+    // A folder that was already there: the person says whether they trust what it says of itself.
+    await page.locator('jl-confirm').getByText('Trust src?').waitFor();
+    await page.locator('jl-confirm').getByRole('button', { name: 'Trust this folder' }).click();
+    await settle(page);
     await page.locator('home-page select').filter({ hasText: 'src' }).waitFor();
 
     await page.locator('home-page textarea').fill('Where am I?');
@@ -43,6 +47,47 @@ describe('projects', () => {
     await page.locator('home-page textarea').waitFor();
     await navItem(page, 'src').waitFor({ state: 'detached' });
     expect(readFileSync(join(rig.workspace, 'src/greet.ts'), 'utf8')).toBe(GREET);
+  });
+});
+
+describe('a folder not trusted yet', () => {
+  it('keeps its notes from the agent until its page says the person trusts it', async () => {
+    const rig = await start({
+      files: { 'src/AGENTS.md': 'Run the tests with npm test.\n', 'src/greet.ts': GREET },
+      replies: [{ text: 'First.' }, { text: 'Second.' }],
+    });
+    const notesRead = (): number => rig.events().filter((event) => event.kind === 'projectNotesRead').length;
+    const page = await rig.browser.newPage({ viewport: DESKTOP });
+    await page.goto(rig.link);
+    await page.locator('home-page .new-project').click();
+    await settle(page);
+    await page.locator('sc-folder-browser li button', { hasText: 'src' }).click();
+    await settle(page);
+    await page.locator('sc-project-dialog .confirm button', { hasText: 'Use src' }).click();
+    await settle(page);
+    await page.locator('jl-confirm').getByRole('button', { name: 'Not now' }).click();
+    await settle(page);
+    await page.locator('home-page textarea').fill('One');
+    await page.locator('home-page textarea').press('Enter');
+    await page.getByText('First.').waitFor();
+    expect(notesRead()).toBe(0);
+
+    // The project's page says so on every tab, and trusts the folder with a press.
+    await navItem(page, 'src').click();
+    await settle(page);
+    const banner = page.locator('project-page .untrusted');
+    await banner.getByText('You have not trusted this folder').waitFor();
+    await banner.locator('.trust').click();
+    await page.evaluate('0');
+    await banner.waitFor({ state: 'hidden' });
+
+    await page.locator('project-page .new-session').click();
+    await settle(page);
+    await page.locator('home-page textarea').fill('Two');
+    await page.locator('home-page textarea').press('Enter');
+    await page.getByText('Second.').waitFor();
+    expect(notesRead()).toBe(1);
+    expect(await overflow(page)).toBe(0);
   });
 });
 
@@ -150,7 +195,7 @@ describe('a project’s sandbox', () => {
     await settle(page);
 
     const card = page.locator('sc-project-sandbox');
-    const toggle = card.getByRole('switch');
+    const toggle = card.locator('.sandboxed').getByRole('switch');
     const problem = card.locator('jl-alert');
     await expect.poll(async () => (await toggle.isEnabled()) || (await problem.isVisible())).toBe(true);
     expect(readFileSync(join(rig.workspace, 'made.txt'), 'utf8')).toBe('inside\n');
@@ -169,7 +214,7 @@ describe('a project’s sandbox', () => {
     await page.evaluate('0');
     await expect.poll(() => toggle.isChecked()).toBe(false);
     await page.reload();
-    await expect.poll(() => card.getByRole('switch').isChecked()).toBe(false);
+    await expect.poll(() => card.locator('.sandboxed').getByRole('switch').isChecked()).toBe(false);
     expect(await overflow(page)).toBe(0);
   });
 });

@@ -70,6 +70,9 @@ export const ProjectSchema = z.object({
   skillsOff: z.array(z.string()).default([]),
   // What is left to do in the project, in the order it was added.
   todos: z.array(ProjectTodoSchema).default([]),
+  // Added from a folder that was already there, and not trusted yet: its notes (AGENTS.md) and its own skills are
+  // kept from the agent, which follows them as the person's words, and its commands keep their sandbox.
+  untrusted: z.boolean().optional(),
 });
 export type Project = z.infer<typeof ProjectSchema>;
 
