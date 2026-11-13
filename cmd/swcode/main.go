@@ -107,6 +107,9 @@ func run(command cli.Command) int {
 			fmt.Fprintln(os.Stderr, command.Problem+"\n")
 		}
 		fmt.Println(cli.Usage(version.Build))
+		if command.Exit != 0 {
+			return command.Exit
+		}
 		if command.Problem != "" {
 			return failed
 		}
@@ -128,6 +131,8 @@ func run(command cli.Command) int {
 		return local.ServiceUninstall(settings(environment), place(environment))
 	case cli.KindPair:
 		return local.Pair(settings(environment))
+	case cli.KindRun:
+		return local.RunSession(settings(environment), place(environment), command.Run)
 	case cli.KindUpdate:
 		return runUpdate(environment)
 	case cli.KindServe:
