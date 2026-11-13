@@ -1,13 +1,13 @@
 import { css } from '@jadis/core';
-import { JlButton, JlDialog } from '@syware/jlib';
-import { FitAddon } from '@xterm/addon-fit';
-import { Terminal } from '@xterm/xterm';
+import { JlButton, JlDialog, toast } from '@syware/jlib';
 import xtermStyles from '@xterm/xterm/css/xterm.css?inline';
 
 import { ScElement } from '../base/sc-element';
 import { BASE_STYLES } from '../styles/shared';
 import styles from './sc-terminal.css?inline';
 
+import type { FitAddon } from '@xterm/addon-fit';
+import type { Terminal } from '@xterm/xterm';
 import type { Terminal as TerminalInfo, TerminalState } from '../../../shared/protocol/messages.schema';
 import type { TerminalSize } from '../types/terminal.types';
 
@@ -18,6 +18,12 @@ const COLOR_FALLBACK = 'transparent';
 const CURSOR_FALLBACK = '#4a9eff';
 const INK_FALLBACK = '#d4d4d4';
 const DARK_QUERY = '(prefers-color-scheme: dark)';
+// The size a terminal is said to have until xterm is there to measure its view: the one a shell starts with.
+const FIRST_SIZE: TerminalSize = { columns: 80, rows: 24 };
+const LOAD_FAILED = 'The terminal could not be loaded';
+
+// xterm is a third of the app's code, and only a terminal needs it: it comes when the first one is shown.
+const loadXterm = () => Promise.all([import('@xterm/xterm'), import('@xterm/addon-fit')]);
 
 // How a terminal stands, in its dialog: a new state does not compile until it is here.
 const STATE_TEXT: {
@@ -46,6 +52,9 @@ export class ScTerminal extends ScElement {
   readonly events = this.useEvents<{ back: undefined; close: undefined; input: string; resize: TerminalSize }>();
 
   private _terminal: Terminal | undefined;
+  // xterm being loaded, and what the page asked of the terminal meanwhile, done in order once it is there.
+  private _loading: Promise<void> | undefined;
+  private _waiting: ((terminal: Terminal) => void)[] = [];
   private _fit: FitAddon | undefined;
   private _observer: ResizeObserver | undefined;
   private _theme: MutationObserver | undefined;
@@ -93,8 +102,8 @@ export class ScTerminal extends ScElement {
   /** Shows a terminal in its dialog: its name and how it stands; what it printed comes as the page writes it. */
   show(terminal: TerminalInfo): void {
     // Another terminal takes the view: what the last one printed goes, its own output coming after.
-    if (this._shown !== '' && this._shown !== terminal.id && this._terminal) {
-      this._terminal.reset();
+    if (this._shown !== '' && this._shown !== terminal.id) {
+      this.onTerminal((xterm) => xterm.reset());
     }
     this._shown = terminal.id;
     this._refs.dialog.heading.set(terminal.title);
@@ -105,10 +114,11 @@ export class ScTerminal extends ScElement {
     }
     this.useTheme();
     this.openTerminal();
-    if (this._terminal) {
-      // A shell that ended takes nothing more: what is typed stays in the view, unread by anyone.
-      this._terminal.options.disableStdin = terminal.state.kind !== 'running';
-    }
+    // A shell that ended takes nothing more: what is typed stays in the view, unread by anyone.
+    const ended = terminal.state.kind !== 'running';
+    this.onTerminal((xterm) => {
+      xterm.options.disableStdin = ended;
+    });
     requestAnimationFrame(() => {
       this.fit();
       this._terminal?.focus();
@@ -124,21 +134,26 @@ export class ScTerminal extends ScElement {
     }
   }
 
-  /** How much of the view the shell's terminal should be, in characters. */
+  /** How much of the view the shell's terminal should be, in characters: xterm's fit says it once it is there. */
   size(): TerminalSize {
-    return { columns: this._terminal?.cols ?? 0, rows: this._terminal?.rows ?? 0 };
+    return this._terminal ? { columns: this._terminal.cols, rows: this._terminal.rows } : FIRST_SIZE;
   }
 
   /** The terminal from the start, then what it printed so far: what a page shows again after a reload. */
   replay(output: string): void {
-    this._terminal?.reset();
+    this.onTerminal((xterm) => xterm.reset());
     this.write(output);
   }
 
   /** What came from the shell, as the daemon sends it: base64 of bytes that are not always UTF-8. */
   write(data: string): void {
     const bytes = Uint8Array.from(atob(data), (character) => character.charCodeAt(0));
-    this._terminal?.write(bytes);
+    this.onTerminal((xterm) => xterm.write(bytes));
+  }
+
+  /** Does something with xterm's terminal: now, or once it is loaded, in the order asked. */
+  private onTerminal(action: (terminal: Terminal) => void): void {
+    this._terminal ? action(this._terminal) : this._waiting.push(action);
   }
 
   /** The dialog closed by its own button or Escape: the page leaves the view, unless it asked for the close. */
@@ -151,29 +166,44 @@ export class ScTerminal extends ScElement {
   }
 
   private openTerminal(): void {
-    if (!this._terminal) {
-      this.createTerminal();
+    if (this._terminal) {
+      this.fit();
       return;
     }
-    this.fit();
+    this._loading ??= this.createTerminal().catch((error: unknown) => {
+      // A next terminal shown tries again: the network may be back.
+      this._loading = undefined;
+      toast({
+        heading: LOAD_FAILED,
+        text: error instanceof Error ? error.message : String(error),
+        tone: 'danger',
+      });
+    });
   }
 
-  private createTerminal(): void {
-    const terminal = new Terminal({
+  private async createTerminal(): Promise<void> {
+    const [xterm, fitAddon] = await loadXterm();
+    const terminal = new xterm.Terminal({
       cursorBlink: true,
       fontFamily: token(getComputedStyle(this), '--jl-font-mono', FONT_FALLBACK),
       fontSize: FONT_SIZE,
       scrollback: SCROLLBACK_LINES,
       theme: this.theme(),
     });
-    const fit = new FitAddon();
+    const fit = new fitAddon.FitAddon();
     terminal.loadAddon(fit);
     terminal.open(this._refs.screen);
     terminal.onData((data) => this.events.emit('input', data));
     terminal.onResize(({ cols, rows }) => this.events.emit('resize', { columns: cols, rows }));
     this._terminal = terminal;
     this._fit = fit;
+    for (const action of this._waiting.splice(0)) {
+      action(terminal);
+    }
     this.fit();
+    if (this._open) {
+      terminal.focus();
+    }
   }
 
   /** The colours of the page as it is now: xterm takes values, and the theme changes under it. */
