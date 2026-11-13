@@ -14,7 +14,7 @@ import {
 import { daemonLine } from '../src/lib/daemon-lines';
 import { childPath } from '../src/lib/folders';
 import { keepingEnd } from '../src/lib/follow-end';
-import { ago, contextText, folderName, percent, tokens } from '../src/lib/format';
+import { ago, contextText, folderName, percent, speedLine, tokens } from '../src/lib/format';
 import { atTop, fillsWindow, scrollAfterOlder } from '../src/lib/history-window';
 import { blocksOf } from '../src/lib/markdown';
 import { tailnetLine } from '../src/lib/pairing-view';
@@ -533,5 +533,27 @@ describe('tailnetLine', () => {
     expect(tailnetLine({ address, available: true, served: false })).toContain(
       `can give swcode an HTTPS address on your tailnet, ${address}`
     );
+  });
+});
+
+describe('speedLine', () => {
+  it('says how fast the reply was written and how much of the prompt was kept', () => {
+    expect(
+      speedLine({ cachedTokens: 1100, completionTokens: 40, predictedMs: 1000, promptMs: 250, promptTokens: 1200 })
+    ).toBe('40 tokens/s · 92% of the prompt from the cache');
+  });
+
+  it('says only what llm-server said', () => {
+    expect(speedLine({ completionTokens: 40, promptTokens: 1200 })).toBe('');
+    expect(speedLine({ cachedTokens: 0, completionTokens: 40, promptTokens: 1200 })).toBe(
+      '0% of the prompt from the cache'
+    );
+    expect(speedLine({ completionTokens: 90, predictedMs: 3000, promptTokens: 1200 })).toBe('30 tokens/s');
+    expect(speedLine(undefined)).toBe('');
+  });
+
+  it('gives no speed to a reply that wrote nothing, or took no time', () => {
+    expect(speedLine({ completionTokens: 0, predictedMs: 10, promptTokens: 10 })).toBe('');
+    expect(speedLine({ completionTokens: 5, predictedMs: 0, promptTokens: 10 })).toBe('');
   });
 });

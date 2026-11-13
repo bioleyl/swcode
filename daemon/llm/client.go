@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"os"
 	"regexp"
@@ -159,7 +160,20 @@ type wireChunk struct {
 	Usage *struct {
 		CompletionTokens int `json:"completion_tokens"`
 		PromptTokens     int `json:"prompt_tokens"`
+		// OpenAI's API says here how much of the prompt it had kept.
+		PromptTokensDetails *struct {
+			CachedTokens int `json:"cached_tokens"`
+		} `json:"prompt_tokens_details"`
 	} `json:"usage"`
+	// llama.cpp's own account of the request: the prompt's tokens it had kept (cache_n) and those it processed
+	// (prompt_n), the tokens it wrote, and the time each took.
+	Timings *struct {
+		CacheN      int     `json:"cache_n"`
+		PromptN     int     `json:"prompt_n"`
+		PromptMs    float64 `json:"prompt_ms"`
+		PredictedN  int     `json:"predicted_n"`
+		PredictedMs float64 `json:"predicted_ms"`
+	} `json:"timings"`
 }
 
 func text(value *string) string {
@@ -173,6 +187,15 @@ func (w wireChunk) chunk() StreamChunk {
 	chunk := StreamChunk{}
 	if w.Usage != nil {
 		chunk.Usage = &protocol.Usage{CompletionTokens: w.Usage.CompletionTokens, PromptTokens: w.Usage.PromptTokens}
+		if details := w.Usage.PromptTokensDetails; details != nil {
+			chunk.Usage.CachedTokens = details.CachedTokens
+		}
+	}
+	if w.Timings != nil {
+		chunk.Timings = &Timings{
+			CachedTokens: w.Timings.CacheN, CompletionTokens: w.Timings.PredictedN, PredictedMs: int(math.Round(w.Timings.PredictedMs)),
+			PromptMs: int(math.Round(w.Timings.PromptMs)), PromptTokens: w.Timings.PromptN + w.Timings.CacheN,
+		}
 	}
 	if len(w.Choices) == 0 || w.Choices[0].Delta == nil {
 		return chunk

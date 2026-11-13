@@ -242,3 +242,33 @@ func TestTheContextIsReadAsHostedAPIsListIt(t *testing.T) {
 		t.Fatalf("contexts %v", got)
 	}
 }
+
+// lines is a stream as llm-server writes it: an event a line.
+func lines(events ...string) string {
+	return "data: " + strings.Join(events, "\n\ndata: ") + "\n\ndata: [DONE]\n\n"
+}
+
+func TestAReplyKeepsHowLlamaCppSpentItsTimeAndHowMuchOfThePromptItHadKept(t *testing.T) {
+	const answer = `{"choices":[{"delta":{"content":"Hi."}}]}`
+	replies := map[string]*protocol.Usage{
+		// llama.cpp's timings beside its usage, in its last event.
+		lines(answer, `{"choices":[],"usage":{"prompt_tokens":1200,"completion_tokens":40},"timings":{"cache_n":1100,"prompt_n":100,"prompt_ms":250.4,"predicted_n":40,"predicted_ms":999.6}}`): {
+			CachedTokens: 1100, CompletionTokens: 40, PredictedMs: 1000, PromptMs: 250, PromptTokens: 1200,
+		},
+		// Timings alone count the tokens too: the prompt is what was kept and what was processed.
+		lines(answer, `{"choices":[],"timings":{"cache_n":900,"prompt_n":300,"prompt_ms":10,"predicted_n":7,"predicted_ms":70}}`): {
+			CachedTokens: 900, CompletionTokens: 7, PredictedMs: 70, PromptMs: 10, PromptTokens: 1200,
+		},
+		// OpenAI's API says what it had kept in its usage, and no time.
+		lines(answer, `{"choices":[],"usage":{"prompt_tokens":500,"completion_tokens":5,"prompt_tokens_details":{"cached_tokens":400}}}`): {
+			CachedTokens: 400, CompletionTokens: 5, PromptTokens: 500,
+		},
+		lines(answer, `{"choices":[],"usage":{"prompt_tokens":500,"completion_tokens":5}}`): {CompletionTokens: 5, PromptTokens: 500},
+	}
+	for stream, expected := range replies {
+		reply, err := readReply(context.Background(), strings.NewReader(stream), func(Part) {})
+		if err != nil || !reflect.DeepEqual(reply.Usage, expected) {
+			t.Fatalf("usage %+v, error %v, for %s", reply.Usage, err, stream)
+		}
+	}
+}

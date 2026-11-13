@@ -1,5 +1,8 @@
+import type { Usage } from '../../../shared/protocol/session.schema';
+
 const THOUSAND = 1000;
 const FULL = 100;
+const MS_PER_SECOND = 1000;
 const MS_PER_MINUTE = 60_000;
 const MINUTES_PER_HOUR = 60;
 const HOURS_PER_DAY = 24;
@@ -42,3 +45,24 @@ export const folderName = (path: string): string =>
     .split(PATH_SEPARATORS)
     .filter((part) => part !== '')
     .at(-1) ?? path;
+
+/**
+ * How fast the model wrote its last reply and how much of the prompt llm-server had kept from the request before,
+ * in a line: "38 tokens/s · 92% of the prompt from the cache". Only what llm-server said; nothing when it said
+ * neither. A low share of the cache means something changed the start of the conversation, and the whole prompt
+ * was processed again.
+ */
+export function speedLine(usage: Usage | undefined): string {
+  if (usage === undefined) {
+    return '';
+  }
+  const speed =
+    usage.predictedMs && usage.completionTokens > 0
+      ? [`${Math.round((usage.completionTokens * MS_PER_SECOND) / usage.predictedMs)} tokens/s`]
+      : [];
+  const cached =
+    usage.cachedTokens === undefined || usage.promptTokens <= 0
+      ? []
+      : [`${percent(usage.cachedTokens, usage.promptTokens)}% of the prompt from the cache`];
+  return [...speed, ...cached].join(' · ');
+}

@@ -5,7 +5,7 @@ import { MAX_TERMINAL_TITLE } from '../../../shared/protocol/messages.schema';
 import { ScElement } from '../base/sc-element';
 import { agentsOf } from '../lib/agents';
 import { SESSION_COMMANDS } from '../lib/commands';
-import { contextText } from '../lib/format';
+import { contextText, speedLine } from '../lib/format';
 import { currentPlan } from '../lib/plan';
 import { presetOf, presetStatusOf } from '../lib/presets';
 import { skillsOn } from '../lib/project-skills';
@@ -88,6 +88,10 @@ const usedTokens = (events: readonly SessionEvent[]): number => {
     : 0;
 };
 
+/** The last reply's tokens and times, as llm-server gave them: how fast the model is now, and whether its cache holds. */
+const lastUsage = (events: readonly SessionEvent[]) =>
+  events.findLast((event) => event.kind === 'assistantMessage' && event.usage !== undefined);
+
 /** The settings a session made by /new takes from the one it was typed in: a chat's place and permissions are none. */
 const sameSettings = (session: SessionSummary): ClientMessage => ({
   concise: session.concise,
@@ -166,6 +170,7 @@ export class SessionPage extends ScElement {
         this._refs.panel.agents.set(agentsOf(this._events));
         this._refs.plan.show(currentPlan(this._events));
         this.showUsage(usedTokens(this._events));
+        this.showSpeed(lastUsage(this._events));
       }),
     terminalOpened: (message) => this.terminalOpened(message.terminal, message.output),
     terminalOutput: (message) => {
@@ -633,6 +638,11 @@ export class SessionPage extends ScElement {
       return;
     }
     this.showUsage(event.usage.promptTokens + event.usage.completionTokens);
+    this.showSpeed(event);
+  }
+
+  private showSpeed(reply: SessionEvent | undefined): void {
+    this._refs.panel.speed.set(speedLine(reply?.kind === 'assistantMessage' ? reply.usage : undefined));
   }
 
   private showUsage(used: number): void {

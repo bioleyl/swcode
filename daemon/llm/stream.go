@@ -49,12 +49,23 @@ type ToolCallDelta struct {
 	Arguments string
 }
 
+// Timings is llama.cpp's own account of a request: the prompt's tokens, those of them it had kept from the request
+// before, the tokens it wrote, and the milliseconds the prompt and the reply took.
+type Timings struct {
+	PromptTokens     int
+	CachedTokens     int
+	CompletionTokens int
+	PromptMs         int
+	PredictedMs      int
+}
+
 // StreamChunk is one chunk of the stream, read from the API's shape.
 type StreamChunk struct {
 	Text      string
 	Reasoning string
 	ToolCalls []ToolCallDelta
 	Usage     *protocol.Usage
+	Timings   *Timings
 }
 
 type partialCall struct {
@@ -70,6 +81,7 @@ type ReplyBuilder struct {
 	reasoning strings.Builder
 	calls     []*partialCall
 	usage     *protocol.Usage
+	timings   *Timings
 }
 
 // Add takes a chunk: the parts to show now.
@@ -78,6 +90,9 @@ func (b *ReplyBuilder) Add(chunk StreamChunk) []Part {
 	b.reasoning.WriteString(chunk.Reasoning)
 	if chunk.Usage != nil {
 		b.usage = chunk.Usage
+	}
+	if chunk.Timings != nil {
+		b.timings = chunk.Timings
 	}
 	parts := []Part{}
 	if chunk.Reasoning != "" {
@@ -123,6 +138,20 @@ func firstNonEmpty(first, second string) string {
 	return second
 }
 
+// timedUsage is a reply's tokens with how llama.cpp spent its time on them, when it said so. Its usage counts the
+// tokens, when it gave one; its timings stand for it otherwise.
+func timedUsage(usage *protocol.Usage, timings *Timings) *protocol.Usage {
+	if timings == nil {
+		return usage
+	}
+	timed := protocol.Usage{CompletionTokens: timings.CompletionTokens, PromptTokens: timings.PromptTokens}
+	if usage != nil {
+		timed = *usage
+	}
+	timed.CachedTokens, timed.PromptMs, timed.PredictedMs = timings.CachedTokens, timings.PromptMs, timings.PredictedMs
+	return &timed
+}
+
 // Build is the reply whole: the calls in the order the model wrote them, one the server gave no id getting one.
 func (b *ReplyBuilder) Build(newID func() string) Reply {
 	calls := append([]*partialCall(nil), b.calls...)
@@ -139,6 +168,6 @@ func (b *ReplyBuilder) Build(newID func() string) Reply {
 		Reasoning: strings.TrimSpace(b.reasoning.String()),
 		Text:      strings.TrimSpace(b.text.String()),
 		ToolCalls: toolCalls,
-		Usage:     b.usage,
+		Usage:     timedUsage(b.usage, b.timings),
 	}
 }

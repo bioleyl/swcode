@@ -103,6 +103,11 @@ export class ScSidePanel extends ScElement {
   );
   /** The prompt tokens of the last reply: the conversation so far. */
   readonly used = this.useChange(0, () => this.render());
+  /** How fast the last reply came and how much of its prompt was kept, as llm-server said; empty when it did not. */
+  readonly speed = this.useChange('', (line) => {
+    this._refs.speed.textContent = line;
+    this._refs.speed.hidden = line === '';
+  });
   /** The session's main model, as its llm-server says now: the context it holds, and the model before any request. */
   readonly main = this.useChange<PresetStatus | undefined>(undefined, () => this.render());
   /** The commands the agent left running in the background. */
@@ -124,6 +129,7 @@ export class ScSidePanel extends ScElement {
     pins: ref('.pins'),
     pinsEmpty: ref('.pins-empty'),
     servers: ref('.servers'),
+    speed: ref('.speed'),
     subagents: ref('.subagents'),
     terminals: ref('.terminals'),
     terminalsSection: ref('.terminals-section'),
@@ -171,6 +177,7 @@ export class ScSidePanel extends ScElement {
             <strong class="used" /> <span class="of" />
           </p>
           <JlProgress size="sm" />
+          <p class="speed" hidden />
         </section>
         <p class="version" />
       </>

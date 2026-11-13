@@ -119,8 +119,16 @@ export type DiffDisplay = Extract<ToolDisplay, { kind: 'diff' }>;
 export const ToolCallSchema = z.object({ arguments: z.string(), id: z.string(), name: z.string() });
 export type ToolCall = z.infer<typeof ToolCallSchema>;
 
+/**
+ * The tokens of a reply, and, where llm-server says them, how it spent its time: the tokens of the prompt it had
+ * kept from the request before and did not process again, the milliseconds it took to process the rest, and to
+ * write the reply. They tell how fast the model is here, and whether the prompt cache holds.
+ */
 export const UsageSchema = z.object({
+  cachedTokens: z.number().int().optional(),
   completionTokens: z.number().int(),
+  predictedMs: z.number().int().optional(),
+  promptMs: z.number().int().optional(),
   promptTokens: z.number().int(),
 });
 export type Usage = z.infer<typeof UsageSchema>;

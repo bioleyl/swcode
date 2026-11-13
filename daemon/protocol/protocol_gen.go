@@ -1297,7 +1297,10 @@ type ToolCall struct {
 }
 
 type Usage struct {
+	CachedTokens     int `json:"cachedTokens,omitempty"`
 	CompletionTokens int `json:"completionTokens"`
+	PredictedMs      int `json:"predictedMs,omitempty"`
+	PromptMs         int `json:"promptMs,omitempty"`
 	PromptTokens     int `json:"promptTokens"`
 }
 
