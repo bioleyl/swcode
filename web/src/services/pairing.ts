@@ -1,8 +1,8 @@
 import { ENDPOINTS, PAIR_PARAM } from '../../../shared/protocol/endpoints';
 import { DevicesSchema, PairAnswerSchema, PairingCodeSchema } from '../../../shared/protocol/pairing.schema';
 import { problemOf } from '../lib/daemon-lines';
-import { authorizationHeaders, keepToken } from './access';
-import { jsonOfText, request, textOf } from './api';
+import { keepToken } from './access';
+import { jsonOf, jsonOfText, request, textOf } from './api';
 
 import type { Device, PairingCode } from '../../../shared/protocol/pairing.schema';
 import type { Answer } from '../types/answer.types';
@@ -70,17 +70,13 @@ export async function newPairingCode(): Promise<Answer<PairingCode>> {
 }
 
 export async function pairedDevices(): Promise<Device[]> {
-  const response = await fetch(ENDPOINTS.devices, { headers: authorizationHeaders() }).catch(() => undefined);
-  const parsed = DevicesSchema.safeParse(await response?.json().catch(() => undefined));
+  const parsed = DevicesSchema.safeParse(await jsonOf(await request('GET', ENDPOINTS.devices)));
   return parsed.success ? parsed.data.devices : [];
 }
 
 /** Forgets a paired phone: its token stops working at once. */
 export async function forgetDevice(id: string): Promise<void> {
-  await fetch(`${ENDPOINTS.devices}/${encodeURIComponent(id)}`, {
-    headers: authorizationHeaders(),
-    method: 'DELETE',
-  }).catch(() => undefined);
+  await request('DELETE', `${ENDPOINTS.devices}/${encodeURIComponent(id)}`);
 }
 
 /** The link the QR code holds: the address a phone reaches, with the code. */

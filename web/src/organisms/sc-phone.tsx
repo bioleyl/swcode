@@ -10,6 +10,7 @@ import {
   secondsUntilRenewal,
 } from '../lib/pairing-view';
 import { qrElement } from '../lib/qr';
+import { daemonOrigin } from '../services/access';
 import { daemonState } from '../services/daemon-status';
 import { installApp, installBus, installState } from '../services/install';
 import { forgetDevice, NO_CODE, newPairingCode, pairedDevices, pairingLink } from '../services/pairing';
@@ -154,7 +155,7 @@ export class ScPhone extends ScElement {
   }
 
   private renderPairing(): void {
-    const base = reachableBaseOf(daemonState(), location.origin);
+    const base = reachableBaseOf(daemonState(), daemonOrigin());
     const code = this._code;
     const link = code ? pairingLink(base, code.code) : '';
     this._refs.qr.replaceChildren(...(code ? [qrElement(link, QR_LABEL)] : []));

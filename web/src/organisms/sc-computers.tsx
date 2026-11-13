@@ -21,9 +21,13 @@ import {
   renewalLine,
   secondsUntilRenewal,
 } from '../lib/pairing-view';
+import { ScQrScanner } from '../molecules/sc-qr-scanner';
+import { daemonOrigin } from '../services/access';
+import { askComputers, onComputersAnswer } from '../services/computers';
 import { daemonState } from '../services/daemon-status';
-import { askDesktop, inDesktopApp, onDesktopAnswer } from '../services/desktop';
-import { NO_CODE, newPairingCode } from '../services/pairing';
+import { inDesktopApp } from '../services/desktop';
+import { NO_CODE, newPairingCode, pairingLink } from '../services/pairing';
+import { canScan } from '../services/qr-scan';
 import { BASE_STYLES } from '../styles/shared';
 import styles from './sc-computers.css?inline';
 
@@ -57,13 +61,28 @@ const COMPUTER_ACTIONS: MenuItem<ComputerAction>[] = [
   { divider: true },
   { danger: true, icon: 'trash', label: 'Forget', value: 'forget' },
 ];
-const NOT_IN_APP =
-  'Only swcode’s desktop app shows other computers. In a browser, open the other computer’s swcode at its own address.';
 const UNREACHABLE = 'not reachable';
 const CONNECT_LEAD =
-  'On the other computer’s swcode, open Settings → Computers, type this address and this code there, then Add. The code works once, and a new one comes every minute.';
+  'On the other computer’s swcode, or in the app a phone installed, open Settings → Computers and paste this link there, or type this address and this code, then Add. The code works once, and a new one comes every minute.';
 const ADDRESS_LABEL = 'Address';
 const CODE_LABEL = 'Pairing code';
+const LINK_LABEL = 'Link';
+// What the form asks for, by who keeps the computers: the desktop app reaches any address and takes a link with a
+// token; a browser pairs with a code, from an address its page may talk to.
+const ADD_TEXTS = {
+  app: {
+    addressHint: 'Its swcode listens on the network: SWCODE_HOST is 0.0.0.0 by default.',
+    addressPlaceholder: 'gmktec, 192.168.1.20:4500, or a link with its token',
+    codeHint:
+      'That computer’s swcode shows one in its Settings → Computers topic, or run swcode pair there (swcode-desktop.exe --pair on Windows). A link with its token needs none.',
+  },
+  browser: {
+    addressHint:
+      'The link that computer’s swcode shows in Settings → Computers, or under its QR code; or its address.',
+    addressPlaceholder: 'https://gmktec.tailnet.ts.net/?pair=…',
+    codeHint: 'Only with an address: the link holds its code already.',
+  },
+} as const;
 const MS_PER_SECOND = 1000;
 
 /**
@@ -112,17 +131,20 @@ export class ScComputers extends ScElement {
     },
     computerUnreachable: () => {
       // The switch says that computer did not answer; the list says which ones are not reachable.
-      askDesktop({ type: 'listComputers' });
+      askComputers({ type: 'listComputers' });
     },
   };
 
   private readonly _refs = this.useRefs((ref) => ({
     add: ref<JlButton>('.add'),
     address: ref<JlInput>('#computer-address'),
+    addressField: ref<JlField>('.address-field'),
     code: ref<JlInput>('#computer-code'),
+    codeField: ref<JlField>('.code-field'),
     computers: ref('.computers'),
     copyAddress: ref<JlCopyButton>('.copy-address'),
     copyCode: ref<JlCopyButton>('.copy-code'),
+    copyLink: ref<JlCopyButton>('.copy-link'),
     edit: ref(JlDialog),
     editCancel: ref<JlButton>('.edit-cancel'),
     editColor: ref<JlSelect>('.edit-color'),
@@ -133,9 +155,11 @@ export class ScComputers extends ScElement {
     feedback: ref<JlAlert>('.feedback'),
     form: ref<HTMLFormElement>('form'),
     note: ref('.note'),
-    notInApp: ref('.not-in-app'),
     pairAddress: ref('.address'),
     pairingCode: ref('.code'),
+    pairLink: ref('.link'),
+    scan: ref<JlButton>('.scan'),
+    scanner: ref(ScQrScanner),
   }));
 
   templateHtml(): Node {
@@ -160,6 +184,11 @@ export class ScComputers extends ScElement {
               <code class="code" />
               <JlCopyButton class="copy-code" />
             </div>
+            <div class="pair">
+              <span class="label">{LINK_LABEL}</span>
+              <code class="link" />
+              <JlCopyButton class="copy-link" />
+            </div>
           </div>
           <p class="expires" />
           <p class="note" hidden>
@@ -168,23 +197,19 @@ export class ScComputers extends ScElement {
         </section>
         <form>
           <h3>Add a computer</h3>
-          <JlField label="Address" hint="Its swcode listens on the network: SWCODE_HOST is 0.0.0.0 by default.">
-            <JlInput
-              id="computer-address"
-              placeholder="gmktec, 192.168.1.20:4500, or a link with its token"
-              autocomplete="off"
-            />
+          <JlField class="address-field" label="Link or address">
+            <JlInput id="computer-address" autocomplete="off" />
           </JlField>
-          <JlField
-            label="Pairing code"
-            hint="That computer’s swcode shows one in its Settings → Computers topic, or run swcode pair there (swcode-desktop.exe --pair on Windows). A link with its token needs none.">
+          <JlField class="code-field" label="Pairing code">
             <JlInput id="computer-code" autocomplete="off" />
           </JlField>
           <JlAlert class="feedback" hidden />
           <div class="actions">
+            <JlButton class="scan" icon="camera" label="Scan its QR code" hidden />
             <JlButton class="add" type="submit" variant="primary" label="Add" />
           </div>
         </form>
+        <ScQrScanner />
         <JlDialog class="edit" heading="Edit computer" size="sm">
           <div class="edit-body">
             <JlField label="Name" hint="What this app calls that computer. Its address and token stay.">
@@ -198,9 +223,6 @@ export class ScComputers extends ScElement {
           <JlButton slot="actions" class="edit-cancel" label="Cancel" />
           <JlButton slot="actions" class="edit-save" variant="primary" label="Save" />
         </JlDialog>
-        <p class="not-in-app" hidden>
-          {NOT_IN_APP}
-        </p>
       </div>
     );
   }
@@ -210,9 +232,9 @@ export class ScComputers extends ScElement {
   }
 
   onConnect(): void {
-    const inApp = inDesktopApp();
-    this._refs.notInApp.hidden = inApp;
-    this._refs.form.hidden = !inApp;
+    this.renderForm();
+    this._refs.scan.events.register('press', () => this._refs.scanner.scan());
+    this._refs.scanner.events.register('found', (link) => this.addScanned(link));
     this.on(this._refs.form, 'submit', (event) => {
       event.preventDefault();
       this.add();
@@ -221,8 +243,8 @@ export class ScComputers extends ScElement {
     this._refs.edit.events.register('close', () => this.stopEditing());
     this._refs.editCancel.events.register('press', () => this._refs.edit.close());
     this._refs.editSave.events.register('press', () => this.edit());
-    onDesktopAnswer((answer) => this.hear(answer), this.killSignal);
-    askDesktop({ type: 'listComputers' });
+    onComputersAnswer((answer) => this.hear(answer), this.killSignal);
+    askComputers({ type: 'listComputers' });
     if (this.active.get()) {
       this.startCode();
     }
@@ -230,6 +252,22 @@ export class ScComputers extends ScElement {
 
   onDisconnect(): void {
     this.stopClock();
+  }
+
+  /** What the form asks for where the computers are kept, and the scan button where the device can scan. */
+  private renderForm(): void {
+    const texts = ADD_TEXTS[inDesktopApp() ? 'app' : 'browser'];
+    this._refs.addressField.hint.set(texts.addressHint);
+    this._refs.address.placeholder.set(texts.addressPlaceholder);
+    this._refs.codeField.hint.set(texts.codeHint);
+    this._refs.scan.hidden = inDesktopApp() || !canScan();
+  }
+
+  /** The link a QR code held goes in the form, and is added at once: it carries its code. */
+  private addScanned(link: string): void {
+    this._refs.address.value.set(link);
+    this._refs.code.value.set('');
+    this.add();
   }
 
   /** A first code, renewed every minute for as long as the topic is shown. */
@@ -277,13 +315,17 @@ export class ScComputers extends ScElement {
   }
 
   private renderPairing(): void {
-    const base = reachableBaseOf(daemonState(), location.origin);
+    const base = reachableBaseOf(daemonState(), daemonOrigin());
     const code = this._code?.code ?? '';
     this._refs.pairAddress.textContent = base;
     this._refs.pairingCode.textContent = code;
     this._refs.copyAddress.value.set(base);
     this._refs.copyCode.value.set(code);
     this._refs.copyCode.hidden = code === '';
+    const link = code === '' ? '' : pairingLink(base, code);
+    this._refs.pairLink.textContent = link;
+    this._refs.copyLink.value.set(link);
+    this._refs.copyLink.hidden = code === '';
     this._refs.note.hidden = !isLocalBase(base);
     this.renderExpiry();
   }
@@ -321,7 +363,7 @@ export class ScComputers extends ScElement {
     this._pairing = true;
     this._refs.add.loading.set(true);
     this.say(PAIRING, 'info');
-    askDesktop({ address, code: this._refs.code.value.get().trim(), type: 'addComputer' });
+    askComputers({ address, code: this._refs.code.value.get().trim(), type: 'addComputer' });
   }
 
   /** The actions of a paired computer, in its row's More menu: the menu keeps its clicks to itself. */
@@ -343,7 +385,7 @@ export class ScComputers extends ScElement {
   private act(action: ComputerAction, computer: Computer): void {
     const actions: Record<ComputerAction, () => void> = {
       edit: () => this.openEdit(computer),
-      forget: () => askDesktop({ id: computer.id, type: 'forgetComputer' }),
+      forget: () => askComputers({ id: computer.id, type: 'forgetComputer' }),
     };
     actions[action]();
   }
@@ -369,7 +411,7 @@ export class ScComputers extends ScElement {
     }
     const color = this.colorChosen();
     this._refs.editSave.loading.set(true);
-    askDesktop({ id: computer.id, name, type: 'editComputer', ...(color === undefined ? {} : { color }) });
+    askComputers({ id: computer.id, name, type: 'editComputer', ...(color === undefined ? {} : { color }) });
   }
 
   private colorChosen(): ComputerColor | undefined {
@@ -415,7 +457,7 @@ export class ScComputers extends ScElement {
         attrs: { class: 'open', slot: 'end' },
         props: { label: 'Open', size: 'sm' },
       });
-      open.events.register('press', () => askDesktop({ id: computer.id, type: 'openComputer' }));
+      open.events.register('press', () => askComputers({ id: computer.id, type: 'openComputer' }));
       row.append(open);
     }
     if (!local) {

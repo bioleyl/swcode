@@ -33,22 +33,8 @@
   color: var(--jl-accent);
 }
 
-.name,
 jl-select {
   flex: 1;
-}
-
-.name {
-  min-width: 0;
-}
-
-.name {
-  overflow: hidden;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--jl-text);
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 jl-select::part(base) {

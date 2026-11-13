@@ -9,8 +9,7 @@
   max-width: var(--jl-page-form);
 }
 
-.lead,
-.not-in-app {
+.lead {
   font-size: var(--jl-font-md);
   color: var(--jl-text-2);
 }
@@ -82,6 +81,7 @@ h3 {
 .actions {
   display: flex;
   justify-content: flex-end;
+  gap: var(--jl-space-2);
 }
 
 .edit-body {

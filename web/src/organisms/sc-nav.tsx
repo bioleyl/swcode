@@ -31,7 +31,6 @@ import type { Project } from '../../../shared/protocol/project.schema';
 import type { SessionKind, SessionSummary } from '../../../shared/protocol/session.schema';
 import type { Theme } from '../services/theme';
 import type { ProjectGroup } from '../types/conversation.types';
-import type { DaemonState } from '../types/daemon.types';
 import type { NavLists, ProjectStart } from '../types/nav.types';
 
 registerIcons({
@@ -157,11 +156,6 @@ export class ScNav extends ScElement {
   readonly seen = this.useChange<Record<string, string>>({}, () => this.renderSections());
   /** The item of the page shown: `new`, `settings`, `project:…`, `session:…`. */
   readonly active = this.useChange('', (id) => this._refs.nav.value.set(id));
-  /** The daemon's state: the computer it runs on, in a browser. */
-  readonly daemon = this.useChange<DaemonState>({ kind: 'unknown' }, (state) => this.renderComputer(state), {
-    immediate: true,
-  });
-
   // The shell marks what it holds as its nav, this element: the side nav inside learns it from here.
   readonly drawer = this.useAttributes({
     [IN_DRAWER]: (value) => {
@@ -175,7 +169,6 @@ export class ScNav extends ScElement {
 
   private readonly _refs = this.useRefs((ref) => ({
     brand: ref<HTMLAnchorElement>('.brand'),
-    computer: ref(ScComputerSwitch),
     fold: ref<JlButton>('.fold'),
     modes: ref<JlSegmented<SessionKind>>('.mode'),
     nav: ref(JlSideNav),
@@ -315,10 +308,6 @@ export class ScNav extends ScElement {
   private renderTheme(theme: Theme): void {
     this._refs.theme.icon.set(THEME_ICONS[theme]);
     this._refs.theme.hint.set(theme === 'dark' ? 'Light theme' : 'Dark theme');
-  }
-
-  private renderComputer(state: DaemonState): void {
-    this._refs.computer.computer.set(state.kind === 'ready' ? (state.status.computer ?? '') : '');
   }
 }
 

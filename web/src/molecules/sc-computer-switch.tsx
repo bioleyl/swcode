@@ -4,7 +4,8 @@ import { JlIcon, JlSelect, toast } from '@syware/jlib';
 import { THIS_COMPUTER } from '../../../shared/protocol/desktop.schema';
 import { ScElement } from '../base/sc-element';
 import { applyComputerColor } from '../services/computer-color';
-import { askDesktop, inDesktopApp, onDesktopAnswer } from '../services/desktop';
+import { askComputers, onComputersAnswer } from '../services/computers';
+import { inDesktopApp } from '../services/desktop';
 import { navigate, settingsPath } from '../services/navigation';
 import { BASE_STYLES, PILL_SELECT_STYLES } from '../styles/shared';
 import styles from './sc-computer-switch.css?inline';
@@ -18,7 +19,6 @@ const MANAGE = 'manage';
 const MANAGE_LABEL = 'Manage computers…';
 const COMPUTERS_TOPIC = 'computers';
 const UNREACHABLE = ' (not reachable)';
-const THIS_COMPUTER_NAME = 'This computer';
 const DID_NOT_ANSWER = 'did not answer';
 const CHECK_SWCODE = 'Is swcode running there, and listening on the network?';
 const LOOPBACK_NAMES: ReadonlySet<string> = new Set(['localhost', '127.0.0.1', '[::1]']);
@@ -35,14 +35,11 @@ const optionsOf = (computers: readonly Computer[]): SelectOption[] => [
 
 /**
  * Where swcode works, at the top of the sidebar: this computer, or another one, tinted and marked remote so it is
- * never mistaken for this one. In the desktop app it switches between the computers the app knows, and leads to
- * the settings that add them; in a browser it names the machine the daemon runs on.
+ * never mistaken for this one. It switches between the computers the app knows (the desktop app's, or the ones
+ * this browser paired with), and leads to the settings that add them.
  */
 export class ScComputerSwitch extends ScElement {
   static readonly selector = 'sc-computer-switch';
-
-  /** The machine the daemon runs on, as its status names it: what a browser shows. */
-  readonly computer = this.useChange('', () => this.renderBrowser());
 
   private _current: string = THIS_COMPUTER;
 
@@ -55,7 +52,6 @@ export class ScComputerSwitch extends ScElement {
   private readonly _refs = this.useRefs((ref) => ({
     badge: ref('.badge'),
     icon: ref<JlIcon>('.place-icon'),
-    name: ref('.name'),
     select: ref(JlSelect),
   }));
 
@@ -63,8 +59,7 @@ export class ScComputerSwitch extends ScElement {
     return (
       <div class="where">
         <JlIcon class="place-icon" name="laptop" size={16} />
-        <span class="name" />
-        <JlSelect class="pill-select" label="Computer" hidden />
+        <JlSelect class="pill-select" label="Computer" />
         <span class="badge" hidden>
           Remote
         </span>
@@ -77,16 +72,9 @@ export class ScComputerSwitch extends ScElement {
   }
 
   onConnect(): void {
-    if (!inDesktopApp()) {
-      this.renderBrowser();
-      return;
-    }
-    // In the desktop app, the pill chooses among the computers; in a browser it only names the place.
-    this._refs.name.hidden = true;
-    this._refs.select.hidden = false;
     this._refs.select.events.register('change', (value) => this.choose(value));
-    onDesktopAnswer((answer) => this.hear(answer), this.killSignal);
-    askDesktop({ type: 'listComputers' });
+    onComputersAnswer((answer) => this.hear(answer), this.killSignal);
+    askComputers({ type: 'listComputers' });
   }
 
   private hear(answer: DesktopAnswer): void {
@@ -104,7 +92,9 @@ export class ScComputerSwitch extends ScElement {
     this._current = current;
     this._refs.select.options.set(optionsOf(computers));
     this._refs.select.value.set(current);
-    this.renderPlace(current !== THIS_COMPUTER);
+    // In a browser, the computer that served the page is another one too, unless the page was opened on it.
+    const servedFromElsewhere = !inDesktopApp() && !LOOPBACK_NAMES.has(location.hostname);
+    this.renderPlace(current !== THIS_COMPUTER || servedFromElsewhere);
     applyComputerColor(computers.find((computer) => computer.id === current)?.color);
   }
 
@@ -112,16 +102,6 @@ export class ScComputerSwitch extends ScElement {
   private refuse(answer: DesktopAnswerMap['computerUnreachable']): void {
     this._refs.select.value.set(this._current);
     toast({ heading: `${answer.name} ${DID_NOT_ANSWER}`, text: CHECK_SWCODE, tone: 'danger' });
-  }
-
-  /** A browser knows the daemon's machine, and whether the page came from this one. */
-  private renderBrowser(): void {
-    if (inDesktopApp()) {
-      return;
-    }
-    const remote = !LOOPBACK_NAMES.has(location.hostname);
-    this._refs.name.textContent = remote ? this.computer.get() || location.hostname : THIS_COMPUTER_NAME;
-    this.renderPlace(remote);
   }
 
   private renderPlace(remote: boolean): void {
@@ -140,7 +120,7 @@ export class ScComputerSwitch extends ScElement {
     if (value === this._current) {
       return;
     }
-    askDesktop({ id: value, type: 'openComputer' });
+    askComputers({ id: value, type: 'openComputer' });
   }
 }
 

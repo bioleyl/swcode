@@ -20,7 +20,6 @@ import { ScStartupSettings } from '../organisms/sc-startup-settings';
 import { ScUpdateSettings } from '../organisms/sc-update-settings';
 import { daemonBus } from '../services/daemon';
 import { refreshStatus } from '../services/daemon-status';
-import { inDesktopApp } from '../services/desktop';
 import { hrefOf, settingsPath } from '../services/navigation';
 import { confirmRestart, loadSettings, saveSettings } from '../services/settings';
 import { loadStartup } from '../services/startup';
@@ -141,9 +140,6 @@ export class SettingsPage extends ScElement {
         void this.restarted();
       }
     });
-    if (!inDesktopApp()) {
-      this.panelFor('computers').remove();
-    }
     if (!installsUpdates()) {
       this.panelFor('updates').remove();
     }
@@ -212,9 +208,7 @@ export class SettingsPage extends ScElement {
   /** Save is for the settings file: the other topics save as they change. Codes are made while their topic is shown. */
   private renderTopic(topic: SettingsTopic): void {
     this._refs.save.hidden = !FILE_TOPICS.has(topic);
-    if (inDesktopApp()) {
-      this._refs.computers.active.set(topic === COMPUTERS_TOPIC);
-    }
+    this._refs.computers.active.set(topic === COMPUTERS_TOPIC);
     this._refs.phone.active.set(topic === PHONE_TOPIC);
   }
 

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { PHONE, settle, start, stopRigs, tab } from './support.js';
+import { DESKTOP, PHONE, settle, start, stopRigs, tab } from './support.js';
 
 afterEach(stopRigs);
 
@@ -52,5 +52,55 @@ describe('on a phone', () => {
     // The topic has its own address, which opens on it.
     await page.reload();
     await page.locator('sc-phone').getByText('Add to Home Screen', { exact: false }).waitFor();
+  });
+});
+
+describe('another computer’s swcode', () => {
+  it('is added from its pairing link, shown in this browser, and left again for the one the page came from', async () => {
+    const home = await start({ replies: [{ text: 'From home.' }] });
+    const other = await start({ replies: [{ text: 'From the other one.' }] });
+
+    // The other computer has a session of its own, and shows the link that pairs with it.
+    const there = await other.browser.newPage({ viewport: DESKTOP });
+    await there.goto(other.link);
+    await there.locator('home-page textarea').fill('Over there');
+    await there.locator('home-page textarea').press('Enter');
+    await there.getByText('From the other one.').waitFor();
+    await there.goto(`${other.link}#/settings/computers`);
+    const link = there.locator('sc-computers .pair .link');
+    await expect.poll(() => link.textContent()).toContain('pair=');
+    const pairing = (await link.textContent()) ?? '';
+
+    // This browser pairs with it from the link alone, and lists it beside the computer its page came from.
+    const page = await home.browser.newPage({ viewport: DESKTOP });
+    await page.goto(`${home.link}#/settings/computers`);
+    const computers = page.locator('sc-computers jl-list-item.computer');
+    await computers.first().getByText('Shown here').waitFor();
+    await page.locator('#computer-address input').fill(pairing);
+    await page.locator('sc-computers .add').click();
+    await page.locator('sc-computers jl-alert').getByText('Added', { exact: false }).waitFor();
+    await expect.poll(() => computers.count()).toBe(2);
+    // The link served once: the same one again is refused, with why.
+    await page.locator('#computer-address input').fill(pairing);
+    await page.locator('sc-computers .add').click();
+    await page.locator('sc-computers jl-alert').getByText('refused the code', { exact: false }).waitFor();
+
+    // Opened, the page shows the other computer's sessions, marked as another computer's.
+    const where = page.locator('sc-computer-switch');
+    await computers.nth(1).locator('.open').click();
+    await where.getByText('Remote', { exact: true }).waitFor();
+    await settle(page);
+    await page.goto(`${new URL(page.url()).origin}/#/sessions`);
+    await page.locator('sessions-page').getByText('Over there').first().click();
+    await page.locator('session-page').getByText('From the other one.').waitFor();
+
+    // The pill leads back to the computer the page came from, which has no session.
+    await where.locator('jl-select select').selectOption('local');
+    await where.getByText('Remote', { exact: true }).waitFor({ state: 'hidden' });
+    await settle(page);
+    await page.goto(`${new URL(page.url()).origin}/#/sessions`);
+    await settle(page);
+    await page.locator('sessions-page').waitFor();
+    expect(await page.getByText('Over there').count()).toBe(0);
   });
 });

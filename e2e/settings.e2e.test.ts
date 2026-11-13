@@ -146,13 +146,13 @@ describe('settings', () => {
     expect(await phone.locator('session-page sc-composer .summary').textContent()).toContain('Mixed');
   });
 
-  it('leave Startup and Computers out in a browser, and set how the Windows app starts with Windows', async () => {
+  it('leave Startup out in a browser, and set how the Windows app starts with Windows', async () => {
     const rig = await start({ replies: [] });
     const browser = await rig.browser.newPage({ viewport: DESKTOP });
     await browser.goto(`${rig.link}#/settings/models`);
     await topicTab(browser, 'Models', true).waitFor();
     await topicTab(browser, 'Startup').waitFor({ state: 'detached' });
-    await topicTab(browser, 'Computers').waitFor({ state: 'detached' });
+    await topicTab(browser, 'Computers').waitFor();
 
     // The Windows app's daemon answers that it can: this one runs from the command line, so the test plays it.
     const windowsApp = await rig.browser.newPage({ viewport: DESKTOP });
@@ -242,14 +242,21 @@ describe('updates', () => {
 });
 
 describe('the computer', () => {
-  it('is this one in a browser on it, without a way to switch', async () => {
+  it('is this one in a browser on it, the pill leading to the settings that add others', async () => {
     const rig = await start({ replies: [] });
     const page = await rig.browser.newPage({ viewport: DESKTOP });
     await page.goto(rig.link);
     const where = page.locator('sc-nav sc-computer-switch');
-    await where.locator('.name', { hasText: 'This computer' }).waitFor();
+    const computers = where.locator('jl-select select');
+    await expect
+      .poll(() => computers.locator('option').allTextContents())
+      .toEqual(['This computer', 'Manage computers…']);
+    expect(await computers.inputValue()).toBe('local');
     expect((await where.getAttribute('class')) ?? '').not.toContain('remote');
-    expect(await where.locator('jl-select').isHidden()).toBe(true);
+    await computers.selectOption('manage');
+    await settle(page);
+    expect(await computers.inputValue()).toBe('local');
+    await page.locator('sc-computers').getByText('Add a computer').waitFor();
   });
 
   it('is marked remote in the desktop app showing another one, and switches back or leads to the settings', async () => {

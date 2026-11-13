@@ -319,9 +319,8 @@ export class ScAppShell extends ScElement {
     actions[action]();
   }
 
-  /** The daemon's state: the navigation's computer, and a problem over every page, where a phone sees it. */
+  /** The daemon's state: a problem over every page, where a phone sees it. */
   private renderDaemon(state: DaemonState): void {
-    this._refs.nav.daemon.set(state);
     const line = daemonLine(state);
     this._refs.alert.hidden = line.tone !== 'problem';
     this._refs.alert.heading.set(line.text);
