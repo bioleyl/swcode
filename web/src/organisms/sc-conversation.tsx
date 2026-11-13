@@ -32,7 +32,7 @@ import type {
 import type { SkillSummary } from '../../../shared/protocol/skill.schema';
 import type { MessageAuthor } from '../molecules/sc-message';
 import type { Activity } from '../types/activity.types';
-import type { SessionEventHandlers, SessionEventMap } from '../types/conversation.types';
+import type { SessionEventHandlers, SessionEventMap, ToolRowState } from '../types/conversation.types';
 
 // How close to the end counts as "following along": new content then keeps the end in view.
 const FOLLOW_DISTANCE_PX = 80;
@@ -242,7 +242,7 @@ export class ScConversation extends ScElement {
     subagentQueued: (event) => {
       this._subagents.set(event.agentId, event.callId);
       this._working.add(event.callId);
-      this.rowOrLater(event.callId, event)?.state.set('queued');
+      this.progress(this.rowOrLater(event.callId, event), 'queued');
       this.handleEarly(agentKey(event.agentId));
     },
     subagentReport: (event) =>
@@ -256,7 +256,7 @@ export class ScConversation extends ScElement {
     subagentStarted: (event) => {
       this._subagents.set(event.agentId, event.callId);
       this._working.add(event.callId);
-      this.rowOrLater(event.callId, event)?.state.set('running');
+      this.progress(this.rowOrLater(event.callId, event), 'running');
       this.handleEarly(agentKey(event.agentId));
     },
     toolCall: (event) => {
@@ -504,6 +504,16 @@ export class ScConversation extends ScElement {
     }
   }
 
+  /**
+   * Where a call stands while it has no result. A result is final: an older page can bring a call's start after the
+   * result the page shown already gave its row, and the row stays finished.
+   */
+  private progress(row: ScToolRow | undefined, state: ToolRowState): void {
+    if (row && row.result.get() === undefined) {
+      row.state.set(state);
+    }
+  }
+
   /** The row of a call; when an older page has yet to bring it, none, and the event waits for it. */
   private rowOrLater(callId: string, event: SessionEvent): ScToolRow | undefined {
     const row = this._rows.get(callId);
@@ -603,7 +613,7 @@ export class ScConversation extends ScElement {
     if (!row) {
       return;
     }
-    row.state.set('running');
+    this.progress(row, 'running');
     this.doing({ kind: 'running', summary: row.summary.get(), tool: row.tool.get() });
   }
 
@@ -700,7 +710,7 @@ export class ScConversation extends ScElement {
       return;
     }
     const row = this._rows.get(event.callId);
-    row?.state.set('waiting');
+    this.progress(row, 'waiting');
     const card: ScPermission = (
       <ScPermission
         tool={row?.tool.get()}
@@ -723,7 +733,7 @@ export class ScConversation extends ScElement {
     if (this._answered.delete(event.requestId)) {
       return;
     }
-    this._rows.get(event.callId)?.state.set('waiting');
+    this.progress(this._rows.get(event.callId), 'waiting');
     const card: ScPassword = (
       <ScPassword prompt={event.prompt} where={`main agent · in ${folderName(this.workspace.get())}`} />
     );
@@ -740,7 +750,7 @@ export class ScConversation extends ScElement {
     if (this._answered.delete(event.requestId)) {
       return;
     }
-    this._rows.get(event.callId)?.state.set('waiting');
+    this.progress(this._rows.get(event.callId), 'waiting');
     const card: ScQuestion = (
       <ScQuestion questions={event.questions} where={`main agent · in ${folderName(this.workspace.get())}`} />
     );
