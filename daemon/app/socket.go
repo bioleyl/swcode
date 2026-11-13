@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/coder/websocket"
 
@@ -20,23 +21,46 @@ const (
 	unknownTerminal = "There is no such terminal."
 	notUnderstood   = "The daemon did not understand that message."
 	maxMessage      = 64 << 20
+	// maxWaiting is how much may wait for a socket that takes nothing: past it the socket is closed, and its page
+	// asks for what it missed once it is back.
+	maxWaiting = 32 << 20
+	// writeLimit is how long a socket has to take a message.
+	writeLimit = 30 * time.Second
+	// pingEvery is how often a socket is asked whether it is still there, and pingLimit how long it has to say so:
+	// a phone that left the network without a word would hold its socket, and what waits for it, for hours.
+	pingEvery = 30 * time.Second
+	pingLimit = 10 * time.Second
 )
 
-// outbox is a socket's messages waiting to leave, in order, however many: the sessions tell it what happens with
-// their lock held, so it never waits.
+// outbox is a socket's messages waiting to leave, in order: the sessions tell it what happens with their lock
+// held, so it never waits. What waits is bounded: full is called once when it overflows, to close the socket.
 type outbox struct {
 	mu      sync.Mutex
 	waiting [][]byte
+	bytes   int
 	ready   chan struct{}
+	full    func()
 }
 
+// push sends the socket an answer of its own, as a page takes it.
 func (o *outbox) push(message protocol.ServerMessage) {
-	data, err := json.Marshal(message)
+	data, err := json.Marshal(forPage(message))
 	if err != nil {
 		return
 	}
+	o.pushData(data)
+}
+
+// pushData adds a message already in JSON, unless too much waits already: the socket is then closed.
+func (o *outbox) pushData(data []byte) {
 	o.mu.Lock()
+	if o.bytes+len(data) > maxWaiting {
+		o.mu.Unlock()
+		o.full()
+		return
+	}
 	o.waiting = append(o.waiting, data)
+	o.bytes += len(data)
 	o.mu.Unlock()
 	select {
 	case o.ready <- struct{}{}:
@@ -48,7 +72,7 @@ func (o *outbox) take() [][]byte {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	taken := o.waiting
-	o.waiting = nil
+	o.waiting, o.bytes = nil, 0
 	return taken
 }
 
@@ -107,6 +131,8 @@ type handlers struct {
 	ctx      context.Context
 	reply    func(protocol.ServerMessage)
 	watchers *terminalWatchers
+	// socket is this socket's number in the hub, which sends it the stream of the session it opens.
+	socket int
 }
 
 func (h handlers) problem(text string) struct{} {
@@ -198,6 +224,7 @@ func (h handlers) ListHosts(protocol.ClientMessageListHosts) struct{} {
 // OpenSession answers a page with the end of a session's conversation, or, to a page back online that holds its
 // first events, with what came after them.
 func (h handlers) OpenSession(message protocol.ClientMessageOpenSession) struct{} {
+	h.app.hub.open(h.socket, message.SessionID)
 	if message.Since > 0 {
 		if since, ok := h.app.Sessions.Resume(message.SessionID, message.Since); ok {
 			h.reply(since)
@@ -402,9 +429,24 @@ func (h handlers) CompactSession(message protocol.ClientMessageCompactSession) s
 	return h.problem(h.app.Sessions.Compact(message.SessionID))
 }
 
+// CloseSession notes that the page shows that session no more, or none: its stream stops coming to this socket.
+func (h handlers) CloseSession(message protocol.ClientMessageCloseSession) struct{} {
+	h.app.hub.close(h.socket, message.SessionID)
+	return struct{}{}
+}
+
+// Ping answers a page that asks whether the daemon still hears it: a socket can go without either end being told.
+func (h handlers) Ping(protocol.ClientMessagePing) struct{} {
+	h.reply(protocol.ServerMessage{Value: protocol.ServerMessagePong{}})
+	return struct{}{}
+}
+
 // socket is the socket the app talks to the daemon through: commands one way, everything that happens the other.
+// What it sends is compressed, each message by itself: a session's history is text that shrinks several times.
 func (a *App) socket(response http.ResponseWriter, request *http.Request) {
-	connection, err := websocket.Accept(response, request, &websocket.AcceptOptions{InsecureSkipVerify: true})
+	connection, err := websocket.Accept(response, request, &websocket.AcceptOptions{
+		CompressionMode: websocket.CompressionNoContextTakeover, InsecureSkipVerify: true,
+	})
 	if err != nil {
 		return
 	}
@@ -414,26 +456,18 @@ func (a *App) socket(response http.ResponseWriter, request *http.Request) {
 	if device, paired := a.pairing.DeviceOf(presentedToken(request)); paired {
 		defer a.deviceSockets.open(device, cancel)()
 	}
-	box := &outbox{ready: make(chan struct{}, 1)}
-	unsubscribe := []func(){
-		a.Sessions.Subscribe(func(message protocol.ServerMessage) { box.push(message) }),
-		a.Projects.Subscribe(func(message protocol.ServerMessage) { box.push(message) }),
-		a.Models.Subscribe(func(message protocol.ServerMessage) { box.push(message) }),
-		a.Terminals.Subscribe(func(message protocol.ServerMessage) { box.push(message) }),
-	}
-	defer func() {
-		for _, each := range unsubscribe {
-			each()
-		}
-	}()
+	box := &outbox{full: cancel, ready: make(chan struct{}, 1)}
+	socketID, leave := a.hub.join(box)
+	defer leave()
 	box.push(protocol.ServerMessage{Value: protocol.ServerMessageProjects{Projects: a.Projects.List()}})
 	box.push(protocol.ServerMessage{Value: protocol.ServerMessagePresets{Choices: a.Models.Choices()}})
 	box.push(protocol.ServerMessage{Value: protocol.ServerMessageSessions{Sessions: a.Sessions.List()}})
 	box.push(protocol.ServerMessage{Value: protocol.ServerMessageTerminals{Terminals: a.Terminals.List()}})
 	go a.send(ctx, cancel, connection, box)
+	go keepAlive(ctx, cancel, connection)
 	watchers := newTerminalWatchers()
 	defer watchers.close()
-	reply := handlers{app: a, ctx: context.WithoutCancel(ctx), reply: box.push, watchers: watchers}
+	reply := handlers{app: a, ctx: context.WithoutCancel(ctx), reply: box.push, socket: socketID, watchers: watchers}
 	for {
 		_, data, err := connection.Read(ctx)
 		if err != nil {
@@ -449,12 +483,39 @@ func (a *App) socket(response http.ResponseWriter, request *http.Request) {
 	}
 }
 
+// write sends one message, given writeLimit to leave.
+func write(ctx context.Context, connection *websocket.Conn, data []byte) error {
+	ctx, done := context.WithTimeout(ctx, writeLimit)
+	defer done()
+	return connection.Write(ctx, websocket.MessageText, data)
+}
+
+// keepAlive asks a socket now and then whether it is still there, and ends it when it does not say so in time.
+func keepAlive(ctx context.Context, cancel context.CancelFunc, connection *websocket.Conn) {
+	ticker := time.NewTicker(pingEvery)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+		asked, done := context.WithTimeout(ctx, pingLimit)
+		err := connection.Ping(asked)
+		done()
+		if err != nil {
+			cancel()
+			return
+		}
+	}
+}
+
 // send writes a socket's messages as they come, until the socket closes.
 func (a *App) send(ctx context.Context, cancel context.CancelFunc, connection *websocket.Conn, box *outbox) {
 	defer cancel()
 	for {
 		for _, data := range box.take() {
-			if connection.Write(ctx, websocket.MessageText, data) != nil {
+			if write(ctx, connection, data) != nil {
 				return
 			}
 		}

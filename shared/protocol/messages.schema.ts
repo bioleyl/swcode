@@ -106,12 +106,18 @@ export const ClientMessageSchema = z.discriminatedUnion('type', [
   // The end of a session's conversation: at most `events` of its last events, so a long one shows quickly and the
   // older ones come as the person scrolls up. A page back online says how many of the session's events it holds
   // (`since`, the ones kept back counted): only those after them come then, and the page goes on where it was.
+  // Opening a session also has its stream come to this socket (its events, its answer as it is written), in place
+  // of the one it had open.
   z.object({
     events: z.number().int().positive().optional(),
     sessionId: z.string(),
     since: z.number().int().positive().optional(),
     type: z.literal('openSession'),
   }),
+  // The page shows that session no more, or none yet (no `sessionId`): no session's stream comes to this socket
+  // until it opens one. A socket that says neither is sent every session's events, as the desktop app's watch of
+  // another computer needs them, though no answer as it is written.
+  z.object({ sessionId: z.string().optional(), type: z.literal('closeSession') }),
   z.object({
     pictures: z.array(PictureUploadSchema).max(MAX_PICTURES).optional(),
     sessionId: z.string(),
@@ -263,6 +269,9 @@ export const ClientMessageSchema = z.discriminatedUnion('type', [
   }),
   // Where projects can be: this computer, its WSL distributions, the SSH endpoints.
   z.object({ type: z.literal('listHosts') }),
+  // Asks whether the daemon still hears this socket: it answers `pong`. A socket can go without either end being
+  // told, a phone's above all, and a page that hears nothing back opens another.
+  z.object({ type: z.literal('ping') }),
   // The subfolders of a folder, to pick a project's; without a path, of the folder projects usually go in.
   z.object({
     host: HostRefSchema.optional(),
@@ -311,6 +320,8 @@ export const ServerMessageSchema = z.discriminatedUnion('type', [
     type: z.literal('toolCallWriting'),
   }),
   z.object({ message: z.string(), type: z.literal('problem') }),
+  // The answer to a `ping`, to the socket that asked.
+  z.object({ type: z.literal('pong') }),
   // A peek's state and its answer as it streams, to the app that asked only.
   z.object({
     message: z.string().optional(),

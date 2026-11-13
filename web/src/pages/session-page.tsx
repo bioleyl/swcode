@@ -32,6 +32,7 @@ import { deleteSession } from '../services/session-delete';
 import { findSession, sessionListBus } from '../services/session-list';
 import { restoreCheckpoint } from '../services/session-restore';
 import { sessionRevealBus, takeReveal } from '../services/session-reveal';
+import { sessionLeft, sessionShown } from '../services/session-stream';
 import { setSidePanelOpen, sidePanelOpen } from '../services/side-panel';
 import { allTerminals, terminalKey, terminalListBus, terminalsIn } from '../services/terminals';
 import { BASE_STYLES } from '../styles/shared';
@@ -117,6 +118,8 @@ export class SessionPage extends ScElement {
   private _keptBack = 0;
   // Whether this page has its history yet: a search's match is marked once it has.
   private _opened = false;
+  // Whether this page counts among those that show its session, from its connection to its leaving.
+  private _showing = false;
   // The event a search found in this session, until the conversation is drawn and marks it.
   private _found = '';
   // The terminal drawn in the conversation's room, if one is; and whether the next terminalOpened is one this page
@@ -251,6 +254,8 @@ export class SessionPage extends ScElement {
   }
 
   onConnect(): void {
+    this._showing = true;
+    sessionShown(this._sessionId);
     this._opened = false;
     this._found = takeReveal(this._sessionId) ?? '';
     this._events = [];
@@ -268,6 +273,18 @@ export class SessionPage extends ScElement {
       this.openHistory();
     }
     this._refs.composer.focusText();
+  }
+
+  /** Leaving the page: the session's stream stops coming to this socket, and so does the terminal it showed. */
+  onDisconnect(): void {
+    // A page removed before it connected for good never said it showed the session.
+    if (this._showing) {
+      this._showing = false;
+      sessionLeft(this._sessionId);
+    }
+    if (this._shownTerminal !== '') {
+      daemon.send({ terminalId: this._shownTerminal, type: 'detachTerminal' });
+    }
   }
 
   /** What the daemon says, and what it says about itself: the page redraws what it shows. */

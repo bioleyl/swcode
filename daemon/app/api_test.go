@@ -398,3 +398,57 @@ func TestAPageFromAnotherSwcodeTalksToThisOneOnceItsPhonePairedFromThere(t *test
 		t.Fatalf("another origin reads the answer: allowed %q", allowed)
 	}
 }
+
+// has tells whether a socket received a message of that kind so far.
+func (c *client) has(kind string) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for _, message := range c.received {
+		if message["type"] == kind {
+			return true
+		}
+	}
+	return false
+}
+
+func TestASessionsStreamGoesOnlyToTheSocketsThatHaveItOpenWithoutWhatOnlyTheModelReads(t *testing.T) {
+	test := Start(t, Options{
+		Files:   map[string]string{"notes.txt": "A line only the model reads back.\n"},
+		Replies: []fakellama.Reply{call("read", map[string]any{"path": "notes.txt"}), text("Read.")},
+	})
+	watching, elsewhere, following := connect(t, test), connect(t, test), connect(t, test)
+	// A page says it shows no session yet; a socket that says nothing follows them all, as the desktop app does.
+	elsewhere.send(map[string]any{"type": "closeSession"})
+	watching.send(map[string]any{"type": "createSession"})
+	created := watching.next("sessionCreated")["session"].(map[string]any)
+	watching.send(map[string]any{"sessionId": created["id"], "type": "openSession"})
+	watching.next("sessionHistory")
+	watching.send(map[string]any{"sessionId": created["id"], "text": "Read the notes", "type": "sendPrompt"})
+	test.WaitForEvent("turnFinished", 1)
+
+	// The socket that opened the session hears its events and its answer as it is written; the page elsewhere only
+	// that a session works; the one that follows every session, their events without the writing.
+	watching.next("sessionEvent")
+	watching.next("assistantDelta")
+	elsewhere.next("sessions")
+	following.next("sessionEvent")
+	watching.send(map[string]any{"type": "ping"})
+	watching.next("pong")
+	if elsewhere.has("sessionEvent") || elsewhere.has("assistantDelta") || elsewhere.has("pong") {
+		t.Fatal("a page that shows no session heard one's stream")
+	}
+	if following.has("assistantDelta") {
+		t.Fatal("a socket that follows every session was sent an answer as it was written")
+	}
+
+	// The file read is in the session, for the model; a page is sent the call's few words only.
+	elsewhere.send(map[string]any{"sessionId": created["id"], "type": "openSession"})
+	history := RequestText(elsewhere.next("sessionHistory"))
+	if strings.Contains(history, "only the model reads back") || !strings.Contains(history, `"toolFinished"`) {
+		t.Fatalf("the history a page gets: %s", history)
+	}
+	kept := RequestText(map[string]any{"events": test.Events(created["id"].(string))})
+	if !strings.Contains(kept, "only the model reads back") {
+		t.Fatal("the session lost what the model read")
+	}
+}

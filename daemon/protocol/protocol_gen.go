@@ -2025,6 +2025,8 @@ func (ClientMessageSendQueueNow) isClientMessage() {}
 
 func (ClientMessageOpenSession) isClientMessage() {}
 
+func (ClientMessageCloseSession) isClientMessage() {}
+
 func (ClientMessageSendPrompt) isClientMessage() {}
 
 func (ClientMessageAnswerPermission) isClientMessage() {}
@@ -2091,6 +2093,8 @@ func (ClientMessageRemoveProjectTodo) isClientMessage() {}
 
 func (ClientMessageListHosts) isClientMessage() {}
 
+func (ClientMessagePing) isClientMessage() {}
+
 func (ClientMessageListFolders) isClientMessage() {}
 
 func (u ClientMessage) MarshalJSON() ([]byte, error) {
@@ -2152,6 +2156,12 @@ func (u *ClientMessage) UnmarshalJSON(data []byte) error {
 		u.Value = value
 	case "\"openSession\"":
 		var value ClientMessageOpenSession
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
+	case "\"closeSession\"":
+		var value ClientMessageCloseSession
 		if err := json.Unmarshal(data, &value); err != nil {
 			return err
 		}
@@ -2354,6 +2364,12 @@ func (u *ClientMessage) UnmarshalJSON(data []byte) error {
 			return err
 		}
 		u.Value = value
+	case "\"ping\"":
+		var value ClientMessagePing
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
 	case "\"listFolders\"":
 		var value ClientMessageListFolders
 		if err := json.Unmarshal(data, &value); err != nil {
@@ -2376,6 +2392,7 @@ type ClientMessageMapper[R any] interface {
 	ClearQueue(ClientMessageClearQueue) R
 	SendQueueNow(ClientMessageSendQueueNow) R
 	OpenSession(ClientMessageOpenSession) R
+	CloseSession(ClientMessageCloseSession) R
 	SendPrompt(ClientMessageSendPrompt) R
 	AnswerPermission(ClientMessageAnswerPermission) R
 	AnswerQuestion(ClientMessageAnswerQuestion) R
@@ -2409,6 +2426,7 @@ type ClientMessageMapper[R any] interface {
 	SetProjectTodoText(ClientMessageSetProjectTodoText) R
 	RemoveProjectTodo(ClientMessageRemoveProjectTodo) R
 	ListHosts(ClientMessageListHosts) R
+	Ping(ClientMessagePing) R
 	ListFolders(ClientMessageListFolders) R
 }
 
@@ -2431,6 +2449,8 @@ func MapClientMessage[R any](u ClientMessage, m ClientMessageMapper[R]) R {
 		return m.SendQueueNow(value)
 	case ClientMessageOpenSession:
 		return m.OpenSession(value)
+	case ClientMessageCloseSession:
+		return m.CloseSession(value)
 	case ClientMessageSendPrompt:
 		return m.SendPrompt(value)
 	case ClientMessageAnswerPermission:
@@ -2497,6 +2517,8 @@ func MapClientMessage[R any](u ClientMessage, m ClientMessageMapper[R]) R {
 		return m.RemoveProjectTodo(value)
 	case ClientMessageListHosts:
 		return m.ListHosts(value)
+	case ClientMessagePing:
+		return m.Ping(value)
 	case ClientMessageListFolders:
 		return m.ListFolders(value)
 	}
@@ -2746,6 +2768,19 @@ func (v *ClientMessageOpenSession) Normalize() error {
 		return fmt.Errorf("%s: must be positive", "since")
 	}
 	return nil
+}
+
+type ClientMessageCloseSession struct {
+	SessionID string `json:"sessionId,omitempty"`
+}
+
+func (v ClientMessageCloseSession) MarshalJSON() ([]byte, error) {
+	type plain ClientMessageCloseSession
+	p := plain(v)
+	return json.Marshal(struct {
+		Key string `json:"type"`
+		plain
+	}{"closeSession", p})
 }
 
 type ClientMessageSendPrompt struct {
@@ -3602,6 +3637,18 @@ func (v ClientMessageListHosts) MarshalJSON() ([]byte, error) {
 	}{"listHosts", p})
 }
 
+type ClientMessagePing struct {
+}
+
+func (v ClientMessagePing) MarshalJSON() ([]byte, error) {
+	type plain ClientMessagePing
+	p := plain(v)
+	return json.Marshal(struct {
+		Key string `json:"type"`
+		plain
+	}{"ping", p})
+}
+
 type ClientMessageListFolders struct {
 	Host *HostRef `json:"host,omitempty"`
 	Path string   `json:"path,omitempty"`
@@ -3661,6 +3708,8 @@ func (ServerMessageReasoningDelta) isServerMessage() {}
 func (ServerMessageToolCallWriting) isServerMessage() {}
 
 func (ServerMessageProblem) isServerMessage() {}
+
+func (ServerMessagePong) isServerMessage() {}
 
 func (ServerMessagePeekState) isServerMessage() {}
 
@@ -3755,6 +3804,12 @@ func (u *ServerMessage) UnmarshalJSON(data []byte) error {
 			return err
 		}
 		u.Value = value
+	case "\"pong\"":
+		var value ServerMessagePong
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
 	case "\"peekState\"":
 		var value ServerMessagePeekState
 		if err := json.Unmarshal(data, &value); err != nil {
@@ -3844,6 +3899,7 @@ type ServerMessageMapper[R any] interface {
 	ReasoningDelta(ServerMessageReasoningDelta) R
 	ToolCallWriting(ServerMessageToolCallWriting) R
 	Problem(ServerMessageProblem) R
+	Pong(ServerMessagePong) R
 	PeekState(ServerMessagePeekState) R
 	PeekDelta(ServerMessagePeekDelta) R
 	Projects(ServerMessageProjects) R
@@ -3879,6 +3935,8 @@ func MapServerMessage[R any](u ServerMessage, m ServerMessageMapper[R]) R {
 		return m.ToolCallWriting(value)
 	case ServerMessageProblem:
 		return m.Problem(value)
+	case ServerMessagePong:
+		return m.Pong(value)
 	case ServerMessagePeekState:
 		return m.PeekState(value)
 	case ServerMessagePeekDelta:
@@ -4093,6 +4151,18 @@ func (v ServerMessageProblem) MarshalJSON() ([]byte, error) {
 		Key string `json:"type"`
 		plain
 	}{"problem", p})
+}
+
+type ServerMessagePong struct {
+}
+
+func (v ServerMessagePong) MarshalJSON() ([]byte, error) {
+	type plain ServerMessagePong
+	p := plain(v)
+	return json.Marshal(struct {
+		Key string `json:"type"`
+		plain
+	}{"pong", p})
 }
 
 type ServerMessagePeekState struct {

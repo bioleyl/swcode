@@ -122,8 +122,10 @@ type App struct {
 	// deviceSockets is the sockets each paired phone has open, ended with it when it is forgotten.
 	deviceSockets *deviceSockets
 	tailnet       tailnetAddress
-	logger        *slog.Logger
-	stopWatching  context.CancelFunc
+	// hub sends what the services say to the open sockets.
+	hub          *hub
+	logger       *slog.Logger
+	stopWatching context.CancelFunc
 }
 
 // NewID is a random UUID, as sessions and projects are named.
@@ -255,6 +257,11 @@ func New(settings config.Config, options Options) (*App, error) {
 	if app.options.Busy == nil {
 		app.options.Busy = func() bool { return anyWorking(service.List()) }
 	}
+	app.hub = newHub()
+	app.Sessions.Subscribe(app.hub.broadcast)
+	app.Projects.Subscribe(app.hub.broadcast)
+	app.Models.Subscribe(app.hub.broadcast)
+	app.Terminals.Subscribe(app.hub.broadcast)
 	app.watchUpdates(settings, logError)
 	app.Handler = app.routes()
 	return app, nil
