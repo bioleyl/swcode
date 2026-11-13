@@ -2,6 +2,59 @@
 
 All notable changes to swcode are documented here.
 
+## [0.11.0] - 2026-11-13
+
+### Added
+
+- MCP servers: the agent of a coding session has the tools of the servers listed in `~/.swcode/mcp.json` (a program over its standard streams, or an address over HTTP), and asks before it calls one. Settings → MCP servers lists them with where each stands.
+- A sandbox for the agent's commands on Linux hosts (this computer, WSL, a server over SSH) that have bubblewrap: they write only in the project, its scratch folder and a `/tmp` of their own, and your keys are not there. A command that must leave it asks first, even in a session that runs everything; a project's Config tab turns it off, and `SWCODE_SANDBOX=off` turns it off everywhere.
+- Trust: a folder added as a project speaks for itself only once you trust it. Until then its `AGENTS.md` and its own skills are kept from the agent, and its commands keep their sandbox.
+- A permission request can be answered for the whole project: its Config tab lists the programs and MCP servers its sessions use without asking, each taken back with a press.
+- A restore point also keeps what the turn's commands changed, in a git repository: its diff and its restore cover them as they cover the files the tools wrote.
+- A session can work in a git worktree of its own, on a branch of its own beside the repository.
+- A session's Changes button shows what its folder has uncommitted, file by file, and commits it with your message.
+- Agents of your own: a file in `.agents/agents/` names an agent, its instructions and its tools, writing and running commands included. It works under the session's permissions.
+- `swcode run "<prompt>"` starts a session from the command line and waits for its turn, with `--json` for scripts.
+- A project starts a session on a prompt by itself, every hour, day or week, from its Config tab.
+- An eval suite: a dozen small tasks in `evals/`, scored on success, steps, tokens and time against your own llm-server (`npm run eval`).
+- A project runs a command after each file the agent writes or edits (a formatter, a linter, a type check), and the agent reads what it found.
+- On a phone: swcode installs as an app, one press has Tailscale serve it over HTTPS on your tailnet, a device is notified when a session waits for you or ends its turn (Web Push), and a browser adds other computers' swcode by their pairing link or QR code, as the desktop app does.
+- What a command prints shows while it runs, and the side panel says how fast the model answered and how much of the prompt llm-server had kept.
+- Code blocks are highlighted and copied with a press, and Markdown draws italics, strikethrough, quotes, rules and nested lists.
+
+### Changed
+
+- A command that asks for a password (`sudo`, ssh) runs in a terminal of the app, where you type it while the agent waits for the result, instead of a card under the call.
+- swcode listens on its own computer (`127.0.0.1`) unless told otherwise. An install that already has paired phones or computers keeps listening on every interface.
+- `edit` finds its text by its words when only the indentation differs, and names the nearest lines when it finds nothing.
+- The calls of one reply that only read run together.
+- A summary is asked at the end of the conversation llm-server already holds, so compacting a long session no longer processes it all again.
+- What you were typing in a composer is still there when you come back to the page.
+- The web app is lighter: an answer streaming in is drawn once a frame, a long conversation lays out only the rows near the window, the terminal's code loads when a terminal opens, the files travel compressed and stay in the browser's cache, and a session's stream goes only to the pages that show it.
+
+### Fixed
+
+- A session opened again showed the wrong older pages above the end of a long conversation; a page that comes back online now goes on from its last event instead of drawing the conversation again.
+- A call's row kept "running" when an older page brought its events after its result.
+- Calls whose ids a server repeats from one reply to the next (call-0, call-1…) each keep their own result, for the model and on the page.
+- Notes longer than a session reads lost the ones just written; they now lose their oldest.
+- Forgetting a phone ends the sockets it had open.
+- A project the daemon refuses says why in its dialog, which stayed waiting.
+- A todo being edited keeps what was typed when the lists change.
+
+### Security
+
+- The data folder and its files are the person's alone, and the page carries a content security policy.
+- A session grant by program name no longer vouches for a command that sets a variable first, runs its words (`sudo`, `env`, `xargs`, `npx`…) or names a program for git or npm to run.
+- The file tools stay out of `.git`, and the daemon's own git runs nothing a repository names.
+- The web tools read the public web only, redirects included; a notes file that is a link is not read; a background job is its session's.
+- Another swcode's page talks to this one only once it paired from there.
+
+### Maintenance
+
+- Pushes to main and pull requests run the check and the app end to end.
+- The end-to-end tests give a busy machine the time it needs: a poll waits up to 15 seconds instead of one.
+
 ## [0.10.0] - 2026-11-11
 
 ### Changed
