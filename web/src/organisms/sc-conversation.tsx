@@ -11,6 +11,7 @@ import { ScMessage } from '../molecules/sc-message';
 import { ScPassword } from '../molecules/sc-password';
 import { ScPermission } from '../molecules/sc-permission';
 import { ScQuestion } from '../molecules/sc-question';
+import { ScTerminalWait } from '../molecules/sc-terminal-wait';
 import { ScThinking } from '../molecules/sc-thinking';
 import { ScToolRow } from '../molecules/sc-tool-row';
 import { authorizedUrl } from '../services/access';
@@ -108,6 +109,8 @@ export class ScConversation extends ScElement {
     cancelQueue: undefined;
     /** The person asked to see the files a turn changed: its id. */
     checkpointDiff: string;
+    /** The person asked for the terminal a command of the agent runs in: its id. */
+    openTerminal: string;
     /** The person reached the top of what is shown: `older` events are missing above it. */
     older: number;
     password: { requestId: string; secret: string };
@@ -156,6 +159,9 @@ export class ScConversation extends ScElement {
   private readonly _rows = new Map<string, ScToolRow>();
   // What waits for the person, by request: an approval, the agent's questions, or a password a command asked for.
   private readonly _requests = new Map<string, ScPermission | ScQuestion | ScPassword>();
+  // The calls whose command runs in a terminal of the app, where the person may have to answer it: each one's card,
+  // until its result comes.
+  private readonly _terminalWaits = new Map<string, ScTerminalWait>();
   // Which agent call started each subagent: its calls show under that row.
   private readonly _subagents = new Map<string, string>();
   // The agent calls whose subagent works in the background: their rows run until its report, past the call's result.
@@ -259,6 +265,7 @@ export class ScConversation extends ScElement {
       this.progress(this.rowOrLater(event.callId, event), 'running');
       this.handleEarly(agentKey(event.agentId));
     },
+    terminalWaiting: (event) => this.showTerminalWait(event),
     toolCall: (event) => {
       const row: ScToolRow = <ScToolRow tool={event.tool} summary={event.summary} />;
       row.dataset.event = event.callId;
@@ -272,6 +279,7 @@ export class ScConversation extends ScElement {
         this.doing({ kind: 'working' });
         return;
       }
+      this.endTerminalWait(event.callId);
       const row = this.rowOrLater(event.callId, event);
       row?.result.set({ display: event.display, meta: event.meta, ok: event.ok });
       row?.state.set(event.ok ? 'done' : 'failed');
@@ -279,6 +287,10 @@ export class ScConversation extends ScElement {
     },
     toolRunning: (event) => this.runningRow(event),
     turnFinished: (event) => {
+      // A turn that ended waits for nothing: a command it left in a terminal is the person's from here.
+      for (const callId of [...this._terminalWaits.keys()]) {
+        this.endTerminalWait(callId);
+      }
       this.working(false);
       this.note(event.message ?? ENDINGS[event.outcome], event.outcome);
     },
@@ -359,6 +371,7 @@ export class ScConversation extends ScElement {
     this._reveal = '';
     this._early.clear();
     this._answered.clear();
+    this._terminalWaits.clear();
     this._streamed.clear();
     this._reasoned.clear();
     this._messages.clear();
@@ -760,6 +773,26 @@ export class ScConversation extends ScElement {
       this.events.emit('question', { answers, requestId: event.requestId })
     );
     this.working(true);
+  }
+
+  /**
+   * A command runs in a terminal of the app, where the person may have to answer it: a card under its call says
+   * so and leads there, until the call's result comes. None for a call an older page brings with its result
+   * known already.
+   */
+  private showTerminalWait(event: SessionEventMap['terminalWaiting']): void {
+    if (this._rows.get(event.callId)?.result.get() !== undefined) {
+      return;
+    }
+    const card: ScTerminalWait = <ScTerminalWait terminal={event.title} />;
+    this._terminalWaits.set(event.callId, card);
+    this.add(card);
+    card.events.register('open', () => this.events.emit('openTerminal', event.terminalId));
+  }
+
+  private endTerminalWait(callId: string): void {
+    this._terminalWaits.get(callId)?.remove();
+    this._terminalWaits.delete(callId);
   }
 
   /** A request answered: its card goes. One whose page has yet to come is remembered, and opens no card then. */

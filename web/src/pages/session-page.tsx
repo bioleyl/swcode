@@ -333,6 +333,7 @@ export class SessionPage extends ScElement {
     conversation.events.register('checkpointDiff', (turnId) =>
       daemon.send({ sessionId: this._sessionId, turnId, type: 'checkpointDiff' })
     );
+    conversation.events.register('openTerminal', (terminalId) => this.showTerminal(terminalId));
     conversation.events.register('older', (older) =>
       daemon.send({ events: HISTORY_EVENTS, keptBack: older, sessionId: this._sessionId, type: 'olderEvents' })
     );

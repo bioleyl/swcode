@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { DESKTOP, settle, start, stopRigs } from './support.js';
+import { DESKTOP, overflow, settle, start, stopRigs } from './support.js';
 
 afterEach(stopRigs);
 
@@ -88,5 +88,56 @@ describe('a terminal of the project', () => {
     await panel.locator('.terminals .terminal .close').first().click();
     await page.evaluate('0');
     await expect.poll(async () => panel.locator('.terminals .terminal').count()).toBe(1);
+  });
+});
+
+describe('a command that asks for a password', () => {
+  it('runs in a terminal of the app, where the person types it, and the agent goes on once it ends', async () => {
+    const rig = await start({
+      replies: [
+        {
+          toolCalls: [
+            {
+              arguments: {
+                command: 'read -r -s -p "Password: " secret; echo; echo "it was $secret"',
+                title: 'setup',
+                wait: true,
+              },
+              name: 'terminal',
+            },
+          ],
+        },
+        { text: 'Installed.' },
+      ],
+    });
+    const page = await rig.browser.newPage({ viewport: DESKTOP });
+    await page.goto(rig.link);
+    await page.locator('home-page textarea').fill('Install it');
+    await page.locator('home-page textarea').press('Enter');
+
+    // The call says where its command runs, and the session that it needs its person once the command asks.
+    const card = page.locator('session-page sc-terminal-wait');
+    await card.getByText('Runs in the terminal “setup”').waitFor();
+    await page.locator('session-page header').getByText('Needs you').waitFor();
+    expect(await overflow(page)).toBe(0);
+
+    // The password is typed in the terminal itself, which shows none of it.
+    await card.getByRole('button', { name: 'Open the terminal' }).click();
+    const dialog = page.locator('session-page sc-terminal jl-dialog');
+    await expect.poll(async () => dialog.isVisible()).toBe(true);
+    await expect.poll(async () => page.locator(ROWS).textContent()).toContain('Password:');
+    await page.locator('session-page sc-terminal .xterm').click();
+    await page.keyboard.type('hunter2');
+    expect(await page.locator(ROWS).textContent()).not.toContain('hunter2');
+    await page.keyboard.press('Enter');
+    await expect.poll(async () => page.locator(ROWS).textContent()).toContain('it was hunter2');
+    // The terminal shows no trace of how the shell told swcode the command ended.
+    expect(await page.locator(ROWS).textContent()).not.toContain('777;swcode');
+    await dialog.getByRole('button', { exact: true, name: 'Close' }).click();
+
+    // The agent went on by itself, and the card left with the call's result.
+    await page.getByText('Installed.').waitFor();
+    expect(await card.count()).toBe(0);
+    expect(await page.locator('session-page sc-tool-row').getAttribute('state')).toBe('done');
   });
 });

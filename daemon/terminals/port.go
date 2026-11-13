@@ -25,4 +25,16 @@ type Port interface {
 	List() []protocol.Terminal
 	Output(id string) []byte
 	Terminal(id string) (protocol.Terminal, bool)
+	// Run types a command in a terminal's shell and waits for it to end, while the person answers what it asks
+	// there; asks hears whether it waits on a password now.
+	Run(ctx context.Context, id, command string, asks func(waits bool)) (Ran, string)
+}
+
+// Ran is how a command typed in a terminal went: what the terminal printed from its line on, and whether it ended
+// (with which exit code), or the terminal closed first; neither when the wait for it was given up.
+type Ran struct {
+	Output []byte
+	Code   int
+	Ended  bool
+	Closed bool
 }

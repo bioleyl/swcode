@@ -238,6 +238,15 @@ export const SessionEventSchema = z.discriminatedUnion('kind', [
   }),
   z.object({ at, gave: z.boolean(), kind: z.literal('passwordAnswered'), requestId: z.string() }),
   z.object({ at, callId: z.string(), kind: z.literal('toolRunning') }),
+  // The call's command runs in a terminal of the app, and the call waits for it to end: the person answers what it
+  // asks there, a password among other things, which swcode never sees. The call's result ends the wait.
+  z.object({
+    at,
+    callId: z.string(),
+    kind: z.literal('terminalWaiting'),
+    terminalId: z.string(),
+    title: z.string(),
+  }),
   z.object({
     at,
     callId: z.string(),

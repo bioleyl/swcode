@@ -9,7 +9,7 @@ const BUSY_DELETE_HINT = 'Stop this session before deleting it';
 export const SESSION_STATUS_LOOKS: Readonly<Record<SessionStatus, StatusLook>> = {
   idle: { hint: 'Its turn is over: it waits for your next message.', label: 'Idle', tone: 'neutral' },
   waiting: {
-    hint: 'It asks you first: an approval, or a question.',
+    hint: 'It needs you: an approval, a question, or a password to type in a terminal.',
     icon: 'circle-alert',
     label: 'Needs you',
     tone: 'warn',

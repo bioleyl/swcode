@@ -190,6 +190,12 @@ func (s *Service) hostFor(session *live, turn *runningTurn, ready prepared, sees
 		},
 		Host:    where.host,
 		HostRef: session.meta.Host,
+		InTerminal: func(callID string, terminal protocol.Terminal) func(asks bool) {
+			s.mu.Lock()
+			s.record(session, protocol.SessionEventTerminalWaiting{CallID: callID, TerminalID: terminal.ID, Title: terminal.Title})
+			s.mu.Unlock()
+			return func(asks bool) { s.asksInTerminal(turn, asks) }
+		},
 		ShowOutput: func(callID, text string) {
 			s.mu.Lock()
 			defer s.mu.Unlock()
@@ -208,6 +214,18 @@ func (s *Service) hostFor(session *live, turn *runningTurn, ready prepared, sees
 		Workspace:   session.meta.Workspace,
 	}
 	return host
+}
+
+// asksInTerminal notes whether a command of the turn waits for the person in a terminal of the app: the session
+// then waits for them, as it does on a request, and every app says so.
+func (s *Service) asksInTerminal(turn *runningTurn, asks bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if turn.asksInTerminal == asks {
+		return
+	}
+	turn.asksInTerminal = asks
+	s.publishSessions()
 }
 
 func (h *turnHost) ToolContext() *tools.Context { return h.context }

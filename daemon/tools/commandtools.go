@@ -83,8 +83,24 @@ func joined(parts ...string) string {
 	return strings.Join(kept, "\n")
 }
 
+// needsPerson is what a command says when it found nobody to ask: sudo without a terminal, ssh or git refused for
+// want of a password or a yes.
+var needsPerson = regexp.MustCompile(`(?i)a terminal is required|no tty present|askpass|Permission denied \((?:[a-z-]+,)*(?:password|keyboard-interactive)|Host key verification failed|could not read (?:Username|Password)`)
+
+// personHint tells the model how to run a command that stopped for want of a person to answer it.
+const personHint = "[This command needs the person to answer it: run it with terminal and wait, they type in that terminal.]"
+
+// hintFor is the hint a failed command's output calls for; none for a command that went well.
+func hintFor(result hosts.CommandResult) string {
+	failed := result.ExitCode == nil || *result.ExitCode != 0
+	if failed && needsPerson.MatchString(result.Output) {
+		return personHint
+	}
+	return ""
+}
+
 func commandOutcome(result hosts.CommandResult, timeoutMs int) Outcome {
-	text := joined(strings.TrimRight(result.Output, " \t\r\n"), endingOf(result, timeoutMs))
+	text := joined(strings.TrimRight(result.Output, " \t\r\n"), endingOf(result, timeoutMs), hintFor(result))
 	if text == "" {
 		text = noOutput
 	}
@@ -132,7 +148,7 @@ var bashTool = Define(Spec[bashInput]{
 			return commandOutcome(tc.Host.Run(ctx, input.Command, options), timeoutMs)
 		}, preview)
 	},
-	Description: "Runs a shell command in the workspace: tests, builds, git. It gets no input, so use non-interactive flags. A password a command asks for is typed by the person while the command waits: run sudo as sudo -A, ssh asks by itself. Give a short description. A server or a watcher runs with background, never with &: read what it prints with output, stop it with kill.",
+	Description: "Runs a shell command in the workspace: tests, builds, git. It gets no input and no terminal, so use non-interactive flags; a command that asks the person something (sudo, a password, a login) runs with terminal and wait instead. Give a short description. A server or a watcher runs with background, never with &: read what it prints with output, stop it with kill.",
 	Input: Object(
 		Optional("background", Boolean().Describe("For a command that does not end by itself (a dev server, a watcher): it runs on in the background, and the call returns after a few seconds with its first output and a job id.")),
 		Required("command", String().Min(1).Describe("The command, run with bash in the workspace, without any input.")),

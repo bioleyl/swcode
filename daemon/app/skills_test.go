@@ -127,9 +127,10 @@ func TestSaveskillIsOfferedNoLonger(t *testing.T) {
 
 func TestTheSkillsAreToldAgainAfterACompaction(t *testing.T) {
 	test := startWithDeploy(t, Options{
-		// The system prompt and the tools take about 4,900 tokens; big.txt, about 4,000 more.
-		ContextTokens: 7000,
-		Files:         map[string]string{"big.txt": strings.Repeat(strings.Repeat("x", 60)+"\n", 200)},
+		// The system prompt and the tools take about 5,800 tokens; big.txt, about 6,100 more: the window sits between
+		// the two, as in the compaction tests.
+		ContextTokens: 8000,
+		Files:         map[string]string{"big.txt": strings.Repeat(strings.Repeat("x", 60)+"\n", 300)},
 		Replies:       []fakellama.Reply{call("read", map[string]any{"path": "big.txt"}), text("Lines of x.")},
 		Scripts:       map[string][]fakellama.Reply{summaryRequest: {text("The user asked what big.txt holds.")}},
 	})

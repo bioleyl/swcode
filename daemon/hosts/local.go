@@ -121,7 +121,7 @@ func (h *LocalHost) StartJob(_ context.Context, command, cwd string) (string, er
 func (h *LocalHost) StartTerminal(options TerminalOptions) (*Terminal, error) {
 	command := exec.Command(h.shell.Program, h.shell.Interactive...)
 	command.Dir = options.Cwd
-	return StartTerminal(command, options)
+	return StartTerminal(command, options, h.shell)
 }
 
 func (h *LocalHost) ReadJob(_ context.Context, id string, consume bool) (*JobState, error) {

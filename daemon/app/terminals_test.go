@@ -8,6 +8,7 @@ import (
 
 	"swcode/daemon/fakellama"
 	"swcode/daemon/protocol"
+	"swcode/daemon/sessions"
 	. "swcode/daemon/testapp"
 )
 
@@ -107,5 +108,68 @@ func TestATurnReadsTheLastLinesATerminalPrinted(t *testing.T) {
 	}
 	if !strings.Contains(RequestText(test.Requests()[2]), "build-error-here") {
 		t.Fatal("the model did not get the terminal's last lines")
+	}
+}
+
+func TestACommandThePersonAnswersRunsInATerminalAndTheAgentGoesOnOnceItEnds(t *testing.T) {
+	test := Start(t, Options{Replies: []fakellama.Reply{
+		call("terminal", map[string]any{
+			"command": `read -r -s -p "Password: " secret; echo; echo "it was $secret"`, "title": "setup", "wait": true,
+		}),
+		text("Installed."),
+	}})
+	session := test.NewSession(sessions.Request{})
+	test.App.Sessions.SendPrompt(session.ID, "Install it", nil)
+
+	// The session says where the command runs, then that it waits for its person there.
+	test.WaitForEvent("terminalWaiting", 1)
+	waiting := OfKind(test.Events(session.ID), "terminalWaiting")[0].(map[string]any)
+	Expect(t, waiting, `{"title":"setup"}`)
+	statusOf := func() protocol.SessionStatus {
+		for _, summary := range test.App.Sessions.List() {
+			if summary.ID == session.ID {
+				return summary.Status
+			}
+		}
+		return ""
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for statusOf() != protocol.SessionStatusWaiting {
+		if time.Now().After(deadline) {
+			t.Fatalf("the session is %q while its command asks for a password", statusOf())
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+
+	// The password is typed in the terminal: the call ends with the command, and the turn goes on.
+	if refusal := test.App.Terminals.Write(waiting["terminalId"].(string), "hunter2\n"); refusal != "" {
+		t.Fatal(refusal)
+	}
+	test.WaitForEvent("turnFinished", 1)
+	Expect(t, OfKind(test.Events(session.ID), "toolFinished"), `[{"meta":"done","ok":true}]`)
+	result := OfKind(test.Events(session.ID), "toolFinished")[0].(map[string]any)["output"].(string)
+	if !strings.Contains(result, "it was hunter2") || strings.Contains(result, "777;swcode") {
+		t.Fatalf("what the model read: %q", result)
+	}
+	if statusOf() != protocol.SessionStatusIdle {
+		t.Fatalf("the session is %q once the turn is over", statusOf())
+	}
+	// The terminal runs on for the next command, with what sudo would remember.
+	if list := test.App.Terminals.List(); len(list) != 1 || list[0].Title != "setup" {
+		t.Fatalf("terminals after the call: %+v", list)
+	}
+}
+
+func TestACommandThatFoundNobodyToAskIsToldToRunInATerminal(t *testing.T) {
+	test := Start(t, Options{Replies: []fakellama.Reply{
+		call("bash", map[string]any{"command": `echo "sudo: a terminal is required to read the password" >&2; exit 1`}),
+		text("It needs you."),
+	}})
+	session := test.NewSession(sessions.Request{})
+	test.App.Sessions.SendPrompt(session.ID, "Install it", nil)
+	test.WaitForEvent("turnFinished", 1)
+	result := OfKind(test.Events(session.ID), "toolFinished")[0].(map[string]any)["output"].(string)
+	if !strings.Contains(result, "run it with terminal and wait") {
+		t.Fatalf("what the model read: %q", result)
 	}
 }

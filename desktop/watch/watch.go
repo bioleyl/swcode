@@ -5,6 +5,7 @@ package watch
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/url"
 	"strings"
 	"time"
@@ -35,6 +36,7 @@ const (
 
 	untitled   = "A session"
 	askedFirst = "Asks you first: "
+	inTerminal = "A command runs in the terminal “%s”: it may ask for your password there."
 	turnOver   = "Its turn is over."
 	turnFailed = "Its turn failed."
 
@@ -102,6 +104,9 @@ func (t *Tracker) event(sessionID string, event protocol.SessionEvent) (Notice, 
 		return notice, true
 	case protocol.SessionEventPasswordRequested:
 		notice.Kind, notice.Text = NeedsYou, clipped(value.Prompt)
+		return notice, true
+	case protocol.SessionEventTerminalWaiting:
+		notice.Kind, notice.Text = NeedsYou, clipped(fmt.Sprintf(inTerminal, value.Title))
 		return notice, true
 	case protocol.SessionEventTurnFinished:
 		return t.finished(notice, value)

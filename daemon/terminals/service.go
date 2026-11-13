@@ -45,6 +45,12 @@ type terminal struct {
 	process *hosts.Terminal
 	running bool
 	buffer  []byte
+	// printed is how much it printed in all, what the scrollback dropped included: where a command's output starts.
+	printed int
+	// typed: something was typed in it, by a person or as its first command; announced: its shell was readied for
+	// the commands the agent waits for.
+	typed     bool
+	announced bool
 	// cut says the start of its output was dropped: a view clears itself before drawing what is left.
 	cut         bool
 	watchers    map[int]func([]byte)
@@ -88,6 +94,7 @@ func (s *Service) Open(ctx context.Context, request Request) (protocol.Terminal,
 	go s.read(started, process)
 	go s.wait(started, process)
 	if request.Command != "" {
+		started.typed = true
 		if _, err := process.Write([]byte(request.Command + "\n")); err != nil {
 			s.Close(opened.ID)
 			return protocol.Terminal{}, "The command could not be typed in the terminal: " + err.Error()
@@ -165,6 +172,7 @@ func (s *Service) deliver(t *terminal, chunk []byte) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	t.buffer = append(t.buffer, chunk...)
+	t.printed += len(chunk)
 	if over := len(t.buffer) - maxScrollback; over > 0 {
 		t.buffer = append([]byte(nil), t.buffer[over:]...)
 		t.cut = true
@@ -265,6 +273,9 @@ func (s *Service) Write(id, data string) string {
 	s.mu.Lock()
 	t, ok := s.terminals[id]
 	alive := ok && t.running
+	if alive {
+		t.typed = true
+	}
 	s.mu.Unlock()
 	if !ok {
 		return unknownTerminal

@@ -124,3 +124,74 @@ func TestATerminalTakesAnotherName(t *testing.T) {
 		t.Fatal("an unknown terminal took a name")
 	}
 }
+
+func TestACommandTypedInATerminalIsWaitedForWhileThePersonAnswersItThere(t *testing.T) {
+	service, folder := local(t)
+	opened, refused := service.Open(context.Background(), terminals.Request{Cwd: folder, Host: protocol.LocalHost(), Title: "setup"})
+	if refused != "" {
+		t.Fatal(refused)
+	}
+	// A command that asks for a password, as sudo does: without echo, on a line of its own.
+	asked := make(chan bool, 8)
+	ran := make(chan terminals.Ran, 1)
+	go func() {
+		got, _ := service.Run(context.Background(), opened.ID, `read -r -s -p "Password: " secret; echo; echo "it was $secret"; (exit 4)`, func(waits bool) { asked <- waits })
+		ran <- got
+	}()
+	select {
+	case waits := <-asked:
+		if !waits {
+			t.Fatal("the command was said not to wait before it asked")
+		}
+	case <-time.After(waitLimit):
+		t.Fatal("the password prompt was not seen")
+	}
+	if refusal := service.Write(opened.ID, "hunter2\n"); refusal != "" {
+		t.Fatal(refusal)
+	}
+	select {
+	case got := <-ran:
+		output := string(got.Output)
+		if !got.Ended || got.Code != 4 || !strings.Contains(output, "it was hunter2") || strings.Contains(output, "\x1b]777") {
+			t.Fatalf("ended %v with code %d: %q", got.Ended, got.Code, output)
+		}
+	case <-time.After(waitLimit):
+		t.Fatal("the command was not seen to end")
+	}
+
+	// The terminal runs on: the next command is typed in the same shell, which kept what the first one set.
+	next, refusal := service.Run(context.Background(), opened.ID, `echo "still $secret"`, func(bool) {})
+	if refusal != "" || !next.Ended || next.Code != 0 || !strings.Contains(string(next.Output), "still hunter2") {
+		t.Fatalf("the next command: %+v, %q", next, refusal)
+	}
+}
+
+func TestAWaitForACommandEndsWithItsTerminalOrWhenGivenUp(t *testing.T) {
+	service, folder := local(t)
+	opened, _ := service.Open(context.Background(), terminals.Request{Cwd: folder, Host: protocol.LocalHost(), Title: "setup"})
+	closed := make(chan terminals.Ran, 1)
+	go func() {
+		got, _ := service.Run(context.Background(), opened.ID, "sleep 30", func(bool) {})
+		closed <- got
+	}()
+	until(t, "the command to be typed", func() bool { return strings.Contains(string(service.Output(opened.ID)), "sleep 30") })
+	service.Close(opened.ID)
+	select {
+	case got := <-closed:
+		if got.Ended || !got.Closed {
+			t.Fatalf("after its terminal closed: %+v", got)
+		}
+	case <-time.After(waitLimit):
+		t.Fatal("the wait went on after its terminal closed")
+	}
+
+	again, _ := service.Open(context.Background(), terminals.Request{Cwd: folder, Host: protocol.LocalHost(), Title: "setup"})
+	short, stop := context.WithTimeout(context.Background(), 300*time.Millisecond)
+	defer stop()
+	if got, refusal := service.Run(short, again.ID, "sleep 30", func(bool) {}); refusal != "" || got.Ended || got.Closed {
+		t.Fatalf("given up: %+v, %q", got, refusal)
+	}
+	if _, refusal := service.Run(context.Background(), "nope", "true", func(bool) {}); refusal == "" {
+		t.Fatal("a command ran in a terminal that is not there")
+	}
+}

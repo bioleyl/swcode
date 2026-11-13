@@ -156,6 +156,8 @@ type runningTurn struct {
 	recorder  *checkpoints.Recorder
 	streaming *protocol.Streaming
 	pending   *pending
+	// asksInTerminal: a command of the turn waits for the person in a terminal of the app, on a password.
+	asksInTerminal bool
 	// setup is what the turn runs with once ready: a peek asks with the same, for the prompt llm-server cached.
 	setup *agent.Setup
 }
@@ -984,7 +986,7 @@ func summaryOf(session *live) protocol.SessionSummary {
 	status := protocol.SessionStatusIdle
 	if session.turn != nil {
 		status = protocol.SessionStatusWorking
-		if session.turn.pending != nil {
+		if session.turn.pending != nil || session.turn.asksInTerminal {
 			status = protocol.SessionStatusWaiting
 		}
 	}

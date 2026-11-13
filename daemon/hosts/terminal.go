@@ -54,11 +54,32 @@ type Terminal struct {
 	command  *pty.Cmd
 	// close is once: the person closing the terminal and its shell ending both let it go, and go-pty keeps no lock.
 	close sync.Once
+	// shell is the shell that runs in it: how a command typed there says it ended.
+	shell Shell
+}
+
+// Announce readies the terminal's shell for commands the agent waits for: typed once, before the first one. wipe
+// clears the view after it, in a terminal nobody typed in yet. The space before it keeps it out of the shell's
+// history.
+func (t *Terminal) Announce(wipe bool) error {
+	line := " " + t.shell.Announce
+	if wipe {
+		line += "; " + t.shell.Wipe
+	}
+	_, err := t.Write([]byte(line + "\n"))
+	return err
+}
+
+// Type types a command in the terminal's shell, which says when it ended, with that mark and its exit code
+// (CommandEnd finds it in what the terminal prints).
+func (t *Terminal) Type(command, mark string) error {
+	_, err := t.Write([]byte(command + typedEnd(mark) + "\n"))
+	return err
 }
 
 // StartTerminal starts the command attached to a pseudo-terminal of its own: the same program, folder and
 // environment, with a terminal it can draw in.
-func StartTerminal(command *exec.Cmd, options TerminalOptions) (*Terminal, error) {
+func StartTerminal(command *exec.Cmd, options TerminalOptions, shell Shell) (*Terminal, error) {
 	terminal, err := pty.New()
 	if err != nil {
 		return nil, err
@@ -79,7 +100,7 @@ func StartTerminal(command *exec.Cmd, options TerminalOptions) (*Terminal, error
 		_ = terminal.Close()
 		return nil, err
 	}
-	return &Terminal{command: started, terminal: terminal}, nil
+	return &Terminal{command: started, shell: shell, terminal: terminal}, nil
 }
 
 func (t *Terminal) Read(data []byte) (int, error) {

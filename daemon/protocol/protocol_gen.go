@@ -962,6 +962,8 @@ func (SessionEventPasswordAnswered) isSessionEvent() {}
 
 func (SessionEventToolRunning) isSessionEvent() {}
 
+func (SessionEventTerminalWaiting) isSessionEvent() {}
+
 func (SessionEventToolFinished) isSessionEvent() {}
 
 func (SessionEventSubagentQueued) isSessionEvent() {}
@@ -1091,6 +1093,12 @@ func (u *SessionEvent) UnmarshalJSON(data []byte) error {
 			return err
 		}
 		u.Value = value
+	case "\"terminalWaiting\"":
+		var value SessionEventTerminalWaiting
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
 	case "\"toolFinished\"":
 		var value SessionEventToolFinished
 		if err := json.Unmarshal(data, &value); err != nil {
@@ -1169,6 +1177,7 @@ type SessionEventMapper[R any] interface {
 	PasswordRequested(SessionEventPasswordRequested) R
 	PasswordAnswered(SessionEventPasswordAnswered) R
 	ToolRunning(SessionEventToolRunning) R
+	TerminalWaiting(SessionEventTerminalWaiting) R
 	ToolFinished(SessionEventToolFinished) R
 	SubagentQueued(SessionEventSubagentQueued) R
 	SubagentStarted(SessionEventSubagentStarted) R
@@ -1215,6 +1224,8 @@ func MapSessionEvent[R any](u SessionEvent, m SessionEventMapper[R]) R {
 		return m.PasswordAnswered(value)
 	case SessionEventToolRunning:
 		return m.ToolRunning(value)
+	case SessionEventTerminalWaiting:
+		return m.TerminalWaiting(value)
 	case SessionEventToolFinished:
 		return m.ToolFinished(value)
 	case SessionEventSubagentQueued:
@@ -1715,6 +1726,22 @@ func (v SessionEventToolRunning) MarshalJSON() ([]byte, error) {
 		Key string `json:"kind"`
 		plain
 	}{"toolRunning", p})
+}
+
+type SessionEventTerminalWaiting struct {
+	At         string `json:"at"`
+	CallID     string `json:"callId"`
+	TerminalID string `json:"terminalId"`
+	Title      string `json:"title"`
+}
+
+func (v SessionEventTerminalWaiting) MarshalJSON() ([]byte, error) {
+	type plain SessionEventTerminalWaiting
+	p := plain(v)
+	return json.Marshal(struct {
+		Key string `json:"kind"`
+		plain
+	}{"terminalWaiting", p})
 }
 
 type SessionEventToolFinished struct {

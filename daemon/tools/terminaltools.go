@@ -26,6 +26,11 @@ const (
 	minReadLines     = 1
 	maxReadLines     = 500
 	noTerminalAgent  = "Subagents do not open terminals: the main agent runs what the person watches."
+	// waitLimit is how long a command the person may have to answer is waited for: they may be away.
+	waitLimit    = 30 * time.Minute
+	stillRunning = "[the command still runs in the terminal %q after %s: the person may not have answered it yet. Tell them, and read the terminal later with readterminal.]"
+	closedFirst  = "[the terminal %q was closed before the command ended]"
+	exitCodeLine = "[exit code %d]"
 )
 
 // escapeSequence is what a terminal draws with rather than says: the colours and cursor moves the model cannot read.
@@ -80,6 +85,7 @@ func (s standingOf) Signalled(protocol.TerminalStateSignalled) terminalStanding 
 type terminalInput struct {
 	Command string `json:"command"`
 	Title   string `json:"title"`
+	Wait    bool   `json:"wait"`
 }
 
 var terminalTool = Define(Spec[terminalInput]{
@@ -87,12 +93,16 @@ var terminalTool = Define(Spec[terminalInput]{
 		if tc.Terminals == nil {
 			return Refuse(noTerminalAgent)
 		}
+		if input.Wait {
+			return Ready(func(ctx context.Context) Outcome { return runInTerminal(ctx, input, tc) }, Text(input.Command))
+		}
 		return Ready(func(ctx context.Context) Outcome { return startTerminal(ctx, input, tc) }, Text(input.Command))
 	},
-	Description: "Runs a long command (a dev server, a watcher) in a terminal of its own in the workspace, which the person watches beside the session and can type in. Give it a short title people know it by. The call returns after a few seconds with what it printed so far; the terminal runs on until its command ends or the person closes it. Read what it printed later with readterminal.",
+	Description: "Runs a command in a terminal of the app, in the workspace, which the person watches beside the session and can type in. Two uses. A long command (a dev server, a watcher): the call returns after a few seconds with what it printed so far, the terminal runs on, and readterminal reads it later. A command the person has to answer (sudo or ssh asking for a password, a login, an installer's questions): set wait, and the call waits until the command ends while the person types in the terminal, then gives what it printed and its exit code; say in your answer nothing of the password, the app tells the person where to type it. Give the terminal a short title people know it by.",
 	Input: Object(
 		Required("command", String().Min(1).Describe("The command, run by a shell in the workspace.")),
-		Required("title", String().Min(1).Max(terminalTitleMax).Describe("What the terminal is called in the app, in a few words: dev server.")),
+		Required("title", String().Min(1).Max(terminalTitleMax).Describe("What the terminal is called in the app, in a few words: dev server, setup. With wait, a title already in use runs the command in that terminal: a password sudo took there is not asked for again for a while.")),
+		Optional("wait", Boolean().Describe("Wait until the command ends, while the person answers what it asks in the terminal: for sudo, ssh with a password, a login, or any command that asks questions.")),
 	),
 	Name: protocol.ToolNameTerminal,
 	Subject: func(input terminalInput, _ *Context) permissions.Subject {
@@ -205,6 +215,58 @@ func startTerminal(ctx context.Context, input terminalInput, tc *Context) Outcom
 	}
 	waitForStart(ctx)
 	return terminalOutcome(tc.Terminals, info)
+}
+
+// waitingTerminal is the terminal a command the person answers runs in: the workspace's running one of that title,
+// which keeps what sudo was told, else a new one.
+func waitingTerminal(ctx context.Context, title string, tc *Context) (protocol.Terminal, string) {
+	if found, named := namedTerminal(workspaceTerminals(tc), title); named {
+		if _, running := found.State.Value.(protocol.TerminalStateRunning); running {
+			return found, ""
+		}
+	}
+	return tc.Terminals.Open(ctx, terminals.Request{
+		Columns: terminalColumns, Cwd: tc.Workspace, Host: tc.HostRef, Rows: terminalRows, Title: title,
+	})
+}
+
+// runInTerminal types the command in a terminal of the app and waits until it ends, while the person answers
+// what it asks there: a password is typed in the terminal itself, and never comes here.
+func runInTerminal(ctx context.Context, input terminalInput, tc *Context) Outcome {
+	terminal, refused := waitingTerminal(ctx, input.Title, tc)
+	if refused != "" {
+		return Failure(refused, "failed")
+	}
+	asks := tc.InTerminal(tc.CallID, terminal)
+	defer asks(false)
+	waiting, giveUp := context.WithTimeout(ctx, waitLimit)
+	defer giveUp()
+	ran, refused := tc.Terminals.Run(waiting, terminal.ID, input.Command, asks)
+	if refused != "" {
+		return Failure(refused, "failed")
+	}
+	return ranOutcome(ctx, terminal, ran)
+}
+
+// ranOutcome is how a command the person could answer went, as the model reads it: what it printed, then its exit
+// code, or why it has none.
+func ranOutcome(ctx context.Context, terminal protocol.Terminal, ran terminals.Ran) Outcome {
+	printed := plainTerminal(ran.Output, maxTerminalRead)
+	result := func(standing, meta string) Outcome {
+		text := joined(printed, standing)
+		return Outcome{Display: Text(text), Meta: meta, OK: ran.Ended && ran.Code == 0, Output: text}
+	}
+	switch {
+	case ran.Ended && ran.Code == 0:
+		return result("", "done")
+	case ran.Ended:
+		return result(fmt.Sprintf(exitCodeLine, ran.Code), fmt.Sprintf("exit code %d", ran.Code))
+	case ran.Closed:
+		return result(fmt.Sprintf(closedFirst, terminal.Title), "closed")
+	case ctx.Err() != nil:
+		return result("[stopped]", "stopped")
+	}
+	return result(fmt.Sprintf(stillRunning, terminal.Title, waitLimit), "still running")
 }
 
 // waitForStart gives the command its first seconds, as a background job's call does.

@@ -1,0 +1,61 @@
+:host {
+  display: block;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid var(--jl-accent-line);
+  border-radius: var(--jl-radius-lg);
+  background: var(--jl-surface);
+}
+
+.head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.badge {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--jl-radius);
+  background: var(--jl-accent-soft);
+  color: var(--jl-accent);
+}
+
+h2 {
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.3;
+  word-break: break-word;
+}
+
+.what {
+  margin-top: 4px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--jl-text-2);
+}
+
+jl-button {
+  align-self: flex-start;
+}
+
+/* On a phone the button is as wide as the card: a thumb finds it. */
+@media (max-width: 720px) {
+  jl-button {
+    display: flex;
+    align-self: stretch;
+  }
+}
+
+[hidden] {
+  display: none;
+}
