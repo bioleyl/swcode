@@ -26,8 +26,10 @@ var ignoredFolders = map[string]bool{
 	"coverage": true, "dist": true, "node_modules": true, "target": true, "venv": true,
 }
 
-// gitVisibleFiles: tracked files, and untracked ones the .gitignore files do not exclude, separated by NUL.
-var gitVisibleFiles = []string{"ls-files", "--cached", "--others", "--exclude-standard", "-z"}
+// gitVisibleFiles: tracked files, and untracked ones the .gitignore files do not exclude, separated by NUL. The
+// repository's own fsmonitor setting is left out: it names a program git would run, and listing files runs nothing
+// the repository says.
+var gitVisibleFiles = []string{"-c", "core.fsmonitor=false", "ls-files", "--cached", "--others", "--exclude-standard", "-z"}
 
 // IsBinary tells a binary file: a NUL byte near the start.
 func IsBinary(content []byte) bool {

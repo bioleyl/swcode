@@ -233,6 +233,35 @@ func TestOnlyWhatGitShowsIsSearchedInARepository(t *testing.T) {
 	f.outputs("glob", `{"pattern":"**/*.ts"}`, "src/kept.ts")
 }
 
+func TestARepositorysOwnFolderIsNotChangedByAFileToolAndSaysNothingToRunWhenFilesAreListed(t *testing.T) {
+	f := setUp(t)
+	if output, err := exec.Command("git", "init", "-q", f.workspace).CombinedOutput(); err != nil {
+		t.Fatalf("%s", output)
+	}
+	// Its settings and hooks say what git runs: a file tool leaves them to git itself, which is a command.
+	f.call("read", `{"path":".git/config"}`)
+	f.refused("write", `{"path":".git/config","content":"[core]\n\tfsmonitor = ./payload.sh\n"}`, `\.git/config is in \.git`)
+	f.refused("edit", `{"path":".git/config","oldString":"[core]","newString":"[core]\n\tfsmonitor = ./payload.sh"}`, `is in \.git`)
+	f.refused("write", `{"path":".git/hooks/pre-commit","content":"#!/bin/sh\n"}`, `is in \.git`)
+
+	// A repository that names a program for git to run, as one cloned from elsewhere may: listing its files runs
+	// nothing it says.
+	ran := filepath.Join(f.workspace, "RAN")
+	f.put("payload.sh", "#!/bin/sh\ntouch "+ran+"\n")
+	if err := os.Chmod(filepath.Join(f.workspace, "payload.sh"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if output, err := exec.Command("git", "-C", f.workspace, "config", "core.fsmonitor", "./payload.sh").CombinedOutput(); err != nil {
+		t.Fatalf("%s", output)
+	}
+	f.put("src/kept.ts", "const needle = 1;\n")
+	f.outputs("glob", `{"pattern":"**/*.ts"}`, "src/kept.ts")
+	f.call("grep", `{"pattern":"needle"}`)
+	if _, err := os.Stat(ran); err == nil {
+		t.Fatal("listing the files ran the program the repository named")
+	}
+}
+
 func fakeWeb() *web.Port {
 	page := web.Page{Text: "PAGE", Title: "Timeouts", Truncated: true, URL: "https://docs.test/timeouts"}
 	return &web.Port{

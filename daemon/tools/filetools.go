@@ -120,6 +120,9 @@ func edits(input string) permissions.Subject {
 var writeTool = Define(Spec[writeInput]{
 	Check: func(ctx context.Context, input writeInput, tc *Context) Check {
 		path, problem := resolveTarget(ctx, tc, input.Path)
+		if problem == "" {
+			problem = gitFolderProblem(tc.Host.Paths(), path, input.Path)
+		}
 		if problem != "" {
 			return Refuse(problem)
 		}
@@ -172,6 +175,9 @@ type editInput struct {
 var editTool = Define(Spec[editInput]{
 	Check: func(ctx context.Context, input editInput, tc *Context) Check {
 		path, problem := resolveTarget(ctx, tc, input.Path)
+		if problem == "" {
+			problem = gitFolderProblem(tc.Host.Paths(), path, input.Path)
+		}
 		if problem != "" {
 			return Refuse(problem)
 		}

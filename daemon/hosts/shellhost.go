@@ -180,7 +180,7 @@ func (h *ShellHost) ListFiles(ctx context.Context, base, pattern string, limit i
 	}
 	listing, err := h.session.Run(ctx, strings.Join([]string{
 		fmt.Sprintf("cd -- %s 2>/dev/null || exit 0", ShellWord(base)),
-		"if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then git ls-files --cached --others --exclude-standard -z",
+		"if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then git -c core.fsmonitor=false ls-files --cached --others --exclude-standard -z",
 		fmt.Sprintf(`else find . \( -type d \( %s \) -prune \) -o -type f -printf '%%P\0' | LC_ALL=C sort -z; fi | head -z -n %d | base64 -w0`,
 			strings.Join(prunes, " -o "), maxListed),
 	}, line))

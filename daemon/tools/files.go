@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 
 	"swcode/daemon/hosts"
@@ -69,6 +70,18 @@ func resolveTarget(ctx context.Context, tc *Context, input string) (string, stri
 		return "", fmt.Sprintf("%s leads outside %s through a link.", input, folder)
 	}
 	return path, ""
+}
+
+// gitFolder is a repository's own folder: its settings and its hooks name programs git runs.
+const gitFolder = ".git"
+
+// gitFolderProblem is why a file tool does not change a file of a repository's own folder: a change there is a
+// command in all but name, which an approval of edits does not cover. Empty for any other file.
+func gitFolderProblem(paths hosts.Paths, path, label string) string {
+	if !slices.Contains(strings.Split(path, paths.Separator()), gitFolder) {
+		return ""
+	}
+	return fmt.Sprintf("%s is in %s, whose settings and hooks say what git runs: change it with git itself, in bash.", label, gitFolder)
 }
 
 func readText(ctx context.Context, host hosts.Host, path string) (string, error) {
