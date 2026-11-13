@@ -162,6 +162,11 @@ export class ScConversation extends ScElement {
   private readonly _working = new Set<string>();
   // What the agent does now, for the line under the conversation; set at every streamed token, so not a useChange.
   private _activity: Activity = { kind: 'working' };
+  // What streamed in since the last frame, by message: an answer's words, and the thoughts above it. A model
+  // writes many pieces a frame: they are drawn together, once, and not at all while the window is hidden.
+  private readonly _streamed = new Map<string, string>();
+  private readonly _reasoned = new Map<string, string>();
+  private _frame = 0;
 
   private readonly _handlers: SessionEventHandlers = {
     assistantMessage: (event) => {
@@ -341,12 +346,21 @@ export class ScConversation extends ScElement {
     this.on(this, 'scroll', () => this.watchTop());
   }
 
+  onDisconnect(): void {
+    cancelAnimationFrame(this._frame);
+    this._frame = 0;
+    this._streamed.clear();
+    this._reasoned.clear();
+  }
+
   /** Draws the end of a session again, from the history the daemon answered, and the answer being written. */
   load(events: readonly SessionEvent[], older: number, streaming: Streaming | undefined): void {
     this._older = older;
     this._reveal = '';
     this._early.clear();
     this._answered.clear();
+    this._streamed.clear();
+    this._reasoned.clear();
     this._messages.clear();
     this._thoughts.clear();
     this._rows.clear();
@@ -361,6 +375,7 @@ export class ScConversation extends ScElement {
     }
     if (streaming) {
       this.delta(streaming.messageId, streaming.text);
+      this.drawStreamed();
     }
     this.scrollTop = this.scrollHeight;
     this._topState = 'none';
@@ -389,6 +404,7 @@ export class ScConversation extends ScElement {
    * stands now. An older page asked for before the socket went never came: the top asks again when it is reached.
    */
   resume(events: readonly SessionEvent[], streaming: Streaming | undefined): void {
+    this.drawStreamed();
     this.following(() => {
       for (const event of events) {
         this.handle(event.kind, event);
@@ -401,18 +417,48 @@ export class ScConversation extends ScElement {
     this.showTop();
   }
 
+  /** An event of the session: what streamed before it is drawn first, a reply's whole text then replaces it. */
   apply(event: SessionEvent): void {
+    this.drawStreamed();
     this.following(() => this.handle(event.kind, event));
   }
 
   delta(messageId: string, text: string): void {
-    this.following(() => this.message(messageId).append(text));
+    this._streamed.set(messageId, `${this._streamed.get(messageId) ?? ''}${text}`);
+    this.drawNextFrame();
     this.doing({ kind: 'writing' });
   }
 
   reasoning(messageId: string, text: string): void {
-    this.following(() => this.thinking(messageId).append(text));
+    this._reasoned.set(messageId, `${this._reasoned.get(messageId) ?? ''}${text}`);
+    this.drawNextFrame();
     this.doing({ kind: 'thinking' });
+  }
+
+  private drawNextFrame(): void {
+    if (this._frame !== 0) {
+      return;
+    }
+    this._frame = requestAnimationFrame(() => this.drawStreamed());
+  }
+
+  /** Draws what streamed in since the last frame: the thoughts first, which stand above their answer. */
+  private drawStreamed(): void {
+    cancelAnimationFrame(this._frame);
+    this._frame = 0;
+    if (this._streamed.size === 0 && this._reasoned.size === 0) {
+      return;
+    }
+    this.following(() => {
+      for (const [messageId, text] of this._reasoned) {
+        this.thinking(messageId).append(text);
+      }
+      for (const [messageId, text] of this._streamed) {
+        this.message(messageId).append(text);
+      }
+    });
+    this._reasoned.clear();
+    this._streamed.clear();
   }
 
   /** The model started writing a call to this tool: its arguments come unseen, until the call is whole. */

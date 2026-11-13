@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { blocksOf } from '../src/lib/markdown';
+import { blockKey, blocksOf, sameBlocks } from '../src/lib/markdown';
 
 describe('blocksOf, beyond paragraphs', () => {
   it('reads a list right under its introduction', () => {
@@ -179,5 +179,27 @@ describe('blocksOf, links', () => {
     const [list, table] = blocksOf(`- [notes](${GoNotes})\n\n| Doc |\n| --- |\n| ${GoNotes} |`);
     expect(list?.kind === 'list' && list.items[0]).toEqual([{ href: GoNotes, kind: 'link', text: 'notes' }]);
     expect(table?.kind === 'table' && table.rows[0]).toEqual([[{ href: GoNotes, kind: 'link', text: GoNotes }]]);
+  });
+});
+
+describe('sameBlocks', () => {
+  const keysOf = (text: string): string[] => blocksOf(text).map(blockKey);
+
+  it('keeps every block but the one an answer is still writing', () => {
+    const drawn = keysOf('First.\n\nSecond, half wri');
+    expect(sameBlocks(drawn, keysOf('First.\n\nSecond, half written.\n\nThird.'))).toBe(1);
+  });
+
+  it('keeps all of them when the text only grew by new blocks', () => {
+    expect(sameBlocks(keysOf('First.\n\nSecond.'), keysOf('First.\n\nSecond.\n\nThird.'))).toBe(2);
+  });
+
+  it('keeps none of a message drawn for the first time, nor of one whose first block changed', () => {
+    expect(sameBlocks([], keysOf('First.'))).toBe(0);
+    expect(sameBlocks(keysOf('A list:\n- one'), keysOf('Another start.\n- one'))).toBe(0);
+  });
+
+  it('keeps only what is left of a text that got shorter', () => {
+    expect(sameBlocks(keysOf('First.\n\nSecond.'), keysOf('First.'))).toBe(1);
   });
 });

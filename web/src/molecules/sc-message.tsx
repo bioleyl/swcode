@@ -2,7 +2,7 @@ import { css } from '@jadis/core';
 import { JlButton } from '@syware/jlib';
 
 import { oneOf, ScElement } from '../base/sc-element';
-import { blocksOf } from '../lib/markdown';
+import { blockKey, blocksOf, sameBlocks } from '../lib/markdown';
 import { BASE_STYLES } from '../styles/shared';
 import styles from './sc-message.css?inline';
 
@@ -114,9 +114,7 @@ export class ScMessage extends ScElement {
     },
     { attribute: 'pinned' }
   );
-  readonly text = this.useChange('', (value) =>
-    this._refs.body.replaceChildren(...blocksOf(value).map(blockNode))
-  );
+  readonly text = this.useChange('', (value) => this.drawText(value));
   /** The addresses of the pictures pasted with it: a click opens one whole, in a tab. */
   readonly pictures = this.useChange<string[]>([], (urls) => {
     this._refs.pictures.hidden = urls.length === 0;
@@ -129,11 +127,28 @@ export class ScMessage extends ScElement {
     );
   });
 
+  // The blocks drawn, each as its text form and in the order of the body's children: a longer text draws again
+  // only the blocks that changed, which is the last one or two of an answer as it streams in.
+  private _drawn: string[] = [];
+
   private readonly _refs = this.useRefs((ref) => ({
     body: ref('.body'),
     pictures: ref('.pictures'),
     pin: ref(JlButton),
   }));
+
+  /** Draws the text's blocks: those the body already shows stay, the ones after them are made again. */
+  private drawText(value: string): void {
+    const blocks = blocksOf(value);
+    const keys = blocks.map(blockKey);
+    const kept = sameBlocks(this._drawn, keys);
+    const body = this._refs.body;
+    while (body.childNodes.length > kept) {
+      body.lastChild?.remove();
+    }
+    body.append(...blocks.slice(kept).map(blockNode));
+    this._drawn = keys;
+  }
 
   /** Adds a piece of an answer as it streams in. */
   append(text: string): void {

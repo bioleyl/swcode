@@ -222,3 +222,17 @@ const codeOf = (part: string): Block => ({
  */
 export const blocksOf = (text: string): Block[] =>
   text.split(FENCE).flatMap((part, index) => (index % 2 === 1 ? [codeOf(part)] : paragraphsOf(part)));
+
+/**
+ * How many blocks at the start of a message are the same as the ones drawn before it grew: an answer streams in
+ * at its end, so all but its last block or two stay as they are, and only what follows them is drawn again.
+ * `drawn` and `next` are each block's text form, as `blockKey` gives it.
+ */
+export function sameBlocks(drawn: readonly string[], next: readonly string[]): number {
+  const shared = Math.min(drawn.length, next.length);
+  const changed = next.slice(0, shared).findIndex((key, index) => key !== drawn[index]);
+  return changed < 0 ? shared : changed;
+}
+
+/** A block as one text, to tell whether it is the same as the one drawn before. */
+export const blockKey = (block: Block): string => JSON.stringify(block);
