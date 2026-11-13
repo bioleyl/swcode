@@ -440,3 +440,45 @@ describe('the commands', () => {
     await page.locator('project-page sc-todo-row').getByText('Write the tests').waitFor();
   });
 });
+
+describe('what is typed', () => {
+  it('stays in the composer it was typed in, on leaving the page and on loading it again, until it is sent', async () => {
+    const rig = await start({ replies: [{ text: 'Hello there.' }, { text: 'Fixed.' }] });
+    const page = await rig.browser.newPage({ viewport: DESKTOP });
+    await page.goto(rig.link);
+    const home = page.locator('home-page textarea');
+    await home.fill('Hi');
+    await home.press('Enter');
+    await page.getByText('Hello there.').waitFor();
+
+    // A message started in the session, then a new session started beside it.
+    const composer = page.locator('session-page sc-composer textarea');
+    await composer.fill('Fix the login');
+    await navItem(page, 'New session').click();
+    await settle(page);
+    expect(await home.inputValue()).toBe('');
+    await home.fill('Another idea');
+
+    // Each page has kept its own words: back in the session, after a reload too, and back home.
+    await navItem(page, 'Hi').click();
+    await settle(page);
+    expect(await composer.inputValue()).toBe('Fix the login');
+    await page.reload();
+    await page.getByText('Hello there.').waitFor();
+    expect(await composer.inputValue()).toBe('Fix the login');
+    await navItem(page, 'New session').click();
+    await settle(page);
+    expect(await home.inputValue()).toBe('Another idea');
+
+    // Sent, the words are gone from their composer for good.
+    await navItem(page, 'Hi').click();
+    await settle(page);
+    await composer.press('Enter');
+    await page.getByText('Fixed.').waitFor();
+    await navItem(page, 'New session').click();
+    await settle(page);
+    await navItem(page, 'Hi').click();
+    await settle(page);
+    expect(await composer.inputValue()).toBe('');
+  });
+});

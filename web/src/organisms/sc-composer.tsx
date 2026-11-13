@@ -21,6 +21,7 @@ import { THINKING_LABELS } from '../lib/thinking-labels';
 import { ScCommandHelp } from '../molecules/sc-command-help';
 import { ScSessionChoices } from '../molecules/sc-session-choices';
 import { canDictate, dictate } from '../services/dictation';
+import { draftOf, keepDraft } from '../services/drafts';
 import { presetChoices, presetsBus } from '../services/presets';
 import { BASE_STYLES } from '../styles/shared';
 import styles from './sc-composer.css?inline';
@@ -134,6 +135,11 @@ export class ScComposer extends ScElement {
   readonly context = this.useChange('', (value) => {
     this._refs.context.textContent = value;
   });
+  /**
+   * What the message is written for (a session's id, a new session's page): what is typed there is kept as it is
+   * typed, and shows again when the person comes back to it. Empty keeps nothing.
+   */
+  readonly draftPlace = this.useChange('', (place) => this.showDraft(place));
 
   // The pictures waiting to go with the message, made small already.
   private _pictures: PictureUpload[] = [];
@@ -303,6 +309,26 @@ export class ScComposer extends ScElement {
   private typed(): void {
     this._chosen = 0;
     this.renderMenu();
+    this.rememberDraft();
+  }
+
+  /** The message left at this place shows again, its list of commands closed until the text changes. */
+  private showDraft(place: string): void {
+    const draft = place === '' ? { pictures: [], text: '' } : draftOf(place);
+    this._refs.text.value = draft.text;
+    this._dismissed = draft.text;
+    this._pictures = draft.pictures;
+    this._chosen = 0;
+    this.renderMenu();
+    this.renderPictures();
+  }
+
+  private rememberDraft(): void {
+    const place = this.draftPlace.get();
+    if (place === '') {
+      return;
+    }
+    keepDraft(place, { pictures: this._pictures, text: this._refs.text.value });
   }
 
   private step(step: number): void {
@@ -479,12 +505,14 @@ export class ScComposer extends ScElement {
       }
       this._pictures = [...this._pictures, picture.answer];
       this.renderPictures();
+      this.rememberDraft();
     }
   }
 
   private removePicture(index: number): void {
     this._pictures = this._pictures.filter((_, each) => each !== index);
     this.renderPictures();
+    this.rememberDraft();
     this._refs.text.focus();
   }
 
@@ -578,8 +606,8 @@ export class ScComposer extends ScElement {
       return;
     }
     const draft = { pictures: this._pictures, text };
-    this.clearText();
     this._pictures = [];
+    this.clearText();
     this.renderPictures();
     this.events.emit('send', draft);
   }

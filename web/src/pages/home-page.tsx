@@ -3,6 +3,7 @@ import { JlAlert, JlButton, JlCard, JlField, JlPage, JlSelect } from '@syware/jl
 
 import { hostLabel } from '../../../shared/hosts/host-key';
 import { ScElement } from '../base/sc-element';
+import { NEW_DRAFT_PLACES } from '../lib/drafts';
 import { folderName } from '../lib/format';
 import { appDefaults, CONCISE_AT_FIRST, startingChoices } from '../lib/new-session';
 import { presetOf, presetStatusOf } from '../lib/presets';
@@ -86,7 +87,7 @@ export class HomePage extends ScElement {
         <JlCard class="todos" heading="Todos" description={TODOS_NOTE} hidden>
           <div class="todo-list" />
         </JlCard>
-        <ScComposer concise={CONCISE_AT_FIRST} />
+        <ScComposer concise={CONCISE_AT_FIRST} draftPlace={NEW_DRAFT_PLACES.code} />
         <JlAlert tone="danger" hidden />
       </JlPage>
     );

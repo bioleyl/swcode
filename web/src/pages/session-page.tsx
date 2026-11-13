@@ -131,6 +131,7 @@ export class SessionPage extends ScElement {
     id: (id) => {
       this._sessionId = id ?? '';
       this._refs.conversation.session.set(this._sessionId);
+      this._refs.composer.draftPlace.set(this._sessionId);
     },
   });
 

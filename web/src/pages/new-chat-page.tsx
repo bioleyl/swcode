@@ -2,6 +2,7 @@ import { css } from '@jadis/core';
 import { JlAlert, JlPage } from '@syware/jlib';
 
 import { ScElement } from '../base/sc-element';
+import { NEW_DRAFT_PLACES } from '../lib/drafts';
 import { CONCISE_AT_FIRST } from '../lib/new-session';
 import { presetOf, presetStatusOf } from '../lib/presets';
 import { ScComposer } from '../organisms/sc-composer';
@@ -37,7 +38,7 @@ export class NewChatPage extends ScElement {
         description="Ask anything: swcode answers, and searches the web when it needs to."
         appName={APP_NAME}
         width="form">
-        <ScComposer kind="chat" concise={CONCISE_AT_FIRST} />
+        <ScComposer kind="chat" concise={CONCISE_AT_FIRST} draftPlace={NEW_DRAFT_PLACES.chat} />
         <JlAlert tone="danger" hidden />
       </JlPage>
     );
