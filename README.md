@@ -26,6 +26,8 @@ A coding agent for local models. It runs an LLM agent with file, terminal and we
 - **Projects**: sessions are grouped by project; a project's page lists its sessions, sets what its new sessions start with, and turns its skills on and off.
 - **Skills**: reusable instructions for recurring tasks, loaded from your home folder or the project, and run as `/<skill>`.
 - **MCP servers**: list [Model Context Protocol](https://modelcontextprotocol.io) servers in a file and the agent has their tools beside its own, asking before it calls one.
+- **Headless runs**: `swcode run "<prompt>"` starts a session from the command line and waits for its turn, for scripts and CI; the session stays in the app.
+- **Evals**: a dozen small tasks in `evals/`, scored on success, steps, tokens and time against your own llm-server, to judge a change of prompt, tool or model (`npm run eval`).
 - **Slash commands**: `/new` starts a session with the same settings, `/compact` summarizes the conversation now, `/peek` asks the agent something beside its work without entering the conversation, `/help` lists them all.
 - **Composer**: paste or drop pictures for models that see them, dictate your message with the microphone (your browser's speech recognition), and queue messages while a turn runs. What you were typing is still there when you come back to a page.
 - **Models and presets**: several llm-servers and models side by side, presets that pick the main agent's model and the subagents', a thinking level per session, and a token economy mode that asks for shorter answers.
@@ -33,6 +35,7 @@ A coding agent for local models. It runs an LLM agent with file, terminal and we
 - **Restore points**: each turn keeps the files it changes as they were, to show what it changed and put it back — the files its tools wrote, and in a git repository those its commands changed too.
 - **Context management**: automatic conversation compaction when approaching the model's context limit.
 - **Search**: `Ctrl K` finds sessions, projects and settings, and searches inside the conversations.
+- **Markdown**: answers are drawn with highlighted code blocks, each copied with a press, tables, quotes and nested lists.
 - **Web app**: follow what the agent does in real time, answer its questions, approve commands, chat with it. Works on desktop and phone, in light or dark.
 - **Phones**: pair a phone with a QR code from Settings → Phone, then follow and steer your sessions from it, on your network or over a tailnet (one press has Tailscale serve swcode over HTTPS). swcode installs on the phone as an app, and a browser adds other computers' swcode by scanning their code, as the desktop app does.
 - **Remote projects**: work on projects over SSH or in WSL without moving the daemon.
@@ -197,7 +200,10 @@ swcode install      # install the binary and create shortcuts
 swcode service install    # run swcode as a service, started when you log in
 swcode service uninstall  # remove the service, keeping settings and sessions
 swcode --update     # install the latest release and restart the running daemon
+swcode run "Fix the failing test"   # one turn of a new session in this folder, without the app
 ```
+
+`swcode run [--cwd <folder>] [--mode auto|acceptEdits|ask] [--json] [--timeout <duration>] "<prompt>"` starts the daemon when it does not run, starts a coding session on the prompt and waits for its turn. It prints the tool calls on stderr and the agent's last message on stdout, or with `--json` every event of the session, a line each, then `{"kind":"runFinished","outcome":…,"steps":…,"toolCalls":…,"promptTokens":…,"completionTokens":…,"seconds":…}`. It exits 0 when the turn is done, 1 otherwise, 2 when its arguments were not understood. Nobody is there to ask: a request the mode would ask about is declined, and a question is answered "decide by yourself".
 
 ## Architecture
 
