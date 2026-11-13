@@ -26,6 +26,7 @@ import { isSwcodeBaseIn } from '../lib/swcode-base';
 import { ScSessionChoices } from '../molecules/sc-session-choices';
 import { ScSessionRow } from '../molecules/sc-session-row';
 import { ScTodoRow } from '../molecules/sc-todo-row';
+import { ScProjectSandbox } from '../organisms/sc-project-sandbox';
 import { daemon } from '../services/daemon';
 import { daemonState, daemonStatusBus } from '../services/daemon-status';
 import { hrefOf, newSessionPath, projectTabPath, sessionPath } from '../services/navigation';
@@ -150,6 +151,7 @@ export class ProjectPage extends ScElement {
     page: ref(JlPage),
     remove: ref<JlButton>('.remove'),
     reset: ref<JlButton>('.reset'),
+    sandbox: ref(ScProjectSandbox),
     skillList: ref('.skill-list'),
     skillsState: ref(JlLoadState),
     swcodeBaseInHome: ref<JlButton>('.swcode-base .in-home'),
@@ -218,6 +220,7 @@ export class ProjectPage extends ScElement {
                 <JlButton type="submit" label="Save" />
               </form>
             </JlCard>
+            <ScProjectSandbox />
           </JlTabPanel>
           <JlTabPanel name="skills" label={PROJECT_TAB_LABELS.skills.label} icon={PROJECT_TAB_LABELS.skills.icon}>
             <div class="side">
@@ -319,6 +322,7 @@ export class ProjectPage extends ScElement {
     }
     this.renderDefaults(project);
     this.renderAfterEdit(project);
+    this._refs.sandbox.project.set(project);
     this.renderTodos(project);
     this.renderSkills(project);
     if (this._skillsOf !== project.id) {

@@ -64,7 +64,8 @@ type ProjectTodos interface {
 
 // Jobs is a session's background commands, on its host, in its workspace.
 type Jobs interface {
-	Start(ctx context.Context, command string) (string, error)
+	// Start starts a command: shown is how people know it, command what runs (the same, in a sandbox or not).
+	Start(ctx context.Context, shown, command string) (string, error)
 	// Read is a job's state; consume takes the output read, so the next read gives what came after.
 	Read(ctx context.Context, id string, consume bool) (*hosts.JobState, error)
 	// Stop stops it and everything it started.
@@ -113,6 +114,16 @@ type Context struct {
 	Skills catalog.Port
 	// Todos are the project's todos, which the agent opens and closes; nil in a chat, which works in no project.
 	Todos ProjectTodos
+	// Sandbox is where the session's commands run, on a host that can make one; nil where they run as the person.
+	Sandbox *hosts.Sandbox
+}
+
+// inSandbox is a command as it runs for the session: in its sandbox, where it has one.
+func (tc *Context) inSandbox(command string) string {
+	if tc.Sandbox == nil {
+		return command
+	}
+	return tc.Sandbox.Wrap(command)
 }
 
 // Outcome is how a call ended.

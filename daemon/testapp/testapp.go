@@ -123,7 +123,8 @@ func Start(t *testing.T, options Options) *App {
 	environment := map[string]string{
 		"LLAMA_MODEL": options.Model, "LLAMA_SUBAGENT_MODEL": options.SubagentModel, "LLAMA_URL": llama.URL,
 		"SWCODE_DATA_DIR": dataDir, "SWCODE_ENV": "test", "SWCODE_HOST": "127.0.0.1", "SWCODE_TOKEN": Token,
-		"SWCODE_WORKSPACE": workspace,
+		// Commands run as they are unless a test is about the sandbox: not every machine can make one.
+		"SWCODE_SANDBOX": "off", "SWCODE_WORKSPACE": workspace,
 	}
 	for name, value := range options.Settings {
 		environment[name] = value

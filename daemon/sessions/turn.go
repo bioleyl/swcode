@@ -25,6 +25,8 @@ type place struct {
 	platform string
 	scratch  string
 	skills   catalog.Port
+	// sandbox is where the session's commands run; nil where they run as the person does.
+	sandbox *hosts.Sandbox
 }
 
 // The agent call's result: the subagent works, or waits its turn, and its report comes later in any case.
@@ -66,12 +68,51 @@ func (s *Service) prepare(ctx context.Context, session *live) (prepared, error) 
 	if err != nil {
 		return prepared{}, err
 	}
-	where := place{host: host, platform: platform, scratch: scratch, skills: s.deps.Skills.PortFor(catalog.Place{
+	where := place{host: host, platform: platform, sandbox: s.sandboxFor(ctx, session, meta, host, scratch), scratch: scratch, skills: s.deps.Skills.PortFor(catalog.Place{
 		Host: host, Off: s.deps.SkillsOff(meta.Workspace, meta.Host), Workspace: meta.Workspace,
 	})}
 	return prepared{
 		main: main, setup: s.setupFor(session, meta, main, where, main.Vision, limit), subagent: subagent, subagents: limit, where: where,
 	}, nil
+}
+
+// sandboxFor is where the session's commands run: in a sandbox, when its host can make one and neither the daemon
+// nor the session's project turned it off; nil otherwise, and they run as the person does.
+func (s *Service) sandboxFor(ctx context.Context, session *live, meta Meta, host hosts.Host, scratch string) *hosts.Sandbox {
+	if s.deps.Sandboxes == nil || (s.deps.SandboxOff != nil && s.deps.SandboxOff(meta.Workspace, meta.Host)) {
+		return nil
+	}
+	state := s.deps.Sandboxes.Of(ctx, hosts.Key(meta.Host), host)
+	if !state.Available {
+		return nil
+	}
+	sandbox := &hosts.Sandbox{Host: state, Scratch: s.realPath(ctx, session, host, scratch), Workspace: s.realPath(ctx, session, host, meta.Workspace)}
+	if hosts.IsLocal(meta.Host) {
+		sandbox.Hidden = s.deps.SandboxHidden
+	}
+	return sandbox
+}
+
+// realPath is where a folder of the session really is, links followed, asked of its host once: a sandbox opens a
+// folder by its real path only.
+func (s *Service) realPath(ctx context.Context, session *live, host hosts.Host, path string) string {
+	s.mu.Lock()
+	known, found := session.realPaths[path]
+	s.mu.Unlock()
+	if found {
+		return known
+	}
+	resolved, err := host.RealPath(ctx, path)
+	if err != nil || resolved == "" {
+		return path
+	}
+	s.mu.Lock()
+	if session.realPaths == nil {
+		session.realPaths = map[string]string{}
+	}
+	session.realPaths[path] = resolved
+	s.mu.Unlock()
+	return resolved
 }
 
 // runTurnIn runs a turn with what the session's agent runs with now.
@@ -153,7 +194,7 @@ func (s *Service) setupFor(session *live, meta Meta, main llm.Choice, where plac
 		},
 		Skills: where.skills.List,
 		SystemPrompt: agent.SystemPrompt(meta.Workspace, where.scratch, where.platform, agent.Servers{
-			Browser: s.deps.Browser != nil && sees, Images: s.deps.ImageURL != "",
+			Browser: s.deps.Browser != nil && sees, Images: s.deps.ImageURL != "", Sandbox: where.sandbox != nil,
 		}, limit),
 		Tools: s.toolsFor(limit),
 	}
@@ -210,6 +251,7 @@ func (s *Service) hostFor(session *live, turn *runningTurn, ready prepared, sees
 		Images:      s.imagesFor(session),
 		Jobs:        &sessionJobs{host: where.host, service: s, session: session},
 		ReadFiles:   session.readFiles,
+		Sandbox:     where.sandbox,
 		Scratch:     where.scratch,
 		Screenshots: s.screenshotsFor(session, main, sees),
 		Skills:      where.skills,
@@ -349,7 +391,7 @@ type permissionAsk struct {
 }
 
 func (a permissionAsk) request(id string) protocol.SessionEventVariant {
-	return protocol.SessionEventPermissionRequested{CallID: a.ask.CallID, Detail: a.ask.Preview, RequestID: id}
+	return protocol.SessionEventPermissionRequested{CallID: a.ask.CallID, Detail: a.ask.Preview, Outside: a.ask.Subject.Outside, RequestID: id}
 }
 
 func (permissionAsk) no() answer { return answer{decision: protocol.PermissionDecisionDeny} }
@@ -360,7 +402,7 @@ func (a permissionAsk) settled(session *live, id string, got answer) {
 	a.service.record(session, protocol.SessionEventPermissionAnswered{Decision: got.decision, RequestID: id})
 	if got.decision == protocol.PermissionDecisionAllowSession {
 		granted := permissions.GrantForSession(a.ask.Subject, a.service.grantsOf(session))
-		session.grants = permissions.Grants{Edits: granted.Edits, Programs: granted.Programs, Servers: granted.Servers}
+		session.grants = permissions.Grants{Edits: granted.Edits, Outside: granted.Outside, Programs: granted.Programs, Servers: granted.Servers}
 	}
 }
 
@@ -459,7 +501,7 @@ type sessionJobs struct {
 	session *live
 }
 
-func (j *sessionJobs) Start(ctx context.Context, command string) (string, error) {
+func (j *sessionJobs) Start(ctx context.Context, shown, command string) (string, error) {
 	j.service.mu.Lock()
 	workspace := j.session.meta.Workspace
 	j.service.mu.Unlock()
@@ -469,7 +511,7 @@ func (j *sessionJobs) Start(ctx context.Context, command string) (string, error)
 	}
 	j.service.mu.Lock()
 	j.session.startedJobs[id] = true
-	j.session.jobs = append(j.session.jobs, protocol.SessionSummaryJob{Command: command, ID: id})
+	j.session.jobs = append(j.session.jobs, protocol.SessionSummaryJob{Command: shown, ID: id})
 	j.service.publishSessions()
 	j.service.watchJobs(j.session, j.host)
 	j.service.mu.Unlock()

@@ -107,6 +107,12 @@ type Deps struct {
 	SkillsOff func(path string, host protocol.HostRef) []string
 	// AfterEdit is the command a folder's project runs after each file its agent writes or edits; none when empty.
 	AfterEdit func(path string, host protocol.HostRef) string
+	// Sandboxes knows which hosts can run commands in a sandbox; nil, and none is: every command runs as the person.
+	Sandboxes *hosts.Sandboxes
+	// SandboxOff tells whether a folder's project turned the sandbox off for its sessions.
+	SandboxOff func(path string, host protocol.HostRef) bool
+	// SandboxHidden are folders of this computer no sandboxed command sees: the daemon's own data.
+	SandboxHidden []string
 	// Todos are the projects' todos, which the agent opens and closes.
 	Todos     tools.ProjectTodos
 	Workspace string
@@ -185,7 +191,9 @@ type live struct {
 	startedJobs map[string]bool
 	grants      permissions.Grants
 	readFiles   *tools.ReadFiles
-	turn        *runningTurn
+	// realPaths is where the session's folders really are, links followed, as its host said once.
+	realPaths map[string]string
+	turn      *runningTurn
 	// subagents is the subagents at work in the background, to stop each: they outlive the turn that started them.
 	subagents map[string]runningSubagent
 	// waiting is the subagents past the preset's limit, in the order they start.

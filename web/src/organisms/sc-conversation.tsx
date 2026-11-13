@@ -729,6 +729,7 @@ export class ScConversation extends ScElement {
         tool={row?.tool.get()}
         summary={row?.summary.get() ?? ''}
         detail={event.detail}
+        outside={event.outside ?? false}
         where={`main agent · in ${folderName(this.workspace.get())}`}
       />
     );

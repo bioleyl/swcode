@@ -162,6 +162,9 @@ export async function startRig(options: E2eOptions): Promise<E2eRig> {
       SWCODE_HOST: HOST,
       SWCODE_PORT: String(port),
       SWCODE_RELEASES_URL: releases.url,
+      // Not every machine can make a sandbox: the tests run their commands the same way everywhere, but the one
+      // about the sandbox.
+      SWCODE_SANDBOX: options.sandbox === true ? 'on' : 'off',
       SWCODE_TOKEN: TOKEN,
       SWCODE_WEB_DIR: WEB_DIR,
       SWCODE_WORKSPACE: workspace,

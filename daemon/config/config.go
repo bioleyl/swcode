@@ -19,6 +19,8 @@ const (
 	// defaultHost: swcode runs commands for whoever holds its token, and speaks plain HTTP: it listens on its own
 	// computer unless the person opens it to the network.
 	defaultHost = "127.0.0.1"
+	switchOn    = "on"
+	switchOff   = "off"
 	// everyInterface is the address that opens swcode to the network, which was the default once.
 	everyInterface   = "0.0.0.0"
 	defaultLlamaURL  = "http://127.0.0.1:8080"
@@ -56,6 +58,7 @@ const (
 	envPort             = "SWCODE_PORT"
 	envPublicURL        = "SWCODE_PUBLIC_URL"
 	envReleasesURL      = "SWCODE_RELEASES_URL"
+	envSandbox          = "SWCODE_SANDBOX"
 	envShutdownTimeout  = "SWCODE_SHUTDOWN_TIMEOUT_MS"
 	envSSHEndpoints     = "SWCODE_SSH_ENDPOINTS"
 	envSubagentMaxSteps = "SWCODE_SUBAGENT_MAX_STEPS"
@@ -105,7 +108,10 @@ type Config struct {
 	// The address people open, when it differs from host and port (the Vite server in development).
 	PublicURL string
 	// The latest release in GitHub's API, which updates come from: a fork's own, or a test's.
-	ReleasesURL       string
+	ReleasesURL string
+	// Whether the agent's commands run in a sandbox where the project's host can make one, unless the project
+	// says otherwise: off here turns it off for every project.
+	Sandbox           bool
 	ShutdownTimeoutMs int
 	// Machines projects can be on, reached over SSH: ssh destinations, by commas or spaces.
 	SSHEndpoints []string
@@ -184,6 +190,20 @@ func (r *reader) env() Env {
 	return env
 }
 
+// switched reads a setting that is on or off.
+func (r *reader) switched(name string, fallback bool) bool {
+	switch r.text(name) {
+	case "":
+		return fallback
+	case switchOn:
+		return true
+	case switchOff:
+		return false
+	}
+	r.fail(name, switchOn+" or "+switchOff)
+	return fallback
+}
+
 func (r *reader) token() string {
 	token := r.text(envToken)
 	if token != "" && len(token) < minTokenLength {
@@ -222,6 +242,7 @@ func Load(environment map[string]string, defaults Defaults) (Config, error) {
 		Port:               r.number(envPort, DefaultPort, 1, maxPort),
 		PublicURL:          r.url(envPublicURL, ""),
 		ReleasesURL:        r.url(envReleasesURL, defaultReleases),
+		Sandbox:            r.switched(envSandbox, true),
 		ShutdownTimeoutMs:  r.number(envShutdownTimeout, defaultShutdown, minShutdown, maxShutdown),
 		SSHEndpoints:       endpoints(r.text(envSSHEndpoints)),
 		SubagentMaxSteps:   r.number(envSubagentMaxSteps, defaultSubagentMaxSteps, minMaxSteps, maxMaxSteps),

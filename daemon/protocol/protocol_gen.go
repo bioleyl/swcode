@@ -84,6 +84,7 @@ const (
 	EndpointModels         = "/api/models"
 	EndpointPairing        = "/api/pairing"
 	EndpointPairingCode    = "/api/pairing/code"
+	EndpointSandbox        = "/api/sandbox"
 	EndpointSettings       = "/api/settings"
 	EndpointSettingsModels = "/api/settings/models"
 	EndpointSkills         = "/api/skills"
@@ -716,15 +717,16 @@ func (v *HostRefSSH) Normalize() error {
 }
 
 type Project struct {
-	AfterEdit string           `json:"afterEdit,omitempty"`
-	CreatedAt string           `json:"createdAt"`
-	Defaults  *SessionDefaults `json:"defaults,omitempty"`
-	Host      HostRef          `json:"host"`
-	ID        string           `json:"id"`
-	Name      string           `json:"name"`
-	Path      string           `json:"path"`
-	SkillsOff []string         `json:"skillsOff"`
-	Todos     []ProjectTodo    `json:"todos"`
+	AfterEdit  string           `json:"afterEdit,omitempty"`
+	CreatedAt  string           `json:"createdAt"`
+	Defaults   *SessionDefaults `json:"defaults,omitempty"`
+	Host       HostRef          `json:"host"`
+	ID         string           `json:"id"`
+	Name       string           `json:"name"`
+	Path       string           `json:"path"`
+	SandboxOff bool             `json:"sandboxOff,omitempty"`
+	SkillsOff  []string         `json:"skillsOff"`
+	Todos      []ProjectTodo    `json:"todos"`
 }
 
 func (v Project) MarshalJSON() ([]byte, error) {
@@ -782,6 +784,11 @@ func (v *ProjectTodo) Normalize() error {
 		return fmt.Errorf("%s: at most 500 characters", "text")
 	}
 	return nil
+}
+
+type SandboxView struct {
+	Available bool   `json:"available"`
+	Problem   string `json:"problem,omitempty"`
 }
 
 type ProjectSkill struct {
@@ -1476,6 +1483,7 @@ type SessionEventPermissionRequested struct {
 	At        string       `json:"at"`
 	CallID    string       `json:"callId"`
 	Detail    *ToolDisplay `json:"detail,omitempty"`
+	Outside   bool         `json:"outside,omitempty"`
 	RequestID string       `json:"requestId"`
 }
 
@@ -2135,6 +2143,8 @@ func (ClientMessageSetProjectDefaults) isClientMessage() {}
 
 func (ClientMessageSetProjectAfterEdit) isClientMessage() {}
 
+func (ClientMessageSetProjectSandbox) isClientMessage() {}
+
 func (ClientMessageSetProjectSkill) isClientMessage() {}
 
 func (ClientMessageAddProjectTodo) isClientMessage() {}
@@ -2388,6 +2398,12 @@ func (u *ClientMessage) UnmarshalJSON(data []byte) error {
 			return err
 		}
 		u.Value = value
+	case "\"setProjectSandbox\"":
+		var value ClientMessageSetProjectSandbox
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
 	case "\"setProjectSkill\"":
 		var value ClientMessageSetProjectSkill
 		if err := json.Unmarshal(data, &value); err != nil {
@@ -2481,6 +2497,7 @@ type ClientMessageMapper[R any] interface {
 	RemoveProject(ClientMessageRemoveProject) R
 	SetProjectDefaults(ClientMessageSetProjectDefaults) R
 	SetProjectAfterEdit(ClientMessageSetProjectAfterEdit) R
+	SetProjectSandbox(ClientMessageSetProjectSandbox) R
 	SetProjectSkill(ClientMessageSetProjectSkill) R
 	AddProjectTodo(ClientMessageAddProjectTodo) R
 	SetProjectTodoDone(ClientMessageSetProjectTodoDone) R
@@ -2568,6 +2585,8 @@ func MapClientMessage[R any](u ClientMessage, m ClientMessageMapper[R]) R {
 		return m.SetProjectDefaults(value)
 	case ClientMessageSetProjectAfterEdit:
 		return m.SetProjectAfterEdit(value)
+	case ClientMessageSetProjectSandbox:
+		return m.SetProjectSandbox(value)
 	case ClientMessageSetProjectSkill:
 		return m.SetProjectSkill(value)
 	case ClientMessageAddProjectTodo:
@@ -3584,6 +3603,20 @@ func (v *ClientMessageSetProjectAfterEdit) Normalize() error {
 		return fmt.Errorf("%s: at most 500 characters", "command")
 	}
 	return nil
+}
+
+type ClientMessageSetProjectSandbox struct {
+	On        bool   `json:"on"`
+	ProjectID string `json:"projectId"`
+}
+
+func (v ClientMessageSetProjectSandbox) MarshalJSON() ([]byte, error) {
+	type plain ClientMessageSetProjectSandbox
+	p := plain(v)
+	return json.Marshal(struct {
+		Key string `json:"type"`
+		plain
+	}{"setProjectSandbox", p})
 }
 
 type ClientMessageSetProjectSkill struct {

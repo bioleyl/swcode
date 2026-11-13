@@ -40,6 +40,18 @@ type bashInput struct {
 	Command     string   `json:"command"`
 	Description string   `json:"description"`
 	TimeoutMs   *float64 `json:"timeoutMs"`
+	Unsandboxed bool     `json:"unsandboxed"`
+}
+
+// leavesSandbox tells whether a command asked to run outside the sandbox of a session that has one.
+func leavesSandbox(input bashInput, tc *Context) bool { return input.Unsandboxed && tc.Sandbox != nil }
+
+// asRun is the command as the host runs it: in the session's sandbox, unless it was asked out of it.
+func asRun(input bashInput, tc *Context) string {
+	if input.Unsandboxed {
+		return input.Command
+	}
+	return tc.inSandbox(input.Command)
 }
 
 func endingOf(result hosts.CommandResult, timeoutMs int) string {
@@ -90,17 +102,28 @@ var needsPerson = regexp.MustCompile(`(?i)a terminal is required|no tty present|
 // personHint tells the model how to run a command that stopped for want of a person to answer it.
 const personHint = "[This command needs the person to answer it: run it with terminal and wait, they type in that terminal.]"
 
+// sandboxRefused is what a command says when the sandbox kept it from writing, or from the keys it hides.
+var sandboxRefused = regexp.MustCompile(`(?i)Read-only file system|Could not read from remote repository|Permission denied \(publickey`)
+
+// sandboxHint tells the model what the sandbox is, when a command failed on it.
+const sandboxHint = "[Commands run in a sandbox: they write only in the workspace, the scratch folder and /tmp, and the person's keys (~/.ssh, cloud and git credentials) are not there. If this command needs more, run it again with unsandboxed set: the person is asked first.]"
+
 // hintFor is the hint a failed command's output calls for; none for a command that went well.
-func hintFor(result hosts.CommandResult) string {
+func hintFor(result hosts.CommandResult, sandboxed bool) string {
 	failed := result.ExitCode == nil || *result.ExitCode != 0
-	if failed && needsPerson.MatchString(result.Output) {
+	switch {
+	case !failed:
+		return ""
+	case sandboxed && sandboxRefused.MatchString(result.Output):
+		return sandboxHint
+	case needsPerson.MatchString(result.Output):
 		return personHint
 	}
 	return ""
 }
 
-func commandOutcome(result hosts.CommandResult, timeoutMs int) Outcome {
-	text := joined(strings.TrimRight(result.Output, " \t\r\n"), endingOf(result, timeoutMs), hintFor(result))
+func commandOutcome(result hosts.CommandResult, timeoutMs int, sandboxed bool) Outcome {
+	text := joined(strings.TrimRight(result.Output, " \t\r\n"), endingOf(result, timeoutMs), hintFor(result, sandboxed))
 	if text == "" {
 		text = noOutput
 	}
@@ -136,7 +159,7 @@ var bashTool = Define(Spec[bashInput]{
 			if tc.Jobs == nil {
 				return Refuse(noJobs)
 			}
-			return Ready(func(ctx context.Context) Outcome { return startJob(ctx, tc.Jobs, input.Command) }, preview)
+			return Ready(func(ctx context.Context) Outcome { return startJob(ctx, tc.Jobs, input.Command, asRun(input, tc)) }, preview)
 		}
 		timeoutMs := whole(input.TimeoutMs, defaultTimeoutMs)
 		return Ready(func(ctx context.Context) Outcome {
@@ -145,7 +168,7 @@ var bashTool = Define(Spec[bashInput]{
 			options := hosts.CommandOptions{
 				Cwd: tc.Workspace, Live: live.writer(), Passwords: passwordsOf(tc), Timeout: time.Duration(timeoutMs) * time.Millisecond,
 			}
-			return commandOutcome(tc.Host.Run(ctx, input.Command, options), timeoutMs)
+			return commandOutcome(tc.Host.Run(ctx, asRun(input, tc), options), timeoutMs, tc.Sandbox != nil && !input.Unsandboxed)
 		}, preview)
 	},
 	Description: "Runs a shell command in the workspace: tests, builds, git. It gets no input and no terminal, so use non-interactive flags; a command that asks the person something (sudo, a password, a login) runs with terminal and wait instead. Give a short description. A server or a watcher runs with background, never with &: read what it prints with output, stop it with kill.",
@@ -154,10 +177,11 @@ var bashTool = Define(Spec[bashInput]{
 		Required("command", String().Min(1).Describe("The command, run with bash in the workspace, without any input.")),
 		Optional("description", String().Describe("What the command does, in a few words, for the person who approves it.")),
 		Optional("timeoutMs", Number().Between(minTimeoutMs, maxTimeoutMs).Describe("Stops the command after this many milliseconds; 120000 when left out.")),
+		Optional("unsandboxed", Boolean().Describe("Run outside the sandbox, when commands run in one and this one failed on it: the person is asked first.")),
 	),
 	Name: protocol.ToolNameBash,
-	Subject: func(input bashInput, _ *Context) permissions.Subject {
-		return permissions.Subject{Access: permissions.AccessCommand, Command: input.Command}
+	Subject: func(input bashInput, tc *Context) permissions.Subject {
+		return permissions.Subject{Access: permissions.AccessCommand, Command: input.Command, Outside: leavesSandbox(input, tc)}
 	},
 	Summarize: func(input bashInput) string { return input.Command },
 })
@@ -200,8 +224,8 @@ func unknownJob(id string) Outcome {
 }
 
 // startJob starts a command in the background, and gives what it printed in its first seconds, with its id.
-func startJob(ctx context.Context, jobs Jobs, command string) Outcome {
-	id, err := jobs.Start(ctx, command)
+func startJob(ctx context.Context, jobs Jobs, shown, command string) Outcome {
+	id, err := jobs.Start(ctx, shown, command)
 	if err != nil {
 		return Failure(err.Error(), "failed")
 	}

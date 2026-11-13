@@ -1,0 +1,15 @@
+:host {
+  display: block;
+  max-width: var(--jl-page-form);
+  margin-top: var(--jl-space-4);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--jl-space-3);
+}
+
+[hidden] {
+  display: none;
+}

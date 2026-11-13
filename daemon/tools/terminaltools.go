@@ -105,8 +105,9 @@ var terminalTool = Define(Spec[terminalInput]{
 		Optional("wait", Boolean().Describe("Wait until the command ends, while the person answers what it asks in the terminal: for sudo, ssh with a password, a login, or any command that asks questions.")),
 	),
 	Name: protocol.ToolNameTerminal,
-	Subject: func(input terminalInput, _ *Context) permissions.Subject {
-		return permissions.Subject{Access: permissions.AccessCommand, Command: input.Command}
+	// A terminal is the person's own shell: what runs there is outside the session's sandbox, when it has one.
+	Subject: func(input terminalInput, tc *Context) permissions.Subject {
+		return permissions.Subject{Access: permissions.AccessCommand, Command: input.Command, Outside: tc.Sandbox != nil}
 	},
 	Summarize: func(input terminalInput) string { return input.Title + ": " + input.Command },
 })

@@ -21,6 +21,7 @@ A coding agent for local models. It runs an LLM agent with file, terminal and we
 - **Plans and questions**: for a task of several steps the agent keeps a plan you watch it work through; it asks you multiple-choice questions when a decision is yours, and a command that asks for a password (`sudo`, ssh) shows a card where you type it.
 - **Subagents**: the agent can spin up parallel explore subagents to search the codebase or the web while it keeps working, on a smaller model if you give them one.
 - **Permissions**: choose how much the agent can do without asking — run everything, ask before commands, or ask for everything.
+- **Sandbox**: on Linux (this computer, WSL, a server over SSH) the agent's commands run in a [bubblewrap](https://github.com/containers/bubblewrap) sandbox: they write only in the project, and your keys are not there. What must leave it asks first.
 - **Projects**: sessions are grouped by project; a project's page lists its sessions, sets what its new sessions start with, and turns its skills on and off.
 - **Skills**: reusable instructions for recurring tasks, loaded from your home folder or the project, and run as `/<skill>`.
 - **MCP servers**: list [Model Context Protocol](https://modelcontextprotocol.io) servers in a file and the agent has their tools beside its own, asking before it calls one.
@@ -116,6 +117,7 @@ Settings are stored in `~/.swcode/settings.env` (key=value lines). The settings 
 | `SWCODE_SUBAGENT_MAX_STEPS` | `30` | Maximum tool calls of a subagent before it stops and reports |
 | `SWCODE_IMAGE_URL` | — | Address of a stable-diffusion.cpp server for image generation |
 | `SWCODE_SSH_ENDPOINTS` | — | Comma-separated SSH hosts for remote projects |
+| `SWCODE_SANDBOX` | `on` | `off` runs every project's commands without a sandbox |
 
 ### Skills
 
@@ -127,6 +129,17 @@ Skills are instructions for recurring tasks. swcode reads them from two places o
 Each skill is a folder with a `SKILL.md` file containing a YAML frontmatter with `name` and `description`, followed by the instructions. The agent is told about available skills and loads them with the `skill` tool when a task matches.
 
 You can also trigger a skill directly from the composer with `/<skill-name>`.
+
+### Sandbox
+
+Where a project's host is Linux and has bubblewrap (`sudo apt install bubblewrap`), the commands of its sessions run in a sandbox, and the model is told so:
+
+- the whole system is read-only, but the project's folder, the session's scratch folder, a `/tmp` of the session's own, and the caches of package managers and compilers (`~/.cache`, `~/.npm`, `~/go/pkg`, `~/.cargo/registry`…);
+- your keys are not there at all: `~/.ssh`, `~/.gnupg`, `~/.aws`, `~/.azure`, `~/.kube`, `~/.docker`, `~/.config/gh`, `~/.config/gcloud`, `~/.netrc`, `~/.git-credentials` and swcode's own data — on WSL, those of the Windows users too;
+- the repository's `.git/hooks` and `.git/config` are read-only, since git runs them later in your name;
+- the network stays, for installs and tests. `~/.npmrc` stays readable too, or no private package would install.
+
+A command that needs more (a `git push` over ssh, an install outside the project) is run again by the agent with `unsandboxed`, and that always asks first, even in a session that runs everything; a command in a terminal of the app is outside the sandbox too. A project turns its sandbox off in its Config tab, and `SWCODE_SANDBOX=off` turns it off everywhere. Windows hosts have none, and the project's page says so where a host cannot make one.
 
 ### MCP servers
 

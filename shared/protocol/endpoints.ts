@@ -18,6 +18,8 @@ export const ENDPOINTS = {
   // GET a new pairing code for the QR code, valid a minute and once.
   pairingCode: '/api/pairing/code',
   // GET the settings in use, PUT new ones (the daemon restarts).
+  // GET ?project=<id>: whether the project's host can run its sessions' commands in a sandbox.
+  sandbox: '/api/sandbox',
   settings: '/api/settings',
   // POST an llm-server's address: the models it serves.
   settingsModels: '/api/settings/models',

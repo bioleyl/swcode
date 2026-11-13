@@ -242,6 +242,8 @@ export const ClientMessageSchema = z.discriminatedUnion('type', [
     projectId: z.string(),
     type: z.literal('setProjectAfterEdit'),
   }),
+  // Whether the commands of the project's sessions run in a sandbox, where its host can make one.
+  z.object({ on: z.boolean(), projectId: z.string(), type: z.literal('setProjectSandbox') }),
   // Turns one of the skills the project's sessions find on or off for them, from their next turn on.
   z.object({
     name: z.string().min(1),

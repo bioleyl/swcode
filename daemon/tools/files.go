@@ -161,7 +161,7 @@ func afterEdit(ctx context.Context, tc *Context, path string, written []byte) st
 		return ""
 	}
 	command := strings.ReplaceAll(tc.AfterEdit, filePlaceholder, hosts.ShellWord(path))
-	result := tc.Host.Run(ctx, command, hosts.CommandOptions{Cwd: tc.Workspace, Timeout: checkLimit})
+	result := tc.Host.Run(ctx, tc.inSandbox(command), hosts.CommandOptions{Cwd: tc.Workspace, Timeout: checkLimit})
 	said := ""
 	passedQuietly := result.ExitCode != nil && *result.ExitCode == 0 && strings.TrimSpace(result.Output) == ""
 	if !passedQuietly {

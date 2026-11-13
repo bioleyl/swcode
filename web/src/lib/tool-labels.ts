@@ -195,13 +195,27 @@ const serverGrant = (summary: string): string | undefined => {
   return end > 0 ? `Always allow ${summary.slice(0, end)}’s tools in this session` : undefined;
 };
 
-const programsGrant = (command: string): string | undefined => {
+const programsGrant = (command: string, outside: boolean): string | undefined => {
   const programs = commandPrograms(command);
-  return programs ? `Always allow ${[...new Set(programs)].join(', ')} in this session` : undefined;
+  if (!programs) {
+    return undefined;
+  }
+  const names = [...new Set(programs)].join(', ');
+  return outside
+    ? `Always allow ${names} outside the sandbox in this session`
+    : `Always allow ${names} in this session`;
+};
+
+// A terminal's call is summed up as "<title>: <command>" (`terminalTool` in the daemon).
+const TITLE_MARK = ': ';
+
+const terminalGrant = (summary: string, outside: boolean): string | undefined => {
+  const start = summary.indexOf(TITLE_MARK);
+  return programsGrant(start < 0 ? summary : summary.slice(start + TITLE_MARK.length), outside);
 };
 
 // What "for the rest of the session" covers, as the daemon grants it (`grantForSession`).
-const SESSION_GRANTS: Readonly<Record<ToolName, (summary: string) => string | undefined>> = {
+const SESSION_GRANTS: Readonly<Record<ToolName, (summary: string, outside: boolean) => string | undefined>> = {
   agent: never,
   bash: programsGrant,
   closetodo: never,
@@ -221,13 +235,19 @@ const SESSION_GRANTS: Readonly<Record<ToolName, (summary: string) => string | un
   saveskill: () => ALL_EDITS,
   screenshot: never,
   skill: never,
-  terminal: programsGrant,
+  terminal: terminalGrant,
   todo: never,
   webfetch: never,
   websearch: never,
   write: () => ALL_EDITS,
 };
 
-/** The label of the "for this session" button, or `undefined` when such a grant would not cover the call. */
-export const sessionGrantLabel = (tool: ToolName | undefined, summary: string): string | undefined =>
-  tool ? SESSION_GRANTS[tool](summary) : undefined;
+/**
+ * The label of the "for this session" button, or `undefined` when such a grant would not cover the call. `outside`:
+ * the command leaves the sandbox the session's commands run in, and the grant is for that.
+ */
+export const sessionGrantLabel = (
+  tool: ToolName | undefined,
+  summary: string,
+  outside = false
+): string | undefined => (tool ? SESSION_GRANTS[tool](summary, outside) : undefined);

@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
@@ -88,6 +89,51 @@ describe('a project’s check after each edit', () => {
     expect(edited?.kind === 'toolFinished' ? edited.output : '').toContain(
       'check after an edit (grep -c Hello {file}) failed'
     );
+    expect(await overflow(page)).toBe(0);
+  });
+});
+
+describe('a project’s sandbox', () => {
+  it('holds its sessions’ commands unless turned off in its Config, and says why where none can be made', async () => {
+    const outside = join(tmpdir(), `swcode-e2e-outside-${process.pid}`);
+    const rig = await start({
+      replies: [
+        { toolCalls: [{ arguments: { command: `echo inside > made.txt; echo no > ${outside}` }, name: 'bash' }] },
+        { text: 'Tried.' },
+      ],
+      sandbox: true,
+    });
+    const page = await rig.browser.newPage({ viewport: DESKTOP });
+    await page.goto(rig.link);
+    await page.locator('home-page textarea').fill('Write the files');
+    await page.locator('home-page textarea').press('Enter');
+    await page.getByText('Tried.').waitFor();
+    await navItem(page, basename(rig.workspace)).click();
+    await settle(page);
+    await projectTab(page, 'Config').click();
+    await settle(page);
+
+    const card = page.locator('sc-project-sandbox');
+    const toggle = card.getByRole('switch');
+    const problem = card.locator('jl-alert');
+    await expect.poll(async () => (await toggle.isEnabled()) || (await problem.isVisible())).toBe(true);
+    expect(readFileSync(join(rig.workspace, 'made.txt'), 'utf8')).toBe('inside\n');
+    if (await problem.isVisible()) {
+      // This machine makes no sandbox (no bubblewrap, or a system that refuses it): the card says so.
+      expect(await toggle.isChecked()).toBe(false);
+      expect(await problem.textContent()).toContain('bubblewrap');
+      rmSync(outside, { force: true });
+      return;
+    }
+
+    // The command wrote its workspace and nothing beside it: its /tmp is the session's own.
+    expect(existsSync(outside)).toBe(false);
+    expect(await toggle.isChecked()).toBe(true);
+    await toggle.click();
+    await page.evaluate('0');
+    await expect.poll(() => toggle.isChecked()).toBe(false);
+    await page.reload();
+    await expect.poll(() => card.getByRole('switch').isChecked()).toBe(false);
     expect(await overflow(page)).toBe(0);
   });
 });

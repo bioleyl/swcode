@@ -46,3 +46,21 @@ describe('a call to an MCP server’s tool', () => {
     expect(sessionGrantLabel('mcp', 'no server here')).toBeUndefined();
   });
 });
+
+describe('a command that leaves the sandbox', () => {
+  it('is allowed for the session as such, by its programs', () => {
+    expect(sessionGrantLabel('bash', 'git push', true)).toBe(
+      'Always allow git outside the sandbox in this session'
+    );
+    expect(sessionGrantLabel('bash', 'git push')).toBe('Always allow git in this session');
+    expect(sessionGrantLabel('bash', 'echo $(date)', true)).toBeUndefined();
+  });
+
+  it('is named by its command in a terminal, not by the terminal’s title', () => {
+    expect(sessionGrantLabel('terminal', 'setup: sudo apt install jq', true)).toBeUndefined();
+    expect(sessionGrantLabel('terminal', 'dev server: npm run dev', true)).toBe(
+      'Always allow npm outside the sandbox in this session'
+    );
+    expect(sessionGrantLabel('terminal', 'dev server: npm run dev')).toBe('Always allow npm in this session');
+  });
+});

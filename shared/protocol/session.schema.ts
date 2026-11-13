@@ -211,6 +211,8 @@ export const SessionEventSchema = z.discriminatedUnion('kind', [
     callId: z.string(),
     detail: ToolDisplaySchema.optional(),
     kind: z.literal('permissionRequested'),
+    // The command would run outside the sandbox the session's other commands run in.
+    outside: z.boolean().optional(),
     requestId: z.string(),
   }),
   z.object({

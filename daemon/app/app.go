@@ -125,6 +125,8 @@ type App struct {
 	tailnet       tailnetAddress
 	// servers are the MCP servers the person listed, whose tools the agent has beside its own.
 	servers *mcp.Manager
+	// sandboxes knows which hosts can run the agent's commands in a sandbox; nil when the settings turn it off.
+	sandboxes *hosts.Sandboxes
 	// hub sends what the services say to the open sockets.
 	hub          *hub
 	logger       *slog.Logger
@@ -222,6 +224,9 @@ func New(settings config.Config, options Options) (*App, error) {
 		servers:       mcp.NewManager(filepath.Join(settings.DataDir, mcp.File), options.HTTP, options.Version),
 	}
 	app.servers.Reload()
+	if settings.Sandbox {
+		app.sandboxes = hosts.NewSandboxes(options.Now)
+	}
 	var service *sessions.Service
 	app.Projects = projects.NewService(projects.Deps{
 		ForgetSessions: func(path string, host protocol.HostRef) string { return service.RemoveIn(path, host) },
@@ -251,7 +256,13 @@ func New(settings config.Config, options Options) (*App, error) {
 			project, _ := app.Projects.Find(path, host)
 			return project.AfterEdit
 		},
-		Skills: catalog.New(logError), SkillsOff: func(path string, host protocol.HostRef) []string {
+		Sandboxes: app.sandboxes,
+		SandboxOff: func(path string, host protocol.HostRef) bool {
+			project, _ := app.Projects.Find(path, host)
+			return project.SandboxOff
+		},
+		SandboxHidden: []string{realFolder(settings.DataDir)},
+		Skills:        catalog.New(logError), SkillsOff: func(path string, host protocol.HostRef) []string {
 			project, _ := app.Projects.Find(path, host)
 			return project.SkillsOff
 		},
@@ -330,6 +341,7 @@ func (a *App) routes() http.Handler {
 	a.updateRoutes(mux)
 	a.tailnetRoutes(mux)
 	a.mcpRoutes(mux)
+	a.sandboxRoutes(mux)
 	mux.HandleFunc("GET "+protocol.EndpointSocket, a.socket)
 	mux.Handle("/", webApp(a.webFiles()))
 	return withCORS(withAuth(mux, a.Token, a.pairing), a.pairing)

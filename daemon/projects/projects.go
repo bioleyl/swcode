@@ -199,6 +199,21 @@ func (s *Service) SetAfterEdit(projectID, command string) string {
 	return ""
 }
 
+// SetSandbox says whether the commands of the project's sessions run in a sandbox, where its host can make one: they
+// do unless it was turned off.
+func (s *Service) SetSandbox(projectID string, on bool) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	index := slices.IndexFunc(s.projects, func(project protocol.Project) bool { return project.ID == projectID })
+	if index < 0 {
+		return unknownProject
+	}
+	projects := append([]protocol.Project{}, s.projects...)
+	projects[index].SandboxOff = !on
+	s.change(projects)
+	return ""
+}
+
 // SetSkill turns one of the skills the project's sessions find on or off for them: they read it from their next turn.
 func (s *Service) SetSkill(projectID, name string, on bool) string {
 	s.mu.Lock()

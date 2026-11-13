@@ -47,12 +47,21 @@ export const ProjectSchema = z.object({
   id: z.string(),
   name: z.string(),
   path: z.string(),
+  // Its sessions' commands run in a sandbox where its host can make one, unless turned off here.
+  sandboxOff: z.boolean().optional(),
   // The skills its sessions are neither told of nor can run, by name: every skill found is on until turned off here.
   skillsOff: z.array(z.string()).default([]),
   // What is left to do in the project, in the order it was added.
   todos: z.array(ProjectTodoSchema).default([]),
 });
 export type Project = z.infer<typeof ProjectSchema>;
+
+/**
+ * `GET /api/sandbox?project=<id>`: whether the project's host can run commands in a sandbox (bubblewrap, on Linux),
+ * and why not when it cannot.
+ */
+export const SandboxViewSchema = z.object({ available: z.boolean(), problem: z.string().optional() });
+export type SandboxView = z.infer<typeof SandboxViewSchema>;
 
 // A folder made for a new project: one name, not a path.
 const FOLDER_NAME = /^[^/\\]+$/;

@@ -10,6 +10,7 @@ import styles from './sc-permission.css?inline';
 import type { PermissionDecision, ToolDisplay, ToolName } from '../../../shared/protocol/session.schema';
 
 const COMMAND_TOOL: ToolName = 'bash';
+const OUTSIDE_QUESTION = 'Run this command outside the sandbox?';
 
 /**
  * A call that waits for a person: what it would do, exactly, and the answers. Inline in the conversation on a
@@ -23,6 +24,8 @@ export class ScPermission extends ScElement {
   readonly tool = this.useChange<ToolName | undefined>(undefined, () => this.render());
   readonly summary = this.useChange('', () => this.render());
   readonly detail = this.useChange<ToolDisplay | undefined>(undefined, () => this.render());
+  /** The command would run outside the sandbox the session's other commands run in. */
+  readonly outside = this.useChange(false, () => this.render());
   readonly where = this.useChange('', (value) => {
     this._refs.where.textContent = value;
   });
@@ -82,9 +85,10 @@ export class ScPermission extends ScElement {
     const detail = this.detail.get();
     const label = toolLabel(tool);
     const isCommand = tool === COMMAND_TOOL;
-    const grant = sessionGrantLabel(tool, summary);
+    const outside = this.outside.get();
+    const grant = sessionGrantLabel(tool, summary, outside);
     this._refs.icon.name.set(label.icon);
-    this._refs.question.textContent = label.question;
+    this._refs.question.textContent = outside ? OUTSIDE_QUESTION : label.question;
     this._refs.command.hidden = !isCommand;
     this._refs.command.textContent = summary;
     this._refs.path.hidden = isCommand;

@@ -403,7 +403,7 @@ func TestImageRefusesWhatItCannotDoBeforeAskingTheServer(t *testing.T) {
 
 type hostJobs struct{ f *fixture }
 
-func (j hostJobs) Start(ctx context.Context, command string) (string, error) {
+func (j hostJobs) Start(ctx context.Context, _, command string) (string, error) {
 	return j.f.tc.Host.StartJob(ctx, command, j.f.workspace)
 }
 func (j hostJobs) Read(ctx context.Context, id string, consume bool) (*hosts.JobState, error) {

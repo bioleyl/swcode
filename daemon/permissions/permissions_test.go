@@ -92,3 +92,20 @@ func TestAnMCPServersToolsAreAskedAboutUntilTheServerIsAllowed(t *testing.T) {
 		t.Fatal("allowing a server allowed a program of its name")
 	}
 }
+
+func TestACommandThatLeavesTheSandboxIsAskedAboutEvenWhereEverythingRuns(t *testing.T) {
+	outside := func(text string) Subject { return Subject{Access: AccessCommand, Command: text, Outside: true} }
+	auto := withMode(protocol.PermissionModeAuto)
+	if NeedsPermission(command("git push"), auto) || !NeedsPermission(outside("git push"), auto) {
+		t.Fatal("running everything covers the sandbox, not what leaves it")
+	}
+	granted := GrantForSession(outside("git push"), auto)
+	if NeedsPermission(outside("git fetch"), granted) || !NeedsPermission(outside("npm publish"), granted) {
+		t.Fatal("a program allowed outside the sandbox goes through, and only it")
+	}
+	// What was allowed inside the sandbox says nothing of the outside, nor the other way round.
+	inside := GrantForSession(command("git status"), ask)
+	if !NeedsPermission(outside("git push"), inside) || !NeedsPermission(command("git status"), GrantForSession(outside("git push"), ask)) {
+		t.Fatal("a grant crossed the sandbox's wall")
+	}
+}

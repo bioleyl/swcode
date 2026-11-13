@@ -3,6 +3,7 @@
 package permissions
 
 import (
+	"maps"
 	"regexp"
 	"strings"
 
@@ -28,6 +29,8 @@ type Subject struct {
 	Path    string
 	Command string
 	Server  string
+	// Outside: the command runs outside the sandbox the session's commands run in, with all the person can do.
+	Outside bool
 }
 
 // Read is a call that only reads.
@@ -40,6 +43,9 @@ type Grants struct {
 	Programs map[string]bool
 	// Servers are the MCP servers whose tools were allowed.
 	Servers map[string]bool
+	// Outside are the programs allowed outside the sandbox: a mode that runs everything runs it in the sandbox,
+	// and asks about what leaves it.
+	Outside map[string]bool
 }
 
 // allowance is what a mode lets through by itself, before anything allowed for the session.
@@ -54,20 +60,25 @@ var modeAllows = map[protocol.PermissionMode]allowance{
 	protocol.PermissionModeAuto:        {commands: true, edits: true},
 }
 
-func commandAllowed(command string, grants Grants) bool {
-	if modeAllows[grants.Mode].commands {
-		return true
-	}
+// programsAllowed tells whether every program a command runs was allowed.
+func programsAllowed(command string, allowed map[string]bool) bool {
 	programs, known := CommandPrograms(command)
 	if !known {
 		return false
 	}
 	for _, program := range programs {
-		if !grants.Programs[program] {
+		if !allowed[program] {
 			return false
 		}
 	}
 	return true
+}
+
+func commandAllowed(subject Subject, grants Grants) bool {
+	if subject.Outside {
+		return programsAllowed(subject.Command, grants.Outside)
+	}
+	return modeAllows[grants.Mode].commands || programsAllowed(subject.Command, grants.Programs)
 }
 
 // NeedsPermission tells whether a person has to approve this call first.
@@ -80,17 +91,19 @@ func NeedsPermission(subject Subject, grants Grants) bool {
 	case AccessServer:
 		return !modeAllows[grants.Mode].commands && !grants.Servers[subject.Server]
 	}
-	return !commandAllowed(subject.Command, grants)
+	return !commandAllowed(subject, grants)
 }
 
 // GrantForSession is the grants once a person allowed this kind of call for the rest of the session.
 func GrantForSession(subject Subject, grants Grants) Grants {
-	next := Grants{Edits: grants.Edits, Mode: grants.Mode, Programs: map[string]bool{}, Servers: map[string]bool{}}
-	for program := range grants.Programs {
-		next.Programs[program] = true
+	next := Grants{
+		Edits: grants.Edits, Mode: grants.Mode,
+		Outside: maps.Clone(grants.Outside), Programs: maps.Clone(grants.Programs), Servers: maps.Clone(grants.Servers),
 	}
-	for server := range grants.Servers {
-		next.Servers[server] = true
+	for _, held := range []*map[string]bool{&next.Outside, &next.Programs, &next.Servers} {
+		if *held == nil {
+			*held = map[string]bool{}
+		}
 	}
 	switch subject.Access {
 	case AccessEdit:
@@ -98,9 +111,13 @@ func GrantForSession(subject Subject, grants Grants) Grants {
 	case AccessServer:
 		next.Servers[subject.Server] = true
 	case AccessCommand:
+		allowed := next.Programs
+		if subject.Outside {
+			allowed = next.Outside
+		}
 		programs, _ := CommandPrograms(subject.Command)
 		for _, program := range programs {
-			next.Programs[program] = true
+			allowed[program] = true
 		}
 	}
 	return next
