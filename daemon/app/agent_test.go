@@ -813,3 +813,45 @@ func TestARestorePointCoversWhatACommandChangedInARepository(t *testing.T) {
 		t.Fatalf("after the restore: %q, %q", test.ReadFile("app.ts"), test.ReadFile("made.txt"))
 	}
 }
+
+// toolResults is what a request gives the model as its calls' results, by the call each answers.
+func toolResults(request map[string]any) map[string]string {
+	results := map[string]string{}
+	for _, message := range fakellama.Messages(request) {
+		if message["role"] == "tool" {
+			results[message["tool_call_id"].(string)], _ = message["content"].(string)
+		}
+	}
+	return results
+}
+
+func TestCallsWhoseIdsAServerRepeatsKeepEachItsOwnResult(t *testing.T) {
+	// The fake llm-server numbers the calls of each reply from call-0, as some servers do.
+	test := Start(t, Options{Replies: []fakellama.Reply{
+		call("bash", map[string]any{"command": "echo one"}), call("bash", map[string]any{"command": "echo two"}), text("Said both."),
+	}})
+	session := test.NewSession(sessions.Request{})
+	if problem := test.App.Sessions.SendPrompt(session.ID, "Say one, then two", nil); problem != "" {
+		t.Fatal(problem)
+	}
+	test.UntilIdle(session.ID)
+
+	// The model reads each call's own result back, under an id no other call has.
+	results := toolResults(test.Requests()[2])
+	said := []string{}
+	for _, output := range results {
+		said = append(said, output)
+	}
+	slices.Sort(said)
+	if !reflect.DeepEqual(said, []string{"one", "two"}) {
+		t.Fatalf("the model read %v back", results)
+	}
+	// And the page is told of two calls, each with its own result.
+	ids := map[string]bool{}
+	for _, finished := range Finished(test.Events(session.ID)) {
+		ids[finished.CallID] = true
+	}
+	if len(ids) != 2 {
+		t.Fatalf("the two calls share an id: %v", ids)
+	}
+}

@@ -341,7 +341,7 @@ func readResponses(ctx context.Context, body io.Reader, onPart func(Part)) (Repl
 		}
 		return Reply{}, &ModelError{Message: "llm-server broke off its answer: " + err.Error()}
 	}
-	reply := builder.Build(newCallID)
+	reply := builder.Build(NewCallID)
 	reply.Items = items
 	return reply, nil
 }

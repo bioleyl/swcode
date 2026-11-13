@@ -219,11 +219,39 @@ func complete(ctx context.Context, host TurnHost, setup Setup) (llm.Reply, error
 	if err != nil {
 		return llm.Reply{}, err
 	}
+	reply.ToolCalls = distinctCalls(reply, host.History())
 	host.Record(protocol.SessionEventAssistantMessage{
 		ID: messageID, Reasoning: reply.Reasoning, ResponseItems: reply.Items, Text: reply.Text, ToolCalls: reply.ToolCalls,
 		Usage: reply.Usage,
 	})
 	return reply, nil
+}
+
+// distinctCalls gives a call an id of its own when an earlier call of the conversation already had its id: some
+// servers number the calls of each reply from the start (call-0, call-1…), and a call is known by its id alone — to
+// give the model each call's own result, and to draw each on its own row, whatever order their events come in. A
+// reply the Responses API wrote keeps its ids: its items go back to the server as they came, and that server's ids
+// are never repeated.
+func distinctCalls(reply llm.Reply, history []protocol.SessionEvent) []protocol.ToolCall {
+	if reply.Items != "" || len(reply.ToolCalls) == 0 {
+		return reply.ToolCalls
+	}
+	used := map[string]bool{}
+	for _, event := range history {
+		if message, said := event.Value.(protocol.SessionEventAssistantMessage); said {
+			for _, call := range message.ToolCalls {
+				used[call.ID] = true
+			}
+		}
+	}
+	calls := slices.Clone(reply.ToolCalls)
+	for index := range calls {
+		if used[calls[index].ID] {
+			calls[index].ID = llm.NewCallID()
+		}
+		used[calls[index].ID] = true
+	}
+	return calls
 }
 
 // streamPart shows a piece of the reply as it comes: its text, its reasoning, or the tool it started calling,

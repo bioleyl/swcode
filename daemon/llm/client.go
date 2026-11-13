@@ -416,7 +416,7 @@ func readReply(ctx context.Context, body io.Reader, onPart func(Part)) (Reply, e
 		}
 		return Reply{}, &ModelError{Message: "llm-server broke off its answer: " + err.Error()}
 	}
-	return builder.Build(newCallID), nil
+	return builder.Build(NewCallID), nil
 }
 
 func readLine(line string, builder *ReplyBuilder, onPart func(Part)) error {
@@ -442,7 +442,8 @@ func readLine(line string, builder *ReplyBuilder, onPart func(Part)) error {
 	return nil
 }
 
-func newCallID() string {
+// NewCallID is an id for a call the server gave none, or one another call already has.
+func NewCallID() string {
 	id := make([]byte, callIDBytes)
 	_, _ = rand.Read(id)
 	return callIDPrefix + hex.EncodeToString(id)
