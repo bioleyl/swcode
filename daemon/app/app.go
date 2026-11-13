@@ -25,6 +25,7 @@ import (
 	"swcode/daemon/mcp"
 	"swcode/daemon/models"
 	"swcode/daemon/pairing"
+	"swcode/daemon/permissions"
 	"swcode/daemon/projects"
 	"swcode/daemon/protocol"
 	"swcode/daemon/sessions"
@@ -255,6 +256,16 @@ func New(settings config.Config, options Options) (*App, error) {
 		AfterEdit: func(path string, host protocol.HostRef) string {
 			project, _ := app.Projects.Find(path, host)
 			return project.AfterEdit
+		},
+		Allowed: func(path string, host protocol.HostRef) permissions.Allowed {
+			project, _ := app.Projects.Find(path, host)
+			if project.Allowed == nil {
+				return permissions.Allowed{}
+			}
+			return permissions.Allowed{Outside: project.Allowed.Outside, Programs: project.Allowed.Programs, Servers: project.Allowed.Servers}
+		},
+		AllowInProject: func(path string, host protocol.HostRef, allowed permissions.Allowed) {
+			app.Projects.Allow(path, host, allowed.Programs, allowed.Outside, allowed.Servers)
 		},
 		Sandboxes: app.sandboxes,
 		SandboxOff: func(path string, host protocol.HostRef) bool {

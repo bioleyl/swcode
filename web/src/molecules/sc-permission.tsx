@@ -2,7 +2,7 @@ import { css } from '@jadis/core';
 import { JlButton, JlIcon } from '@syware/jlib';
 
 import { ScElement } from '../base/sc-element';
-import { sessionGrantLabel, toolLabel } from '../lib/tool-labels';
+import { projectGrantLabel, sessionGrantLabel, toolLabel } from '../lib/tool-labels';
 import { BASE_STYLES } from '../styles/shared';
 import { ScDiff } from './sc-diff';
 import styles from './sc-permission.css?inline';
@@ -37,6 +37,7 @@ export class ScPermission extends ScElement {
     deny: ref<JlButton>('.deny'),
     diff: ref<ScDiff>('sc-diff'),
     icon: ref<JlIcon>('.badge jl-icon'),
+    inProject: ref<JlButton>('.in-project'),
     path: ref('.path'),
     question: ref('h2'),
     where: ref('.where'),
@@ -64,7 +65,10 @@ export class ScPermission extends ScElement {
           <JlButton class="deny" label="Deny" size="lg" />
           <JlButton class="allow" label="Allow once" variant="primary" size="lg" />
         </div>
-        <JlButton class="always" variant="ghost" block hidden />
+        <div class="wider">
+          <JlButton class="always" variant="ghost" block hidden />
+          <JlButton class="in-project" variant="ghost" block hidden />
+        </div>
       </section>
     );
   }
@@ -77,6 +81,7 @@ export class ScPermission extends ScElement {
     this._refs.deny.events.register('press', () => this.events.emit('answer', 'deny'));
     this._refs.allow.events.register('press', () => this.events.emit('answer', 'allowOnce'));
     this._refs.always.events.register('press', () => this.events.emit('answer', 'allowSession'));
+    this._refs.inProject.events.register('press', () => this.events.emit('answer', 'allowProject'));
   }
 
   private render(): void {
@@ -99,6 +104,9 @@ export class ScPermission extends ScElement {
     this._refs.why.textContent = detail?.kind === 'text' ? detail.text : '';
     this._refs.always.hidden = grant === undefined;
     this._refs.always.label.set(grant ?? '');
+    const inProject = projectGrantLabel(tool, summary, outside);
+    this._refs.inProject.hidden = inProject === undefined;
+    this._refs.inProject.label.set(inProject ?? '');
   }
 }
 

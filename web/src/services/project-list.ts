@@ -3,7 +3,7 @@ import { Bus } from '@jadis/core';
 import { sameHost } from '../../../shared/hosts/host-key';
 import { daemon, daemonBus } from './daemon';
 
-import type { HostRef, Project } from '../../../shared/protocol/project.schema';
+import type { AllowedRule, HostRef, Project } from '../../../shared/protocol/project.schema';
 
 // The list lives as long as the page: its bus listener never needs to stop.
 const forever = new AbortController().signal;
@@ -46,3 +46,7 @@ daemonBus.register(
  */
 export const setProjectAfterEdit = (projectId: string, command: string): void =>
   daemon.send({ command, projectId, type: 'setProjectAfterEdit' });
+
+/** Takes back what the project's sessions did without asking: they ask again from their next call. */
+export const removeProjectAllowed = (projectId: string, rule: AllowedRule, name: string): void =>
+  daemon.send({ name, projectId, rule, type: 'removeProjectAllowed' });

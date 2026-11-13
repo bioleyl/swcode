@@ -4,6 +4,7 @@ import { SessionDefaultsSchema } from './choices.schema.js';
 import { PresetChoicesSchema, PresetStatusSchema, SourceStatusSchema } from './models.schema.js';
 import { MAX_PICTURES, PictureUploadSchema } from './picture.schema.js';
 import {
+  AllowedRuleSchema,
   HostOptionSchema,
   HostRefSchema,
   MAX_AFTER_EDIT,
@@ -241,6 +242,13 @@ export const ClientMessageSchema = z.discriminatedUnion('type', [
     command: z.string().trim().max(MAX_AFTER_EDIT),
     projectId: z.string(),
     type: z.literal('setProjectAfterEdit'),
+  }),
+  // Takes back what the project's sessions were allowed without asking: a program, or an MCP server.
+  z.object({
+    name: z.string().min(1),
+    projectId: z.string(),
+    rule: AllowedRuleSchema,
+    type: z.literal('removeProjectAllowed'),
   }),
   // Whether the commands of the project's sessions run in a sandbox, where its host can make one.
   z.object({ on: z.boolean(), projectId: z.string(), type: z.literal('setProjectSandbox') }),

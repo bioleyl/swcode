@@ -31,6 +31,21 @@ export const ProjectTodoSchema = z.object({
 });
 export type ProjectTodo = z.infer<typeof ProjectTodoSchema>;
 
+/**
+ * What a project's sessions do without asking, as people answered “in this project”: programs by name, in the
+ * sandbox and outside it, and MCP servers by name.
+ */
+export const ALLOWED_RULES = ['program', 'outside', 'server'] as const;
+export const AllowedRuleSchema = z.enum(ALLOWED_RULES);
+export type AllowedRule = z.infer<typeof AllowedRuleSchema>;
+
+export const ProjectAllowedSchema = z.object({
+  outside: z.array(z.string()).default([]),
+  programs: z.array(z.string()).default([]),
+  servers: z.array(z.string()).default([]),
+});
+export type ProjectAllowed = z.infer<typeof ProjectAllowedSchema>;
+
 /** A folder sessions work in, on a host, with a name for people: the folder's, at first. */
 // The most a project's check after an edit is: a command line.
 export const MAX_AFTER_EDIT = 500;
@@ -39,6 +54,8 @@ export const ProjectSchema = z.object({
   // A command run in the project's folder after each file the agent writes or edits, `{file}` standing for the
   // file: a formatter, a linter, a type check. What it says goes back to the agent with the edit's result.
   afterEdit: z.string().optional(),
+  // What its sessions do without asking.
+  allowed: ProjectAllowedSchema.optional(),
   createdAt: z.iso.datetime(),
   // What its new sessions start with; the app's own defaults when it has none.
   defaults: SessionDefaultsSchema.optional(),

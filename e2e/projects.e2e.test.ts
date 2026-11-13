@@ -93,6 +93,42 @@ describe('a project’s check after each edit', () => {
   });
 });
 
+describe('a project’s rules', () => {
+  it('take a program allowed “in this project” from the card, list it in its Config, and give it back', async () => {
+    const rig = await start({
+      replies: [{ toolCalls: [{ arguments: { command: 'echo one' }, name: 'bash' }] }, { text: 'Said one.' }],
+    });
+    const page = await rig.browser.newPage({ viewport: DESKTOP });
+    await page.goto(rig.link);
+    const composer = page.locator('home-page sc-composer');
+    await composer.locator('.choices').click();
+    await settle(page);
+    await composer.locator('sc-session-choices').getByText('Ask before commands', { exact: true }).click();
+    await settle(page);
+    await page.keyboard.press('Escape');
+    await page.locator('home-page textarea').fill('Say one');
+    await page.locator('home-page textarea').press('Enter');
+
+    const card = page.locator('sc-permission');
+    await card.getByText('Run this command?').waitFor();
+    await card.getByText('Always allow echo in this project').click();
+    await page.evaluate('0');
+    await page.getByText('Said one.').waitFor();
+
+    await navItem(page, basename(rig.workspace)).click();
+    await settle(page);
+    await projectTab(page, 'Config').click();
+    await settle(page);
+    const rules = page.locator('sc-project-allowed');
+    await rules.locator('.rule .heading').getByText('echo', { exact: true }).waitFor();
+    await rules.locator('.rule .remove').click();
+    await page.evaluate('0');
+    await rules.getByText('Nothing yet.').waitFor();
+    expect(await rules.locator('.rule').count()).toBe(0);
+    expect(await overflow(page)).toBe(0);
+  });
+});
+
 describe('a project’s sandbox', () => {
   it('holds its sessions’ commands unless turned off in its Config, and says why where none can be made', async () => {
     const outside = join(tmpdir(), `swcode-e2e-outside-${process.pid}`);

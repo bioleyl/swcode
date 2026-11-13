@@ -26,6 +26,7 @@ import { isSwcodeBaseIn } from '../lib/swcode-base';
 import { ScSessionChoices } from '../molecules/sc-session-choices';
 import { ScSessionRow } from '../molecules/sc-session-row';
 import { ScTodoRow } from '../molecules/sc-todo-row';
+import { ScProjectAllowed } from '../organisms/sc-project-allowed';
 import { ScProjectSandbox } from '../organisms/sc-project-sandbox';
 import { daemon } from '../services/daemon';
 import { daemonState, daemonStatusBus } from '../services/daemon-status';
@@ -143,6 +144,7 @@ export class ProjectPage extends ScElement {
   private readonly _refs = this.useRefs((ref) => ({
     afterEditForm: ref<HTMLFormElement>('.after-edit-form'),
     afterEditInput: ref<JlInput>('.after-edit-input'),
+    allowed: ref(ScProjectAllowed),
     choices: ref(ScSessionChoices),
     defaults: ref<JlCard>('.defaults'),
     empty: ref(JlEmpty),
@@ -221,6 +223,7 @@ export class ProjectPage extends ScElement {
               </form>
             </JlCard>
             <ScProjectSandbox />
+            <ScProjectAllowed />
           </JlTabPanel>
           <JlTabPanel name="skills" label={PROJECT_TAB_LABELS.skills.label} icon={PROJECT_TAB_LABELS.skills.icon}>
             <div class="side">
@@ -323,6 +326,7 @@ export class ProjectPage extends ScElement {
     this.renderDefaults(project);
     this.renderAfterEdit(project);
     this._refs.sandbox.project.set(project);
+    this._refs.allowed.project.set(project);
     this.renderTodos(project);
     this.renderSkills(project);
     if (this._skillsOf !== project.id) {

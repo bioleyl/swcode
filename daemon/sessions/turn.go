@@ -400,9 +400,16 @@ func (permissionAsk) waitsFor(got answer) bool { return got.answers == nil && go
 
 func (a permissionAsk) settled(session *live, id string, got answer) {
 	a.service.record(session, protocol.SessionEventPermissionAnswered{Decision: got.decision, RequestID: id})
-	if got.decision == protocol.PermissionDecisionAllowSession {
-		granted := permissions.GrantForSession(a.ask.Subject, a.service.grantsOf(session))
+	switch got.decision {
+	case protocol.PermissionDecisionAllowSession:
+		granted := permissions.GrantForSession(a.ask.Subject, session.grants)
 		session.grants = permissions.Grants{Edits: granted.Edits, Outside: granted.Outside, Programs: granted.Programs, Servers: granted.Servers}
+	case protocol.PermissionDecisionAllowProject:
+		// The project keeps it, and every session of it reads the project's rules at each call: this one too.
+		if a.service.deps.AllowInProject != nil {
+			a.service.deps.AllowInProject(session.meta.Workspace, session.meta.Host, permissions.AllowedBy(a.ask.Subject))
+		}
+	case protocol.PermissionDecisionAllowOnce, protocol.PermissionDecisionDeny:
 	}
 }
 
@@ -487,10 +494,15 @@ func (h *turnHost) UseModel(use func()) {
 	use()
 }
 
+// grantsOf is what the session lets through without asking: its mode, what people allowed for it, and what its
+// project allows every session of it.
 func (s *Service) grantsOf(session *live) permissions.Grants {
 	grants := session.grants
 	grants.Mode = session.meta.Mode
-	return grants
+	if s.deps.Allowed == nil {
+		return grants
+	}
+	return grants.With(s.deps.Allowed(session.meta.Workspace, session.meta.Host))
 }
 
 // sessionJobs is a session's background commands, on its host, in its folder: the session lists them while they

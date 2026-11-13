@@ -1,0 +1,20 @@
+:host {
+  display: block;
+  max-width: var(--jl-page-form);
+  margin-top: var(--jl-space-4);
+}
+
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--jl-space-1);
+}
+
+.none {
+  font-size: var(--jl-font-md);
+  color: var(--jl-text-2);
+}
+
+[hidden] {
+  display: none;
+}

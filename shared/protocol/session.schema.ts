@@ -42,8 +42,11 @@ export const TOOL_NAMES = [
 export const ToolNameSchema = z.enum(TOOL_NAMES);
 export type ToolName = z.infer<typeof ToolNameSchema>;
 
-/** How a person answers a permission request: this call only, every similar call in the session, or no. */
-export const PERMISSION_DECISIONS = ['allowOnce', 'allowSession', 'deny'] as const;
+/**
+ * How a person answers a permission request: this call only, every similar call in the session, every similar call
+ * in every session of the project, or no.
+ */
+export const PERMISSION_DECISIONS = ['allowOnce', 'allowSession', 'allowProject', 'deny'] as const;
 export const PermissionDecisionSchema = z.enum(PERMISSION_DECISIONS);
 export type PermissionDecision = z.infer<typeof PermissionDecisionSchema>;
 

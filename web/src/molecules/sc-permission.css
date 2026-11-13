@@ -85,6 +85,17 @@ sc-diff {
   display: flex;
 }
 
+/* The answers that cover more than this call: for the session, then for the project. */
+.wider {
+  display: flex;
+  flex-direction: column;
+  gap: var(--jl-space-1);
+}
+
+.wider:not(:has(jl-button:not([hidden]))) {
+  display: none;
+}
+
 /* On a phone: a sheet over the bottom of the screen, within reach of a thumb. */
 @media (max-width: 720px) {
   :host {

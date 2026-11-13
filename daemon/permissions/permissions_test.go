@@ -109,3 +109,32 @@ func TestACommandThatLeavesTheSandboxIsAskedAboutEvenWhereEverythingRuns(t *test
 		t.Fatal("a grant crossed the sandbox's wall")
 	}
 }
+
+func TestAProjectsRulesLetItsProgramsAndServersThroughInEverySession(t *testing.T) {
+	server := Subject{Access: AccessServer, Server: "github"}
+	outside := Subject{Access: AccessCommand, Command: "git push", Outside: true}
+	allowed := Allowed{Outside: AllowedBy(outside).Outside, Programs: AllowedBy(command("npm test && git status")).Programs, Servers: AllowedBy(server).Servers}
+	if !reflect.DeepEqual(allowed, Allowed{Outside: []string{"git"}, Programs: []string{"npm", "git"}, Servers: []string{"github"}}) {
+		t.Fatalf("what the answers add to the project: %+v", allowed)
+	}
+	granted := ask.With(allowed)
+	for _, subject := range []Subject{command("git log"), command("npm run lint"), outside, server} {
+		if NeedsPermission(subject, granted) {
+			t.Fatalf("asked about %+v", subject)
+		}
+	}
+	if !NeedsPermission(command("rm -rf dist"), granted) || !NeedsPermission(edit("a.ts"), granted) {
+		t.Fatal("the project's rules let through what they do not name")
+	}
+	// The session's own grants are left as they were: the project's rules are read at each call.
+	if len(ask.Programs) != 0 {
+		t.Fatal("the session's grants were changed")
+	}
+	// An edit, or a command whose programs cannot be told, adds nothing to a project.
+	if got := AllowedBy(edit("a.ts")); !reflect.DeepEqual(got, Allowed{}) {
+		t.Fatalf("an edit added %+v", got)
+	}
+	if got := AllowedBy(command("echo $(date)")); len(got.Programs) != 0 {
+		t.Fatalf("a command no rule can vouch for added %+v", got)
+	}
+}

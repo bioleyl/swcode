@@ -25,6 +25,8 @@ const MaxPictures = 4
 
 var PictureTypes = []PictureType{PictureTypeImageJpeg, PictureTypeImagePng}
 
+var AllowedRules = []AllowedRule{AllowedRuleProgram, AllowedRuleOutside, AllowedRuleServer}
+
 const MaxAfterEdit = 500
 
 const MaxPinnedTodos = 20
@@ -35,7 +37,7 @@ var SkillOrigins = []SkillOrigin{SkillOriginPersonal, SkillOriginProject}
 
 var DiffLineKinds = []DiffLineKind{DiffLineKindAdd, DiffLineKindRemove, DiffLineKindContext, DiffLineKindGap}
 
-var PermissionDecisions = []PermissionDecision{PermissionDecisionAllowOnce, PermissionDecisionAllowSession, PermissionDecisionDeny}
+var PermissionDecisions = []PermissionDecision{PermissionDecisionAllowOnce, PermissionDecisionAllowSession, PermissionDecisionAllowProject, PermissionDecisionDeny}
 
 var PlanStepStatuses = []PlanStepStatus{PlanStepStatusPending, PlanStepStatusInProgress, PlanStepStatusCompleted}
 
@@ -161,6 +163,23 @@ func (v PictureType) Valid() bool {
 	return false
 }
 
+type AllowedRule string
+
+const (
+	AllowedRuleProgram AllowedRule = "program"
+	AllowedRuleOutside AllowedRule = "outside"
+	AllowedRuleServer  AllowedRule = "server"
+)
+
+// Valid tells whether v is one of the AllowedRule values.
+func (v AllowedRule) Valid() bool {
+	switch v {
+	case AllowedRuleProgram, AllowedRuleOutside, AllowedRuleServer:
+		return true
+	}
+	return false
+}
+
 type SkillOrigin string
 
 const (
@@ -182,13 +201,14 @@ type PermissionDecision string
 const (
 	PermissionDecisionAllowOnce    PermissionDecision = "allowOnce"
 	PermissionDecisionAllowSession PermissionDecision = "allowSession"
+	PermissionDecisionAllowProject PermissionDecision = "allowProject"
 	PermissionDecisionDeny         PermissionDecision = "deny"
 )
 
 // Valid tells whether v is one of the PermissionDecision values.
 func (v PermissionDecision) Valid() bool {
 	switch v {
-	case PermissionDecisionAllowOnce, PermissionDecisionAllowSession, PermissionDecisionDeny:
+	case PermissionDecisionAllowOnce, PermissionDecisionAllowSession, PermissionDecisionAllowProject, PermissionDecisionDeny:
 		return true
 	}
 	return false
@@ -716,8 +736,45 @@ func (v *HostRefSSH) Normalize() error {
 	return nil
 }
 
+type ProjectAllowed struct {
+	Outside  []string `json:"outside"`
+	Programs []string `json:"programs"`
+	Servers  []string `json:"servers"`
+}
+
+func (v ProjectAllowed) MarshalJSON() ([]byte, error) {
+	type plain ProjectAllowed
+	p := plain(v)
+	if p.Outside == nil {
+		p.Outside = []string{}
+	}
+	if p.Programs == nil {
+		p.Programs = []string{}
+	}
+	if p.Servers == nil {
+		p.Servers = []string{}
+	}
+	return json.Marshal(p)
+}
+
+func (v *ProjectAllowed) UnmarshalJSON(data []byte) error {
+	type plain ProjectAllowed
+	p := plain{Outside: []string{}, Programs: []string{}, Servers: []string{}}
+	if err := json.Unmarshal(data, &p); err != nil {
+		return err
+	}
+	*v = ProjectAllowed(p)
+	return v.Normalize()
+}
+
+// Normalize trims and checks what the app sent, as its schema does.
+func (v *ProjectAllowed) Normalize() error {
+	return nil
+}
+
 type Project struct {
 	AfterEdit  string           `json:"afterEdit,omitempty"`
+	Allowed    *ProjectAllowed  `json:"allowed,omitempty"`
 	CreatedAt  string           `json:"createdAt"`
 	Defaults   *SessionDefaults `json:"defaults,omitempty"`
 	Host       HostRef          `json:"host"`
@@ -2143,6 +2200,8 @@ func (ClientMessageSetProjectDefaults) isClientMessage() {}
 
 func (ClientMessageSetProjectAfterEdit) isClientMessage() {}
 
+func (ClientMessageRemoveProjectAllowed) isClientMessage() {}
+
 func (ClientMessageSetProjectSandbox) isClientMessage() {}
 
 func (ClientMessageSetProjectSkill) isClientMessage() {}
@@ -2398,6 +2457,12 @@ func (u *ClientMessage) UnmarshalJSON(data []byte) error {
 			return err
 		}
 		u.Value = value
+	case "\"removeProjectAllowed\"":
+		var value ClientMessageRemoveProjectAllowed
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
 	case "\"setProjectSandbox\"":
 		var value ClientMessageSetProjectSandbox
 		if err := json.Unmarshal(data, &value); err != nil {
@@ -2497,6 +2562,7 @@ type ClientMessageMapper[R any] interface {
 	RemoveProject(ClientMessageRemoveProject) R
 	SetProjectDefaults(ClientMessageSetProjectDefaults) R
 	SetProjectAfterEdit(ClientMessageSetProjectAfterEdit) R
+	RemoveProjectAllowed(ClientMessageRemoveProjectAllowed) R
 	SetProjectSandbox(ClientMessageSetProjectSandbox) R
 	SetProjectSkill(ClientMessageSetProjectSkill) R
 	AddProjectTodo(ClientMessageAddProjectTodo) R
@@ -2585,6 +2651,8 @@ func MapClientMessage[R any](u ClientMessage, m ClientMessageMapper[R]) R {
 		return m.SetProjectDefaults(value)
 	case ClientMessageSetProjectAfterEdit:
 		return m.SetProjectAfterEdit(value)
+	case ClientMessageRemoveProjectAllowed:
+		return m.RemoveProjectAllowed(value)
 	case ClientMessageSetProjectSandbox:
 		return m.SetProjectSandbox(value)
 	case ClientMessageSetProjectSkill:
@@ -3601,6 +3669,42 @@ func (v *ClientMessageSetProjectAfterEdit) Normalize() error {
 	v.Command = strings.TrimSpace(v.Command)
 	if utf8.RuneCountInString(v.Command) > 500 {
 		return fmt.Errorf("%s: at most 500 characters", "command")
+	}
+	return nil
+}
+
+type ClientMessageRemoveProjectAllowed struct {
+	Name      string      `json:"name"`
+	ProjectID string      `json:"projectId"`
+	Rule      AllowedRule `json:"rule"`
+}
+
+func (v ClientMessageRemoveProjectAllowed) MarshalJSON() ([]byte, error) {
+	type plain ClientMessageRemoveProjectAllowed
+	p := plain(v)
+	return json.Marshal(struct {
+		Key string `json:"type"`
+		plain
+	}{"removeProjectAllowed", p})
+}
+
+func (v *ClientMessageRemoveProjectAllowed) UnmarshalJSON(data []byte) error {
+	type plain ClientMessageRemoveProjectAllowed
+	p := plain{}
+	if err := json.Unmarshal(data, &p); err != nil {
+		return err
+	}
+	*v = ClientMessageRemoveProjectAllowed(p)
+	return v.Normalize()
+}
+
+// Normalize trims and checks what the app sent, as its schema does.
+func (v *ClientMessageRemoveProjectAllowed) Normalize() error {
+	if utf8.RuneCountInString(v.Name) < 1 {
+		return fmt.Errorf("%s: must not be empty", "name")
+	}
+	if !v.Rule.Valid() {
+		return fmt.Errorf("%s: unknown value %q", "rule", v.Rule)
 	}
 	return nil
 }

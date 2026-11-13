@@ -20,7 +20,7 @@ A coding agent for local models. It runs an LLM agent with file, terminal and we
 - **Agent with tools**: reads, writes and edits files, runs commands (foreground and background), searches code with grep/glob, browses the web, takes screenshots, draws images.
 - **Plans and questions**: for a task of several steps the agent keeps a plan you watch it work through; it asks you multiple-choice questions when a decision is yours, and a command that asks for a password (`sudo`, ssh) shows a card where you type it.
 - **Subagents**: the agent can spin up parallel explore subagents to search the codebase or the web while it keeps working, on a smaller model if you give them one.
-- **Permissions**: choose how much the agent can do without asking — run everything, ask before commands, or ask for everything.
+- **Permissions**: choose how much the agent can do without asking — run everything, ask before commands, or ask for everything. A request is answered for this call, for the session, or for the project: its Config tab lists what its sessions do without asking.
 - **Sandbox**: on Linux (this computer, WSL, a server over SSH) the agent's commands run in a [bubblewrap](https://github.com/containers/bubblewrap) sandbox: they write only in the project, and your keys are not there. What must leave it asks first.
 - **Projects**: sessions are grouped by project; a project's page lists its sessions, sets what its new sessions start with, and turns its skills on and off.
 - **Skills**: reusable instructions for recurring tasks, loaded from your home folder or the project, and run as `/<skill>`.

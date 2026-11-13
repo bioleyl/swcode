@@ -107,6 +107,10 @@ type Deps struct {
 	SkillsOff func(path string, host protocol.HostRef) []string
 	// AfterEdit is the command a folder's project runs after each file its agent writes or edits; none when empty.
 	AfterEdit func(path string, host protocol.HostRef) string
+	// Allowed is what a folder's project lets its sessions do without asking; AllowInProject adds to it, when a
+	// person answers a request with "in this project".
+	Allowed        func(path string, host protocol.HostRef) permissions.Allowed
+	AllowInProject func(path string, host protocol.HostRef, allowed permissions.Allowed)
 	// Sandboxes knows which hosts can run commands in a sandbox; nil, and none is: every command runs as the person.
 	Sandboxes *hosts.Sandboxes
 	// SandboxOff tells whether a folder's project turned the sandbox off for its sessions.

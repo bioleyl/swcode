@@ -123,6 +123,52 @@ func GrantForSession(subject Subject, grants Grants) Grants {
 	return next
 }
 
+// Allowed is what a project lets through for every session of it, as people answered "in this project": programs
+// by name, in the sandbox and outside it, and MCP servers.
+type Allowed struct {
+	Programs []string
+	Outside  []string
+	Servers  []string
+}
+
+// with is what was allowed, with more names on top.
+func with(allowed map[string]bool, more []string) map[string]bool {
+	if len(more) == 0 {
+		return allowed
+	}
+	all := maps.Clone(allowed)
+	if all == nil {
+		all = map[string]bool{}
+	}
+	for _, name := range more {
+		all[name] = true
+	}
+	return all
+}
+
+// With is the grants with what the session's project allows on top.
+func (g Grants) With(allowed Allowed) Grants {
+	g.Programs, g.Outside, g.Servers = with(g.Programs, allowed.Programs), with(g.Outside, allowed.Outside), with(g.Servers, allowed.Servers)
+	return g
+}
+
+// AllowedBy is what allowing a call "in this project" adds to the project: the programs of a command, in the
+// sandbox or outside it, or the server of an MCP tool. Nothing for an edit (a project's sessions start in the mode
+// that accepts edits when it says so), nor for a command whose programs cannot be told.
+func AllowedBy(subject Subject) Allowed {
+	switch subject.Access {
+	case AccessServer:
+		return Allowed{Servers: []string{subject.Server}}
+	case AccessCommand:
+		programs, _ := CommandPrograms(subject.Command)
+		if subject.Outside {
+			return Allowed{Outside: programs}
+		}
+		return Allowed{Programs: programs}
+	}
+	return Allowed{}
+}
+
 // opaqueMarks are the marks of a command that does more than run a list of programs: a substitution, a
 // redirection, a subshell, a background job or a second line. A rule about programs cannot vouch for those, so
 // they are always asked about.

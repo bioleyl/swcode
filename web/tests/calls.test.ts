@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import { anyStarting, SERVER_STATES, serverLine } from '../src/lib/mcp-view';
-import { sessionGrantLabel, toolLabel } from '../src/lib/tool-labels';
+import { ALLOWED_RULE_LABELS, allowedRows } from '../src/lib/project-allowed';
+import { projectGrantLabel, sessionGrantLabel, toolLabel } from '../src/lib/tool-labels';
 
+import type { Project } from '../../shared/protocol/project.schema';
 import type { McpServer } from '../../shared/protocol/settings.schema';
 
 const server = (changes: Partial<McpServer>): McpServer => ({
@@ -62,5 +64,41 @@ describe('a command that leaves the sandbox', () => {
       'Always allow npm outside the sandbox in this session'
     );
     expect(sessionGrantLabel('terminal', 'dev server: npm run dev')).toBe('Always allow npm in this session');
+  });
+});
+
+describe('an answer for the whole project', () => {
+  it('is offered for programs and MCP servers, never for edits', () => {
+    expect(projectGrantLabel('bash', 'npm test && git status')).toBe('Always allow npm, git in this project');
+    expect(projectGrantLabel('bash', 'git push', true)).toBe(
+      'Always allow git outside the sandbox in this project'
+    );
+    expect(projectGrantLabel('mcp', 'github · create_issue {}')).toBe(
+      'Always allow github’s tools in this project'
+    );
+    expect(projectGrantLabel('edit', 'src/a.ts')).toBeUndefined();
+    expect(projectGrantLabel('bash', 'echo $(date)')).toBeUndefined();
+    expect(sessionGrantLabel('edit', 'src/a.ts')).toBe('Allow all edits in this session');
+  });
+
+  it('is listed in the project’s Config, programs first', () => {
+    const project: Project = {
+      allowed: { outside: ['git'], programs: ['git', 'npm'], servers: ['github'] },
+      createdAt: '2026-11-13T00:00:00.000Z',
+      host: { kind: 'local' },
+      id: 'p1',
+      name: 'app',
+      path: '/home/someone/app',
+      skillsOff: [],
+      todos: [],
+    };
+    expect(allowedRows(project)).toEqual([
+      { name: 'git', rule: 'program' },
+      { name: 'npm', rule: 'program' },
+      { name: 'git', rule: 'outside' },
+      { name: 'github', rule: 'server' },
+    ]);
+    expect(allowedRows({ ...project, allowed: undefined })).toEqual([]);
+    expect(ALLOWED_RULE_LABELS.server.icon).toBe('plug');
   });
 });

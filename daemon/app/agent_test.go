@@ -747,3 +747,35 @@ func TestASessionReadsAndStopsOnlyTheBackgroundCommandsItStarted(t *testing.T) {
 	}
 	test.App.Sessions.StopJob(first.ID, "1")
 }
+
+func TestAProgramAllowedInTheProjectGoesThroughInItsOtherSessionsUntilTakenBack(t *testing.T) {
+	test := Start(t, Options{Replies: []fakellama.Reply{
+		call("bash", map[string]any{"command": "echo one"}), text("One."),
+		call("bash", map[string]any{"command": "echo two"}), text("Two."),
+		call("bash", map[string]any{"command": "echo three"}), text("Three."),
+	}})
+	first := prompt(t, test, "Say one")
+	answerNext(t, test, first, protocol.PermissionDecisionAllowProject, 1)
+	test.UntilIdle(first)
+	project, _ := test.App.Projects.Find(test.Workspace, protocol.LocalHost())
+	if project.Allowed == nil || !reflect.DeepEqual(project.Allowed.Programs, []string{"echo"}) {
+		t.Fatalf("the project allows %+v", project.Allowed)
+	}
+
+	// Another session of the project runs the program without asking.
+	second := prompt(t, test, "Say two")
+	test.UntilIdle(second)
+	if asked := len(OfKind(test.Events(second), "permissionRequested")); asked != 0 {
+		t.Fatalf("the project's other session asked %d times", asked)
+	}
+	Expect(t, Finished(test.Events(second))[0], `{"ok":true,"output":"two"}`)
+
+	// Taken back in the project's settings, it is asked about again.
+	if problem := test.App.Projects.RemoveAllowed(project.ID, protocol.AllowedRuleProgram, "echo"); problem != "" {
+		t.Fatal(problem)
+	}
+	third := prompt(t, test, "Say three")
+	answerNext(t, test, third, protocol.PermissionDecisionAllowOnce, 2)
+	test.UntilIdle(third)
+	Expect(t, Finished(test.Events(third))[0], `{"ok":true,"output":"three"}`)
+}

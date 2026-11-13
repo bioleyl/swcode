@@ -187,60 +187,71 @@ export const toolLabel = (tool: ToolName | undefined): ToolLabel => (tool ? TOOL
 const ALL_EDITS = 'Allow all edits in this session';
 const never = (): undefined => undefined;
 
+/**
+ * What an answer for more than one call covers: every edit, which a session can allow and a project cannot (its
+ * sessions start in the mode that accepts edits when it says so), or the calls these words name ("git", "git outside
+ * the sandbox", "github’s tools"), which either can.
+ */
+type Grant = { kind: 'edits' } | { kind: 'named'; what: string };
+
+const EDITS: Grant = { kind: 'edits' };
+const edits = (): Grant => EDITS;
+
 // A call to an MCP server's tool is summed up as "<server> · <tool> <arguments>" (`ServerTool` in the daemon).
 const SERVER_MARK = ' · ';
 
-const serverGrant = (summary: string): string | undefined => {
+const serverGrant = (summary: string): Grant | undefined => {
   const end = summary.indexOf(SERVER_MARK);
-  return end > 0 ? `Always allow ${summary.slice(0, end)}’s tools in this session` : undefined;
+  return end > 0 ? { kind: 'named', what: `${summary.slice(0, end)}’s tools` } : undefined;
 };
 
-const programsGrant = (command: string, outside: boolean): string | undefined => {
+const programsGrant = (command: string, outside: boolean): Grant | undefined => {
   const programs = commandPrograms(command);
   if (!programs) {
     return undefined;
   }
   const names = [...new Set(programs)].join(', ');
-  return outside
-    ? `Always allow ${names} outside the sandbox in this session`
-    : `Always allow ${names} in this session`;
+  return { kind: 'named', what: outside ? `${names} outside the sandbox` : names };
 };
 
 // A terminal's call is summed up as "<title>: <command>" (`terminalTool` in the daemon).
 const TITLE_MARK = ': ';
 
-const terminalGrant = (summary: string, outside: boolean): string | undefined => {
+const terminalGrant = (summary: string, outside: boolean): Grant | undefined => {
   const start = summary.indexOf(TITLE_MARK);
   return programsGrant(start < 0 ? summary : summary.slice(start + TITLE_MARK.length), outside);
 };
 
-// What "for the rest of the session" covers, as the daemon grants it (`grantForSession`).
-const SESSION_GRANTS: Readonly<Record<ToolName, (summary: string, outside: boolean) => string | undefined>> = {
+// What an answer for more than this call covers, as the daemon grants it (`GrantForSession`, `AllowedBy`).
+const GRANTS: Readonly<Record<ToolName, (summary: string, outside: boolean) => Grant | undefined>> = {
   agent: never,
   bash: programsGrant,
   closetodo: never,
   draw: never,
-  edit: () => ALL_EDITS,
+  edit: edits,
   glob: never,
   grep: never,
-  image: () => ALL_EDITS,
+  image: edits,
   kill: never,
   mcp: serverGrant,
-  notes: () => ALL_EDITS,
+  notes: edits,
   output: never,
   plan: never,
   question: never,
   read: never,
   readterminal: never,
-  saveskill: () => ALL_EDITS,
+  saveskill: edits,
   screenshot: never,
   skill: never,
   terminal: terminalGrant,
   todo: never,
   webfetch: never,
   websearch: never,
-  write: () => ALL_EDITS,
+  write: edits,
 };
+
+const grantOf = (tool: ToolName | undefined, summary: string, outside: boolean): Grant | undefined =>
+  tool ? GRANTS[tool](summary, outside) : undefined;
 
 /**
  * The label of the "for this session" button, or `undefined` when such a grant would not cover the call. `outside`:
@@ -250,4 +261,23 @@ export const sessionGrantLabel = (
   tool: ToolName | undefined,
   summary: string,
   outside = false
-): string | undefined => (tool ? SESSION_GRANTS[tool](summary, outside) : undefined);
+): string | undefined => {
+  const grant = grantOf(tool, summary, outside);
+  if (grant?.kind === 'named') {
+    return `Always allow ${grant.what} in this session`;
+  }
+  return grant ? ALL_EDITS : undefined;
+};
+
+/**
+ * The label of the "in this project" button, which every session of the project then goes by; `undefined` for a
+ * call the project keeps no rule about.
+ */
+export const projectGrantLabel = (
+  tool: ToolName | undefined,
+  summary: string,
+  outside = false
+): string | undefined => {
+  const grant = grantOf(tool, summary, outside);
+  return grant?.kind === 'named' ? `Always allow ${grant.what} in this project` : undefined;
+};

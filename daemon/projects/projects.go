@@ -199,6 +199,67 @@ func (s *Service) SetAfterEdit(projectID, command string) string {
 	return ""
 }
 
+// merged is the names with more of them, each once, in order.
+func merged(names, more []string) []string {
+	all := slices.Concat(names, more)
+	slices.Sort(all)
+	return slices.Compact(all)
+}
+
+// Allow adds to what the sessions of a folder's project do without asking: nothing for a folder without a project.
+func (s *Service) Allow(folder string, host protocol.HostRef, programs, outside, servers []string) {
+	if len(programs)+len(outside)+len(servers) == 0 {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	index := slices.IndexFunc(s.projects, func(project protocol.Project) bool {
+		return project.Path == folder && hosts.SameHost(project.Host, host)
+	})
+	if index < 0 {
+		return
+	}
+	projects := append([]protocol.Project{}, s.projects...)
+	allowed := protocol.ProjectAllowed{}
+	if held := projects[index].Allowed; held != nil {
+		allowed = *held
+	}
+	allowed.Programs, allowed.Outside, allowed.Servers = merged(allowed.Programs, programs), merged(allowed.Outside, outside), merged(allowed.Servers, servers)
+	projects[index].Allowed = &allowed
+	s.change(projects)
+}
+
+// without is the names but one.
+func without(names []string, name string) []string {
+	return slices.DeleteFunc(slices.Clone(names), func(each string) bool { return each == name })
+}
+
+// RemoveAllowed takes back one thing the project's sessions did without asking: they ask again from their next call.
+func (s *Service) RemoveAllowed(projectID string, rule protocol.AllowedRule, name string) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	index := slices.IndexFunc(s.projects, func(project protocol.Project) bool { return project.ID == projectID })
+	if index < 0 {
+		return unknownProject
+	}
+	projects := append([]protocol.Project{}, s.projects...)
+	if projects[index].Allowed == nil {
+		return ""
+	}
+	allowed := *projects[index].Allowed
+	switch rule {
+	case protocol.AllowedRuleProgram:
+		allowed.Programs = without(allowed.Programs, name)
+	case protocol.AllowedRuleOutside:
+		allowed.Outside = without(allowed.Outside, name)
+	case protocol.AllowedRuleServer:
+		allowed.Servers = without(allowed.Servers, name)
+	}
+	projects[index].Allowed = &allowed
+	s.change(projects)
+	return ""
+}
+
 // SetSandbox says whether the commands of the project's sessions run in a sandbox, where its host can make one: they
 // do unless it was turned off.
 func (s *Service) SetSandbox(projectID string, on bool) string {
