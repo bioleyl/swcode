@@ -33,6 +33,11 @@ var (
 	browserTools = []protocol.ToolName{protocol.ToolNameScreenshot}
 	// retiredTools are offered no longer: their names stay for the calls older sessions hold.
 	retiredTools = []protocol.ToolName{protocol.ToolNameSaveskill}
+	// waitingTools only read, and mostly wait while they do (a disk, a host over SSH, a page): the calls of one
+	// reply to them run together. They ask nobody anything and change nothing, so no order between them matters.
+	waitingTools = []protocol.ToolName{
+		protocol.ToolNameRead, protocol.ToolNameGrep, protocol.ToolNameGlob, protocol.ToolNameWebsearch, protocol.ToolNameWebfetch,
+	}
 )
 
 // Box is the tools an agent has: as the model reads them, and by name.
@@ -60,6 +65,13 @@ func (b Box) Find(name string) (Tool, bool) {
 		return Tool{}, false
 	}
 	return all[protocol.ToolName(name)], true
+}
+
+// RunsTogether tells whether calls to that tool may run at the same time as other calls of the same reply: it only
+// reads, and the agent has it.
+func (b Box) RunsTogether(name string) bool {
+	_, has := b.Find(name)
+	return has && slices.Contains(waitingTools, protocol.ToolName(name))
 }
 
 // Servers is which servers of the settings the agents have.

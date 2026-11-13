@@ -104,11 +104,16 @@ func (h *subagentHost) History() []protocol.SessionEvent {
 	return append([]protocol.SessionEvent{}, h.events...)
 }
 
+// Record keeps an event in the subagent's own conversation, and tells the session of a call that finished. Calls
+// that only read run together, so it may be called from several of them at once.
 func (h *subagentHost) Record(event protocol.SessionEventVariant) {
 	h.mu.Lock()
 	h.events = append(h.events, protocol.SessionEvent{Value: protocol.Dated(event, protocol.Timestamp(h.deps.Now()))})
+	activity, finished := h.activityOf(event)
 	h.mu.Unlock()
-	h.report(event)
+	if finished {
+		h.deps.Record(activity)
+	}
 }
 
 // StreamText does nothing: nobody reads a subagent's answer as it streams, the main agent gets it whole.
@@ -140,16 +145,19 @@ func (h *subagentHost) TakeReports() []protocol.SessionEventSubagentReport { ret
 // UseModel: a subagent's requests take no peek, and wait for none.
 func (h *subagentHost) UseModel(use func()) { use() }
 
-func (h *subagentHost) report(event protocol.SessionEventVariant) {
+// activityOf keeps a call's few words when it is made, and gives the line the session shows once it finished:
+// false for any other event. The caller holds the lock.
+func (h *subagentHost) activityOf(event protocol.SessionEventVariant) (protocol.SessionEventSubagentActivity, bool) {
 	switch value := event.(type) {
 	case protocol.SessionEventToolCall:
 		h.calls[value.CallID] = subagentCall{summary: value.Summary, tool: value.Tool}
 	case protocol.SessionEventToolFinished:
 		call := h.calls[value.CallID]
-		h.deps.Record(protocol.SessionEventSubagentActivity{
+		return protocol.SessionEventSubagentActivity{
 			AgentID: h.agentID, Meta: value.Meta, OK: value.OK, Summary: call.summary, Tool: call.tool,
-		})
+		}, true
 	}
+	return protocol.SessionEventSubagentActivity{}, false
 }
 
 // RunSubagent runs one explore subagent to its report. Its start and its end are its session's to record: the

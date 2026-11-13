@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"sync"
 
 	"swcode/daemon/llm"
 	"swcode/daemon/protocol"
@@ -105,39 +106,80 @@ func execute(ctx context.Context, callID string, call tools.PreparedCall, host T
 	return true
 }
 
-func runCall(ctx context.Context, call protocol.ToolCall, host TurnHost, setup Setup) bool {
+// prepareCall checks a call and records it, ready to run: false when it cannot run, its refusal recorded for the
+// model to read.
+func prepareCall(ctx context.Context, call protocol.ToolCall, host TurnHost, setup Setup) (tools.PreparedCall, bool) {
 	tool, found := setup.Tools.Find(call.Name)
 	if !found {
 		recordRefusal(host, call, call.Name, "There is no tool named "+call.Name+".", "")
-		return true
+		return tools.PreparedCall{}, false
 	}
 	input, problem := parseArguments(call.Arguments)
 	if problem != "" {
 		recordRefusal(host, call, clip(call.Arguments, rawSummaryLength), problem, tool.Name)
-		return true
+		return tools.PreparedCall{}, false
 	}
 	context := *host.ToolContext()
 	context.CallID = call.ID
 	prepared := tool.Prepare(ctx, input, &context)
 	if !prepared.OK {
 		recordRefusal(host, call, prepared.Summary, prepared.Problem, tool.Name)
-		return true
+		return tools.PreparedCall{}, false
 	}
 	host.Record(protocol.SessionEventToolCall{CallID: call.ID, Summary: prepared.Call.Summary, Tool: toolName(tool.Name)})
-	return execute(ctx, call.ID, prepared.Call, host)
+	return prepared.Call, true
 }
 
-// runCalls runs the calls of one reply, one after the other, subagents too: on one GPU, subagents at the same time
-// share its speed and end later than one after another. A declined call ends the turn, and the calls after it stay
-// unrun: false then.
-func runCalls(ctx context.Context, calls []protocol.ToolCall, host TurnHost, setup Setup) bool {
+// runCall runs one call; false when the person declined it.
+func runCall(ctx context.Context, call protocol.ToolCall, host TurnHost, setup Setup) bool {
+	prepared, ready := prepareCall(ctx, call, host, setup)
+	if !ready {
+		return true
+	}
+	return execute(ctx, call.ID, prepared, host)
+}
+
+// readsAtStart is how many calls at the start of a list only read, and so run together.
+func readsAtStart(calls []protocol.ToolCall, box tools.Box) int {
+	count := 0
+	for count < len(calls) && box.RunsTogether(calls[count].Name) {
+		count++
+	}
+	return count
+}
+
+// runTogether runs calls that only read at the same time: each mostly waits (a disk, a host over SSH, a page and
+// the model that reads it), so three of them take the time of the longest. They are recorded in the order the
+// model wrote them, and each result joins the conversation under its own call, whatever the order they end in.
+func runTogether(ctx context.Context, calls []protocol.ToolCall, host TurnHost, setup Setup) {
+	var running sync.WaitGroup
 	for _, call := range calls {
+		prepared, ready := prepareCall(ctx, call, host, setup)
+		if !ready {
+			continue
+		}
+		running.Go(func() { execute(ctx, call.ID, prepared, host) })
+	}
+	running.Wait()
+}
+
+// runCalls runs the calls of one reply in the order the model wrote them: those that only read and follow one
+// another together, any other by itself. A declined call ends the turn, and the calls after it stay unrun: false
+// then.
+func runCalls(ctx context.Context, calls []protocol.ToolCall, host TurnHost, setup Setup) bool {
+	for len(calls) > 0 {
 		if ctx.Err() != nil {
 			return true
 		}
-		if !runCall(ctx, call, host, setup) {
+		if together := readsAtStart(calls, setup.Tools); together > 1 {
+			runTogether(ctx, calls[:together], host, setup)
+			calls = calls[together:]
+			continue
+		}
+		if !runCall(ctx, calls[0], host, setup) {
 			return false
 		}
+		calls = calls[1:]
 	}
 	return true
 }

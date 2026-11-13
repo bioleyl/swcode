@@ -8,6 +8,7 @@ import (
 
 	"swcode/daemon/llm"
 	"swcode/daemon/protocol"
+	"swcode/daemon/tools"
 )
 
 const at = "2026-10-23T10:00:00.000Z"
@@ -182,5 +183,29 @@ func TestARequestAtTheEndOfAConversationJoinsTheUserMessageThatEndsIt(t *testing
 	}
 	if empty := withRequest(nil, "Summarize."); len(empty) != 1 {
 		t.Fatalf("an empty conversation: %+v", empty)
+	}
+}
+
+func TestOnlyTheReadsThatFollowOneAnotherAtTheStartRunTogether(t *testing.T) {
+	named := func(names ...string) []protocol.ToolCall {
+		calls := []protocol.ToolCall{}
+		for _, name := range names {
+			calls = append(calls, protocol.ToolCall{Name: name})
+		}
+		return calls
+	}
+	counts := map[int][]protocol.ToolCall{
+		3: named("read", "grep", "webfetch", "edit", "read"),
+		0: named("bash", "read", "read"),
+		1: named("glob"),
+	}
+	for expected, calls := range counts {
+		if got := readsAtStart(calls, tools.Main); got != expected {
+			t.Fatalf("%d of %v", got, calls)
+		}
+	}
+	// A tool the agent does not have runs with nothing: its refusal is the call's own.
+	if got := readsAtStart(named("websearch", "read"), tools.Main.Without(protocol.ToolNameWebsearch)); got != 0 {
+		t.Fatalf("%d with a tool the agent lacks", got)
 	}
 }

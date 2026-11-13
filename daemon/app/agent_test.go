@@ -653,3 +653,40 @@ func TestTokenEconomyAsksTheModelToBeConciseAndShowsTheMessageAsWritten(t *testi
 	}
 	Expect(t, test.App.Sessions.List()[0], `{"concise":false}`)
 }
+
+func TestTheReadsOfOneReplyRunTogetherAndTheirResultsStayUnderTheirCalls(t *testing.T) {
+	test := Start(t, Options{
+		Files: map[string]string{"a.txt": "alpha\n", "b.txt": "bravo\n", "c.txt": "charlie\n"},
+		Replies: []fakellama.Reply{
+			{ToolCalls: []fakellama.ToolCall{
+				{Arguments: map[string]any{"path": "a.txt"}, Name: "read"},
+				{Arguments: map[string]any{"path": "missing.txt"}, Name: "read"},
+				{Arguments: map[string]any{"path": "b.txt"}, Name: "read"},
+				{Arguments: map[string]any{"path": "c.txt"}, Name: "read"},
+			}},
+			text("Read."),
+		},
+	})
+	session := test.NewSession(sessions.Request{})
+	test.App.Sessions.SendPrompt(session.ID, "Read them", nil)
+	test.WaitForEvent("turnFinished", 1)
+
+	// Every call is recorded in the order the model wrote them, before any runs; the one that cannot run is refused.
+	events := test.Events(session.ID)
+	summaries := []any{}
+	for _, call := range OfKind(events, "toolCall") {
+		summaries = append(summaries, call.(map[string]any)["summary"])
+	}
+	Expect(t, summaries, []any{"a.txt", "missing.txt", "b.txt", "c.txt"})
+
+	// The model reads each result under its own call, in the order of the calls.
+	results := []string{}
+	for _, message := range fakellama.Messages(test.Requests()[1]) {
+		if message["role"] == "tool" {
+			results = append(results, fakellama.TextOf(message["content"]))
+		}
+	}
+	if len(results) != 4 || !strings.Contains(results[0], "alpha") || !strings.Contains(results[1], "does not exist") || !strings.Contains(results[2], "bravo") || !strings.Contains(results[3], "charlie") {
+		t.Fatalf("the results the model read: %q", results)
+	}
+}
