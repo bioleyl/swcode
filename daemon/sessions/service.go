@@ -553,13 +553,41 @@ func (s *Service) History(sessionID string, limit int) (protocol.ServerMessage, 
 	history := protocol.ServerMessageSessionHistory{
 		Events:    append([]protocol.SessionEvent{}, kept...),
 		KeptBack:  older,
+		Part:      protocol.HistoryPartEnd,
 		SessionID: sessionID,
-	}
-	if session.turn != nil && session.turn.streaming != nil {
-		streaming := *session.turn.streaming
-		history.Streaming = &streaming
+		Streaming: streamingOf(session),
 	}
 	return protocol.ServerMessage{Value: history}, true
+}
+
+// Resume is what a session recorded after the first `since` of its events, and the answer being written, for a page
+// back online that holds those: it goes on where it was instead of drawing the conversation again. False when the
+// session holds fewer events than the page says (another daemon's session of the same id): the page then opens it
+// as a new one.
+func (s *Service) Resume(sessionID string, since int) (protocol.ServerMessage, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	session, ok := s.sessions[sessionID]
+	if !ok || since > len(session.events) {
+		return protocol.ServerMessage{}, false
+	}
+	history := protocol.ServerMessageSessionHistory{
+		Events:    append([]protocol.SessionEvent{}, session.events[since:]...),
+		KeptBack:  since,
+		Part:      protocol.HistoryPartSince,
+		SessionID: sessionID,
+		Streaming: streamingOf(session),
+	}
+	return protocol.ServerMessage{Value: history}, true
+}
+
+// streamingOf is the answer a session's turn is writing now, as it stands; nil when none is.
+func streamingOf(session *live) *protocol.Streaming {
+	if session.turn == nil || session.turn.streaming == nil {
+		return nil
+	}
+	streaming := *session.turn.streaming
+	return &streaming
 }
 
 // lastEvents is the last `limit` events of a session, and how many come before them.
@@ -570,9 +598,9 @@ func lastEvents(events []protocol.SessionEvent, limit int) ([]protocol.SessionEv
 	return events[len(events)-limit:], len(events) - limit
 }
 
-// OlderEvents is the page of events before the ones a page shows: the `limit` that come right before the
-// `keptBack` older ones its last history reported, and how many are left before those. The streaming answer is not
-// repeated: the page holds it.
+// OlderEvents is the page of events before the ones a page shows: the last `limit` of the `keptBack` older ones its
+// last history reported, and how many are left before those. A page that says more are kept back than the session
+// holds gets none. The streaming answer is not repeated: the page holds it.
 func (s *Service) OlderEvents(sessionID string, keptBack, limit int) (protocol.ServerMessage, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -580,14 +608,15 @@ func (s *Service) OlderEvents(sessionID string, keptBack, limit int) (protocol.S
 	if !ok {
 		return protocol.ServerMessage{}, false
 	}
-	end := len(session.events) - keptBack
-	if end < 0 {
+	end := keptBack
+	if end > len(session.events) {
 		end = 0
 	}
 	start := max(end-limit, 0)
 	history := protocol.ServerMessageSessionHistory{
 		Events:    append([]protocol.SessionEvent{}, session.events[start:end]...),
 		KeptBack:  start,
+		Part:      protocol.HistoryPartOlder,
 		SessionID: sessionID,
 	}
 	return protocol.ServerMessage{Value: history}, true

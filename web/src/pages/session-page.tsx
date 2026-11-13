@@ -37,7 +37,12 @@ import { allTerminals, terminalKey, terminalListBus, terminalsIn } from '../serv
 import { BASE_STYLES } from '../styles/shared';
 import styles from './session-page.css?inline';
 
-import type { ClientMessage, ServerMessage, Terminal } from '../../../shared/protocol/messages.schema';
+import type {
+  ClientMessage,
+  HistoryPart,
+  ServerMessage,
+  Terminal,
+} from '../../../shared/protocol/messages.schema';
 import type {
   DiffDisplay,
   SessionEvent,
@@ -108,7 +113,9 @@ export class SessionPage extends ScElement {
   // The session's events the page holds, oldest first: the side panel lists its subagents from them, and its token
   // count and plan come from them. Older pages are added in front as the person scrolls up.
   private _events: SessionEvent[] = [];
-  // Whether this page has its history yet: the next answer is a page of older events, not the conversation itself.
+  // How many events the session holds before the ones this page has: with them, how far into the session it is.
+  private _keptBack = 0;
+  // Whether this page has its history yet: a search's match is marked once it has.
   private _opened = false;
   // The event a search found in this session, until the conversation is drawn and marks it.
   private _found = '';
@@ -149,19 +156,9 @@ export class SessionPage extends ScElement {
         this._refs.conversation.reasoning(message.messageId, message.text)
       ),
     sessionEvent: (message) => this.forThisSession(message.sessionId, () => this.applyEvent(message.event)),
-    // The end of the conversation, or a page of its older events: the first draws the conversation again, the other
-    // is added above what is shown.
     sessionHistory: (message) =>
       this.forThisSession(message.sessionId, () => {
-        if (this._opened) {
-          this._events = [...message.events, ...this._events];
-          this._refs.conversation.addOlder(message.events, message.keptBack);
-        } else {
-          this._opened = true;
-          this._events = [...message.events];
-          this._refs.conversation.load(message.events, message.keptBack, message.streaming);
-          this.revealFound();
-        }
+        this._histories[message.part](message);
         this._refs.panel.agents.set(agentsOf(this._events));
         this._refs.plan.show(currentPlan(this._events));
         this.showUsage(usedTokens(this._events));
@@ -175,6 +172,31 @@ export class SessionPage extends ScElement {
     terminals: () => this.renderTerminals(),
     toolCallWriting: (message) =>
       this.forThisSession(message.sessionId, () => this._refs.conversation.writingCall(message.tool)),
+  };
+
+  // A part of the session's history, by which part it is: the end draws the conversation, an older page goes above
+  // what is shown, and what came while the page was offline goes after it.
+  private readonly _histories: Readonly<
+    Record<HistoryPart, (history: ServerMessageMap['sessionHistory']) => void>
+  > = {
+    end: (history) => {
+      this._opened = true;
+      this._events = [...history.events];
+      this._keptBack = history.keptBack;
+      this._refs.conversation.load(history.events, history.keptBack, history.streaming);
+      this.revealFound();
+    },
+    older: (history) => {
+      this._events = [...history.events, ...this._events];
+      this._keptBack = history.keptBack;
+      this._refs.conversation.addOlder(history.events, history.keptBack);
+    },
+    since: (history) => {
+      this._opened = true;
+      this._events = [...this._events, ...history.events];
+      this._refs.conversation.resume(history.events, history.streaming);
+      this.revealFound();
+    },
   };
 
   private readonly _refs = this.useRefs((ref) => ({
@@ -231,6 +253,7 @@ export class SessionPage extends ScElement {
     this._opened = false;
     this._found = takeReveal(this._sessionId) ?? '';
     this._events = [];
+    this._keptBack = 0;
     this.watchDaemon();
     this.wireConversation();
     this.wireComposer();
@@ -239,7 +262,10 @@ export class SessionPage extends ScElement {
     this.wireTerminals();
     this.renderSummary();
     this.renderDaemon();
-    this.openHistory();
+    // Offline, the socket's opening asks: asking here too would bring the history twice.
+    if (daemon.online) {
+      this.openHistory();
+    }
     this._refs.composer.focusText();
   }
 
@@ -502,8 +528,8 @@ export class SessionPage extends ScElement {
     action();
   }
 
-  /** Back online after the daemon went away: the conversation is drawn again from what the daemon kept, so the
-   * older pages the person had scrolled to come with it. */
+  /** Back online after the daemon went away: the page asks for what the session recorded meanwhile, and goes on
+   * where the person was reading. */
   private reopen(online: boolean): void {
     // A terminal this page was opening when the socket went away never came: the next one is another page's.
     this._openingTerminal = false;
@@ -517,12 +543,14 @@ export class SessionPage extends ScElement {
     }
   }
 
-  /** Asks for the end of the conversation, and for as much before it as the window already shows. */
+  /** Asks for the end of the conversation; a page that holds some of the session asks for what came after it. */
   private openHistory(): void {
+    const held = this._keptBack + this._events.length;
     daemon.send({
-      events: HISTORY_EVENTS + this._events.length,
+      events: HISTORY_EVENTS,
       sessionId: this._sessionId,
       type: 'openSession',
+      ...(held === 0 ? {} : { since: held }),
     });
   }
 

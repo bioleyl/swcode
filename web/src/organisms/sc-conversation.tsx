@@ -46,12 +46,9 @@ const PIN_FLASH_MS = 1_200;
 // A search's match is marked longer: the view may scroll a long way, through older pages, to reach it.
 const MATCH_FLASH_MS = 2_400;
 
-/** Holds rows together, for one of the rare events that draws several (a subagent's report has its note). */
-const fragmentOf = (nodes: readonly Element[]): DocumentFragment => {
-  const fragment = document.createDocumentFragment();
-  fragment.append(...nodes);
-  return fragment;
-};
+// The events kept for a row an older page has yet to bring, by what they wait for: a call's row, or a subagent's call.
+const callKey = (callId: string): string => `call:${callId}`;
+const agentKey = (agentId: string): string => `agent:${agentId}`;
 // When the waiting messages go: after the turn, or at the agent's next step once the person asked for them now.
 const QUEUE_NOTES = { later: 'Sent when this turn ends.', now: 'Sent at the agent’s next step.' } as const;
 
@@ -134,8 +131,13 @@ export class ScConversation extends ScElement {
   private _older = 0;
   // What the top says about the older events: waiting for them, or not waiting.
   private _topState: 'loading' | 'none' = 'none';
-  // The rows added since the last turn of the handlers: an older page takes them from the end and puts them above.
-  private _pending: Element[] = [];
+  // The rows an older page makes while its events are handled: they then go above what is shown.
+  private _olderRows: Element[] | undefined;
+  // The events that came before the row they change: the page shown starts after that row's call, which an older
+  // page brings later. They are handled again then, in the order they came.
+  private readonly _early = new Map<string, SessionEvent[]>();
+  // The requests answered before the page that asked them came: they open no card.
+  private readonly _answered = new Set<string>();
   // The ids of the pinned messages, and the message a pin asked to reach before its page came.
   private _pinned = new Set<string>();
   private _reveal = '';
@@ -222,14 +224,15 @@ export class ScConversation extends ScElement {
       ),
     subagentActivity: (event) => {
       const line = { meta: event.meta, ok: event.ok, summary: event.summary, tool: event.tool };
-      this.subagentRow(event.agentId)?.activity.set((lines) => [...lines, line]);
+      this.subagentRow(event.agentId, event)?.activity.set((lines) => [...lines, line]);
     },
     subagentFinished: (event) => this.finishSubagent(event),
     // What the main agent read, where it read it: the report itself shows in its subagent's row.
     subagentQueued: (event) => {
       this._subagents.set(event.agentId, event.callId);
       this._working.add(event.callId);
-      this._rows.get(event.callId)?.state.set('queued');
+      this.rowOrLater(event.callId, event)?.state.set('queued');
+      this.handleEarly(agentKey(event.agentId));
     },
     subagentReport: (event) =>
       this.add(
@@ -242,7 +245,8 @@ export class ScConversation extends ScElement {
     subagentStarted: (event) => {
       this._subagents.set(event.agentId, event.callId);
       this._working.add(event.callId);
-      this._rows.get(event.callId)?.state.set('running');
+      this.rowOrLater(event.callId, event)?.state.set('running');
+      this.handleEarly(agentKey(event.agentId));
     },
     toolCall: (event) => {
       const row: ScToolRow = <ScToolRow tool={event.tool} summary={event.summary} />;
@@ -250,18 +254,19 @@ export class ScConversation extends ScElement {
       this._rows.set(event.callId, row);
       this.add(row);
       this.doing({ kind: 'running', summary: event.summary, tool: event.tool });
+      this.handleEarly(callKey(event.callId));
     },
     toolFinished: (event) => {
       if (this._working.has(event.callId)) {
         this.doing({ kind: 'working' });
         return;
       }
-      const row = this._rows.get(event.callId);
+      const row = this.rowOrLater(event.callId, event);
       row?.result.set({ display: event.display, meta: event.meta, ok: event.ok });
       row?.state.set(event.ok ? 'done' : 'failed');
       this.doing({ kind: 'working' });
     },
-    toolRunning: (event) => this.runningRow(event.callId),
+    toolRunning: (event) => this.runningRow(event),
     turnFinished: (event) => {
       this.working(false);
       this.note(event.message ?? ENDINGS[event.outcome], event.outcome);
@@ -334,6 +339,8 @@ export class ScConversation extends ScElement {
   load(events: readonly SessionEvent[], older: number, streaming: Streaming | undefined): void {
     this._older = older;
     this._reveal = '';
+    this._early.clear();
+    this._answered.clear();
     this._messages.clear();
     this._thoughts.clear();
     this._rows.clear();
@@ -359,17 +366,33 @@ export class ScConversation extends ScElement {
   addOlder(events: readonly SessionEvent[], older: number): void {
     this._older = older;
     const atEnd = this.isAtEnd();
-    for (const event of [...events].reverse()) {
-      const row = this.nodeOf(event);
-      if (row) {
-        this._refs.items.prepend(row);
-      }
-    }
+    const now = { activity: this._activity, working: !this._refs.working.hidden };
+    this._refs.items.prepend(...this.rowsOf(events));
+    // The page's turns are over: the line under the conversation goes on saying what the agent does now.
+    this._activity = now.activity;
+    this.working(now.working);
     this.scrollTop = scrollAfterOlder(this, atEnd);
     this._topState = 'none';
     this.showTop();
     this.askForRoom();
     this.revealShown();
+  }
+
+  /**
+   * Goes on after a time offline: the events the session recorded meanwhile, and the answer being written as it
+   * stands now. An older page asked for before the socket went never came: the top asks again when it is reached.
+   */
+  resume(events: readonly SessionEvent[], streaming: Streaming | undefined): void {
+    this.following(() => {
+      for (const event of events) {
+        this.handle(event.kind, event);
+      }
+      if (streaming) {
+        this.message(streaming.messageId).text.set(streaming.text);
+      }
+    });
+    this._topState = 'none';
+    this.showTop();
   }
 
   apply(event: SessionEvent): void {
@@ -395,17 +418,42 @@ export class ScConversation extends ScElement {
     this._handlers[kind](event);
   }
 
-  /** The row an event makes, without adding it: an older page goes above what is shown, not after it. Some events
-   * answer a request that was already answered in the meantime and draw nothing at all. */
-  private nodeOf(event: SessionEvent): Node | undefined {
-    this._pending = [];
-    this.handle(event.kind, event);
-    const made = this._pending;
-    this._pending = [];
-    for (const node of made) {
-      node.remove();
+  /**
+   * The rows a page of older events makes, handled oldest first as the session recorded them: a call's row is there
+   * before its result, a request before its answer. A row its own page took away again (an answered request, a
+   * reply that only called tools) is left out.
+   */
+  private rowsOf(events: readonly SessionEvent[]): Element[] {
+    const made: Element[] = [];
+    this._olderRows = made;
+    for (const event of events) {
+      this.handle(event.kind, event);
     }
-    return made.length === 1 ? made[0] : made.length === 0 ? undefined : fragmentOf(made);
+    this._olderRows = undefined;
+    return made.filter((row) => row.parentNode === this._refs.items);
+  }
+
+  /** Keeps an event whose row is not drawn yet, for the older page that brings the row. */
+  private keepEarly(key: string, event: SessionEvent): void {
+    this._early.set(key, [...(this._early.get(key) ?? []), event]);
+  }
+
+  /** Handles the events that waited for what just came, in the order they came. */
+  private handleEarly(key: string): void {
+    const waiting = this._early.get(key) ?? [];
+    this._early.delete(key);
+    for (const event of waiting) {
+      this.handle(event.kind, event);
+    }
+  }
+
+  /** The row of a call; when an older page has yet to bring it, none, and the event waits for it. */
+  private rowOrLater(callId: string, event: SessionEvent): ScToolRow | undefined {
+    const row = this._rows.get(callId);
+    if (!row) {
+      this.keepEarly(callKey(callId), event);
+    }
+    return row;
   }
 
   /** Reaches the top of what is shown: the older events come, once, until the session's whole list is here. */
@@ -493,8 +541,8 @@ export class ScConversation extends ScElement {
     keepingEnd(this, FOLLOW_DISTANCE_PX, change);
   }
 
-  private runningRow(callId: string): void {
-    const row = this._rows.get(callId);
+  private runningRow(event: SessionEventMap['toolRunning']): void {
+    const row = this.rowOrLater(event.callId, event);
     if (!row) {
       return;
     }
@@ -509,25 +557,31 @@ export class ScConversation extends ScElement {
   private finishSubagent(event: SessionEventMap['subagentFinished']): void {
     const callId = this._subagents.get(event.agentId);
     if (callId === undefined) {
+      this.keepEarly(agentKey(event.agentId), event);
       return;
     }
+    const row = this.rowOrLater(callId, event);
     this._working.delete(callId);
-    if (event.report === undefined) {
+    if (!row || event.report === undefined) {
       return;
     }
-    const row = this._rows.get(callId);
     const done = event.outcome === 'done';
-    row?.result.set({
+    row.result.set({
       display: { kind: 'text', text: event.report },
       meta: REPORT_METAS[event.outcome],
       ok: done,
     });
-    row?.state.set(done ? 'done' : 'failed');
+    row.state.set(done ? 'done' : 'failed');
   }
 
-  private subagentRow(agentId: string): ScToolRow | undefined {
+  /** The row of the call that started a subagent; none while an older page has yet to bring it: the event waits. */
+  private subagentRow(agentId: string, event: SessionEvent): ScToolRow | undefined {
     const callId = this._subagents.get(agentId);
-    return callId === undefined ? undefined : this._rows.get(callId);
+    if (callId === undefined) {
+      this.keepEarly(agentKey(agentId), event);
+      return undefined;
+    }
+    return this.rowOrLater(callId, event);
   }
 
   private pictureUrl(picture: PictureRef): string {
@@ -535,7 +589,7 @@ export class ScConversation extends ScElement {
   }
 
   private add(row: Element): void {
-    this._pending.push(row);
+    this._olderRows?.push(row);
     this._refs.items.append(row);
     this._refs.empty.hidden = true;
   }
@@ -585,6 +639,9 @@ export class ScConversation extends ScElement {
   }
 
   private openRequest(event: SessionEventMap['permissionRequested']): void {
+    if (this._answered.delete(event.requestId)) {
+      return;
+    }
     const row = this._rows.get(event.callId);
     row?.state.set('waiting');
     const card: ScPermission = (
@@ -606,6 +663,9 @@ export class ScConversation extends ScElement {
 
   /** A command of this computer stopped asking for a password: the person types it, or says none is coming. */
   private openPassword(event: SessionEventMap['passwordRequested']): void {
+    if (this._answered.delete(event.requestId)) {
+      return;
+    }
     this._rows.get(event.callId)?.state.set('waiting');
     const card: ScPassword = (
       <ScPassword prompt={event.prompt} where={`main agent · in ${folderName(this.workspace.get())}`} />
@@ -620,6 +680,9 @@ export class ScConversation extends ScElement {
   }
 
   private openQuestion(event: SessionEventMap['questionAsked']): void {
+    if (this._answered.delete(event.requestId)) {
+      return;
+    }
     this._rows.get(event.callId)?.state.set('waiting');
     const card: ScQuestion = (
       <ScQuestion questions={event.questions} where={`main agent · in ${folderName(this.workspace.get())}`} />
@@ -632,8 +695,13 @@ export class ScConversation extends ScElement {
     this.working(true);
   }
 
+  /** A request answered: its card goes. One whose page has yet to come is remembered, and opens no card then. */
   private closeRequest(requestId: string): void {
-    this._requests.get(requestId)?.remove();
+    const card = this._requests.get(requestId);
+    if (!card) {
+      this._answered.add(requestId);
+    }
+    card?.remove();
     this._requests.delete(requestId);
     this.working(true);
   }

@@ -710,14 +710,15 @@ func TestTheOlderEventsComeUpFromTheEndOfTheHistory(t *testing.T) {
 	if _, kept := pagesOf(t, end, found); kept == 0 {
 		t.Fatal("a session of five turns has events to keep back")
 	}
-	// The page above it holds what the session had before those, and how many are left before that.
+	// The page above it holds what the session had right before those, the two turns before the last, and how many
+	// are left before that.
 	next, found := service.OlderEvents(sessionID, 16, 8)
-	if got, older := pagesOf(t, next, found); len(got) == 0 || older >= 16 {
+	if got, older := pagesOf(t, next, found); !reflect.DeepEqual(got, []string{"d", "e"}) || older != 8 {
 		t.Fatalf("the next page up: %v, %d kept back", got, older)
 	}
 	// A page that runs past the beginning holds what is left and says nothing is.
 	first, found := service.OlderEvents(sessionID, 2, 40)
-	if got, older := pagesOf(t, first, found); len(got) == 0 || older != 0 {
+	if got, older := pagesOf(t, first, found); !reflect.DeepEqual(got, []string{"b"}) || older != 0 {
 		t.Fatalf("past the beginning: %v, %d kept back", got, older)
 	}
 	// Nothing is older than the whole conversation, and another session has none of its own.

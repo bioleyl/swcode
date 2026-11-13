@@ -104,10 +104,12 @@ export const ClientMessageSchema = z.discriminatedUnion('type', [
   // The queued messages go to the model at the running turn's next step, without waiting for its end.
   z.object({ sessionId: z.string(), type: z.literal('sendQueueNow') }),
   // The end of a session's conversation: at most `events` of its last events, so a long one shows quickly and the
-  // older ones come as the person scrolls up.
+  // older ones come as the person scrolls up. A page back online says how many of the session's events it holds
+  // (`since`, the ones kept back counted): only those after them come then, and the page goes on where it was.
   z.object({
     events: z.number().int().positive().optional(),
     sessionId: z.string(),
+    since: z.number().int().positive().optional(),
     type: z.literal('openSession'),
   }),
   z.object({
@@ -271,6 +273,13 @@ export const ClientMessageSchema = z.discriminatedUnion('type', [
 export type ClientMessage = z.infer<typeof ClientMessageSchema>;
 export type ClientMessageType = ClientMessage['type'];
 
+/**
+ * Which part of a session a history answer holds: its end, drawn as the conversation; the page above what is shown,
+ * added over it; or what came since the events a page back online holds, added after them.
+ */
+export const HistoryPartSchema = z.enum(['end', 'older', 'since']);
+export type HistoryPart = z.infer<typeof HistoryPartSchema>;
+
 /** The answer being written right now, so a page opened mid-answer shows what came so far. */
 export const StreamingSchema = z.object({ messageId: z.string(), text: z.string() });
 export type Streaming = z.infer<typeof StreamingSchema>;
@@ -281,11 +290,12 @@ export const ServerMessageSchema = z.discriminatedUnion('type', [
   z.object({ session: SessionSummarySchema, type: z.literal('sessionCreated') }),
   // The answer to a search, the newest sessions first: the query comes back, for the app to drop an answer too late.
   z.object({ matches: z.array(SessionMatchSchema), query: z.string(), type: z.literal('sessionMatches') }),
-  // A page's history: the events it asked for, and how many older ones the daemon kept back, so the app knows
-  // whether scrolling up has anything more to find.
+  // A page's history: the events it asked for, which part of the session they are, and how many older ones the
+  // daemon kept back, so the app knows whether scrolling up has anything more to find.
   z.object({
     events: z.array(SessionEventSchema),
     keptBack: z.number().int().min(0),
+    part: HistoryPartSchema,
     sessionId: z.string(),
     streaming: StreamingSchema.optional(),
     type: z.literal('sessionHistory'),

@@ -277,6 +277,23 @@ func (v TurnOutcome) Valid() bool {
 	return false
 }
 
+type HistoryPart string
+
+const (
+	HistoryPartEnd   HistoryPart = "end"
+	HistoryPartOlder HistoryPart = "older"
+	HistoryPartSince HistoryPart = "since"
+)
+
+// Valid tells whether v is one of the HistoryPart values.
+func (v HistoryPart) Valid() bool {
+	switch v {
+	case HistoryPartEnd, HistoryPartOlder, HistoryPartSince:
+		return true
+	}
+	return false
+}
+
 type PeekState string
 
 const (
@@ -2678,6 +2695,7 @@ func (v ClientMessageSendQueueNow) MarshalJSON() ([]byte, error) {
 type ClientMessageOpenSession struct {
 	Events    int    `json:"events,omitempty"`
 	SessionID string `json:"sessionId"`
+	Since     int    `json:"since,omitempty"`
 }
 
 func (v ClientMessageOpenSession) MarshalJSON() ([]byte, error) {
@@ -2703,6 +2721,9 @@ func (v *ClientMessageOpenSession) UnmarshalJSON(data []byte) error {
 func (v *ClientMessageOpenSession) Normalize() error {
 	if v.Events != 0 && v.Events <= 0 {
 		return fmt.Errorf("%s: must be positive", "events")
+	}
+	if v.Since != 0 && v.Since <= 0 {
+		return fmt.Errorf("%s: must be positive", "since")
 	}
 	return nil
 }
@@ -3921,6 +3942,7 @@ type SessionMatch struct {
 type ServerMessageSessionHistory struct {
 	Events    []SessionEvent `json:"events"`
 	KeptBack  int            `json:"keptBack"`
+	Part      HistoryPart    `json:"part"`
 	SessionID string         `json:"sessionId"`
 	Streaming *Streaming     `json:"streaming,omitempty"`
 }
@@ -3951,6 +3973,9 @@ func (v *ServerMessageSessionHistory) UnmarshalJSON(data []byte) error {
 func (v *ServerMessageSessionHistory) Normalize() error {
 	if v.KeptBack < 0 {
 		return fmt.Errorf("%s: at least 0", "keptBack")
+	}
+	if !v.Part.Valid() {
+		return fmt.Errorf("%s: unknown value %q", "part", v.Part)
 	}
 	return nil
 }

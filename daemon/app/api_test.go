@@ -232,6 +232,42 @@ func TestTheSocketListsTheSessionsCreatesOneAndRunsATurnInIt(t *testing.T) {
 	}
 }
 
+// historyKinds is the kinds of a history answer's events, in order.
+func historyKinds(history map[string]any) string {
+	kinds := []string{}
+	for _, event := range history["events"].([]any) {
+		kinds = append(kinds, event.(map[string]any)["kind"].(string))
+	}
+	return strings.Join(kinds, " ")
+}
+
+func TestAPageBackOnlineGetsOnlyWhatCameAfterTheEventsItHolds(t *testing.T) {
+	test := startHello(t)
+	socket := connect(t, test)
+	socket.send(map[string]any{"type": "createSession"})
+	created := socket.next("sessionCreated")["session"].(map[string]any)
+	socket.send(map[string]any{"sessionId": created["id"], "text": "Hi", "type": "sendPrompt"})
+	test.WaitForEvent("turnFinished", 1)
+
+	socket.send(map[string]any{"sessionId": created["id"], "since": 2, "type": "openSession"})
+	since := socket.next("sessionHistory")
+	if since["part"] != "since" || since["keptBack"] != float64(2) || historyKinds(since) != "assistantMessage turnFinished" {
+		t.Fatalf("part %v, kept back %v, kinds %q", since["part"], since["keptBack"], historyKinds(since))
+	}
+
+	// A page that says it holds more events than the session has is another daemon's: it gets the end, to draw.
+	socket.send(map[string]any{"events": 3, "sessionId": created["id"], "since": 9, "type": "openSession"})
+	end := socket.next("sessionHistory")
+	if end["part"] != "end" || end["keptBack"] != float64(1) || historyKinds(end) != "userMessage assistantMessage turnFinished" {
+		t.Fatalf("part %v, kept back %v, kinds %q", end["part"], end["keptBack"], historyKinds(end))
+	}
+
+	socket.send(map[string]any{"events": 1, "keptBack": 1, "sessionId": created["id"], "type": "olderEvents"})
+	if older := socket.next("sessionHistory"); older["part"] != "older" || historyKinds(older) != "turnStarted" {
+		t.Fatalf("part %v, kinds %q", older["part"], historyKinds(older))
+	}
+}
+
 func TestTheSocketListsTheProjectsTheFoldersAndMakesOne(t *testing.T) {
 	test := startHello(t)
 	socket := connect(t, test)

@@ -195,7 +195,15 @@ func (h handlers) ListHosts(protocol.ClientMessageListHosts) struct{} {
 	return struct{}{}
 }
 
+// OpenSession answers a page with the end of a session's conversation, or, to a page back online that holds its
+// first events, with what came after them.
 func (h handlers) OpenSession(message protocol.ClientMessageOpenSession) struct{} {
+	if message.Since > 0 {
+		if since, ok := h.app.Sessions.Resume(message.SessionID, message.Since); ok {
+			h.reply(since)
+			return struct{}{}
+		}
+	}
 	history, found := h.app.Sessions.History(message.SessionID, message.Events)
 	if !found {
 		return h.problem(unknownSession)

@@ -18,7 +18,8 @@ import {
   tab,
 } from './support.js';
 
-import type { Locator } from 'playwright-core';
+import type { Locator, Page } from 'playwright-core';
+import type { E2eRig } from './types/e2e.types.js';
 
 afterEach(stopRigs);
 
@@ -542,5 +543,110 @@ describe('pins', () => {
     await pinned.waitFor();
     await expect.poll(() => inConversationView(pinned, conversation)).toBe(true);
     expect(await overflow(page)).toBe(0);
+  });
+});
+
+// More calls than the page a session opens with holds events: the first ones come with the older pages.
+const MANY_READS = 50;
+
+/** Asks to edit greet.ts, which the person approves, then reads it many times: a request answered long before the end. */
+const LONG_FLOW = {
+  files: EDIT_FLOW.files,
+  replies: [
+    ...EDIT_FLOW.replies.slice(0, 2),
+    {
+      toolCalls: Array.from({ length: MANY_READS }, () => ({ arguments: { path: 'src/greet.ts' }, name: 'read' })),
+    },
+    { text: 'The end.' },
+  ],
+};
+// The calls of that flow: the first read, the edit, then the many reads.
+const LONG_FLOW_CALLS = MANY_READS + 2;
+
+/** Run in the conversation's scroller: its top comes into view, where the older pages are asked for. */
+const scrollToTop = (element: { scrollTop: number }): void => {
+  element.scrollTop = 0;
+};
+
+/** Run in the page before it loads: keeps the sockets it opens, for a test to close the one it talks through. */
+const KEEP_SOCKETS = `(() => {
+  const RealSocket = window.WebSocket;
+  window.openedSockets = [];
+  window.WebSocket = class extends RealSocket {
+    constructor(...parts) {
+      super(...parts);
+      window.openedSockets.push(this);
+    }
+  };
+})()`;
+const SOCKETS_OPENED = 'window.openedSockets.length';
+const CLOSE_SOCKET = 'window.openedSockets.at(-1).close()';
+
+describe('a long session', () => {
+  async function longSession(rig: E2eRig, page: Page): Promise<Locator> {
+    await page.goto(rig.link);
+    await askForTheEdit(page);
+    await page.locator('sc-permission .allow button').click();
+    await page.getByText('The end.').waitFor({ timeout: 30_000 });
+    return page.locator('session-page sc-conversation');
+  }
+
+  it('opened again shows its older pages once, each call with its result and no request answered long ago', async () => {
+    const rig = await start(LONG_FLOW);
+    const page = await rig.browser.newPage({ viewport: DESKTOP });
+    const conversation = await longSession(rig, page);
+
+    // Loaded on the session's own address: only the end of the conversation is drawn, once.
+    await page.reload();
+    await page.getByText('The end.').waitFor();
+    await settle(page);
+    const rows = conversation.locator('.items sc-tool-row');
+    expect(await rows.count()).toBeLessThan(LONG_FLOW_CALLS);
+    expect(await conversation.locator('.items sc-message[author="assistant"]').count()).toBe(1);
+
+    // The top brings the pages above, until the first message: every call is there once, finished.
+    const first = conversation.locator('.items sc-message[author="user"]');
+    await expect
+      .poll(
+        async () => {
+          await conversation.evaluate(scrollToTop);
+          return first.count();
+        },
+        { timeout: 20_000 }
+      )
+      .toBe(1);
+    expect(await rows.count()).toBe(LONG_FLOW_CALLS);
+    expect(await conversation.locator('.items sc-tool-row[state="done"]').count()).toBe(LONG_FLOW_CALLS);
+    expect(await conversation.locator('sc-permission').count()).toBe(0);
+    expect(await conversation.locator('.working').isHidden()).toBe(true);
+    expect(await overflow(page)).toBe(0);
+  });
+
+  it('goes on where the person was reading once the socket comes back, with what came meanwhile', async () => {
+    const rig = await start({ ...LONG_FLOW, replies: [...LONG_FLOW.replies, { text: 'And more.' }] });
+    const page = await rig.browser.newPage({ viewport: DESKTOP });
+    await page.addInitScript(KEEP_SOCKETS);
+    const conversation = await longSession(rig, page);
+    await conversation.evaluate(scrollToTop);
+    await expect.poll(() => conversation.locator('.items sc-message[author="user"]').count()).toBe(1);
+    await conversation.evaluate(scrollToTop);
+    const rowsBefore = await conversation.locator('.items sc-tool-row').count();
+
+    // The socket goes, a message is sent from another page meanwhile, and the socket comes back by itself.
+    await page.evaluate(CLOSE_SOCKET);
+    const other = await rig.browser.newPage({ viewport: DESKTOP });
+    // A new page is a new browser profile: the link brings its token first.
+    await other.goto(rig.link);
+    await other.goto(page.url());
+    await other.locator('session-page sc-composer textarea').fill('Go on');
+    await other.locator('session-page sc-composer textarea').press('Enter');
+    await other.getByText('And more.').waitFor();
+    await expect.poll(() => page.evaluate(SOCKETS_OPENED)).toBe(2);
+
+    // What came meanwhile is added at the end; the person is still at the top, and no row is drawn twice.
+    await expect.poll(() => conversation.locator('.items').getByText('And more.').count()).toBe(1);
+    expect(await conversation.locator('.items sc-tool-row').count()).toBe(rowsBefore);
+    expect(await conversation.locator('.items sc-message[author="user"]').count()).toBe(2);
+    expect(await conversation.evaluate((element: { scrollTop: number }) => element.scrollTop)).toBe(0);
   });
 });
