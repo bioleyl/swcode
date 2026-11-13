@@ -615,8 +615,11 @@ describe('a long session', () => {
         { timeout: 20_000 }
       )
       .toBe(1);
-    expect(await rows.count()).toBe(LONG_FLOW_CALLS);
-    expect(await conversation.locator('.items sc-tool-row[state="done"]').count()).toBe(LONG_FLOW_CALLS);
+    // The page above is drawn row by row: the last call's result may come a moment after its row.
+    await expect.poll(() => rows.count()).toBe(LONG_FLOW_CALLS);
+    await expect
+      .poll(() => conversation.locator('.items sc-tool-row[state="done"]').count())
+      .toBe(LONG_FLOW_CALLS);
     expect(await conversation.locator('sc-permission').count()).toBe(0);
     expect(await conversation.locator('.working').isHidden()).toBe(true);
     expect(await overflow(page)).toBe(0);

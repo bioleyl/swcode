@@ -59,6 +59,8 @@ describe('a terminal of the project', () => {
     await page.evaluate('0');
     await expect.poll(async () => dialog.getByRole('heading', { level: 2 }).textContent()).toBe('Terminal');
     expect(await page.locator(ROWS).textContent()).not.toContain('first-terminal');
+    // Typing goes to the terminal once it has the focus: a click gives it, as for the first one.
+    await page.locator('session-page sc-terminal .xterm').click();
     await page.keyboard.type('echo second-terminal');
     await page.keyboard.press('Enter');
     await expect.poll(async () => page.locator(ROWS).textContent()).toContain('second-terminal');
