@@ -59,6 +59,8 @@ import type { DaemonState } from '../types/daemon.types';
 import type { PaletteTarget, PaletteTargetMap } from '../types/palette.types';
 
 const HASH_CHANGE = 'hashchange';
+// A window as narrow as a phone's, where the session page puts its composer along the bottom.
+const PHONE_QUERY = '(max-width: 720px)';
 
 /** A phone's tabs, under the page: a new session or chat, every session, the settings; More opens the navigation. */
 const TAB = { new: 'new', sessions: 'sessions', settings: 'settings' } as const;
@@ -245,7 +247,8 @@ export class ScAppShell extends ScElement {
    * any project has one, and only once per pack.
    */
   private async offerSwcodeBaseSkills(state: DaemonState): Promise<void> {
-    if (this._baseOffered || state.kind !== 'ready') {
+    // Not on a phone: the offer stays until it is answered, over the composer there, and installs on the computer.
+    if (this._baseOffered || state.kind !== 'ready' || window.matchMedia(PHONE_QUERY).matches) {
       return;
     }
     this._baseOffered = true;
