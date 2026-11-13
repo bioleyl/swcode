@@ -302,7 +302,7 @@ func (a *App) routes() http.Handler {
 	a.updateRoutes(mux)
 	mux.HandleFunc("GET "+protocol.EndpointSocket, a.socket)
 	mux.Handle("/", webApp(a.webFiles()))
-	return withAuth(mux, a.Token, a.pairing)
+	return withCORS(withAuth(mux, a.Token, a.pairing), a.pairing)
 }
 
 // Close stops every session's turn and lets go of the hosts, when the daemon stops.

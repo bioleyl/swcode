@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"sync"
 	"time"
 
@@ -28,9 +29,12 @@ const (
 )
 
 // storedDevice is a phone as devices.json keeps it: its token only as its hash, so the file gives no access.
+// Origin is where the page that paired came from, when a browser said so: the app a phone installed from another
+// computer's swcode talks to this one from that origin.
 type storedDevice struct {
 	ID        string `json:"id"`
 	Name      string `json:"name"`
+	Origin    string `json:"origin,omitempty"`
 	PairedAt  string `json:"pairedAt"`
 	TokenHash string `json:"tokenHash"`
 }
@@ -78,7 +82,8 @@ func (p *Pairing) Issue() protocol.PairingCode {
 }
 
 // Redeem is a phone's token for a live code, which then stops working; empty for a code expired, used or unknown.
-func (p *Pairing) Redeem(code, name string) string {
+// origin is where the page that asks came from, as its browser says, empty for anything but a page.
+func (p *Pairing) Redeem(code, name, origin string) string {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.dropExpired(p.now())
@@ -90,7 +95,9 @@ func (p *Pairing) Redeem(code, name string) string {
 	if name == "" {
 		name = defaultName
 	}
-	p.devices = append(p.devices, storedDevice{ID: p.newID(), Name: name, PairedAt: protocol.Timestamp(p.now()), TokenHash: hex.EncodeToString(hashOf(token))})
+	p.devices = append(p.devices, storedDevice{
+		ID: p.newID(), Name: name, Origin: origin, PairedAt: protocol.Timestamp(p.now()), TokenHash: hex.EncodeToString(hashOf(token)),
+	})
 	p.save()
 	return token
 }
@@ -115,6 +122,14 @@ func (p *Pairing) DeviceOf(token string) (string, bool) {
 		}
 	}
 	return id, known
+}
+
+// AllowsOrigin tells whether a paired phone's page came from that origin: a page from there may talk to this
+// daemon, with its phone's token.
+func (p *Pairing) AllowsOrigin(origin string) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return origin != "" && slices.ContainsFunc(p.devices, func(device storedDevice) bool { return device.Origin == origin })
 }
 
 func (p *Pairing) Devices() []protocol.Device {

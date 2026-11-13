@@ -334,3 +334,67 @@ func TestTheSocketAnswersAMessageItDoesNotUnderstandWithAProblem(t *testing.T) {
 	socket.send(map[string]any{"type": "launchRocket"})
 	socket.next("problem")
 }
+
+// fromOrigin sends a request as a page from that origin would: its status, and the origin the daemon lets read
+// the answer.
+func fromOrigin(t *testing.T, test *App, method, path, origin string, headers map[string]string, body any) (int, string, []byte) {
+	t.Helper()
+	var reader io.Reader
+	if body != nil {
+		data, _ := json.Marshal(body)
+		reader = bytes.NewReader(data)
+	}
+	request, _ := http.NewRequest(method, test.Server.URL+path, reader)
+	request.Header.Set("origin", origin)
+	for name, value := range headers {
+		request.Header.Set(name, value)
+	}
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	data, _ := io.ReadAll(response.Body)
+	return response.StatusCode, response.Header.Get("access-control-allow-origin"), data
+}
+
+func TestAPageFromAnotherSwcodeTalksToThisOneOnceItsPhonePairedFromThere(t *testing.T) {
+	test := startHello(t)
+	const home, other = "https://laptop.tailnet.ts.net", "https://elsewhere.example"
+	asks := map[string]string{"access-control-request-method": "GET", "access-control-request-headers": "authorization"}
+
+	// Before any phone paired from there, a page of that origin may only pair.
+	if status, allowed, _ := fromOrigin(t, test, "OPTIONS", protocol.EndpointStatus, home, asks, nil); status != 403 || allowed != "" {
+		t.Fatalf("status before pairing: %d, allowed %q", status, allowed)
+	}
+	if status, allowed, _ := fromOrigin(t, test, "OPTIONS", protocol.EndpointPairing, home, asks, nil); status != 204 || allowed != home {
+		t.Fatalf("pairing: %d, allowed %q", status, allowed)
+	}
+	_, data, _ := raw(t, test, "GET", protocol.EndpointPairingCode, Token, nil)
+	var code protocol.PairingCode
+	_ = json.Unmarshal(data, &code)
+	status, allowed, body := fromOrigin(t, test, "POST", protocol.EndpointPairing, home, nil, map[string]string{"code": code.Code, "name": "iPhone"})
+	var paired protocol.PairAnswer
+	_ = json.Unmarshal(body, &paired)
+	if status != 200 || allowed != home || paired.Token == "" {
+		t.Fatalf("pairing from the page: %d, allowed %q", status, allowed)
+	}
+
+	// Its origin may now ask, and read what the phone's token opens; no other origin may.
+	if status, allowed, _ := fromOrigin(t, test, "OPTIONS", protocol.EndpointStatus, home, asks, nil); status != 204 || allowed != home {
+		t.Fatalf("status once paired: %d, allowed %q", status, allowed)
+	}
+	token := map[string]string{"authorization": protocol.BearerPrefix + paired.Token}
+	if status, allowed, _ := fromOrigin(t, test, "GET", protocol.EndpointStatus, home, token, nil); status != 200 || allowed != home {
+		t.Fatalf("the status read from the page: %d, allowed %q", status, allowed)
+	}
+	if status, allowed, _ := fromOrigin(t, test, "GET", protocol.EndpointStatus, home, nil, nil); status != 401 {
+		t.Fatalf("without the token: %d, allowed %q", status, allowed)
+	}
+	if status, allowed, _ := fromOrigin(t, test, "OPTIONS", protocol.EndpointStatus, other, asks, nil); status != 403 || allowed != "" {
+		t.Fatalf("another origin: %d, allowed %q", status, allowed)
+	}
+	if _, allowed, _ := fromOrigin(t, test, "GET", protocol.EndpointStatus, other, token, nil); allowed != "" {
+		t.Fatalf("another origin reads the answer: allowed %q", allowed)
+	}
+}

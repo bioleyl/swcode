@@ -91,14 +91,14 @@ func TestAPhoneTradesACodeOnceForATokenOfItsOwn(t *testing.T) {
 	if issued.ExpiresAt != "2026-10-24T22:01:00.000Z" {
 		t.Fatalf("expires %s", issued.ExpiresAt)
 	}
-	token := daemon.Redeem(issued.Code, "iPhone")
-	if !regexp.MustCompile(`^[\w-]{40,}$`).MatchString(token) || !daemon.Knows(token) || daemon.Knows("a guess") || daemon.Redeem(issued.Code, "iPhone") != "" {
+	token := daemon.Redeem(issued.Code, "iPhone", "")
+	if !regexp.MustCompile(`^[\w-]{40,}$`).MatchString(token) || !daemon.Knows(token) || daemon.Knows("a guess") || daemon.Redeem(issued.Code, "iPhone", "") != "" {
 		t.Fatal("pairing")
 	}
 	Expect(t, daemon.Devices(), []any{map[string]any{"id": "phone-1", "name": "iPhone", "pairedAt": "2026-10-24T22:00:00.000Z"}})
 	late := daemon.Issue()
 	clock = clock.Add(pairing.CodeLifetime)
-	if daemon.Redeem(late.Code, "") != "" || daemon.Redeem("made up", "") != "" {
+	if daemon.Redeem(late.Code, "", "") != "" || daemon.Redeem("made up", "", "") != "" {
 		t.Fatal("an old code passed")
 	}
 }
@@ -107,7 +107,7 @@ func TestPairedPhonesAreKeptAcrossRestartsTheirTokensAsHashesOnly(t *testing.T) 
 	file := filepath.Join(t.TempDir(), "devices.json")
 	now := func() time.Time { return time.Date(2026, 10, 24, 22, 0, 0, 0, time.UTC) }
 	first := pairing.New(file, now, func() string { return "phone-1" })
-	token := first.Redeem(first.Issue().Code, "")
+	token := first.Redeem(first.Issue().Code, "", "")
 	data, _ := os.ReadFile(file)
 	if strings.Contains(string(data), token) {
 		t.Fatal("the token is kept as it is")

@@ -90,7 +90,7 @@ func (a *App) pairingRoutes(mux *http.ServeMux) {
 			fail(response, http.StatusBadRequest, noCode)
 			return
 		}
-		token := a.pairing.Redeem(asked.Code, asked.Name)
+		token := a.pairing.Redeem(asked.Code, asked.Name, request.Header.Get(originHeader))
 		if token == "" {
 			fail(response, http.StatusForbidden, codeUsed)
 			return
