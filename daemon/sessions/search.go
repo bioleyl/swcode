@@ -25,19 +25,37 @@ func (s *Service) Search(query string) []protocol.SessionMatch {
 	if len(words) == 0 {
 		return matches
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	for _, summary := range s.list() {
-		eventID, snippet, found := lastSaying(s.sessions[summary.ID].events, words)
+	for _, session := range s.conversations() {
+		eventID, snippet, found := lastSaying(session.events, words)
 		if !found {
 			continue
 		}
-		matches = append(matches, protocol.SessionMatch{EventID: eventID, SessionID: summary.ID, Snippet: snippet})
+		matches = append(matches, protocol.SessionMatch{EventID: eventID, SessionID: session.id, Snippet: snippet})
 		if len(matches) == maxMatches {
 			break
 		}
 	}
 	return matches
+}
+
+// conversation is a session's events as they stood when a search started.
+type conversation struct {
+	id     string
+	events []protocol.SessionEvent
+}
+
+// conversations is every session's events, the newest session first, for a search to read without the service's
+// lock: every turn waits on that lock at each token, and a search reads every word of every session. An event
+// never changes once recorded, and a session only adds to its own: what the search holds stays as it was.
+func (s *Service) conversations() []conversation {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	listed := []conversation{}
+	for _, summary := range s.list() {
+		events := s.sessions[summary.ID].events
+		listed = append(listed, conversation{events: events[:len(events):len(events)], id: summary.ID})
+	}
+	return listed
 }
 
 // lastSaying is the event that says the words last, and a line around them in it.

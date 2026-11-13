@@ -164,6 +164,9 @@ type runningTurn struct {
 type live struct {
 	meta   Meta
 	events []protocol.SessionEvent
+	// updatedAt is when the session last did something: its last event's time, kept as each one is recorded, since
+	// every change of any session lists them all.
+	updatedAt string
 	// queue is the messages sent while a turn ran, for the next one; queueNow, the person asked for them now.
 	queue     []agent.PromptMessage
 	queueNow  bool
@@ -236,7 +239,7 @@ func revive(stored Stored) *live {
 	return &live{
 		events: append([]protocol.SessionEvent{}, stored.Events...), grants: permissions.Grants{Programs: map[string]bool{}},
 		jobs: []protocol.SessionSummaryJob{}, meta: stored.Meta, readFiles: tools.NewReadFiles(),
-		subagents: map[string]runningSubagent{},
+		subagents: map[string]runningSubagent{}, updatedAt: lastActivity(stored.Meta, stored.Events),
 	}
 }
 
@@ -991,15 +994,17 @@ func summaryOf(session *live) protocol.SessionSummary {
 		Preset: session.meta.Preset, Queued: queued, QueuedNow: session.queueNow,
 		SeenAt: session.meta.SeenAt, Status: status,
 		Subagents: subagentsLeft(session),
-		Thinking:  session.meta.Thinking, Title: session.meta.Title, UpdatedAt: lastActivity(session.meta, session.events),
+		Thinking:  session.meta.Thinking, Title: session.meta.Title, UpdatedAt: session.updatedAt,
 		Workspace: session.meta.Workspace,
 	}
 }
 
 // record dates an event, keeps it in the session and its file, and tells the apps; the caller holds the lock.
 func (s *Service) record(session *live, event protocol.SessionEventVariant) {
-	dated := protocol.SessionEvent{Value: protocol.Dated(event, protocol.Timestamp(s.deps.Now()))}
+	at := protocol.Timestamp(s.deps.Now())
+	dated := protocol.SessionEvent{Value: protocol.Dated(event, at)}
 	session.events = append(session.events, dated)
+	session.updatedAt = at
 	// A full disk (an agent's runaway output, say) loses the event from the session's file, not from the turn: it
 	// goes on in memory and in the app, and the agent can see what filled the disk.
 	if err := s.deps.Store.Append(session.meta.ID, dated); err != nil {
