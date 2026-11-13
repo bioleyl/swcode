@@ -102,6 +102,8 @@ type Deps struct {
 	Skills  *catalog.Catalog
 	// SkillsOff is the skills a folder's project turned off, by name: its sessions are neither told of them nor run them.
 	SkillsOff func(path string, host protocol.HostRef) []string
+	// AfterEdit is the command a folder's project runs after each file its agent writes or edits; none when empty.
+	AfterEdit func(path string, host protocol.HostRef) string
 	// Todos are the projects' todos, which the agent opens and closes.
 	Todos     tools.ProjectTodos
 	Workspace string

@@ -84,6 +84,9 @@ type Context struct {
 	// AskPassword asks the person, under a call, the password one of its commands asked for, and waits: the words
 	// typed, and whether any were. Nil where there is no one to ask, which is how a subagent's commands run.
 	AskPassword func(ctx context.Context, callID, prompt string) (string, bool)
+	// AfterEdit is the project's check after an edit: a command run in the workspace once a file was written,
+	// `{file}` standing for it; empty for none.
+	AfterEdit string
 	// InTerminal tells the person that a call's command runs in a terminal of the app, where they answer what it
 	// asks; the function it gives back says whether the command waits on a password now. Nil where there is no
 	// person (a subagent).

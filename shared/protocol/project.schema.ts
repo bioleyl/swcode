@@ -32,7 +32,13 @@ export const ProjectTodoSchema = z.object({
 export type ProjectTodo = z.infer<typeof ProjectTodoSchema>;
 
 /** A folder sessions work in, on a host, with a name for people: the folder's, at first. */
+// The most a project's check after an edit is: a command line.
+export const MAX_AFTER_EDIT = 500;
+
 export const ProjectSchema = z.object({
+  // A command run in the project's folder after each file the agent writes or edits, `{file}` standing for the
+  // file: a formatter, a linter, a type check. What it says goes back to the agent with the edit's result.
+  afterEdit: z.string().optional(),
   createdAt: z.iso.datetime(),
   // What its new sessions start with; the app's own defaults when it has none.
   defaults: SessionDefaultsSchema.optional(),

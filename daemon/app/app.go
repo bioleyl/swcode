@@ -242,6 +242,10 @@ func New(settings config.Config, options Options) (*App, error) {
 		Search: web.Paced(func(ctx context.Context, query string) web.SearchOutcome {
 			return web.SearchWeb(ctx, query, pages)
 		}, web.SearchGap),
+		AfterEdit: func(path string, host protocol.HostRef) string {
+			project, _ := app.Projects.Find(path, host)
+			return project.AfterEdit
+		},
 		Skills: catalog.New(logError), SkillsOff: func(path string, host protocol.HostRef) []string {
 			project, _ := app.Projects.Find(path, host)
 			return project.SkillsOff

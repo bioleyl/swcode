@@ -184,6 +184,21 @@ func (s *Service) SetDefaults(projectID string, defaults *protocol.SessionDefaul
 	return ""
 }
 
+// SetAfterEdit keeps the command the project's sessions run after each file their agent writes or edits; none
+// when empty.
+func (s *Service) SetAfterEdit(projectID, command string) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	index := slices.IndexFunc(s.projects, func(project protocol.Project) bool { return project.ID == projectID })
+	if index < 0 {
+		return unknownProject
+	}
+	projects := append([]protocol.Project{}, s.projects...)
+	projects[index].AfterEdit = command
+	s.change(projects)
+	return ""
+}
+
 // SetSkill turns one of the skills the project's sessions find on or off for them: they read it from their next turn.
 func (s *Service) SetSkill(projectID, name string, on bool) string {
 	s.mu.Lock()

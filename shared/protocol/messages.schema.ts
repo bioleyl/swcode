@@ -6,6 +6,7 @@ import { MAX_PICTURES, PictureUploadSchema } from './picture.schema.js';
 import {
   HostOptionSchema,
   HostRefSchema,
+  MAX_AFTER_EDIT,
   MAX_PINNED_TODOS,
   NewFolderNameSchema,
   ProjectSchema,
@@ -234,6 +235,12 @@ export const ClientMessageSchema = z.discriminatedUnion('type', [
     defaults: SessionDefaultsSchema.optional(),
     projectId: z.string(),
     type: z.literal('setProjectDefaults'),
+  }),
+  // The command run after each file the agent writes or edits in the project; none when empty.
+  z.object({
+    command: z.string().trim().max(MAX_AFTER_EDIT),
+    projectId: z.string(),
+    type: z.literal('setProjectAfterEdit'),
   }),
   // Turns one of the skills the project's sessions find on or off for them, from their next turn on.
   z.object({

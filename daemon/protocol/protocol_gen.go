@@ -25,6 +25,8 @@ const MaxPictures = 4
 
 var PictureTypes = []PictureType{PictureTypeImageJpeg, PictureTypeImagePng}
 
+const MaxAfterEdit = 500
+
 const MaxPinnedTodos = 20
 
 const MaxTodoText = 500
@@ -695,6 +697,7 @@ func (v *HostRefSSH) Normalize() error {
 }
 
 type Project struct {
+	AfterEdit string           `json:"afterEdit,omitempty"`
 	CreatedAt string           `json:"createdAt"`
 	Defaults  *SessionDefaults `json:"defaults,omitempty"`
 	Host      HostRef          `json:"host"`
@@ -2111,6 +2114,8 @@ func (ClientMessageRemoveProject) isClientMessage() {}
 
 func (ClientMessageSetProjectDefaults) isClientMessage() {}
 
+func (ClientMessageSetProjectAfterEdit) isClientMessage() {}
+
 func (ClientMessageSetProjectSkill) isClientMessage() {}
 
 func (ClientMessageAddProjectTodo) isClientMessage() {}
@@ -2358,6 +2363,12 @@ func (u *ClientMessage) UnmarshalJSON(data []byte) error {
 			return err
 		}
 		u.Value = value
+	case "\"setProjectAfterEdit\"":
+		var value ClientMessageSetProjectAfterEdit
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
 	case "\"setProjectSkill\"":
 		var value ClientMessageSetProjectSkill
 		if err := json.Unmarshal(data, &value); err != nil {
@@ -2450,6 +2461,7 @@ type ClientMessageMapper[R any] interface {
 	CreateProject(ClientMessageCreateProject) R
 	RemoveProject(ClientMessageRemoveProject) R
 	SetProjectDefaults(ClientMessageSetProjectDefaults) R
+	SetProjectAfterEdit(ClientMessageSetProjectAfterEdit) R
 	SetProjectSkill(ClientMessageSetProjectSkill) R
 	AddProjectTodo(ClientMessageAddProjectTodo) R
 	SetProjectTodoDone(ClientMessageSetProjectTodoDone) R
@@ -2535,6 +2547,8 @@ func MapClientMessage[R any](u ClientMessage, m ClientMessageMapper[R]) R {
 		return m.RemoveProject(value)
 	case ClientMessageSetProjectDefaults:
 		return m.SetProjectDefaults(value)
+	case ClientMessageSetProjectAfterEdit:
+		return m.SetProjectAfterEdit(value)
 	case ClientMessageSetProjectSkill:
 		return m.SetProjectSkill(value)
 	case ClientMessageAddProjectTodo:
@@ -3518,6 +3532,39 @@ func (v ClientMessageSetProjectDefaults) MarshalJSON() ([]byte, error) {
 		Key string `json:"type"`
 		plain
 	}{"setProjectDefaults", p})
+}
+
+type ClientMessageSetProjectAfterEdit struct {
+	Command   string `json:"command"`
+	ProjectID string `json:"projectId"`
+}
+
+func (v ClientMessageSetProjectAfterEdit) MarshalJSON() ([]byte, error) {
+	type plain ClientMessageSetProjectAfterEdit
+	p := plain(v)
+	return json.Marshal(struct {
+		Key string `json:"type"`
+		plain
+	}{"setProjectAfterEdit", p})
+}
+
+func (v *ClientMessageSetProjectAfterEdit) UnmarshalJSON(data []byte) error {
+	type plain ClientMessageSetProjectAfterEdit
+	p := plain{}
+	if err := json.Unmarshal(data, &p); err != nil {
+		return err
+	}
+	*v = ClientMessageSetProjectAfterEdit(p)
+	return v.Normalize()
+}
+
+// Normalize trims and checks what the app sent, as its schema does.
+func (v *ClientMessageSetProjectAfterEdit) Normalize() error {
+	v.Command = strings.TrimSpace(v.Command)
+	if utf8.RuneCountInString(v.Command) > 500 {
+		return fmt.Errorf("%s: at most 500 characters", "command")
+	}
+	return nil
 }
 
 type ClientMessageSetProjectSkill struct {

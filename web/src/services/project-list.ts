@@ -1,7 +1,7 @@
 import { Bus } from '@jadis/core';
 
 import { sameHost } from '../../../shared/hosts/host-key';
-import { daemonBus } from './daemon';
+import { daemon, daemonBus } from './daemon';
 
 import type { HostRef, Project } from '../../../shared/protocol/project.schema';
 
@@ -39,3 +39,10 @@ daemonBus.register(
   },
   forever
 );
+
+/**
+ * Keeps the command the project's sessions run after each file their agent writes or edits; none when empty. The
+ * daemon sends the projects back changed.
+ */
+export const setProjectAfterEdit = (projectId: string, command: string): void =>
+  daemon.send({ command, projectId, type: 'setProjectAfterEdit' });

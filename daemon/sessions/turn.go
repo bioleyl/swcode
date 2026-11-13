@@ -188,8 +188,9 @@ func (s *Service) hostFor(session *live, turn *runningTurn, ready prepared, sees
 			got := s.ask(ctx, session, turn, passwordAsk{callID: callID, prompt: prompt, service: s}).secret
 			return got.text, got.gave
 		},
-		Host:    where.host,
-		HostRef: session.meta.Host,
+		Host:      where.host,
+		HostRef:   session.meta.Host,
+		AfterEdit: s.afterEditOf(session),
 		InTerminal: func(callID string, terminal protocol.Terminal) func(asks bool) {
 			s.mu.Lock()
 			s.record(session, protocol.SessionEventTerminalWaiting{CallID: callID, TerminalID: terminal.ID, Title: terminal.Title})
@@ -214,6 +215,15 @@ func (s *Service) hostFor(session *live, turn *runningTurn, ready prepared, sees
 		Workspace:   session.meta.Workspace,
 	}
 	return host
+}
+
+// afterEditOf is the command the session's project runs after each edit, as its settings say now; none for a
+// daemon without projects (the tests of the sessions alone).
+func (s *Service) afterEditOf(session *live) string {
+	if s.deps.AfterEdit == nil {
+		return ""
+	}
+	return s.deps.AfterEdit(session.meta.Workspace, session.meta.Host)
 }
 
 // asksInTerminal notes whether a command of the turn waits for the person in a terminal of the app: the session

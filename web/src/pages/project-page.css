@@ -8,8 +8,24 @@ jl-tab-panel {
 
 /* What new sessions start with, and the todos: one card, as wide as a form. */
 .defaults,
+.after-edit,
 .todos {
   max-width: var(--jl-page-form);
+}
+
+.after-edit {
+  margin-top: var(--jl-space-4);
+}
+
+.after-edit-form {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--jl-space-2);
+}
+
+.after-edit-form jl-field {
+  flex: 1;
+  min-width: 0;
 }
 
 /* The todos: the field that adds one, then the list under it. */

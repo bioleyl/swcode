@@ -45,6 +45,53 @@ describe('projects', () => {
   });
 });
 
+describe('a project’s check after each edit', () => {
+  it('is kept with the project, and tells the agent what it found in the file it just edited', async () => {
+    const rig = await start({
+      files: { 'src/greet.ts': GREET },
+      replies: [
+        { text: 'Hello there.' },
+        { toolCalls: [{ arguments: { path: 'src/greet.ts' }, name: 'read' }] },
+        {
+          toolCalls: [{ arguments: { newString: 'Hi', oldString: 'Hello', path: 'src/greet.ts' }, name: 'edit' }],
+        },
+        { text: 'Done.' },
+      ],
+    });
+    const page = await rig.browser.newPage({ viewport: DESKTOP });
+    await page.goto(rig.link);
+    await page.locator('home-page textarea').fill('Hi');
+    await page.locator('home-page textarea').press('Enter');
+    await page.getByText('Hello there.').waitFor();
+    await navItem(page, basename(rig.workspace)).click();
+    await settle(page);
+    await projectTab(page, 'Config').click();
+    await settle(page);
+
+    // The command is typed once, and stays through the page's own redraws and a reload.
+    const field = page.locator('project-page .after-edit-input input');
+    await field.fill('grep -c Hello {file}');
+    await page.locator('project-page .after-edit').getByRole('button', { name: 'Save' }).click();
+    await page.getByText('The check after each edit is saved').waitFor();
+    await page.reload();
+    await expect.poll(() => field.inputValue()).toBe('grep -c Hello {file}');
+
+    // The next edit runs it: grep finds no Hello left and fails, which the agent reads with its edit.
+    await projectTab(page, 'Sessions').click();
+    await settle(page);
+    await page.locator('project-page sc-session-row').getByText('Hi', { exact: true }).first().click();
+    await settle(page);
+    await page.locator('session-page sc-composer textarea').fill('Make greet say Hi');
+    await page.locator('session-page sc-composer textarea').press('Enter');
+    await page.getByText('Done.').waitFor();
+    const edited = rig.events().findLast((event) => event.kind === 'toolFinished');
+    expect(edited?.kind === 'toolFinished' ? edited.output : '').toContain(
+      'check after an edit (grep -c Hello {file}) failed'
+    );
+    expect(await overflow(page)).toBe(0);
+  });
+});
+
 describe('a project the daemon refuses', () => {
   it('says why in the dialog, which can be tried again', async () => {
     const rig = await start({ files: { 'src/greet.ts': GREET }, replies: [] });

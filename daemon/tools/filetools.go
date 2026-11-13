@@ -152,7 +152,8 @@ var writeTool = Define(Spec[writeInput]{
 			if problem := saveFile(ctx, tc, path, []byte(input.Content), info, label); problem != "" {
 				return Failure(problem, "")
 			}
-			return Outcome{Display: diff, OK: true, Output: fmt.Sprintf("%s %s (%s).", verb, label, linesLabel(lineCount(input.Content)))}
+			written := fmt.Sprintf("%s %s (%s).", verb, label, linesLabel(lineCount(input.Content)))
+			return Outcome{Display: diff, OK: true, Output: written + afterEdit(ctx, tc, path, []byte(input.Content))}
 		}, diff)
 	},
 	Description: "Writes a whole file: creates it, or replaces it after you read it. To change part of a file, use edit instead.",
@@ -212,7 +213,7 @@ var editTool = Define(Spec[editInput]{
 			if problem := saveFile(ctx, tc, path, []byte(edit.Text), info, label); problem != "" {
 				return Failure(problem, "")
 			}
-			return Outcome{Display: diff, OK: true, Output: editedOutput(label, edit)}
+			return Outcome{Display: diff, OK: true, Output: editedOutput(label, edit) + afterEdit(ctx, tc, path, []byte(edit.Text))}
 		}, diff)
 	},
 	Description: "Replaces exact text in a file you read: oldString must appear once, unless replaceAll is set. Prefer it to write for changes.",

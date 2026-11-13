@@ -655,7 +655,17 @@ describe('a command that takes a while', () => {
   it('shows what it prints while it runs, under its call, until its result takes its place', async () => {
     const rig = await start({
       replies: [
-        { toolCalls: [{ arguments: { command: 'echo compiling; sleep 3; echo done' }, name: 'bash' }] },
+        // It prints on for a few seconds: a page that opens the session a moment late still sees it at work.
+        {
+          toolCalls: [
+            {
+              arguments: {
+                command: 'for step in 1 2 3 4 5 6 7 8; do echo compiling $step; sleep 0.5; done; echo done',
+              },
+              name: 'bash',
+            },
+          ],
+        },
         { text: 'It ran.' },
       ],
     });
@@ -668,6 +678,7 @@ describe('a command that takes a while', () => {
     await row.locator('.live').getByText('compiling').waitFor();
     expect(await row.getAttribute('state')).toBe('running');
     expect(await row.locator('.live').textContent()).not.toContain('done');
+    expect(await row.locator('.details').isHidden()).toBe(true);
 
     await page.getByText('It ran.').waitFor();
     expect(await row.locator('.live').isHidden()).toBe(true);

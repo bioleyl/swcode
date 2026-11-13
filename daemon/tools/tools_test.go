@@ -262,6 +262,32 @@ func TestARepositorysOwnFolderIsNotChangedByAFileToolAndSaysNothingToRunWhenFile
 	}
 }
 
+func TestTheProjectsCheckRunsAfterAnEditAndTellsTheModelWhatItSaid(t *testing.T) {
+	f := setUp(t)
+	f.put("a.txt", "one\n")
+	f.call("read", `{"path":"a.txt"}`)
+
+	// A check that passes and says nothing leaves the result as it was.
+	f.tc.AfterEdit = "test -f {file}"
+	f.outputs("edit", `{"path":"a.txt","oldString":"one","newString":"two"}`, "Edited a.txt: 1 replacement.")
+
+	// One that fails says why, with the edit's result: the model reads it without running anything.
+	f.tc.AfterEdit = "echo \"{file}: line 1 is too short\" >&2; exit 3"
+	failed := f.call("edit", `{"path":"a.txt","oldString":"two","newString":"three"}`)
+	if !failed.OK || !strings.Contains(failed.Output, "failed with exit code 3") || !strings.Contains(failed.Output, "a.txt': line 1 is too short") {
+		t.Fatalf("got %q", failed.Output)
+	}
+
+	// One that rewrites the file, as a formatter does, says so, and the next edit starts from what it left.
+	f.tc.AfterEdit = "printf 'THREE\\n' > {file}"
+	formatted := f.call("edit", `{"path":"a.txt","oldString":"three","newString":"four"}`)
+	if !strings.Contains(formatted.Output, "The check changed the file") || f.read("a.txt") != "THREE\n" {
+		t.Fatalf("got %q, file %q", formatted.Output, f.read("a.txt"))
+	}
+	f.tc.AfterEdit = ""
+	f.outputs("edit", `{"path":"a.txt","oldString":"THREE","newString":"five"}`, "Edited a.txt: 1 replacement.")
+}
+
 func fakeWeb() *web.Port {
 	page := web.Page{Text: "PAGE", Title: "Timeouts", Truncated: true, URL: "https://docs.test/timeouts"}
 	return &web.Port{

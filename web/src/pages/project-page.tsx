@@ -14,7 +14,7 @@ import {
   toast,
 } from '@syware/jlib';
 
-import { MAX_TODO_TEXT } from '../../../shared/protocol/project.schema';
+import { MAX_AFTER_EDIT, MAX_TODO_TEXT } from '../../../shared/protocol/project.schema';
 import { ScElement } from '../base/sc-element';
 import { placeText } from '../lib/hosts';
 import { appDefaults } from '../lib/new-session';
@@ -30,7 +30,7 @@ import { daemon } from '../services/daemon';
 import { daemonState, daemonStatusBus } from '../services/daemon-status';
 import { hrefOf, newSessionPath, projectTabPath, sessionPath } from '../services/navigation';
 import { presetChoices, presetsBus } from '../services/presets';
-import { askToRemoveProject, findProject, projectListBus } from '../services/project-list';
+import { askToRemoveProject, findProject, projectListBus, setProjectAfterEdit } from '../services/project-list';
 import { foundSkills, readProjectSkills, setProjectSkill } from '../services/project-skills';
 import {
   addProjectTodo,
@@ -92,6 +92,10 @@ const UNREACHABLE = 'The daemon did not answer.';
 const TODOS_NOTE = 'What this project still has to do. A new session can pin them to its first message.';
 const TODO_PLACEHOLDER = 'What needs doing?';
 const TODO_DELETE_NOTE = 'It is removed from this project’s todos.';
+const AFTER_EDIT_NOTE =
+  'A command run in the project’s folder after each file the agent writes or edits: a formatter, a linter, a type check. What it says goes back to the agent with its edit, so it corrects itself without being asked.';
+const AFTER_EDIT_SAVED = 'The check after each edit is saved';
+const AFTER_EDIT_CLEARED = 'No check runs after an edit any more';
 // A skill's line under its name: where it is, then the start of what it is for.
 const MAX_SKILL_LINE = 100;
 const ELLIPSIS = '…';
@@ -130,10 +134,14 @@ export class ProjectPage extends ScElement {
   private _swcodeBaseState?: JlLoadState;
   // Each skill's switch, by its name, as last drawn.
   private readonly _switches = new Map<string, JlSwitch>();
+  // The project and its check after an edit as the field last showed them: it is written again only when they change.
+  private _afterEditShown = '';
   // Each todo's row, by its id: a row stays itself when the lists change, so one being edited keeps what was typed.
   private readonly _todoRows = new Map<string, ScTodoRow>();
 
   private readonly _refs = this.useRefs((ref) => ({
+    afterEditForm: ref<HTMLFormElement>('.after-edit-form'),
+    afterEditInput: ref<JlInput>('.after-edit-input'),
     choices: ref(ScSessionChoices),
     defaults: ref<JlCard>('.defaults'),
     empty: ref(JlEmpty),
@@ -197,6 +205,19 @@ export class ProjectPage extends ScElement {
               <ScSessionChoices />
               <JlButton class="reset" variant="ghost" size="sm" icon="refresh" label="Use the app’s defaults" />
             </JlCard>
+            <JlCard class="after-edit" heading="After each edit" description={AFTER_EDIT_NOTE}>
+              <form class="after-edit-form">
+                <JlField label="Command" hint="{file} stands for the file the agent wrote. Empty for none.">
+                  <JlInput
+                    class="after-edit-input"
+                    autocomplete="off"
+                    placeholder="npx biome check --write {file}"
+                    maxlength={String(MAX_AFTER_EDIT)}
+                  />
+                </JlField>
+                <JlButton type="submit" label="Save" />
+              </form>
+            </JlCard>
           </JlTabPanel>
           <JlTabPanel name="skills" label={PROJECT_TAB_LABELS.skills.label} icon={PROJECT_TAB_LABELS.skills.icon}>
             <div class="side">
@@ -241,6 +262,10 @@ export class ProjectPage extends ScElement {
     this.on(this._refs.todoForm, 'submit', (event) => {
       event.preventDefault();
       this.addTodo();
+    });
+    this.on(this._refs.afterEditForm, 'submit', (event) => {
+      event.preventDefault();
+      this.saveAfterEdit();
     });
     choices.events.register('preset', (preset) => this.changeDefault({ preset }));
     choices.events.register('mode', (mode) => this.changeDefault({ mode }));
@@ -293,6 +318,7 @@ export class ProjectPage extends ScElement {
       return;
     }
     this.renderDefaults(project);
+    this.renderAfterEdit(project);
     this.renderTodos(project);
     this.renderSkills(project);
     if (this._skillsOf !== project.id) {
@@ -507,6 +533,29 @@ export class ProjectPage extends ScElement {
     panel.concise.set(defaults.concise);
     this._refs.defaults.description.set(project.defaults ? DEFAULTS_SET : DEFAULTS_APP);
     this._refs.reset.hidden = !project.defaults;
+  }
+
+  /**
+   * The project's check after an edit, in its field: written there when the project's own changes, never over what
+   * the person is typing, since the page draws itself again at every change of the sessions.
+   */
+  private renderAfterEdit(project: Project): void {
+    const kept = `${project.id}\n${project.afterEdit ?? ''}`;
+    if (kept === this._afterEditShown) {
+      return;
+    }
+    this._afterEditShown = kept;
+    this._refs.afterEditInput.value.set(project.afterEdit ?? '');
+  }
+
+  private saveAfterEdit(): void {
+    const project = this.project();
+    if (!project) {
+      return;
+    }
+    const command = this._refs.afterEditInput.value.get().trim();
+    setProjectAfterEdit(project.id, command);
+    toast({ heading: command === '' ? AFTER_EDIT_CLEARED : AFTER_EDIT_SAVED, tone: 'ok' });
   }
 
   /** The project's todos, each done or not, with its delete button; what it still has to do, or nothing yet. */

@@ -1,10 +1,12 @@
 package tools
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"swcode/daemon/hosts"
 )
@@ -127,6 +129,51 @@ func saveFile(ctx context.Context, tc *Context, path string, data []byte, checke
 	}
 	noteSeen(ctx, tc, path)
 	return ""
+}
+
+const (
+	// filePlaceholder stands, in a project's check after an edit, for the file that was edited.
+	filePlaceholder = "{file}"
+	// checkLimit is how long the check has; checkChars, the most of what it says that goes back to the model.
+	checkLimit   = 60 * time.Second
+	checkChars   = 3000
+	checkSaid    = "\n\n[The project’s check after an edit (%s) %s:]\n%s"
+	checkChanged = "\n[The check changed the file: read it again before you edit it further.]"
+)
+
+// checkEnding is how a project's check ended, in a few words.
+func checkEnding(result hosts.CommandResult) string {
+	switch {
+	case result.TimedOut:
+		return "did not end in time"
+	case result.ExitCode != nil && *result.ExitCode == 0:
+		return "passed, and said"
+	}
+	return "failed with exit code " + exitText(result.ExitCode)
+}
+
+// afterEdit runs the project's check on a file the agent just wrote, and is what goes back to the model with the
+// edit's result: what the check said, when it failed or said anything, and that it changed the file, when a
+// formatter did. Nothing for a project without a check, or a check that passed in silence and left the file as it
+// was written.
+func afterEdit(ctx context.Context, tc *Context, path string, written []byte) string {
+	if tc.AfterEdit == "" {
+		return ""
+	}
+	command := strings.ReplaceAll(tc.AfterEdit, filePlaceholder, hosts.ShellWord(path))
+	result := tc.Host.Run(ctx, command, hosts.CommandOptions{Cwd: tc.Workspace, Timeout: checkLimit})
+	said := ""
+	passedQuietly := result.ExitCode != nil && *result.ExitCode == 0 && strings.TrimSpace(result.Output) == ""
+	if !passedQuietly {
+		said = fmt.Sprintf(checkSaid, tc.AfterEdit, checkEnding(result), clipped(strings.TrimSpace(result.Output), checkChars))
+	}
+	// A formatter rewrote the file: the agent's next edit starts from what is there now.
+	now, err := tc.Host.ReadFile(ctx, path)
+	if err == nil && !bytes.Equal(now, written) {
+		noteSeen(ctx, tc, path)
+		said += checkChanged
+	}
+	return said
 }
 
 // lineCount is how many lines a text has: none when it is empty.
