@@ -1,5 +1,5 @@
 {
-  "check": "[ \"$(sh count.sh data/a.txt 'data/b c.txt' 2>/dev/null | tr -d '[:space:]')\" = 5 ] && [ \"$(sh count.sh data/a.txt 2>/dev/null | tr -d '[:space:]')\" = 2 ]",
-  "prompt": "count.sh fails on files whose names hold a space. Fix it: `sh count.sh data/a.txt 'data/b c.txt'` must print 5.",
+  "check": "[ \"$(sh count.sh logs/a.txt 'logs/b c.txt' 2>/dev/null | tr -d '[:space:]')\" = 5 ] && [ \"$(sh count.sh logs/a.txt 2>/dev/null | tr -d '[:space:]')\" = 2 ]",
+  "prompt": "count.sh fails on files whose names hold a space. Fix it: `sh count.sh logs/a.txt 'logs/b c.txt'` must print 5.",
   "timeoutSeconds": 300
 }
