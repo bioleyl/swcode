@@ -11,15 +11,26 @@ import {
 } from '../lib/pairing-view';
 import { qrElement } from '../lib/qr';
 import { daemonState } from '../services/daemon-status';
+import { installApp, installBus, installState } from '../services/install';
 import { forgetDevice, NO_CODE, newPairingCode, pairedDevices, pairingLink } from '../services/pairing';
 import { BASE_STYLES } from '../styles/shared';
 import styles from './sc-phone.css?inline';
 
 import type { Device, PairingCode } from '../../../shared/protocol/pairing.schema';
+import type { InstallState } from '../types/install.types';
 
 const QR_LABEL = 'QR code of the link that pairs a phone with swcode';
 const MS_PER_SECOND = 1000;
 const NO_DEVICES = 'No phone is paired yet.';
+// What installing swcode on the device that shows this page takes, by where it stands.
+const INSTALL_LINES: Readonly<Record<InstallState, string>> = {
+  insecure:
+    'A browser installs an app only from an HTTPS address, and this page came without it. Reach this computer over HTTPS (a tailnet gives it one: tailscale serve), then pair from that address.',
+  installed: 'swcode is installed on this device: it opens from its own icon, in a window of its own.',
+  manual:
+    'In the browser’s menu, choose “Add to Home Screen” (in Safari, the Share button first) or “Install app”: swcode then opens from its own icon, in a window of its own.',
+  offered: 'Install swcode to open it from its own icon, in a window of its own.',
+};
 
 /**
  * The settings' Phone topic, how to use swcode from a phone: a QR code with a pairing code that serves once and
@@ -41,6 +52,8 @@ export class ScPhone extends ScElement {
   private readonly _refs = this.useRefs((ref) => ({
     devices: ref('.devices'),
     expires: ref('.expires'),
+    install: ref<JlButton>('.install-now'),
+    installLine: ref('.install-line'),
     link: ref('.link'),
     note: ref('.note'),
     qr: ref('.qr'),
@@ -64,6 +77,11 @@ export class ScPhone extends ScElement {
           <h2>Paired phones</h2>
           <div class="devices" />
         </section>
+        <section>
+          <h2>Install on this device</h2>
+          <p class="lead install-line" />
+          <JlButton class="install-now" icon="download" label="Install swcode" hidden />
+        </section>
       </div>
     );
   }
@@ -73,9 +91,19 @@ export class ScPhone extends ScElement {
   }
 
   onConnect(): void {
+    this._refs.install.events.register('press', () => void installApp());
+    this.onBus(installBus, 'changed', () => this.renderInstall());
+    this.renderInstall();
     if (this.active.get() && this._clock === undefined) {
       this.start();
     }
+  }
+
+  /** How the device showing this page installs swcode, and the button that does it when the browser offers one. */
+  private renderInstall(): void {
+    const state = installState();
+    this._refs.installLine.textContent = INSTALL_LINES[state];
+    this._refs.install.hidden = state !== 'offered';
   }
 
   onDisconnect(): void {

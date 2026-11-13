@@ -22,6 +22,29 @@ const (
 	revalidate = "no-cache"
 )
 
+// fileTypes are the types of the web app's files. The system's own table is not asked for them: Windows keeps
+// it in the registry, where a program may have changed what a script is, and a browser runs no module sent as
+// text.
+var fileTypes = map[string]string{
+	".css":         "text/css; charset=utf-8",
+	".html":        "text/html; charset=utf-8",
+	".ico":         "image/x-icon",
+	".js":          "text/javascript; charset=utf-8",
+	".json":        "application/json",
+	".png":         "image/png",
+	".svg":         "image/svg+xml",
+	".webmanifest": "application/manifest+json",
+	".woff2":       "font/woff2",
+}
+
+// typeOf is a file's type: the web app's own table first, the system's for anything else.
+func typeOf(name string) string {
+	if kind, known := fileTypes[path.Ext(name)]; known {
+		return kind
+	}
+	return mime.TypeByExtension(path.Ext(name))
+}
+
 // encoding is a compressed copy the build leaves beside a file, and how a browser says it reads it.
 type encoding struct {
 	name   string
@@ -96,7 +119,7 @@ func webApp(files fs.FS) http.Handler {
 				return
 			}
 		}
-		if kind := mime.TypeByExtension(path.Ext(name)); kind != "" {
+		if kind := typeOf(name); kind != "" {
 			response.Header().Set("content-type", kind)
 		}
 		response.Header().Set("vary", "accept-encoding")

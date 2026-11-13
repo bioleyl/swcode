@@ -59,6 +59,10 @@ section + section {
   color: var(--jl-muted);
 }
 
+.install-now {
+  align-self: flex-start;
+}
+
 .devices {
   display: flex;
   flex-direction: column;

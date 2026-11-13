@@ -1,4 +1,5 @@
-"""Draws the Windows icon (the swcode mark alone) as an ICO file, without any image library.
+"""Draws the swcode mark as the Windows icon (an ICO file) and as a phone's icons (PNG files), without any image
+library.
 
 Run: python3 scripts/make-icons.py web/public
 """
@@ -31,6 +32,16 @@ BITS_PER_PIXEL = 32
 # Each row of the mask, one bit a pixel, takes a whole number of 32-bit words.
 MASK_WORD_BITS = 32
 MASK_WORD_BYTES = 4
+WHITE = (0xFF, 0xFF, 0xFF)
+PNG_RGB = 2
+PNG_RGBA = 6
+# A phone's icon of any shape: the mark alone, with a little room around it.
+PHONE_MARK_SHARE = 0.82
+PHONE_SIZES = (192, 512)
+# A maskable icon is cut to the launcher's shape: the mark stays in the middle, inside the circle every shape keeps.
+MASKABLE_ICON = ("icon-maskable-512.png", 512, 0.5)
+# iOS draws an icon without transparency, and rounds its corners itself.
+APPLE_ICON = ("apple-touch-icon.png", 180, 0.6)
 
 
 def inside(x, y, polygon):
@@ -60,13 +71,30 @@ def samples(px, py, size, share):
             yield colour_at((px + (sx + 0.5) / SAMPLES - left) / scale, (py + (sy + 0.5) / SAMPLES - top) / scale)
 
 
-def clear_pixel(px, py, size):
-    """The mark alone: its colours, and the share of the pixel it covers as the alpha."""
-    colours = [colour for colour in samples(px, py, size, WINDOWS_MARK_SHARE) if colour is not None]
-    if not colours:
-        return bytes(4)
-    alpha = round(OPAQUE * len(colours) / SAMPLES**2)
-    return bytes(round(sum(channel) / len(colours)) for channel in zip(*colours)) + bytes([alpha])
+def mark_pixel(share):
+    """Draws the mark alone at a share of the picture: its colours, and the part of the pixel it covers as the alpha."""
+
+    def draw(px, py, size):
+        colours = [colour for colour in samples(px, py, size, share) if colour is not None]
+        if not colours:
+            return bytes(4)
+        alpha = round(OPAQUE * len(colours) / SAMPLES**2)
+        return bytes(round(sum(channel) / len(colours)) for channel in zip(*colours)) + bytes([alpha])
+
+    return draw
+
+
+clear_pixel = mark_pixel(WINDOWS_MARK_SHARE)
+
+
+def flat_pixel(share, background):
+    """Draws the mark on a flat background, which shows wherever the mark does not reach."""
+
+    def draw(px, py, size):
+        colours = [colour or background for colour in samples(px, py, size, share)]
+        return bytes(round(sum(channel) / len(colours)) for channel in zip(*colours))
+
+    return draw
 
 
 def png(size, draw, colour_type):
@@ -99,7 +127,7 @@ def bitmap(size):
 
 
 def icon_image(size):
-    return png(size, clear_pixel, colour_type=6) if size == PNG_ICON_SIZE else bitmap(size)
+    return png(size, clear_pixel, colour_type=PNG_RGBA) if size == PNG_ICON_SIZE else bitmap(size)
 
 
 def ico():
@@ -114,9 +142,19 @@ def ico():
     return struct.pack("<HHH", 0, 1, len(images)) + entries + b"".join(images)
 
 
+def phone_icons():
+    """The icons the web app's manifest and page name: the mark alone, then on white for the shapes that cut it."""
+    for size in PHONE_SIZES:
+        yield f"icon-{size}.png", png(size, mark_pixel(PHONE_MARK_SHARE), colour_type=PNG_RGBA)
+    for name, size, share in (MASKABLE_ICON, APPLE_ICON):
+        yield name, png(size, flat_pixel(share, WHITE), colour_type=PNG_RGB)
+
+
 def main():
     folder = Path(sys.argv[1])
     (folder / WINDOWS_ICON).write_bytes(ico())
+    for name, image in phone_icons():
+        (folder / name).write_bytes(image)
 
 
 if __name__ == "__main__":
