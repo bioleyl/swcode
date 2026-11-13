@@ -45,6 +45,29 @@ describe('projects', () => {
   });
 });
 
+describe('a project the daemon refuses', () => {
+  it('says why in the dialog, which can be tried again', async () => {
+    const rig = await start({ files: { 'src/greet.ts': GREET }, replies: [] });
+    const page = await rig.browser.newPage({ viewport: DESKTOP });
+    await page.goto(rig.link);
+    await page.locator('home-page .new-project').click();
+    await settle(page);
+    const dialog = page.locator('sc-project-dialog');
+    await dialog.getByText('New folder', { exact: true }).click();
+    await settle(page);
+    // A folder that is already there cannot be made again.
+    await dialog.locator('.name input').fill('src');
+    await dialog.locator('.confirm button').click();
+    await dialog.locator('jl-alert').getByText('already exists', { exact: false }).waitFor();
+    expect(await dialog.locator('.confirm button').isDisabled()).toBe(false);
+
+    await dialog.locator('.name input').fill('docs');
+    await dialog.locator('.confirm button').click();
+    await settle(page);
+    await page.locator('home-page select').filter({ hasText: 'docs' }).waitFor();
+  });
+});
+
 describe('a project’s page', () => {
   async function openProject(rig: E2eRig): Promise<Page> {
     const page = await rig.browser.newPage({ viewport: DESKTOP });

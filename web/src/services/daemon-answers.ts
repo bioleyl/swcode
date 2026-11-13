@@ -17,8 +17,8 @@ const forever = new AbortController().signal;
 
 /**
  * One request to the daemon and the answer it sends back. The daemon's replies are a broadcast, so the first answer
- * of the kind asked for ends the request, and a `problem` ends it as a refusal: the caller no longer has to tell
- * whose reply this was.
+ * of the kind asked for ends the request, and the reply that refuses that kind ends it as a refusal: the caller no
+ * longer has to tell whose reply this was.
  */
 class PendingAnswers {
   private readonly _waiting = new Map<keyof ServerMessageMap, (reply: Reply) => void>();
@@ -40,12 +40,18 @@ class PendingAnswers {
   }
 
   private deliver(message: ServerMessage): void {
-    const waiting = this._waiting.get(message.type);
-    if (waiting === undefined) {
+    if (message.type === 'projectRefused') {
+      this.settle('projectCreated', { ok: false, problem: message.message });
       return;
     }
-    this._waiting.delete(message.type);
-    waiting(message.type === 'problem' ? { ok: false, problem: message.message } : { answer: message, ok: true });
+    this.settle(message.type, { answer: message, ok: true });
+  }
+
+  /** Ends the request waiting for that kind of answer, if one is. */
+  private settle(kind: keyof ServerMessageMap, reply: Reply): void {
+    const waiting = this._waiting.get(kind);
+    this._waiting.delete(kind);
+    waiting?.(reply);
   }
 }
 
