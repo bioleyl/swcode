@@ -14,9 +14,13 @@ import (
 )
 
 const (
-	DataFolder       = ".swcode"
-	DefaultPort      = 4500
-	defaultHost      = "0.0.0.0"
+	DataFolder  = ".swcode"
+	DefaultPort = 4500
+	// defaultHost: swcode runs commands for whoever holds its token, and speaks plain HTTP: it listens on its own
+	// computer unless the person opens it to the network.
+	defaultHost = "127.0.0.1"
+	// everyInterface is the address that opens swcode to the network, which was the default once.
+	everyInterface   = "0.0.0.0"
 	defaultLlamaURL  = "http://127.0.0.1:8080"
 	maxPort          = 65_535
 	minTokenLength   = 16

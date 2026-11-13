@@ -107,7 +107,7 @@ Settings are stored in `~/.swcode/settings.env` (key=value lines). The settings 
 | `LLAMA_API_KEY` | — | API key for the LLM server |
 | `LLAMA_MODEL` | — | Model name for the main agent |
 | `SWCODE_WORKSPACE` | current folder | Default folder for new projects |
-| `SWCODE_HOST` | `0.0.0.0` | Address the daemon listens on |
+| `SWCODE_HOST` | `127.0.0.1` | Address the daemon listens on: `0.0.0.0` opens it to the network, over plain HTTP |
 | `SWCODE_PORT` | `4500` | Port the daemon listens on |
 | `SWCODE_DATA_DIR` | `~/.swcode` | Where sessions and settings are stored |
 | `SWCODE_THINKING` | `full` | Reasoning effort for new sessions (`full`, `medium`, `low`, `off`) |

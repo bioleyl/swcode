@@ -33,6 +33,9 @@ func place(environment map[string]string) local.Place {
 func settings(environment map[string]string) config.Config {
 	home, _ := os.UserHomeDir()
 	cwd, _ := os.Getwd()
+	if err := config.ListenAsBefore(environment, home); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+	}
 	loaded, err := config.Load(config.Environment(environment, home), config.Defaults{Cwd: cwd, Home: home})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)

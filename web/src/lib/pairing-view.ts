@@ -8,7 +8,7 @@ const RENEW_AHEAD_MS = 2000;
 
 /** What a code shown at an address only this computer reaches means. */
 export const LOCAL_ADDRESS_NOTE =
-  'This address only works on this computer: the daemon listens here alone. Start it with SWCODE_HOST=0.0.0.0 for the network, or SWCODE_PUBLIC_URL set to an address the other device reaches.';
+  'This address only works on this computer: swcode listens here alone. Give it an address on your tailnet (Settings → Phone), or have it listen on every interface (Settings → Network).';
 
 /** The address another machine reaches: the daemon's public one, else its address on the network, else the page's. */
 export const reachableBaseOf = (state: DaemonState, pageOrigin: string): string => {

@@ -46,7 +46,7 @@ const (
 	// helpersFolder is the programs the daemon's commands run: the password prompt sudo -A and ssh ask with.
 	helpersFolder = "helpers"
 	// devicesFile is the paired phones, their tokens kept as hashes.
-	devicesFile  = "devices.json"
+	devicesFile  = config.DevicesFile
 	projectsFile = "projects.json"
 	// updatesFile keeps whether to look for a newer version every 10 minutes.
 	updatesFile   = "updates.json"

@@ -87,3 +87,61 @@ func TestParseEnvReadsQuotesAsNodeDoes(t *testing.T) {
 		t.Fatalf("got %q", values)
 	}
 }
+
+func TestAnInstallDevicesArePairedWithKeepsListeningOnTheNetworkOnce(t *testing.T) {
+	// listens is the address the settings choose after the look: empty when they choose none.
+	listens := func(home string) string {
+		return ReadSettings(SettingsPathOf(map[string]string{}, home))[envHost]
+	}
+	dataDirOf := func(t *testing.T, devices, settings string) string {
+		home := t.TempDir()
+		dataDir := filepath.Join(home, DataFolder)
+		if err := os.MkdirAll(dataDir, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if devices != "" {
+			_ = os.WriteFile(filepath.Join(dataDir, DevicesFile), []byte(devices), 0o600)
+		}
+		if settings != "" {
+			_ = os.WriteFile(filepath.Join(dataDir, SettingsFile), []byte(settings), 0o600)
+		}
+		return home
+	}
+	const paired = `[{"id":"p1","name":"iPhone","pairedAt":"2026-11-01T10:00:00.000Z","tokenHash":"aa"}]`
+
+	// Paired with a phone, and no address chosen: it listened on the network, and goes on.
+	kept := dataDirOf(t, paired, "")
+	if err := ListenAsBefore(map[string]string{}, kept); err != nil || listens(kept) != everyInterface {
+		t.Fatalf("paired: listens on %q, error %v", listens(kept), err)
+	}
+	// The person then chooses this computer: the next start leaves that alone.
+	_ = WriteSettings(SettingsPathOf(map[string]string{}, kept), map[string]string{})
+	if err := ListenAsBefore(map[string]string{}, kept); err != nil || listens(kept) != "" {
+		t.Fatalf("after the person's choice: listens on %q, error %v", listens(kept), err)
+	}
+
+	// Nobody paired: it becomes this computer's alone, and a phone paired later over a tailnet does not open it.
+	alone := dataDirOf(t, "", "")
+	if err := ListenAsBefore(map[string]string{}, alone); err != nil || listens(alone) != "" {
+		t.Fatalf("nobody paired: listens on %q, error %v", listens(alone), err)
+	}
+	_ = os.WriteFile(filepath.Join(alone, DataFolder, DevicesFile), []byte(paired), 0o600)
+	if err := ListenAsBefore(map[string]string{}, alone); err != nil || listens(alone) != "" {
+		t.Fatalf("paired after the look: listens on %q, error %v", listens(alone), err)
+	}
+
+	// A choice of this computer says what the default now says: its line goes. Another choice stays, and so does
+	// one the environment makes.
+	explicit := dataDirOf(t, paired, "SWCODE_HOST=127.0.0.1\n")
+	if err := ListenAsBefore(map[string]string{}, explicit); err != nil || listens(explicit) != "" {
+		t.Fatalf("this computer chosen: listens on %q, error %v", listens(explicit), err)
+	}
+	other := dataDirOf(t, paired, "SWCODE_HOST=192.168.1.20\n")
+	if err := ListenAsBefore(map[string]string{}, other); err != nil || listens(other) != "192.168.1.20" {
+		t.Fatalf("another address chosen: listens on %q, error %v", listens(other), err)
+	}
+	fromEnvironment := dataDirOf(t, paired, "")
+	if err := ListenAsBefore(map[string]string{envHost: "127.0.0.1"}, fromEnvironment); err != nil || listens(fromEnvironment) != "" {
+		t.Fatalf("chosen by the environment: listens on %q, error %v", listens(fromEnvironment), err)
+	}
+}

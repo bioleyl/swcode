@@ -21,11 +21,11 @@ export const SETTING_FIELDS: Readonly<Record<SettingName, SettingField>> = {
     control: {
       kind: 'choice',
       options: [
-        { label: 'Every interface: phones on the network too', value: DEFAULT },
-        { label: 'This computer only', value: '127.0.0.1' },
+        { label: 'This computer only', value: DEFAULT },
+        { label: 'Every interface: phones and computers on the network too', value: '0.0.0.0' },
       ],
     },
-    hint: 'Whatever opens swcode needs its access token.',
+    hint: 'On the network, swcode speaks plain HTTP: whoever sees its link there can use it. A tailnet reaches it on this computer alone, over HTTPS (Settings → Phone).',
     label: 'Listen on',
   },
   SWCODE_IMAGE_URL: {

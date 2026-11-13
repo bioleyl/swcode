@@ -91,6 +91,9 @@ func newDaemon(exe string) (*daemon, error) {
 func loadSettings() (config.Config, map[string]string, error) {
 	environment := config.ProcessEnvironment()
 	home := homeFolder()
+	if err := config.ListenAsBefore(environment, home); err != nil {
+		return config.Config{}, environment, err
+	}
 	settings, err := config.Load(config.Environment(environment, home), config.Defaults{Cwd: home, Home: home})
 	return settings, environment, err
 }

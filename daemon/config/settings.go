@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -164,4 +165,45 @@ func ProcessEnvironment() map[string]string {
 		environment[name] = value
 	}
 	return environment
+}
+
+const (
+	// DevicesFile is the paired phones and computers, in the data folder.
+	DevicesFile = "devices.json"
+	// listenMarker says an install's address was looked at once, now that the default is this computer alone.
+	listenMarker = "listen-checked"
+)
+
+// hasDevices tells whether phones or computers are paired with the daemon of a data folder.
+func hasDevices(dataDir string) bool {
+	data, err := os.ReadFile(filepath.Join(dataDir, DevicesFile))
+	var devices []json.RawMessage
+	return err == nil && json.Unmarshal(data, &devices) == nil && len(devices) > 0
+}
+
+// ListenAsBefore keeps an install from before swcode listened on its own computer alone reachable by what was
+// paired with it. Looked at once, at its first start since: with phones or computers paired and no address chosen,
+// its settings now choose every interface, which was the default; a choice of this computer says what the default
+// now says, and its line goes. An install nobody paired with becomes this computer's alone.
+func ListenAsBefore(environment map[string]string, home string) error {
+	dataDir := DataDirOf(environment, home)
+	marker := filepath.Join(dataDir, listenMarker)
+	if _, err := os.Stat(marker); err == nil {
+		return nil
+	}
+	path := SettingsPathOf(environment, home)
+	values := ReadSettings(path)
+	chosen, set := values[envHost]
+	switch {
+	case set && chosen == defaultHost:
+		delete(values, envHost)
+	case !set && environment[envHost] == "" && hasDevices(dataDir):
+		values[envHost] = everyInterface
+	default:
+		return os.WriteFile(marker, nil, settingsFileMode)
+	}
+	if err := WriteSettings(path, values); err != nil {
+		return err
+	}
+	return os.WriteFile(marker, nil, settingsFileMode)
 }

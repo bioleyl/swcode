@@ -71,7 +71,8 @@ const LINK_LABEL = 'Link';
 // token; a browser pairs with a code, from an address its page may talk to.
 const ADD_TEXTS = {
   app: {
-    addressHint: 'Its swcode listens on the network: SWCODE_HOST is 0.0.0.0 by default.',
+    addressHint:
+      'Its swcode has to listen on the network (its Settings → Network), or have an address on a tailnet.',
     addressPlaceholder: 'gmktec, 192.168.1.20:4500, or a link with its token',
     codeHint:
       'That computer’s swcode shows one in its Settings → Computers topic, or run swcode pair there (swcode-desktop.exe --pair on Windows). A link with its token needs none.',
