@@ -11,6 +11,10 @@ import {
   MAX_PINNED_TODOS,
   NewFolderNameSchema,
   ProjectSchema,
+  ScheduleEverySchema,
+  SchedulePromptSchema,
+  ScheduleTimeSchema,
+  ScheduleWeekdaySchema,
   TodoTextSchema,
 } from './project.schema.js';
 import {
@@ -276,6 +280,23 @@ export const ClientMessageSchema = z.discriminatedUnion('type', [
     projectId: z.string(),
     type: z.literal('setProjectSkill'),
   }),
+  // A session the project starts by itself, on a prompt, every hour, day or week at a time: added, turned on or
+  // off, removed.
+  z.object({
+    at: ScheduleTimeSchema,
+    every: ScheduleEverySchema,
+    projectId: z.string(),
+    prompt: SchedulePromptSchema,
+    type: z.literal('addProjectSchedule'),
+    weekday: ScheduleWeekdaySchema.optional(),
+  }),
+  z.object({
+    on: z.boolean(),
+    projectId: z.string(),
+    scheduleId: z.string(),
+    type: z.literal('setProjectScheduleOn'),
+  }),
+  z.object({ projectId: z.string(), scheduleId: z.string(), type: z.literal('removeProjectSchedule') }),
   // Adds a todo to the project.
   z.object({
     projectId: z.string(),

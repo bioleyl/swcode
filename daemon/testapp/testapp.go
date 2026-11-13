@@ -69,6 +69,8 @@ type Options struct {
 	Tailscale tailnet.Run
 	// Program is what installing a newer version replaces.
 	Program update.Program
+	// Now is the daemon's clock, for what happens at a time (a project's schedules): the machine's when left out.
+	Now func() time.Time
 }
 
 // App is a daemon under test.
@@ -140,7 +142,7 @@ func Start(t *testing.T, options Options) *App {
 	}
 	daemon, err := app.New(settings, app.Options{
 		Browser: options.Browser, ConnectHost: options.ConnectHost, Defaults: config.Defaults{Cwd: workspace, Home: home},
-		Environment: environmentOf, Home: home, MaxSteps: options.MaxSteps,
+		Environment: environmentOf, Home: home, MaxSteps: options.MaxSteps, Now: options.Now,
 		OnRestart: func() { test.restarts <- struct{}{} }, OnStop: func() { test.stops <- struct{}{} },
 		OnUpdated: func() { test.updates <- struct{}{} }, Program: options.Program, Startup: options.Startup,
 		Tailscale: options.Tailscale, Version: options.Version,

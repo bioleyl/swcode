@@ -29,6 +29,7 @@ import { ScSessionRow } from '../molecules/sc-session-row';
 import { ScTodoRow } from '../molecules/sc-todo-row';
 import { ScProjectAllowed } from '../organisms/sc-project-allowed';
 import { ScProjectSandbox } from '../organisms/sc-project-sandbox';
+import { ScProjectSchedules } from '../organisms/sc-project-schedules';
 import { daemon } from '../services/daemon';
 import { daemonState, daemonStatusBus } from '../services/daemon-status';
 import { hrefOf, newSessionPath, projectTabPath, sessionPath } from '../services/navigation';
@@ -163,6 +164,7 @@ export class ProjectPage extends ScElement {
     remove: ref<JlButton>('.remove'),
     reset: ref<JlButton>('.reset'),
     sandbox: ref(ScProjectSandbox),
+    schedules: ref(ScProjectSchedules),
     skillList: ref('.skill-list'),
     skillsState: ref(JlLoadState),
     swcodeBaseInHome: ref<JlButton>('.swcode-base .in-home'),
@@ -239,6 +241,7 @@ export class ProjectPage extends ScElement {
             </JlCard>
             <ScProjectSandbox />
             <ScProjectAllowed />
+            <ScProjectSchedules />
           </JlTabPanel>
           <JlTabPanel name="skills" label={PROJECT_TAB_LABELS.skills.label} icon={PROJECT_TAB_LABELS.skills.icon}>
             <div class="side">
@@ -344,6 +347,7 @@ export class ProjectPage extends ScElement {
     this._refs.untrusted.hidden = project.untrusted !== true;
     this._refs.sandbox.project.set(project);
     this._refs.allowed.project.set(project);
+    this._refs.schedules.project.set(project);
     this.renderTodos(project);
     this.renderSkills(project);
     if (this._skillsOf !== project.id) {

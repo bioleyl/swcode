@@ -31,6 +31,10 @@ const MaxAfterEdit = 500
 
 const MaxPinnedTodos = 20
 
+const MaxSchedules = 50
+
+const MaxSchedulePrompt = 2000
+
 const MaxTodoText = 500
 
 var SkillOrigins = []SkillOrigin{SkillOriginPersonal, SkillOriginProject}
@@ -112,7 +116,9 @@ const TokenParam = "token"
 
 var pattern1 = regexp.MustCompile("^[A-Za-z0-9+/]+={0,2}$")
 
-var pattern2 = regexp.MustCompile("^[^/\\\\]+$")
+var pattern2 = regexp.MustCompile("^([01]\\d|2[0-3]):[0-5]\\d$")
+
+var pattern3 = regexp.MustCompile("^[^/\\\\]+$")
 
 type PermissionMode string
 
@@ -177,6 +183,23 @@ const (
 func (v AllowedRule) Valid() bool {
 	switch v {
 	case AllowedRuleProgram, AllowedRuleOutside, AllowedRuleServer:
+		return true
+	}
+	return false
+}
+
+type ScheduleEvery string
+
+const (
+	ScheduleEveryHour ScheduleEvery = "hour"
+	ScheduleEveryDay  ScheduleEvery = "day"
+	ScheduleEveryWeek ScheduleEvery = "week"
+)
+
+// Valid tells whether v is one of the ScheduleEvery values.
+func (v ScheduleEvery) Valid() bool {
+	switch v {
+	case ScheduleEveryHour, ScheduleEveryDay, ScheduleEveryWeek:
 		return true
 	}
 	return false
@@ -774,19 +797,66 @@ func (v *ProjectAllowed) Normalize() error {
 	return nil
 }
 
+type ProjectSchedule struct {
+	At            string        `json:"at"`
+	Every         ScheduleEvery `json:"every"`
+	ID            string        `json:"id"`
+	LastRunAt     string        `json:"lastRunAt,omitempty"`
+	LastSessionID string        `json:"lastSessionId,omitempty"`
+	On            bool          `json:"on"`
+	Prompt        string        `json:"prompt"`
+	Since         string        `json:"since"`
+	Weekday       int           `json:"weekday"`
+}
+
+func (v *ProjectSchedule) UnmarshalJSON(data []byte) error {
+	type plain ProjectSchedule
+	p := plain{On: true, Weekday: 0}
+	if err := json.Unmarshal(data, &p); err != nil {
+		return err
+	}
+	*v = ProjectSchedule(p)
+	return v.Normalize()
+}
+
+// Normalize trims and checks what the app sent, as its schema does.
+func (v *ProjectSchedule) Normalize() error {
+	if !pattern2.MatchString(v.At) {
+		return fmt.Errorf("%s: %s", "at", "a time of the day, such as 08:00")
+	}
+	if !v.Every.Valid() {
+		return fmt.Errorf("%s: unknown value %q", "every", v.Every)
+	}
+	v.Prompt = strings.TrimSpace(v.Prompt)
+	if utf8.RuneCountInString(v.Prompt) < 1 {
+		return fmt.Errorf("%s: must not be empty", "prompt")
+	}
+	if utf8.RuneCountInString(v.Prompt) > 2000 {
+		return fmt.Errorf("%s: at most 2000 characters", "prompt")
+	}
+	if v.Weekday < 0 {
+		return fmt.Errorf("%s: at least 0", "weekday")
+	}
+	if v.Weekday > 6 {
+		return fmt.Errorf("%s: at most 6", "weekday")
+	}
+	return nil
+}
+
 type Project struct {
-	AfterEdit  string           `json:"afterEdit,omitempty"`
-	Allowed    *ProjectAllowed  `json:"allowed,omitempty"`
-	CreatedAt  string           `json:"createdAt"`
-	Defaults   *SessionDefaults `json:"defaults,omitempty"`
-	Host       HostRef          `json:"host"`
-	ID         string           `json:"id"`
-	Name       string           `json:"name"`
-	Path       string           `json:"path"`
-	SandboxOff bool             `json:"sandboxOff,omitempty"`
-	SkillsOff  []string         `json:"skillsOff"`
-	Todos      []ProjectTodo    `json:"todos"`
-	Untrusted  bool             `json:"untrusted,omitempty"`
+	AfterEdit  string            `json:"afterEdit,omitempty"`
+	Allowed    *ProjectAllowed   `json:"allowed,omitempty"`
+	CreatedAt  string            `json:"createdAt"`
+	Defaults   *SessionDefaults  `json:"defaults,omitempty"`
+	Host       HostRef           `json:"host"`
+	ID         string            `json:"id"`
+	Name       string            `json:"name"`
+	Path       string            `json:"path"`
+	SandboxOff bool              `json:"sandboxOff,omitempty"`
+	Schedules  []ProjectSchedule `json:"schedules,omitempty"`
+	SkillsOff  []string          `json:"skillsOff"`
+	Todos      []ProjectTodo     `json:"todos"`
+	Untrusted  bool              `json:"untrusted,omitempty"`
 }
 
 func (v Project) MarshalJSON() ([]byte, error) {
@@ -813,6 +883,9 @@ func (v *Project) UnmarshalJSON(data []byte) error {
 
 // Normalize trims and checks what the app sent, as its schema does.
 func (v *Project) Normalize() error {
+	if len(v.Schedules) > 50 {
+		return fmt.Errorf("%s: at most 50", "schedules")
+	}
 	return nil
 }
 
@@ -2218,6 +2291,12 @@ func (ClientMessageSetProjectSandbox) isClientMessage() {}
 
 func (ClientMessageSetProjectSkill) isClientMessage() {}
 
+func (ClientMessageAddProjectSchedule) isClientMessage() {}
+
+func (ClientMessageSetProjectScheduleOn) isClientMessage() {}
+
+func (ClientMessageRemoveProjectSchedule) isClientMessage() {}
+
 func (ClientMessageAddProjectTodo) isClientMessage() {}
 
 func (ClientMessageSetProjectTodoDone) isClientMessage() {}
@@ -2505,6 +2584,24 @@ func (u *ClientMessage) UnmarshalJSON(data []byte) error {
 			return err
 		}
 		u.Value = value
+	case "\"addProjectSchedule\"":
+		var value ClientMessageAddProjectSchedule
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
+	case "\"setProjectScheduleOn\"":
+		var value ClientMessageSetProjectScheduleOn
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
+	case "\"removeProjectSchedule\"":
+		var value ClientMessageRemoveProjectSchedule
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
 	case "\"addProjectTodo\"":
 		var value ClientMessageAddProjectTodo
 		if err := json.Unmarshal(data, &value); err != nil {
@@ -2598,6 +2695,9 @@ type ClientMessageMapper[R any] interface {
 	SetProjectTrust(ClientMessageSetProjectTrust) R
 	SetProjectSandbox(ClientMessageSetProjectSandbox) R
 	SetProjectSkill(ClientMessageSetProjectSkill) R
+	AddProjectSchedule(ClientMessageAddProjectSchedule) R
+	SetProjectScheduleOn(ClientMessageSetProjectScheduleOn) R
+	RemoveProjectSchedule(ClientMessageRemoveProjectSchedule) R
 	AddProjectTodo(ClientMessageAddProjectTodo) R
 	SetProjectTodoDone(ClientMessageSetProjectTodoDone) R
 	SetProjectTodoText(ClientMessageSetProjectTodoText) R
@@ -2696,6 +2796,12 @@ func MapClientMessage[R any](u ClientMessage, m ClientMessageMapper[R]) R {
 		return m.SetProjectSandbox(value)
 	case ClientMessageSetProjectSkill:
 		return m.SetProjectSkill(value)
+	case ClientMessageAddProjectSchedule:
+		return m.AddProjectSchedule(value)
+	case ClientMessageSetProjectScheduleOn:
+		return m.SetProjectScheduleOn(value)
+	case ClientMessageRemoveProjectSchedule:
+		return m.RemoveProjectSchedule(value)
 	case ClientMessageAddProjectTodo:
 		return m.AddProjectTodo(value)
 	case ClientMessageSetProjectTodoDone:
@@ -3696,7 +3802,7 @@ func (v *ClientMessageCreateProject) Normalize() error {
 	if utf8.RuneCountInString(v.NewFolder) > 255 {
 		return fmt.Errorf("%s: at most 255 characters", "newFolder")
 	}
-	if v.NewFolder != "" && !pattern2.MatchString(v.NewFolder) {
+	if v.NewFolder != "" && !pattern3.MatchString(v.NewFolder) {
 		return fmt.Errorf("%s: %s", "newFolder", "a folder name, without / or \\")
 	}
 	return nil
@@ -3857,6 +3963,86 @@ func (v *ClientMessageSetProjectSkill) Normalize() error {
 		return fmt.Errorf("%s: must not be empty", "name")
 	}
 	return nil
+}
+
+type ClientMessageAddProjectSchedule struct {
+	At        string        `json:"at"`
+	Every     ScheduleEvery `json:"every"`
+	ProjectID string        `json:"projectId"`
+	Prompt    string        `json:"prompt"`
+	Weekday   int           `json:"weekday,omitempty"`
+}
+
+func (v ClientMessageAddProjectSchedule) MarshalJSON() ([]byte, error) {
+	type plain ClientMessageAddProjectSchedule
+	p := plain(v)
+	return json.Marshal(struct {
+		Key string `json:"type"`
+		plain
+	}{"addProjectSchedule", p})
+}
+
+func (v *ClientMessageAddProjectSchedule) UnmarshalJSON(data []byte) error {
+	type plain ClientMessageAddProjectSchedule
+	p := plain{}
+	if err := json.Unmarshal(data, &p); err != nil {
+		return err
+	}
+	*v = ClientMessageAddProjectSchedule(p)
+	return v.Normalize()
+}
+
+// Normalize trims and checks what the app sent, as its schema does.
+func (v *ClientMessageAddProjectSchedule) Normalize() error {
+	if !pattern2.MatchString(v.At) {
+		return fmt.Errorf("%s: %s", "at", "a time of the day, such as 08:00")
+	}
+	if !v.Every.Valid() {
+		return fmt.Errorf("%s: unknown value %q", "every", v.Every)
+	}
+	v.Prompt = strings.TrimSpace(v.Prompt)
+	if utf8.RuneCountInString(v.Prompt) < 1 {
+		return fmt.Errorf("%s: must not be empty", "prompt")
+	}
+	if utf8.RuneCountInString(v.Prompt) > 2000 {
+		return fmt.Errorf("%s: at most 2000 characters", "prompt")
+	}
+	if v.Weekday < 0 {
+		return fmt.Errorf("%s: at least 0", "weekday")
+	}
+	if v.Weekday > 6 {
+		return fmt.Errorf("%s: at most 6", "weekday")
+	}
+	return nil
+}
+
+type ClientMessageSetProjectScheduleOn struct {
+	On         bool   `json:"on"`
+	ProjectID  string `json:"projectId"`
+	ScheduleID string `json:"scheduleId"`
+}
+
+func (v ClientMessageSetProjectScheduleOn) MarshalJSON() ([]byte, error) {
+	type plain ClientMessageSetProjectScheduleOn
+	p := plain(v)
+	return json.Marshal(struct {
+		Key string `json:"type"`
+		plain
+	}{"setProjectScheduleOn", p})
+}
+
+type ClientMessageRemoveProjectSchedule struct {
+	ProjectID  string `json:"projectId"`
+	ScheduleID string `json:"scheduleId"`
+}
+
+func (v ClientMessageRemoveProjectSchedule) MarshalJSON() ([]byte, error) {
+	type plain ClientMessageRemoveProjectSchedule
+	p := plain(v)
+	return json.Marshal(struct {
+		Key string `json:"type"`
+		plain
+	}{"removeProjectSchedule", p})
 }
 
 type ClientMessageAddProjectTodo struct {

@@ -277,6 +277,18 @@ func (h handlers) SetProjectSkill(message protocol.ClientMessageSetProjectSkill)
 	return h.problem(h.app.Projects.SetSkill(message.ProjectID, message.Name, message.On))
 }
 
+func (h handlers) AddProjectSchedule(message protocol.ClientMessageAddProjectSchedule) struct{} {
+	return h.problem(h.app.Projects.AddSchedule(message.ProjectID, message.Prompt, message.Every, message.At, message.Weekday))
+}
+
+func (h handlers) SetProjectScheduleOn(message protocol.ClientMessageSetProjectScheduleOn) struct{} {
+	return h.problem(h.app.Projects.SetScheduleOn(message.ProjectID, message.ScheduleID, message.On))
+}
+
+func (h handlers) RemoveProjectSchedule(message protocol.ClientMessageRemoveProjectSchedule) struct{} {
+	return h.problem(h.app.Projects.RemoveSchedule(message.ProjectID, message.ScheduleID))
+}
+
 func (h handlers) AddProjectTodo(message protocol.ClientMessageAddProjectTodo) struct{} {
 	return h.problem(h.app.Projects.AddTodo(message.ProjectID, message.Text))
 }

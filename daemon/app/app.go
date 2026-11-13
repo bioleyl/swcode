@@ -319,6 +319,8 @@ func (a *App) watchUpdates(settings config.Config, logError func(error)) {
 	watching, stop := context.WithCancel(context.Background())
 	a.stopWatching = stop
 	go a.Updates.Watch(watching)
+	// The projects' schedules are looked at until the daemon closes, too.
+	go a.watchSchedules(watching)
 }
 
 func anyWorking(summaries []protocol.SessionSummary) bool {

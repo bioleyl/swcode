@@ -1,0 +1,48 @@
+:host {
+  display: block;
+  max-width: var(--jl-page-form);
+  margin-top: var(--jl-space-4);
+}
+
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--jl-space-1);
+  margin-bottom: var(--jl-space-4);
+}
+
+.none {
+  margin-bottom: var(--jl-space-4);
+  font-size: var(--jl-font-md);
+  color: var(--jl-text-2);
+}
+
+/* The form that adds one: its prompt on a line of its own, then when it runs. */
+.add {
+  display: flex;
+  flex-direction: column;
+  gap: var(--jl-space-3);
+}
+
+.when {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--jl-space-2);
+}
+
+.when jl-field {
+  flex: 1;
+  min-width: 120px;
+}
+
+/* A row's own controls, at its end: the session it last started, its switch, its removal. */
+.end {
+  display: flex;
+  align-items: center;
+  gap: var(--jl-space-2);
+}
+
+[hidden] {
+  display: none;
+}

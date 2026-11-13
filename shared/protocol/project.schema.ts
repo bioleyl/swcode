@@ -46,6 +46,39 @@ export const ProjectAllowedSchema = z.object({
 });
 export type ProjectAllowed = z.infer<typeof ProjectAllowedSchema>;
 
+/** How often a schedule starts a session: every hour, every day, or every week on a weekday. */
+export const ScheduleEverySchema = z.enum(['hour', 'day', 'week']);
+export type ScheduleEvery = z.infer<typeof ScheduleEverySchema>;
+
+/** How much a schedule's prompt may say, and how many schedules a project keeps. */
+export const MAX_SCHEDULE_PROMPT = 2000;
+export const MAX_SCHEDULES = 50;
+export const SchedulePromptSchema = z.string().trim().min(1).max(MAX_SCHEDULE_PROMPT);
+/** A time of the day, in the daemon's own time: `08:00`. Every hour, its minute alone counts. */
+export const ScheduleTimeSchema = z
+  .string()
+  .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'a time of the day, such as 08:00');
+/** A day of the week, Sunday being 0: for a schedule that runs every week. */
+export const ScheduleWeekdaySchema = z.number().int().min(0).max(6);
+
+/**
+ * A session a project starts by itself: on this prompt, every hour, day or week at that time, while it is on. The
+ * daemon notes when it last ran it and the session it started.
+ */
+export const ProjectScheduleSchema = z.object({
+  at: ScheduleTimeSchema,
+  every: ScheduleEverySchema,
+  id: z.string(),
+  lastRunAt: z.iso.datetime().optional(),
+  lastSessionId: z.string().optional(),
+  on: z.boolean().default(true),
+  prompt: SchedulePromptSchema,
+  // From when its times count: when it was added, or last turned on. A time that passed before is not made up for.
+  since: z.iso.datetime(),
+  weekday: ScheduleWeekdaySchema.default(0),
+});
+export type ProjectSchedule = z.infer<typeof ProjectScheduleSchema>;
+
 /** A folder sessions work in, on a host, with a name for people: the folder's, at first. */
 // The most a project's check after an edit is: a command line.
 export const MAX_AFTER_EDIT = 500;
@@ -66,6 +99,8 @@ export const ProjectSchema = z.object({
   path: z.string(),
   // Its sessions' commands run in a sandbox where its host can make one, unless turned off here.
   sandboxOff: z.boolean().optional(),
+  // The sessions it starts by itself, each on its prompt at its time.
+  schedules: z.array(ProjectScheduleSchema).max(MAX_SCHEDULES).optional(),
   // The skills its sessions are neither told of nor can run, by name: every skill found is on until turned off here.
   skillsOff: z.array(z.string()).default([]),
   // What is left to do in the project, in the order it was added.
