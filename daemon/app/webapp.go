@@ -102,6 +102,23 @@ func cached(response http.ResponseWriter, request *http.Request, name string, pl
 	return true
 }
 
+// pagePolicy is what the app's page may load and run: its own files, nothing written into the page, and nothing
+// in a frame. It talks to this daemon and to the other computers its browser paired with, at their own addresses,
+// and shows their pictures. Styles written into the page stay allowed: the terminal draws with them.
+const pagePolicy = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; " +
+	"img-src 'self' data: blob: http: https:; font-src 'self' data:; connect-src 'self' http: https: ws: wss:; " +
+	"object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
+
+// protect says what a browser may do with a file of the app: never guess its type, and for the page, never run a
+// script from elsewhere nor show it in another site's frame, where a click could be led astray.
+func protect(header http.Header, name string) {
+	header.Set("x-content-type-options", "nosniff")
+	header.Set("referrer-policy", "no-referrer")
+	if name == indexPage {
+		header.Set("content-security-policy", pagePolicy)
+	}
+}
+
 // webApp serves the built web app, every address that is not the API answered by its page; nothing when there is
 // none (the tests). A file travels compressed when the build left a copy the browser reads.
 func webApp(files fs.FS) http.Handler {
@@ -123,6 +140,7 @@ func webApp(files fs.FS) http.Handler {
 			response.Header().Set("content-type", kind)
 		}
 		response.Header().Set("vary", "accept-encoding")
+		protect(response.Header(), name)
 		if cached(response, request, name, data) {
 			return
 		}

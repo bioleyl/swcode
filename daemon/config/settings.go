@@ -11,15 +11,18 @@ import (
 )
 
 const (
-	SettingsFile   = "settings.env"
-	tokenSetting   = "SWCODE_TOKEN"
-	singleQuote    = `'`
-	doubleQuote    = `"`
-	backQuote      = "`"
-	commentMark    = "#"
-	exportPrefix   = "export "
-	escapedNewline = `\n`
-	settingsHeader = "# swcode's settings: the settings page writes them, the README lists them. The environment's own come on top."
+	SettingsFile = "settings.env"
+	// The settings hold the keys of the llm-servers and may hold swcode's own token: they are the person's alone.
+	settingsFolderMode = 0o700
+	settingsFileMode   = 0o600
+	tokenSetting       = "SWCODE_TOKEN"
+	singleQuote        = `'`
+	doubleQuote        = `"`
+	backQuote          = "`"
+	commentMark        = "#"
+	exportPrefix       = "export "
+	escapedNewline     = `\n`
+	settingsHeader     = "# swcode's settings: the settings page writes them, the README lists them. The environment's own come on top."
 )
 
 var plainValue = regexp.MustCompile(`^[\w./:~@+-]*$`)
@@ -141,10 +144,10 @@ func SettingsText(values map[string]string) string {
 
 // WriteSettings writes a settings file, its folder made first.
 func WriteSettings(path string, values map[string]string) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), settingsFolderMode); err != nil {
 		return err
 	}
-	return os.WriteFile(path, []byte(SettingsText(values)), 0o644)
+	return os.WriteFile(path, []byte(SettingsText(values)), settingsFileMode)
 }
 
 // Environment is what the daemon starts with: the settings file's (`KEY=value` lines, as `swcode install` writes

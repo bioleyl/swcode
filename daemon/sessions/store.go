@@ -15,6 +15,9 @@ import (
 const (
 	metaSuffix   = ".json"
 	eventsSuffix = ".jsonl"
+	// A session holds what the agent read and ran: its files are the person's alone.
+	folderMode = 0o700
+	fileMode   = 0o600
 )
 
 // Meta is what a session is: its folder on its host, its title, and how it asks and thinks.
@@ -67,7 +70,7 @@ type Store struct {
 }
 
 func NewStore(folder string) *Store {
-	_ = os.MkdirAll(folder, 0o755)
+	_ = os.MkdirAll(folder, folderMode)
 	return &Store{folder: folder}
 }
 
@@ -124,7 +127,7 @@ func (s *Store) SaveMeta(meta Meta) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(s.metaPath(meta.ID), data, 0o644)
+	return os.WriteFile(s.metaPath(meta.ID), data, fileMode)
 }
 
 // Append adds an event to a session's file: the event is the one it holds, so its kind and its time come from it.
@@ -133,7 +136,7 @@ func (s *Store) Append(sessionID string, event protocol.SessionEvent) error {
 	if err != nil {
 		return err
 	}
-	file, err := os.OpenFile(s.eventsPath(sessionID), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	file, err := os.OpenFile(s.eventsPath(sessionID), os.O_APPEND|os.O_CREATE|os.O_WRONLY, fileMode)
 	if err != nil {
 		return err
 	}

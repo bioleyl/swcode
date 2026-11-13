@@ -16,6 +16,7 @@ const (
 	tokenBytes     = 24
 	tokenMinLength = 16
 	ownerOnly      = 0o600
+	ownerFolder    = 0o700
 	localName      = "localhost"
 	loopback       = "127.0.0.1"
 )
@@ -153,8 +154,18 @@ func AccessToken(dataDir, token string) (string, error) {
 	secret := make([]byte, tokenBytes)
 	_, _ = rand.Read(secret)
 	created := base64.RawURLEncoding.EncodeToString(secret)
-	if err := os.MkdirAll(dataDir, 0o755); err != nil {
+	if err := os.MkdirAll(dataDir, ownerFolder); err != nil {
 		return "", err
 	}
 	return created, os.WriteFile(path, []byte(created), ownerOnly)
+}
+
+// keepPrivate makes the data folder the person's alone: it holds the sessions with all the agents read, the
+// settings with their keys, and the log with the link that opens swcode. A folder made by an earlier version was
+// readable by every account of the machine.
+func keepPrivate(dataDir string) error {
+	if err := os.MkdirAll(dataDir, ownerFolder); err != nil {
+		return err
+	}
+	return os.Chmod(dataDir, ownerFolder)
 }

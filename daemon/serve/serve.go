@@ -52,11 +52,22 @@ type Options struct {
 	Program update.Program
 }
 
+// The log says the link that opens swcode, its token in it: it is the person's alone, as its folder is.
+const (
+	logFolderMode = 0o700
+	logFileMode   = 0o600
+	// headerLimit is how long a connection has to say what it asks, and idleLimit how long one that asks nothing
+	// more is kept: a daemon on a network is not held open by whoever connects and stays silent. A request's body
+	// and its answer have no limit: the socket and a model's answer last as long as they last.
+	headerLimit = 10 * time.Second
+	idleLimit   = 2 * time.Minute
+)
+
 func logOf(options Options) (io.Writer, func(), error) {
 	if options.Mode == cli.ModeTerminal || options.LogFile == "" {
 		return os.Stderr, func() {}, nil
 	}
-	if err := os.MkdirAll(filepath.Dir(options.LogFile), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(options.LogFile), logFolderMode); err != nil {
 		return nil, nil, err
 	}
 	// A service starts again on new settings and new versions: its log keeps what the runs before said.
@@ -64,8 +75,13 @@ func logOf(options Options) (io.Writer, func(), error) {
 	if options.Mode == cli.ModeService {
 		flags = os.O_CREATE | os.O_APPEND | os.O_WRONLY
 	}
-	file, err := os.OpenFile(options.LogFile, flags, 0o644)
+	file, err := os.OpenFile(options.LogFile, flags, logFileMode)
 	if err != nil {
+		return nil, nil, err
+	}
+	// A log from before it was the person's alone becomes so: the mode given above only makes a new file.
+	if err := file.Chmod(logFileMode); err != nil {
+		_ = file.Close()
 		return nil, nil, err
 	}
 	return file, func() { _ = file.Close() }, nil
@@ -102,7 +118,10 @@ func Run(settings config.Config, options Options) (Outcome, error) {
 		return Stopped, err
 	}
 	base, cancel := context.WithCancel(context.Background())
-	server := &http.Server{BaseContext: func(net.Listener) context.Context { return base }, Handler: daemon.Handler}
+	server := &http.Server{
+		BaseContext: func(net.Listener) context.Context { return base }, Handler: daemon.Handler,
+		IdleTimeout: idleLimit, ReadHeaderTimeout: headerLimit,
+	}
 	go func() {
 		if err := server.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			daemon.Logger().Error(err.Error())

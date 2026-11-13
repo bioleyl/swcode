@@ -43,14 +43,14 @@ func (s *Store) Load() []protocol.Project {
 }
 
 func (s *Store) Save(projects []protocol.Project) error {
-	if err := os.MkdirAll(filepath.Dir(s.file), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(s.file), 0o700); err != nil {
 		return err
 	}
 	data, err := json.MarshalIndent(projects, "", "  ")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(s.file, data, 0o644)
+	return os.WriteFile(s.file, data, 0o600)
 }
 
 // Deps is what the projects work with.

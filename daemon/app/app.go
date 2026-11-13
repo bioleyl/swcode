@@ -182,6 +182,9 @@ func (o Options) browser() browser.Browser {
 // New puts a daemon together on its settings.
 func New(settings config.Config, options Options) (*App, error) {
 	options.fill()
+	if err := keepPrivate(settings.DataDir); err != nil {
+		return nil, err
+	}
 	token, err := AccessToken(settings.DataDir, settings.Token)
 	if err != nil {
 		return nil, err

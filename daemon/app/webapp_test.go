@@ -3,6 +3,7 @@ package app
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"testing/fstest"
 )
@@ -64,5 +65,22 @@ func TestThePageIsAskedAboutEachTimeAndSentAgainOnlyOnceItChanged(t *testing.T) 
 		if changed := getFile(t, address, map[string]string{"if-none-match": `"another"`}); changed.Code != http.StatusOK {
 			t.Fatalf("%s with another etag: status %d", address, changed.Code)
 		}
+	}
+}
+
+func TestThePageSaysWhatItMayLoadAndNoFileLetsItsTypeBeGuessed(t *testing.T) {
+	page := getFile(t, "/sessions/abc", nil)
+	policy := page.Header().Get("content-security-policy")
+	for _, rule := range []string{"script-src 'self'", "frame-ancestors 'none'", "object-src 'none'"} {
+		if !strings.Contains(policy, rule) {
+			t.Fatalf("the page's policy lacks %q: %q", rule, policy)
+		}
+	}
+	script := getFile(t, "/assets/app-1a2b.js", nil)
+	if page.Header().Get("x-content-type-options") != "nosniff" || script.Header().Get("x-content-type-options") != "nosniff" {
+		t.Fatal("a file's type may be guessed")
+	}
+	if script.Header().Get("content-security-policy") != "" {
+		t.Fatal("a script carries the page's policy")
 	}
 }

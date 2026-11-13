@@ -17,14 +17,16 @@ import (
 )
 
 const (
-	noPicture  = "There is no such picture."
-	noCode     = "Send the pairing code of the QR code."
-	codeUsed   = "This pairing code expired or was already used: scan the QR code again, it changes every minute."
-	noDevice   = "There is no such phone."
-	noProject  = "There is no such project."
-	busy       = "A session is working: stop it first. The daemon restarts to take the new settings."
-	unreadable = "The settings page sent something the daemon does not understand."
-	unreached  = "Nothing answered there as llm-server."
+	noPicture = "There is no such picture."
+	noCode    = "Send the pairing code of the QR code."
+	// maxPairingBody is the most a pairing request holds: a code and a name.
+	maxPairingBody = 4 << 10
+	codeUsed       = "This pairing code expired or was already used: scan the QR code again, it changes every minute."
+	noDevice       = "There is no such phone."
+	noProject      = "There is no such project."
+	busy           = "A session is working: stop it first. The daemon restarts to take the new settings."
+	unreadable     = "The settings page sent something the daemon does not understand."
+	unreached      = "Nothing answered there as llm-server."
 	// keepCached: a picture's address never shows another one, it can stay in the browser's cache.
 	keepCached = "private, max-age=31536000, immutable"
 )
@@ -86,6 +88,8 @@ func (a *App) pairingRoutes(mux *http.ServeMux) {
 	})
 	mux.HandleFunc("POST "+protocol.EndpointPairing, func(response http.ResponseWriter, request *http.Request) {
 		var asked protocol.PairRequest
+		// Anyone may ask this route: what it reads before it knows the code is good stays small.
+		request.Body = http.MaxBytesReader(response, request.Body, maxPairingBody)
 		if readBody(response, request, &asked) != nil || asked.Code == "" {
 			fail(response, http.StatusBadRequest, noCode)
 			return

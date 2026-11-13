@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -17,6 +18,7 @@ import (
 
 	"swcode/daemon/fakellama"
 	"swcode/daemon/protocol"
+	"swcode/daemon/sessions"
 	. "swcode/daemon/testapp"
 )
 
@@ -450,5 +452,32 @@ func TestASessionsStreamGoesOnlyToTheSocketsThatHaveItOpenWithoutWhatOnlyTheMode
 	kept := RequestText(map[string]any{"events": test.Events(created["id"].(string))})
 	if !strings.Contains(kept, "only the model reads back") {
 		t.Fatal("the session lost what the model read")
+	}
+}
+
+func TestTheDataFolderAndASessionsFilesAreThePersonsAlone(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows keeps no such modes")
+	}
+	// A folder an earlier version made, readable by every account.
+	dataDir := filepath.Join(t.TempDir(), "data")
+	if err := os.MkdirAll(dataDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	test := Start(t, Options{DataDir: dataDir, Replies: []fakellama.Reply{{Text: "Hello."}}})
+	session := test.NewSession(sessions.Request{})
+	test.App.Sessions.SendPrompt(session.ID, "Hi", nil)
+	test.WaitForEvent("turnFinished", 1)
+	modes := map[string]os.FileMode{
+		dataDir:                            0o700,
+		filepath.Join(dataDir, "sessions"): 0o700,
+		filepath.Join(dataDir, "sessions", session.ID+".jsonl"): 0o600,
+		filepath.Join(dataDir, "sessions", session.ID+".json"):  0o600,
+	}
+	for path, expected := range modes {
+		info, err := os.Stat(path)
+		if err != nil || info.Mode().Perm() != expected {
+			t.Fatalf("%s: mode %v, error %v", path, info.Mode().Perm(), err)
+		}
 	}
 }

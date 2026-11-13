@@ -169,7 +169,7 @@ func (p *Pairing) dropExpired(now time.Time) {
 }
 
 func (p *Pairing) save() {
-	_ = os.MkdirAll(filepath.Dir(p.file), 0o755)
+	_ = os.MkdirAll(filepath.Dir(p.file), 0o700)
 	data, _ := json.MarshalIndent(p.devices, "", "  ")
 	_ = os.WriteFile(p.file, data, ownerOnly)
 }
