@@ -1452,6 +1452,7 @@ func (v *SessionEventReminder) Normalize() error {
 }
 
 type SessionEventSkillsListed struct {
+	Agents []SkillSummary `json:"agents,omitempty"`
 	At     string         `json:"at"`
 	ID     string         `json:"id"`
 	Skills []SkillSummary `json:"skills"`

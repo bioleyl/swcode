@@ -29,6 +29,8 @@ type place struct {
 	sandbox *hosts.Sandbox
 	// untrusted: the folder is one the person has not trusted, and what it says of itself is not given to the agent.
 	untrusted bool
+	// agents is the agents the person defined, which the agent tool starts by name.
+	agents *definedAgents
 }
 
 // The agent call's result: the subagent works, or waits its turn, and its report comes later in any case.
@@ -77,6 +79,7 @@ func (s *Service) prepare(ctx context.Context, session *live) (prepared, error) 
 			Host: host, Off: s.deps.SkillsOff(meta.Workspace, meta.Host), PersonalOnly: untrusted, Workspace: meta.Workspace,
 		}),
 		untrusted: untrusted,
+		agents:    agentsOf(host, meta.Workspace, untrusted),
 	}
 	return prepared{
 		main: main, setup: s.setupFor(session, meta, main, where, main.Vision, limit), subagent: subagent, subagents: limit, where: where,
@@ -210,6 +213,7 @@ func (s *Service) setupFor(session *live, meta Meta, main llm.Choice, where plac
 			return notes.Find(ctx, where.host, meta.Workspace)
 		},
 		Skills: where.skills.List,
+		Agents: toldAgents(where, limit),
 		SystemPrompt: agent.SystemPrompt(meta.Workspace, where.scratch, where.platform, agent.Servers{
 			Browser: s.deps.Browser != nil && sees, Images: s.deps.ImageURL != "", Sandbox: where.sandbox != nil,
 		}, limit),
@@ -726,8 +730,17 @@ func (a subagents) Start(task tools.SubagentTask) tools.Outcome {
 		},
 		Thinking: s.deps.Thinking.Subagents, Tools: s.deps.SubagentTools, Web: s.webFor(a.subagent), Workspace: a.session.meta.Workspace,
 	}
+	description := task.Description
+	if task.Agent != "" {
+		named, refused := a.useDefined(task.Agent, &deps)
+		if refused != "" {
+			return tools.Failure(refused, "refused")
+		}
+		// The person watching reads which of their agents works.
+		description = named + ": " + description
+	}
 	subagent := waitingSubagent{
-		agentID: agentID, callID: task.CallID, description: task.Description, model: a.subagent.Model,
+		agentID: agentID, callID: task.CallID, description: description, model: a.subagent.Model,
 		run: func(ctx context.Context) agent.Report { return agent.RunSubagent(ctx, agentID, task, deps) },
 	}
 	s.mu.Lock()

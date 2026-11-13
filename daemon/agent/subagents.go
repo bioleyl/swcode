@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -14,7 +15,11 @@ import (
 	"swcode/daemon/web"
 )
 
-const noAnswer = "The subagent ended without an answer."
+const (
+	noAnswer = "The subagent ended without an answer."
+	// declinedNote tells the main agent why a subagent's task ended on a call: nobody approves a subagent's calls.
+	declinedNote = "[The subagent’s task ended on a call the session asks about before it runs, and a subagent has no one to ask: %s. Do it yourself, so the person is asked.]"
+)
 
 // SubagentDeps is what a subagent runs with: its own model and tools, the main turn's context, and the session to
 // report to.
@@ -37,6 +42,8 @@ type SubagentDeps struct {
 	// Record records an event in the main session: a line for each call the subagent made.
 	Record func(event protocol.SessionEventVariant)
 	Web    *web.Port
+	// Defined is the agent the person defined that does the task; nil for an explore subagent.
+	Defined *DefinedAgent
 }
 
 func answered(result TaskResult) string {
@@ -94,6 +101,8 @@ type subagentHost struct {
 	mu      sync.Mutex
 	events  []protocol.SessionEvent
 	calls   map[string]subagentCall
+	// declined is the call that needed a person's approval, which ended the task; empty when none did.
+	declined string
 }
 
 func (h *subagentHost) ToolContext() *tools.Context { return h.context }
@@ -125,11 +134,21 @@ func (h *subagentHost) StreamReasoning(string, string) {}
 // StreamToolCall does nothing: the subagent's calls show once they are made.
 func (h *subagentHost) StreamToolCall(string, protocol.ToolName) {}
 
+// NeedsPermission: an explore subagent only reads. An agent the person defined works under its session's
+// permissions: what the session lets through without asking, it does.
 func (h *subagentHost) NeedsPermission(subject permissions.Subject) bool {
-	return subject.Access != permissions.AccessRead
+	if h.deps.Defined == nil || h.deps.Defined.Grants == nil {
+		return subject.Access != permissions.AccessRead
+	}
+	return permissions.NeedsPermission(subject, h.deps.Defined.Grants())
 }
 
-func (h *subagentHost) AskPermission(context.Context, PermissionAsk) protocol.PermissionDecision {
+// AskPermission declines: a subagent has no one to ask. The call is kept, for the report to say why the task ended.
+func (h *subagentHost) AskPermission(_ context.Context, ask PermissionAsk) protocol.PermissionDecision {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	call := h.calls[ask.CallID]
+	h.declined = strings.TrimSpace(string(call.tool) + " " + call.summary)
 	return protocol.PermissionDecisionDeny
 }
 
@@ -160,8 +179,8 @@ func (h *subagentHost) activityOf(event protocol.SessionEventVariant) (protocol.
 	return protocol.SessionEventSubagentActivity{}, false
 }
 
-// RunSubagent runs one explore subagent to its report. Its start and its end are its session's to record: the
-// session hands the report to the main agent.
+// RunSubagent runs one subagent to its report: an explore one, or an agent the person defined. Its start and its end
+// are its session's to record: the session hands the report to the main agent.
 func RunSubagent(ctx context.Context, agentID string, task tools.SubagentTask, deps SubagentDeps) Report {
 	host := &subagentHost{
 		agentID: agentID,
@@ -170,17 +189,31 @@ func RunSubagent(ctx context.Context, agentID string, task tools.SubagentTask, d
 		context: &tools.Context{Host: deps.Host, ReadFiles: tools.NewReadFiles(), Web: deps.Web, Workspace: deps.Workspace},
 		deps:    deps,
 	}
+	prompt := ExplorePrompt(deps.Workspace, deps.Platform)
+	if deps.Defined != nil {
+		// Its commands run where the session's do, in its sandbox when it has one.
+		host.context.Sandbox, host.context.Scratch = deps.Defined.Sandbox, deps.Defined.Scratch
+		prompt = DefinedAgentPrompt(deps.Defined.Instructions, deps.Workspace, deps.Platform)
+	}
 	setup := Setup{
 		Agent:         llm.Identity{AgentID: agentID, Model: deps.ModelName, Source: deps.Source, Thinking: deps.Thinking},
 		ContextTokens: deps.ContextTokens,
 		MaxSteps:      deps.MaxSteps,
 		Model:         deps.Model,
 		NewID:         deps.NewID,
-		SystemPrompt:  ExplorePrompt(deps.Workspace, deps.Platform),
+		SystemPrompt:  prompt,
 		Tools:         deps.Tools,
 	}
 	result := RunTask(ctx, task.Prompt, host, setup)
 	// Its conversation ends here: its slot goes to the next agent, before its main agent's.
 	llm.AgentDone(deps.Model, setup.Agent)
-	return Report{Outcome: result.Ending.Outcome, Text: reports[result.Ending.Outcome](result)}
+	text := reports[result.Ending.Outcome](result)
+	host.mu.Lock()
+	declined := host.declined
+	host.mu.Unlock()
+	if declined != "" {
+		// Nobody stopped it: its task failed on that call, and its report wakes the main agent like any other.
+		return Report{Outcome: protocol.TurnOutcomeFailed, Text: strings.Join(nonEmpty(result.Answer, fmt.Sprintf(declinedNote, declined)), "\n")}
+	}
+	return Report{Outcome: result.Ending.Outcome, Text: text}
 }

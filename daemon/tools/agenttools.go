@@ -236,6 +236,7 @@ var webfetchTool = Define(Spec[webfetchInput]{
 })
 
 type agentInput struct {
+	Agent       string `json:"agent"`
 	Description string `json:"description"`
 	Prompt      string `json:"prompt"`
 }
@@ -246,11 +247,12 @@ var agentTool = Define(Spec[agentInput]{
 			return Refuse("A subagent cannot start subagents of its own.")
 		}
 		return Ready(func(context.Context) Outcome {
-			return tc.Subagents.Start(SubagentTask{CallID: tc.CallID, Description: input.Description, Prompt: input.Prompt})
+			return tc.Subagents.Start(SubagentTask{Agent: input.Agent, CallID: tc.CallID, Description: input.Description, Prompt: input.Prompt})
 		}, nil)
 	},
 	Description: "Starts an explore subagent in the background: it searches and reads the workspace, and the web, on its own, so its reading stays out of your context. It cannot change files or run commands. Start all those the task needs in one reply: your turn ends after it, and their reports wake you, all together once the last is done. swcode runs as many at once as the preset allows, the others wait their turn.",
 	Input: Object(
+		Optional("agent", String().Trimmed().Min(1).Describe("One of the user’s agents, by its name in the list the conversation gives, in place of an explore subagent: it works from its own instructions, and may change files or run commands when its tools say so.")),
 		Required("description", String().Min(1).Describe(`The task in a few words, for the person watching: "Find where sessions are saved".`)),
 		Required("prompt", String().Min(1).Describe("The whole task: what to look for, where, and what to report. The subagent sees nothing of this conversation.")),
 	),

@@ -126,6 +126,29 @@ var mainTools = slices.DeleteFunc(slices.Clone(protocol.ToolNames), func(name pr
 	return slices.Contains(chatOnlyTools, name) || slices.Contains(retiredTools, name) || slices.Contains(serverTools, name)
 })
 
+// definableTools are the tools an agent the person defines may work with, in the order it is offered them: those
+// of an explore subagent, then the ones that change files and run commands. Never agent, question, terminal, todo,
+// notes or an MCP server's.
+var definableTools = []protocol.ToolName{
+	protocol.ToolNameRead, protocol.ToolNameGrep, protocol.ToolNameGlob, protocol.ToolNameWebsearch, protocol.ToolNameWebfetch,
+	protocol.ToolNameWrite, protocol.ToolNameEdit, protocol.ToolNameBash,
+}
+
+// AgentBox is the tools of an agent the person defined: those it names among the ones such an agent may have; an
+// explore subagent's when it names none of them.
+func AgentBox(names []string) Box {
+	kept := []protocol.ToolName{}
+	for _, tool := range definableTools {
+		if slices.Contains(names, string(tool)) {
+			kept = append(kept, tool)
+		}
+	}
+	if len(kept) == 0 {
+		return Explore
+	}
+	return Box{names: kept}
+}
+
 // Main is the main agent's tools, with all servers.
 var Main = Box{names: mainTools}
 

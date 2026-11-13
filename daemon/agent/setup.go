@@ -75,6 +75,8 @@ type Setup struct {
 	ContextTokens int
 	// Skills is the user's skills as they are now, which the model is told of; nil for subagents.
 	Skills func(ctx context.Context) []protocol.SkillSummary
+	// Agents is the agents the user defined as they are now, told with the skills; nil where there are none to have.
+	Agents func(ctx context.Context) []protocol.SkillSummary
 	// LoadSkill is one of those skills as the model reads it, for a message that runs it with /<its name>; nil for
 	// subagents.
 	LoadSkill func(ctx context.Context, name string) skills.Text

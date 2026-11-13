@@ -193,7 +193,14 @@ export const SessionEventSchema = z.discriminatedUnion('kind', [
     text: z.string(),
   }),
   // The user's skills, as the model was told them: at a turn's start when they changed, and after a compaction.
-  z.object({ at, id: z.string(), kind: z.literal('skillsListed'), skills: z.array(SkillSummarySchema) }),
+  // With them, the agents the user defined (their .agents/agents files), which the agent tool starts by name.
+  z.object({
+    agents: z.array(SkillSummarySchema).optional(),
+    at,
+    id: z.string(),
+    kind: z.literal('skillsListed'),
+    skills: z.array(SkillSummarySchema),
+  }),
   // The project's notes, its AGENTS.md files from the repository's root to its folder, as the model read them: with
   // the first message of a session that has some, and again after a compaction.
   z.object({ at, id: z.string(), kind: z.literal('projectNotesRead'), notes: z.array(ProjectNoteSchema) }),

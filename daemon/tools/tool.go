@@ -43,6 +43,8 @@ func (r *ReadFiles) Set(path string, time int64) {
 
 // SubagentTask is what the main agent hands a subagent: a few words for people, the whole task for the subagent.
 type SubagentTask struct {
+	// Agent is the agent the person defined that gets the task, by name; an explore subagent when empty.
+	Agent       string
 	CallID      string
 	Description string
 	Prompt      string

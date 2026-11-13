@@ -113,7 +113,7 @@ func messagesOf(event protocol.SessionEvent, results map[string]callResult, pict
 	case protocol.SessionEventReminder:
 		return []llm.Message{{Content: value.Text, Role: llm.RoleUser}}
 	case protocol.SessionEventSkillsListed:
-		return []llm.Message{{Content: SkillsText(value.Skills), Role: llm.RoleUser}}
+		return []llm.Message{{Content: ListedText(value), Role: llm.RoleUser}}
 	case protocol.SessionEventProjectNotesRead:
 		return []llm.Message{{Content: NotesText(value.Notes), Role: llm.RoleUser}}
 	case protocol.SessionEventSkillLoaded:
