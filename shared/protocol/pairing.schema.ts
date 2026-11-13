@@ -26,3 +26,16 @@ export const DeviceSchema = z.object({
 export type Device = z.infer<typeof DeviceSchema>;
 
 export const DevicesSchema = z.object({ devices: z.array(DeviceSchema) });
+
+/**
+ * `GET /api/tailnet`, and `POST` to have Tailscale serve swcode there: whether this computer's tailnet can give
+ * swcode an HTTPS address, the address (served already, or the one it would be), and why not otherwise. A phone
+ * installs swcode as an app only from HTTPS.
+ */
+export const TailnetSchema = z.object({
+  address: z.string().optional(),
+  available: z.boolean(),
+  problem: z.string().optional(),
+  served: z.boolean(),
+});
+export type Tailnet = z.infer<typeof TailnetSchema>;

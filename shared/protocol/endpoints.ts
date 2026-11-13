@@ -33,6 +33,9 @@ export const ENDPOINTS = {
   // PUT has npx skills install swcode-base in the home, DELETE take it out of it: the home on the host of the
   // ?project=<id>, this computer's without one.
   swcodeBaseHome: '/api/swcode-base/home',
+  // GET whether this computer's tailnet can give swcode an HTTPS address, and the address; POST has Tailscale serve
+  // swcode there.
+  tailnet: '/api/tailnet',
   // GET the version that runs and what is known of a newer one; PUT whether to look every 10 minutes.
   update: '/api/update',
   // POST: look for a newer version now.

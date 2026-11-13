@@ -28,6 +28,7 @@ import (
 	"swcode/daemon/protocol"
 	"swcode/daemon/sessions"
 	"swcode/daemon/swcodebase"
+	"swcode/daemon/tailnet"
 	"swcode/daemon/terminals"
 	"swcode/daemon/tools"
 	"swcode/daemon/update"
@@ -90,6 +91,9 @@ type Options struct {
 	OnUpdated func()
 	// Version stands in for the build's (the tests give a release's).
 	Version string
+	// Tailscale is Tailscale's command line, asked for the tailnet's HTTPS address of this swcode; without one the
+	// daemon has none.
+	Tailscale tailnet.Run
 }
 
 // App is a daemon, ready to serve.
@@ -117,6 +121,7 @@ type App struct {
 	pairing      *pairing.Pairing
 	// deviceSockets is the sockets each paired phone has open, ended with it when it is forgotten.
 	deviceSockets *deviceSockets
+	tailnet       tailnetAddress
 	logger        *slog.Logger
 	stopWatching  context.CancelFunc
 }
@@ -300,6 +305,7 @@ func (a *App) routes() http.Handler {
 	a.closingRoutes(mux)
 	a.startupRoutes(mux)
 	a.updateRoutes(mux)
+	a.tailnetRoutes(mux)
 	mux.HandleFunc("GET "+protocol.EndpointSocket, a.socket)
 	mux.Handle("/", webApp(a.webFiles()))
 	return withCORS(withAuth(mux, a.Token, a.pairing), a.pairing)

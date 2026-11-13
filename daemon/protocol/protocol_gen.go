@@ -90,6 +90,7 @@ const (
 	EndpointStop           = "/api/stop"
 	EndpointSwcodeBase     = "/api/swcode-base"
 	EndpointSwcodeBaseHome = "/api/swcode-base/home"
+	EndpointTailnet        = "/api/tailnet"
 	EndpointUpdate         = "/api/update"
 	EndpointUpdateCheck    = "/api/update/check"
 	EndpointUpdateInstall  = "/api/update/install"
@@ -5407,6 +5408,13 @@ func (v *PairingCode) Normalize() error {
 		return fmt.Errorf("%s: must be positive", "lifetimeMs")
 	}
 	return nil
+}
+
+type Tailnet struct {
+	Address   string `json:"address,omitempty"`
+	Available bool   `json:"available"`
+	Problem   string `json:"problem,omitempty"`
+	Served    bool   `json:"served"`
 }
 
 type StartupChange struct {

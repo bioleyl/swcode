@@ -25,6 +25,7 @@ import (
 	"swcode/daemon/hosts"
 	"swcode/daemon/protocol"
 	"swcode/daemon/sessions"
+	"swcode/daemon/tailnet"
 	"swcode/daemon/update"
 )
 
@@ -64,6 +65,8 @@ type Options struct {
 	Startup app.StartupPort
 	// Version is the build the daemon says it is: a release's looks for a newer one (SWCODE_RELEASES_URL).
 	Version string
+	// Tailscale stands in for Tailscale's command line: without one the daemon has no tailnet.
+	Tailscale tailnet.Run
 	// Program is what installing a newer version replaces.
 	Program update.Program
 }
@@ -139,7 +142,7 @@ func Start(t *testing.T, options Options) *App {
 		Environment: environmentOf, Home: home, MaxSteps: options.MaxSteps,
 		OnRestart: func() { test.restarts <- struct{}{} }, OnStop: func() { test.stops <- struct{}{} },
 		OnUpdated: func() { test.updates <- struct{}{} }, Program: options.Program, Startup: options.Startup,
-		Version: options.Version,
+		Tailscale: options.Tailscale, Version: options.Version,
 	})
 	if err != nil {
 		t.Fatal(err)

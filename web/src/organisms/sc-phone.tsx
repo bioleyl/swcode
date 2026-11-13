@@ -8,16 +8,18 @@ import {
   reachableBaseOf,
   renewalLine,
   secondsUntilRenewal,
+  tailnetLine,
 } from '../lib/pairing-view';
 import { qrElement } from '../lib/qr';
 import { daemonOrigin } from '../services/access';
-import { daemonState } from '../services/daemon-status';
+import { daemonState, daemonStatusBus, refreshStatus } from '../services/daemon-status';
 import { installApp, installBus, installState } from '../services/install';
 import { forgetDevice, NO_CODE, newPairingCode, pairedDevices, pairingLink } from '../services/pairing';
+import { readTailnet, serveOnTailnet } from '../services/tailnet';
 import { BASE_STYLES } from '../styles/shared';
 import styles from './sc-phone.css?inline';
 
-import type { Device, PairingCode } from '../../../shared/protocol/pairing.schema';
+import type { Device, PairingCode, Tailnet } from '../../../shared/protocol/pairing.schema';
 import type { InstallState } from '../types/install.types';
 
 const QR_LABEL = 'QR code of the link that pairs a phone with swcode';
@@ -26,7 +28,7 @@ const NO_DEVICES = 'No phone is paired yet.';
 // What installing swcode on the device that shows this page takes, by where it stands.
 const INSTALL_LINES: Readonly<Record<InstallState, string>> = {
   insecure:
-    'A browser installs an app only from an HTTPS address, and this page came without it. Reach this computer over HTTPS (a tailnet gives it one: tailscale serve), then pair from that address.',
+    'A browser installs an app only from an HTTPS address, and this page came without it. Give swcode one (a tailnet does, above), then open swcode from that address.',
   installed: 'swcode is installed on this device: it opens from its own icon, in a window of its own.',
   manual:
     'In the browser’s menu, choose “Add to Home Screen” (in Safari, the Share button first) or “Install app”: swcode then opens from its own icon, in a window of its own.',
@@ -58,6 +60,10 @@ export class ScPhone extends ScElement {
     link: ref('.link'),
     note: ref('.note'),
     qr: ref('.qr'),
+    serve: ref<JlButton>('.serve'),
+    tailnet: ref('.tailnet'),
+    tailnetLine: ref('.tailnet-line'),
+    tailnetProblem: ref('.tailnet-problem'),
   }));
 
   templateHtml(): Node {
@@ -78,6 +84,12 @@ export class ScPhone extends ScElement {
           <h2>Paired phones</h2>
           <div class="devices" />
         </section>
+        <section class="tailnet" hidden>
+          <h2>Over HTTPS, on your tailnet</h2>
+          <p class="lead tailnet-line" />
+          <p class="note tailnet-problem" hidden />
+          <JlButton class="serve" label="Serve swcode on the tailnet" hidden />
+        </section>
         <section>
           <h2>Install on this device</h2>
           <p class="lead install-line" />
@@ -93,7 +105,10 @@ export class ScPhone extends ScElement {
 
   onConnect(): void {
     this._refs.install.events.register('press', () => void installApp());
+    this._refs.serve.events.register('press', () => void this.serve());
     this.onBus(installBus, 'changed', () => this.renderInstall());
+    // The address a phone reaches may change: the tailnet's, once Tailscale serves swcode there.
+    this.onBus(daemonStatusBus, 'changed', () => this.renderPairing());
     this.renderInstall();
     if (this.active.get() && this._clock === undefined) {
       this.start();
@@ -111,13 +126,37 @@ export class ScPhone extends ScElement {
     this.stopClock();
   }
 
-  /** A first code, renewed every minute, and the phones paired so far. */
+  /** A first code, renewed every minute, the phones paired so far, and what the tailnet can do. */
   private start(): void {
     this._code = undefined;
     this.renderPairing();
     void this.renew();
     this.startClock();
     void this.renderDevices();
+    void readTailnet().then((tailnet) => this.renderTailnet(tailnet));
+  }
+
+  /** Has Tailscale serve swcode: the QR code then leads to its HTTPS address, once the daemon's status says it. */
+  private async serve(): Promise<void> {
+    this._refs.serve.loading.set(true);
+    const tailnet = await serveOnTailnet();
+    this._refs.serve.loading.set(false);
+    this.renderTailnet(tailnet);
+    await refreshStatus();
+  }
+
+  /** The tailnet's part: nothing for a daemon that does not answer, its address or why none, and the way to it. */
+  private renderTailnet(tailnet: Tailnet | undefined): void {
+    this._refs.tailnet.hidden = tailnet === undefined;
+    if (tailnet === undefined) {
+      return;
+    }
+    this._refs.tailnetLine.textContent = tailnetLine(tailnet);
+    // Available and still with a problem: Tailscale refused to serve, and said why.
+    const refused = tailnet.available && tailnet.problem !== undefined;
+    this._refs.tailnetProblem.hidden = !refused;
+    this._refs.tailnetProblem.textContent = refused ? (tailnet.problem ?? '') : '';
+    this._refs.serve.hidden = !tailnet.available || tailnet.served;
   }
 
   /** Every second while the dialog is open: the time left, and a new code before this one expires. */

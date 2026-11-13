@@ -17,6 +17,7 @@ import { keepingEnd } from '../src/lib/follow-end';
 import { ago, contextText, folderName, percent, tokens } from '../src/lib/format';
 import { atTop, fillsWindow, scrollAfterOlder } from '../src/lib/history-window';
 import { blocksOf } from '../src/lib/markdown';
+import { tailnetLine } from '../src/lib/pairing-view';
 import { matchCommands, paletteCommands, paletteTarget } from '../src/lib/palette';
 import {
   groupByProject,
@@ -515,5 +516,22 @@ describe('SSH hosts', () => {
     expect(sshHostProblem('', [])).not.toBe('');
     expect(sshHostProblem('me@box gmktec', [])).toBe('One host, without spaces or commas.');
     expect(sshHostProblem('gmktec', ['gmktec'])).toBe('This host is in the list already.');
+  });
+});
+
+describe('tailnetLine', () => {
+  it('says why a computer has no tailnet address', () => {
+    expect(tailnetLine({ available: false, problem: 'Tailscale is not on this computer.', served: false })).toBe(
+      'Tailscale is not on this computer.'
+    );
+    expect(tailnetLine({ available: false, served: false })).toBe('');
+  });
+
+  it('names the address swcode has on the tailnet, or would have', () => {
+    const address = 'https://laptop.tail1234.ts.net:4500';
+    expect(tailnetLine({ address, available: true, served: true })).toContain(`swcode is at ${address}`);
+    expect(tailnetLine({ address, available: true, served: false })).toContain(
+      `can give swcode an HTTPS address on your tailnet, ${address}`
+    );
   });
 });

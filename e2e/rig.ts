@@ -4,7 +4,7 @@ import { once } from 'node:events';
 import { copyFileSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { delimiter, dirname, join } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 
 import { chromium } from 'playwright-core';
@@ -32,6 +32,36 @@ const POLL_MS = 50;
 const SAME_RELEASE = { notes: '', version: E2E_RELEASE };
 // Where a daemon that may install a newer version runs from, in its home: the person's command line is there.
 const PROGRAM_PATH = '.local/bin/swcode';
+
+// The folder of the daemon's home whose programs come first: the stand-ins for those of the machine.
+const FAKE_BIN = 'bin';
+const EXECUTABLE = 0o755;
+/**
+ * Tailscale's command line as the daemon asks it: a tailnet with certificates, which serves a port once asked to.
+ * The machine's own Tailscale stays out of the tests, and none of them changes what it serves.
+ */
+const FAKE_TAILSCALE = `#!/bin/sh
+served="$(dirname "$0")/tailnet-port"
+case "$*" in
+  "status --json") echo '{"BackendState":"Running","CertDomains":["laptop.tail1234.ts.net"]}' ;;
+  "serve status --json")
+    if [ -f "$served" ]; then
+      port="$(cat "$served")"
+      printf '{"Web":{"laptop.tail1234.ts.net:%s":{"Handlers":{"/":{"Proxy":"http://127.0.0.1:%s"}}}}}\\n' "$port" "$port"
+    else
+      echo '{}'
+    fi ;;
+  "serve --bg --https="*) echo "\${3#--https=}" > "$served" ;;
+esac
+`;
+
+/** Puts the stand-in programs in the home: the folder to name first on the daemon's PATH. */
+const fakePrograms = (home: string): string => {
+  const folder = join(home, FAKE_BIN);
+  mkdirSync(folder, { recursive: true });
+  writeFileSync(join(folder, 'tailscale'), FAKE_TAILSCALE, { mode: EXECUTABLE });
+  return folder;
+};
 
 const writeAll = (folder: string, files: Readonly<Record<string, string>>): void => {
   for (const [path, content] of Object.entries(files)) {
@@ -125,7 +155,7 @@ export async function startRig(options: E2eOptions): Promise<E2eRig> {
       HOME: home,
       LLAMA_MODEL: model,
       LLAMA_URL: llama.url,
-      PATH: process.env.PATH,
+      PATH: `${fakePrograms(home)}${delimiter}${process.env.PATH ?? ''}`,
       SWCODE_DATA_DIR: dataDir,
       SWCODE_ENV: 'test',
       SWCODE_HOST: HOST,

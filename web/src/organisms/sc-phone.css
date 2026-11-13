@@ -59,7 +59,8 @@ section + section {
   color: var(--jl-muted);
 }
 
-.install-now {
+.install-now,
+.serve {
   align-self: flex-start;
 }
 

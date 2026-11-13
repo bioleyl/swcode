@@ -55,6 +55,23 @@ describe('on a phone', () => {
   });
 });
 
+describe('a tailnet', () => {
+  it('gives swcode an HTTPS address with a press, which the QR code then leads to', async () => {
+    const rig = await start({ replies: [] });
+    const page = await rig.browser.newPage({ viewport: DESKTOP });
+    await page.goto(`${rig.link}#/settings/phone`);
+    const phone = page.locator('sc-phone');
+    await phone.getByText('Tailscale can give swcode an HTTPS address', { exact: false }).waitFor();
+    await expect.poll(() => phone.locator('.link').textContent()).toContain('http://127.0.0.1');
+
+    await phone.locator('.serve').click();
+    await phone.getByText('swcode is at https://laptop.tail1234.ts.net', { exact: false }).waitFor();
+    await expect.poll(() => phone.locator('.link').textContent()).toContain('https://laptop.tail1234.ts.net:');
+    expect(await phone.locator('.serve').isHidden()).toBe(true);
+    expect(await phone.locator('.tailnet-problem').isHidden()).toBe(true);
+  });
+});
+
 describe('another computer’s swcode', () => {
   it('is added from its pairing link, shown in this browser, and left again for the one the page came from', async () => {
     const home = await start({ replies: [{ text: 'From home.' }] });

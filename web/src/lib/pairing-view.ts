@@ -1,3 +1,4 @@
+import type { Tailnet } from '../../../shared/protocol/pairing.schema';
 import type { DaemonState } from '../types/daemon.types';
 
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
@@ -24,3 +25,16 @@ export const secondsUntilRenewal = (expiresAt: string, now: number): number =>
 
 /** How long the shown code lasts, in words. */
 export const renewalLine = (seconds: number): string => `A new code in ${seconds} s`;
+
+/**
+ * What the tailnet does for a phone, in a line: swcode's HTTPS address there once Tailscale serves it, the address
+ * it would have, or why this computer has none.
+ */
+export function tailnetLine(tailnet: Tailnet): string {
+  if (!tailnet.available) {
+    return tailnet.problem ?? '';
+  }
+  return tailnet.served
+    ? `swcode is at ${tailnet.address} on your tailnet, over HTTPS: the QR code leads there, and a phone on the tailnet installs swcode from it and reaches it from anywhere.`
+    : `Tailscale can give swcode an HTTPS address on your tailnet, ${tailnet.address}: a phone on the tailnet installs swcode from it, and reaches it from anywhere.`;
+}

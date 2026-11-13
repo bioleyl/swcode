@@ -20,6 +20,7 @@ import (
 	"swcode/daemon/cli"
 	"swcode/daemon/config"
 	"swcode/daemon/protocol"
+	"swcode/daemon/tailnet"
 	"swcode/daemon/update"
 )
 
@@ -90,6 +91,7 @@ func Run(settings config.Config, options Options) (Outcome, error) {
 		OnUpdated:   endingOf(options, ended, Updated),
 		Program:     options.Program,
 		Startup:     options.Startup,
+		Tailscale:   tailnet.Command,
 	})
 	if err != nil {
 		return Stopped, err
