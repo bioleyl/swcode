@@ -26,6 +26,8 @@ class DaemonConnection {
   private _socket: WebSocket | undefined;
   private _waiting: ClientMessage[] = [];
   private _attempts = 0;
+  // The wait before the next attempt to connect, while the socket is closed.
+  private _retry: ReturnType<typeof setTimeout> | undefined;
 
   get online(): boolean {
     return this._socket?.readyState === WebSocket.OPEN;
@@ -37,6 +39,19 @@ class DaemonConnection {
     socket.addEventListener('open', () => this.opened(socket));
     socket.addEventListener('message', (event) => this.received(event.data));
     socket.addEventListener('close', () => this.closed());
+  }
+
+  /**
+   * Connects now rather than at the end of the wait: the window shows again, or the network is back. A phone that
+   * wakes would otherwise show its last page for up to ten seconds before it hears the daemon again.
+   */
+  retryNow(): void {
+    if (this._retry === undefined) {
+      return;
+    }
+    clearTimeout(this._retry);
+    this._retry = undefined;
+    this.connect();
   }
 
   send(message: ClientMessage): void {
@@ -67,7 +82,10 @@ class DaemonConnection {
     daemonBus.emit('online', false);
     const delay = RETRY_DELAYS_MS[this._attempts] ?? LAST_DELAY_MS;
     this._attempts += 1;
-    setTimeout(() => this.connect(), delay);
+    this._retry = setTimeout(() => {
+      this._retry = undefined;
+      this.connect();
+    }, delay);
   }
 }
 

@@ -23,6 +23,13 @@ document.body.replaceChildren(new ScAppShell());
 startApp(forever);
 // The daemon back after a restart: ask at once whether llm-server answers too.
 daemonBus.register('online', () => void refreshStatus(), forever);
+// A phone that wakes, or a network that comes back: the socket is tried at once, not at the end of its wait.
+document.addEventListener(
+  'visibilitychange',
+  () => (document.visibilityState === 'visible' ? daemon.retryNow() : undefined),
+  { signal: forever }
+);
+window.addEventListener('online', () => daemon.retryNow(), { signal: forever });
 // A phone opened from the QR code trades its pairing code for a token before it talks to the daemon.
 void pairFromLink().finally(() => {
   daemon.connect();
