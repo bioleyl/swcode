@@ -11,8 +11,22 @@ describe('commandPrograms', () => {
     expect(commandPrograms('npm run build && git status; ls | wc -l')).toEqual(['npm', 'git', 'ls', 'wc']);
   });
 
-  it('skips the variables set before the program', () => {
-    expect(commandPrograms('CI=1 NODE_ENV=test npx vitest run')).toEqual(['npx']);
+  it.each([
+    ['a variable set for it', 'PATH=.:$PATH ls'],
+    ['a library loaded into it', 'LD_PRELOAD=./x.so ls'],
+    ['git told what to run', 'git -c core.fsmonitor=./payload.sh status'],
+    ['git told where its programs are', 'git --exec-path=. status'],
+    ['a package run through npm', 'npm exec -y -- some-package'],
+    ['a program that runs another', 'timeout 5 sh ./payload.sh'],
+    ['a shell given a script', 'bash ./payload.sh'],
+    ['a program run as root', 'sudo rm -rf /'],
+    ['a program found and run', 'find . -exec rm {} +'],
+  ])('cannot vouch for a program by its name with %s', (_case, command) => {
+    expect(commandPrograms(command)).toBeUndefined();
+  });
+
+  it('still names git and npm for what they do themselves', () => {
+    expect(commandPrograms('git commit -m fix && npm run build')).toEqual(['git', 'npm']);
   });
 
   it.each([

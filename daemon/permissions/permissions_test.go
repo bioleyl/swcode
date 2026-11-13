@@ -57,14 +57,19 @@ func TestCommandPrograms(t *testing.T) {
 	cases := map[string][]string{
 		"npm test -- --run":                       {"npm"},
 		"npm run build && git status; ls | wc -l": {"npm", "git", "ls", "wc"},
-		"CI=1 NODE_ENV=test npx vitest run":       {"npx"},
+		"git commit -m fix && npm run build":      {"git", "npm"},
 	}
 	for text, want := range cases {
 		if got, known := CommandPrograms(text); !known || !reflect.DeepEqual(got, want) {
 			t.Errorf("%q: got %v", text, got)
 		}
 	}
-	for _, opaque := range []string{"echo $(rm -rf /)", "echo `whoami`", "npm test > out.txt", "sleep 10 & rm file", "(cd /tmp && rm x)", "ls\nrm x", "   "} {
+	// A program's name vouches for nothing after a variable set for it, nor when it runs what its words say.
+	unnamed := []string{
+		"PATH=.:$PATH ls", "LD_PRELOAD=./x.so ls", "git -c core.fsmonitor=./payload.sh status", "git --exec-path=. status",
+		"npm exec -y -- some-package", "timeout 5 sh ./payload.sh", "bash ./payload.sh", "sudo rm -rf /", "find . -exec rm {} +",
+	}
+	for _, opaque := range append(unnamed, "echo $(rm -rf /)", "echo `whoami`", "npm test > out.txt", "sleep 10 & rm file", "(cd /tmp && rm x)", "ls\nrm x", "   ") {
 		if _, known := CommandPrograms(opaque); known {
 			t.Errorf("%q passed", opaque)
 		}

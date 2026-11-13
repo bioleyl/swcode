@@ -102,13 +102,53 @@ var (
 	chains                = regexp.MustCompile(`&&|\|\|`)
 	separators            = regexp.MustCompile(`[;|]`)
 	environmentAssignment = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*=`)
+	// runners are programs that run what their words say rather than a thing of their own: allowing one by its
+	// name would allow anything after it.
+	runners = map[string]bool{
+		"bash": true, "bunx": true, "command": true, "dash": true, "doas": true, "env": true, "eval": true, "exec": true,
+		"find": true, "fish": true, "nice": true, "nohup": true, "npx": true, "parallel": true, "pnpx": true, "sh": true,
+		"ssh": true, "sudo": true, "time": true, "timeout": true, "watch": true, "xargs": true, "zsh": true,
+	}
+	// runningWords are the words that make a program named for itself run something else: git's own settings name
+	// programs it runs, and npm runs any package's.
+	runningWords = map[string][]string{
+		"git": {"-c", "--config-env", "--exec-path"},
+		"npm": {"exec", "x"},
+	}
 )
+
+// runsItsWords tells whether a program runs what its words say, so that its name vouches for nothing.
+func runsItsWords(program string, words []string) bool {
+	if runners[program] {
+		return true
+	}
+	for _, marker := range runningWords[program] {
+		for _, word := range words {
+			if word == marker || strings.HasPrefix(word, marker+"=") {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// programOf is the program a part of a command runs, when its name says what runs: not after a variable set for
+// it (PATH, LD_PRELOAD and git's own change what a name means), and not a program that runs what its words say.
+func programOf(part string) (string, bool) {
+	words := strings.Fields(part)
+	if len(words) == 0 || environmentAssignment.MatchString(words[0]) || runsItsWords(words[0], words[1:]) {
+		return "", false
+	}
+	return words[0], true
+}
 
 const statementSeparator = ";"
 
 // CommandPrograms is the programs a shell command runs, one per part (`npm test && git status` gives npm and git),
-// or none known when the command does more than that list can tell. Quotes are not understood: a separator inside
-// quotes only makes a part that no rule allows, so the command is asked about.
+// or none known when the command does more than that list can tell: it sets a variable first, or one of its
+// programs runs what its words say. Quotes are not understood: a separator inside quotes only makes a part that
+// no rule allows, so the command is asked about. shared/permissions words the app's button with the same rule,
+// in TypeScript: the tests of both hold the same cases.
 func CommandPrograms(command string) ([]string, bool) {
 	statements := chains.ReplaceAllString(command, statementSeparator)
 	for _, mark := range opaqueMarks {
@@ -121,14 +161,8 @@ func CommandPrograms(command string) ([]string, bool) {
 		if strings.TrimSpace(part) == "" {
 			continue
 		}
-		program := ""
-		for _, word := range strings.Fields(part) {
-			if !environmentAssignment.MatchString(word) {
-				program = word
-				break
-			}
-		}
-		if program == "" {
+		program, named := programOf(part)
+		if !named {
 			return nil, false
 		}
 		programs = append(programs, program)
