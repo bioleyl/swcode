@@ -1,0 +1,53 @@
+# Every push to main and every pull request runs what a release runs before it builds: the lint, the type check,
+# the unit tests and the Go checks (npm run check), then the app end to end in a headless Chromium. A tag's own
+# check then fails on nothing a branch could have shown first.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      # The sandbox's tests run where bubblewrap can make a namespace of its own, and skip elsewhere: Ubuntu's
+      # runners refuse it one unless told otherwise.
+      - name: Let bubblewrap make a sandbox
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq bubblewrap
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+      - run: npm ci
+      - run: npm run check
+
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run e2e:install
+      - run: npm run test:e2e
