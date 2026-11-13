@@ -63,7 +63,8 @@ type RouterModel struct {
 type Options struct {
 	// Replies are the replies, in order: each chat completion takes the next one.
 	Replies []Reply
-	// Scripts are replies for the conversations whose first user message holds the key, each in order: requests
+	// Scripts are replies for the conversations whose first user message holds the key (a subagent's task), or
+	// whose last one does (what swcode asks at the end of a conversation, a summary say), each in order: requests
 	// that run at the same time (subagents) cannot share one script.
 	Scripts       map[string][]Reply
 	Models        []string
@@ -245,9 +246,9 @@ func (s *Server) refused(body map[string]any) string {
 func (s *Server) next(body map[string]any) Reply {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	first := FirstUserMessage(body)
+	first, last := FirstUserMessage(body), LastUserMessage(body)
 	for key, script := range s.scripts {
-		if strings.Contains(first, key) {
+		if strings.Contains(first, key) || strings.Contains(last, key) {
 			return s.take(&script, key)
 		}
 	}
@@ -288,6 +289,17 @@ func FirstUserMessage(body map[string]any) string {
 	for _, message := range Messages(body) {
 		if message["role"] == "user" {
 			return TextOf(message["content"])
+		}
+	}
+	return ""
+}
+
+// LastUserMessage is the text of a request's last user message.
+func LastUserMessage(body map[string]any) string {
+	messages := Messages(body)
+	for index := len(messages) - 1; index >= 0; index-- {
+		if messages[index]["role"] == "user" {
+			return TextOf(messages[index]["content"])
 		}
 	}
 	return ""

@@ -160,7 +160,7 @@ func askModel(ctx context.Context, host TurnHost, setup Setup) (llm.Reply, error
 	if err == nil || !llm.IsContextFull(err) || ctx.Err() != nil {
 		return reply, err
 	}
-	if err := Compact(ctx, host, setup); err != nil {
+	if err := CompactFromTranscript(ctx, host, setup); err != nil {
 		return llm.Reply{}, err
 	}
 	return complete(ctx, host, setup)

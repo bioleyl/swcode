@@ -21,10 +21,13 @@ const (
 	unknownContextTokens = 8192
 	noSummary            = "The earlier conversation could not be summarized."
 	compactorPrompt      = "You summarize the conversation of a coding agent with its user, so the agent can go on with less context."
+	// summaryRoomTokens is what a summary asked at the end of the conversation takes after it: the request, the
+	// model's thoughts, and the summary itself.
+	summaryRoomTokens = 3000
 )
 
-var compactionInstructions = strings.Join([]string{
-	"Summarize the conversation below so the agent can go on with the task. Write, in this order:",
+// summaryParts is what a summary holds, in order, whichever way it is asked for.
+var summaryParts = []string{
 	"1. The user's latest request, quoted as they wrote it.",
 	"2. What the user wants overall, and the decisions made so far.",
 	"3. The files read and changed, with their paths and what changed.",
@@ -32,9 +35,23 @@ var compactionInstructions = strings.Join([]string{
 	"5. Where things stand, and what remains to do.",
 	"6. The plan, when the agent wrote one with the plan tool: its latest list, each step with its status.",
 	"Keep paths, names and code identifiers exact. Stay under 400 words.",
-	"",
-	"The conversation:",
-}, "\n")
+}
+
+func instructions(first string, after ...string) string {
+	return strings.Join(slices.Concat([]string{first}, summaryParts, after), "\n")
+}
+
+var (
+	// compactionInstructions asks for the summary of a conversation given as a transcript, in a request of its own.
+	compactionInstructions = instructions(
+		"Summarize the conversation below so the agent can go on with the task. Write, in this order:", "", "The conversation:",
+	)
+	// continuedInstructions asks the agent itself, at the end of its conversation: the request is the one
+	// llm-server cached plus these lines, so it only processes them.
+	continuedInstructions = instructions(
+		"Summarize the conversation so far, to go on with the task from your summary alone: it will stand in place of everything above. Call no tool now. Write, in this order:",
+	)
+)
 
 func clip(text string, limit int) string {
 	runes := []rune(text)
@@ -96,9 +113,10 @@ func TranscriptOf(events []protocol.SessionEvent, budgetChars int) string {
 	return strings.Join(kept, userSeparator)
 }
 
-// Compact replaces the conversation so far with a summary written by the agent's own model; the turn goes on from
-// it.
-func Compact(ctx context.Context, host TurnHost, setup Setup) error {
+// transcriptSummary is a summary of the conversation given as a transcript, each message cut short, in a request of
+// its own: what still works once the conversation no longer fits the context. llm-server processes the whole
+// transcript, and the agent's slot loses the conversation it had cached.
+func transcriptSummary(ctx context.Context, host TurnHost, setup Setup) (string, error) {
 	contextTokens := setup.ContextTokens
 	if contextTokens <= 0 {
 		contextTokens = unknownContextTokens
@@ -111,10 +129,64 @@ func Compact(ctx context.Context, host TurnHost, setup Setup) error {
 		},
 		Target: llm.Target{Identity: setup.Agent, Slot: llm.NoSlot},
 	}, func(llm.Part) {})
+	return reply.Text, err
+}
+
+// withRequest is a conversation with one more thing asked at its end, joined to a user message that ends it: some
+// chat templates want the roles to alternate.
+func withRequest(messages []llm.Message, text string) []llm.Message {
+	last := len(messages) - 1
+	if last < 0 || messages[last].Role != llm.RoleUser {
+		return append(messages, llm.Message{Content: text, Role: llm.RoleUser})
+	}
+	asked := slices.Clone(messages)
+	asked[last].Content += userSeparator + text
+	return asked
+}
+
+// hasRoomForSummary tells whether a summary can be asked at the end of the conversation: it fits with what the
+// summary takes after it. With a context of unknown size it is tried, and llm-server says when it does not fit.
+func hasRoomForSummary(events []protocol.SessionEvent, setup Setup) bool {
+	return setup.ContextTokens <= 0 || EstimatedTokens(events, fixedChars(setup))+summaryRoomTokens <= setup.ContextTokens
+}
+
+// continuedSummary is a summary the agent writes at the end of its own conversation: the request is the one
+// llm-server cached, its tools listed still, with the request for a summary after it, so nothing but that request
+// is processed and the model summarizes what it read whole. Empty when the model called a tool instead, or when
+// there is no room for it.
+func continuedSummary(ctx context.Context, host TurnHost, setup Setup) (string, error) {
+	history := host.History()
+	if !hasRoomForSummary(history, setup) {
+		return "", nil
+	}
+	conversation := ConversationOf(history, setup.Pictures)
+	reply, err := setup.Model.Complete(ctx, llm.Request{
+		Messages: append([]llm.Message{{Content: setup.SystemPrompt, Role: llm.RoleSystem}}, withRequest(conversation, continuedInstructions)...),
+		Target:   llm.Target{Identity: setup.Agent, Slot: llm.NoSlot},
+		Tools:    setup.Tools.Definitions(),
+	}, func(llm.Part) {})
+	if llm.IsContextFull(err) {
+		return "", nil
+	}
+	return reply.Text, err
+}
+
+// summaryOf is the summary of the conversation so far: asked at its end while it fits, from a transcript of it
+// otherwise.
+func summaryOf(ctx context.Context, host TurnHost, setup Setup) (string, error) {
+	if summary, err := continuedSummary(ctx, host, setup); summary != "" || err != nil {
+		return summary, err
+	}
+	return transcriptSummary(ctx, host, setup)
+}
+
+// compactWith replaces the conversation so far with a summary written by the agent's own model; the turn goes on
+// from it.
+func compactWith(ctx context.Context, host TurnHost, setup Setup, summarize func(context.Context, TurnHost, Setup) (string, error)) error {
+	summary, err := summarize(ctx, host, setup)
 	if err != nil {
 		return err
 	}
-	summary := reply.Text
 	if summary == "" {
 		summary = noSummary
 	}
@@ -123,6 +195,16 @@ func Compact(ctx context.Context, host TurnHost, setup Setup) error {
 	ReadNotes(ctx, host, setup)
 	ListSkills(ctx, host, setup)
 	return nil
+}
+
+// Compact replaces the conversation so far with its summary, asked the cheapest way that fits.
+func Compact(ctx context.Context, host TurnHost, setup Setup) error {
+	return compactWith(ctx, host, setup, summaryOf)
+}
+
+// CompactFromTranscript replaces a conversation llm-server found too long for the context with its summary.
+func CompactFromTranscript(ctx context.Context, host TurnHost, setup Setup) error {
+	return compactWith(ctx, host, setup, transcriptSummary)
 }
 
 // HasConversation tells whether there is anything to summarize: a message of the person's or of the model's since

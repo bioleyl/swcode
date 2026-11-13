@@ -74,9 +74,11 @@ const textOf = (content: unknown): string => {
     : '';
 };
 
-const firstUserMessage = (body: Record<string, unknown>): string => {
+/** A request's first and last user messages: a script is told by either (a subagent's task, a summary's request). */
+const userMessages = (body: Record<string, unknown>): string[] => {
   const messages = Array.isArray(body.messages) ? body.messages : [];
-  return textOf(messages.find((message) => message?.role === 'user')?.content);
+  const fromUser = (message: { role?: unknown }): boolean => message?.role === 'user';
+  return [textOf(messages.find(fromUser)?.content), textOf(messages.findLast(fromUser)?.content)];
 };
 
 const routerModels = (router: readonly FakeRouterModel[]) => ({
@@ -102,7 +104,8 @@ export async function startFakeLlama(options: FakeLlamaOptions): Promise<FakeLla
   const replies = [...options.replies];
   const scripts = Object.entries(options.scripts ?? {}).map(([key, script]) => ({ key, replies: [...script] }));
   const nextReply = (body: Record<string, unknown>): ScriptedReply | undefined => {
-    const script = scripts.find((candidate) => firstUserMessage(body).includes(candidate.key));
+    const said = userMessages(body);
+    const script = scripts.find((candidate) => said.some((text) => text.includes(candidate.key)));
     return (script ? script.replies : replies).shift();
   };
   const server = createServer(async (request, response) => {

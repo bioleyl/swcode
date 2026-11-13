@@ -157,3 +157,30 @@ func TestATranscriptDropsTheOldestLinesFirst(t *testing.T) {
 		t.Fatalf("got %q", got)
 	}
 }
+
+func TestASummaryIsAskedAtTheEndOfTheConversationOnlyWhileItFitsWithWhatItTakes(t *testing.T) {
+	events := []protocol.SessionEvent{
+		{Value: protocol.SessionEventUserMessage{ID: "u", Text: "Read it"}},
+		{Value: protocol.SessionEventAssistantMessage{ID: "a", Text: "Done.", Usage: &protocol.Usage{CompletionTokens: 20, PromptTokens: 9980}}},
+	}
+	fits := map[int]bool{10_000 + summaryRoomTokens: true, 10_000 + summaryRoomTokens - 1: false, 0: true}
+	for contextTokens, expected := range fits {
+		if got := hasRoomForSummary(events, Setup{ContextTokens: contextTokens}); got != expected {
+			t.Fatalf("a context of %d tokens: room %v", contextTokens, got)
+		}
+	}
+}
+
+func TestARequestAtTheEndOfAConversationJoinsTheUserMessageThatEndsIt(t *testing.T) {
+	ended := withRequest([]llm.Message{{Content: "Hi", Role: llm.RoleUser}}, "Summarize.")
+	if len(ended) != 1 || ended[0].Content != "Hi\n\nSummarize." {
+		t.Fatalf("after a user message: %+v", ended)
+	}
+	answered := withRequest([]llm.Message{{Content: "Hi", Role: llm.RoleUser}, {Content: "Hello.", Role: llm.RoleAssistant}}, "Summarize.")
+	if len(answered) != 3 || answered[2].Role != llm.RoleUser || answered[2].Content != "Summarize." {
+		t.Fatalf("after an answer: %+v", answered)
+	}
+	if empty := withRequest(nil, "Summarize."); len(empty) != 1 {
+		t.Fatalf("an empty conversation: %+v", empty)
+	}
+}

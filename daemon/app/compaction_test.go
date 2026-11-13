@@ -13,7 +13,8 @@ import (
 )
 
 const (
-	summaryRequest = "Summarize the conversation below"
+	// What both requests for a summary start with: the one of a transcript, and the one at the end of a conversation.
+	summaryRequest = "Summarize the conversation"
 	summary        = "The user asked what big.txt holds; it holds many lines of x. Nothing remains to do but answer."
 )
 
@@ -129,6 +130,18 @@ func TestCompactSummarizesAtThePersonsWordInATurnOfItsOwnAndTheNextTurnGoesOnFro
 	}
 	test.WaitForEvent("turnFinished", 2)
 	test.UntilIdle(session.ID)
+	// The summary is asked at the end of the conversation llm-server cached: the turn's request, its tools listed
+	// still, then the answer and the request for a summary.
+	asked := test.Requests()
+	turn, summarized := fakellama.Messages(asked[0]), fakellama.Messages(asked[1])
+	if len(summarized) != len(turn)+2 || asked[1]["tools"] == nil || !strings.Contains(fakellama.LastUserMessage(asked[1]), summaryRequest) {
+		t.Fatalf("the summary request: %d messages after a turn of %d", len(summarized), len(turn))
+	}
+	for index, message := range turn {
+		if RequestText(message) != RequestText(summarized[index]) {
+			t.Fatalf("message %d of the summary request is not the turn's", index)
+		}
+	}
 	Expect(t, Kinds(test.Events(session.ID))[4:], []any{"turnStarted", "contextCompacted", "turnFinished"})
 	Expect(t, last(test.Events(session.ID)), `{"outcome":"done"}`)
 	if problem := test.App.Sessions.Compact(session.ID); problem != "There is nothing new to summarize." {

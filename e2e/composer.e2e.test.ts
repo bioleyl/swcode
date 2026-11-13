@@ -49,7 +49,7 @@ const GAME_FLOW = {
 };
 
 // What the daemon asks to have the conversation summarized.
-const SUMMARY_REQUEST = 'Summarize the conversation below';
+const SUMMARY_REQUEST = 'Summarize the conversation';
 
 /**
  * Run in the page before it loads: a speech recognizer that hears "fix the login bug" in two results, the first a
