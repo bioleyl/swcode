@@ -1,6 +1,8 @@
 package app
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"io/fs"
 	"mime"
 	"net/http"
@@ -10,10 +12,75 @@ import (
 	"swcode/daemon/protocol"
 )
 
-const indexPage = "index.html"
+const (
+	indexPage = "index.html"
+	// assetsFolder holds the files the build names after their content: a new build names them anew, so a browser
+	// may keep one for good.
+	assetsFolder = "assets/"
+	// revalidate has the browser ask each time whether its copy still stands: the page and the files beside it keep
+	// their names from one build to the next.
+	revalidate = "no-cache"
+)
+
+// encoding is a compressed copy the build leaves beside a file, and how a browser says it reads it.
+type encoding struct {
+	name   string
+	suffix string
+}
+
+// encodings are the copies the build makes (web/vite.config.ts), the smallest first.
+var encodings = []encoding{{name: "br", suffix: ".br"}, {name: "gzip", suffix: ".gz"}}
+
+// accepts tells whether a browser reads an encoding, by its accept-encoding header.
+func accepts(header, name string) bool {
+	for _, each := range strings.Split(header, ",") {
+		coding, quality, _ := strings.Cut(strings.TrimSpace(each), ";")
+		if strings.EqualFold(strings.TrimSpace(coding), name) && strings.TrimSpace(quality) != "q=0" {
+			return true
+		}
+	}
+	return false
+}
+
+// served is a file of the web app as it travels: its smallest copy the browser reads, and that copy's encoding,
+// empty for the file itself.
+func served(files fs.FS, name, acceptEncoding string, plain []byte) ([]byte, string) {
+	for _, each := range encodings {
+		if !accepts(acceptEncoding, each.name) {
+			continue
+		}
+		if data, err := fs.ReadFile(files, name+each.suffix); err == nil {
+			return data, each.name
+		}
+	}
+	return plain, ""
+}
+
+// etagOf names a file's content, for a browser to ask whether its copy still stands.
+func etagOf(data []byte) string {
+	sum := sha256.Sum256(data)
+	return `"` + hex.EncodeToString(sum[:8]) + `"`
+}
+
+// cached answers a browser that already holds the file: true when nothing more is to be sent. A file named after
+// its content is kept for good; any other is asked about each time, and sent again only once it changed.
+func cached(response http.ResponseWriter, request *http.Request, name string, plain []byte) bool {
+	if strings.HasPrefix(name, assetsFolder) {
+		response.Header().Set("cache-control", keepCached)
+		return false
+	}
+	etag := etagOf(plain)
+	response.Header().Set("cache-control", revalidate)
+	response.Header().Set("etag", etag)
+	if request.Header.Get("if-none-match") != etag {
+		return false
+	}
+	response.WriteHeader(http.StatusNotModified)
+	return true
+}
 
 // webApp serves the built web app, every address that is not the API answered by its page; nothing when there is
-// none (the tests).
+// none (the tests). A file travels compressed when the build left a copy the browser reads.
 func webApp(files fs.FS) http.Handler {
 	return http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		if request.Method != http.MethodGet || strings.HasPrefix(request.URL.Path, protocol.APIPrefix) || files == nil {
@@ -32,6 +99,14 @@ func webApp(files fs.FS) http.Handler {
 		if kind := mime.TypeByExtension(path.Ext(name)); kind != "" {
 			response.Header().Set("content-type", kind)
 		}
-		_, _ = response.Write(data)
+		response.Header().Set("vary", "accept-encoding")
+		if cached(response, request, name, data) {
+			return
+		}
+		body, encoded := served(files, name, request.Header.Get("accept-encoding"), data)
+		if encoded != "" {
+			response.Header().Set("content-encoding", encoded)
+		}
+		_, _ = response.Write(body)
 	})
 }
