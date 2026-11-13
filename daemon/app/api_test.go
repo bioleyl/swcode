@@ -102,6 +102,51 @@ func TestAPhonePairedWithACodeOpensTheAPIUntilItIsForgotten(t *testing.T) {
 	}
 }
 
+// pairedPhone pairs a phone with a fresh code: its token, and the id the daemon lists it under.
+func pairedPhone(t *testing.T, test *App) (string, string) {
+	t.Helper()
+	_, data, _ := raw(t, test, "GET", protocol.EndpointPairingCode, Token, nil)
+	var code protocol.PairingCode
+	_ = json.Unmarshal(data, &code)
+	_, data, _ = raw(t, test, "POST", protocol.EndpointPairing, "", map[string]string{"code": code.Code, "name": "iPhone"})
+	var paired protocol.PairAnswer
+	_ = json.Unmarshal(data, &paired)
+	_, data, _ = raw(t, test, "GET", protocol.EndpointDevices, Token, nil)
+	var devices protocol.Devices
+	_ = json.Unmarshal(data, &devices)
+	if paired.Token == "" || len(devices.Devices) != 1 {
+		t.Fatalf("%d phones paired", len(devices.Devices))
+	}
+	return paired.Token, devices.Devices[0].ID
+}
+
+func TestForgettingAPhoneEndsTheSocketItHadOpen(t *testing.T) {
+	test := startHello(t)
+	token, device := pairedPhone(t, test)
+	address := "ws" + strings.TrimPrefix(test.Server.URL, "http") + protocol.EndpointSocket + "?token=" + token
+	connection, _, err := websocket.Dial(context.Background(), address, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer connection.CloseNow()
+	connection.SetReadLimit(64 << 20)
+	ended := make(chan struct{})
+	go func() {
+		defer close(ended)
+		for {
+			if _, _, err := connection.Read(context.Background()); err != nil {
+				return
+			}
+		}
+	}()
+	raw(t, test, "DELETE", protocol.EndpointDevices+"/"+device, Token, nil)
+	select {
+	case <-ended:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the forgotten phone's socket is still open")
+	}
+}
+
 func TestTheStatusNeedsTheTokenAndSaysTheWorkspaceAndWhatLlamaServerServes(t *testing.T) {
 	test := startHello(t)
 	if status, _, _ := raw(t, test, "GET", protocol.EndpointStatus, "", nil); status != 401 {

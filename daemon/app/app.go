@@ -115,8 +115,10 @@ type App struct {
 	http         *http.Client
 	hosts        *hosts.Registry
 	pairing      *pairing.Pairing
-	logger       *slog.Logger
-	stopWatching context.CancelFunc
+	// deviceSockets is the sockets each paired phone has open, ended with it when it is forgotten.
+	deviceSockets *deviceSockets
+	logger        *slog.Logger
+	stopWatching  context.CancelFunc
 }
 
 // NewID is a random UUID, as sessions and projects are named.
@@ -202,7 +204,8 @@ func New(settings config.Config, options Options) (*App, error) {
 		SwcodeBase:   swcodebase.NewService(registry, logger),
 		Terminals:    terminalService,
 		imagesFolder: filepath.Join(settings.DataDir, imagesFolder), logger: logger, options: options, workspace: workspace,
-		pairing: pairing.New(filepath.Join(settings.DataDir, devicesFile), options.Now, options.NewID),
+		pairing:       pairing.New(filepath.Join(settings.DataDir, devicesFile), options.Now, options.NewID),
+		deviceSockets: newDeviceSockets(),
 	}
 	var service *sessions.Service
 	app.Projects = projects.NewService(projects.Deps{

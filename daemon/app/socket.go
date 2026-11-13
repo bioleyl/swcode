@@ -411,6 +411,9 @@ func (a *App) socket(response http.ResponseWriter, request *http.Request) {
 	connection.SetReadLimit(maxMessage)
 	ctx, cancel := context.WithCancel(request.Context())
 	defer cancel()
+	if device, paired := a.pairing.DeviceOf(presentedToken(request)); paired {
+		defer a.deviceSockets.open(device, cancel)()
+	}
 	box := &outbox{ready: make(chan struct{}, 1)}
 	unsubscribe := []func(){
 		a.Sessions.Subscribe(func(message protocol.ServerMessage) { box.push(message) }),

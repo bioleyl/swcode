@@ -97,17 +97,24 @@ func (p *Pairing) Redeem(code, name string) string {
 
 // Knows tells whether a token is a paired phone's.
 func (p *Pairing) Knows(token string) bool {
+	_, known := p.DeviceOf(token)
+	return known
+}
+
+// DeviceOf is the paired phone a token belongs to, by its id: every phone is compared, so the time taken says
+// nothing of which one matched.
+func (p *Pairing) DeviceOf(token string) (string, bool) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	given := hashOf(token)
-	known := false
+	id, known := "", false
 	for _, device := range p.devices {
 		stored, _ := hex.DecodeString(device.TokenHash)
 		if subtle.ConstantTimeCompare(stored, given) == 1 {
-			known = true
+			id, known = device.ID, true
 		}
 	}
-	return known
+	return id, known
 }
 
 func (p *Pairing) Devices() []protocol.Device {
