@@ -39,3 +39,25 @@ export const TailnetSchema = z.object({
   served: z.boolean(),
 });
 export type Tailnet = z.infer<typeof TailnetSchema>;
+
+/** `GET /api/push`: the daemon's public key, which a browser subscribes to its push service with. */
+export const PushKeySchema = z.object({ key: z.string() });
+export type PushKey = z.infer<typeof PushKeySchema>;
+
+/**
+ * `POST /api/push`: a browser that asks to be told when a session waits for the person or ends its turn, the app
+ * closed. What its `PushSubscription` holds: where its push service takes messages for it, and its keys.
+ */
+export const PushSubscriptionSchema = z.object({
+  endpoint: z.string().min(1),
+  keys: z.object({ auth: z.string().min(1), p256dh: z.string().min(1) }),
+});
+export type PushSubscription = z.infer<typeof PushSubscriptionSchema>;
+
+/** `DELETE /api/push`: the browser asks out, by the address of its subscription. */
+export const PushRemovalSchema = z.object({ endpoint: z.string().min(1) });
+export type PushRemoval = z.infer<typeof PushRemovalSchema>;
+
+/** What a push says, as the service worker reads it: the session's title, what it needs, and the session to open. */
+export const PushNoticeSchema = z.object({ body: z.string(), sessionId: z.string(), title: z.string() });
+export type PushNotice = z.infer<typeof PushNoticeSchema>;

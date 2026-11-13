@@ -110,6 +110,7 @@ func (a *App) pairingRoutes(mux *http.ServeMux) {
 			return
 		}
 		a.deviceSockets.end(request.PathValue("id"))
+		a.forgetPushOf(request.PathValue("id"))
 		answer(response, map[string]bool{"ok": true})
 	})
 }

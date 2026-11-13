@@ -11,6 +11,7 @@ import { daemon, daemonBus } from './services/daemon';
 import { refreshStatus, watchStatus } from './services/daemon-status';
 import { startApp } from './services/install';
 import { pairFromLink } from './services/pairing';
+import { followPushes } from './services/push';
 import { applyTheme } from './services/theme';
 import { ScAppShell } from './templates/sc-app-shell';
 
@@ -21,6 +22,7 @@ applyTheme();
 adoptToken();
 document.body.replaceChildren(new ScAppShell());
 startApp(forever);
+followPushes(forever);
 // The daemon back after a restart: ask at once whether llm-server answers too.
 daemonBus.register('online', () => void refreshStatus(), forever);
 // A phone that wakes, or a network that comes back: the socket is tried at once, or asked whether it still lives.

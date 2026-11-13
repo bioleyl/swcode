@@ -92,6 +92,7 @@ const (
 	EndpointModels         = "/api/models"
 	EndpointPairing        = "/api/pairing"
 	EndpointPairingCode    = "/api/pairing/code"
+	EndpointPush           = "/api/push"
 	EndpointSandbox        = "/api/sandbox"
 	EndpointSettings       = "/api/settings"
 	EndpointSettingsModels = "/api/settings/models"
@@ -6124,6 +6125,87 @@ func (v *PairingCode) UnmarshalJSON(data []byte) error {
 func (v *PairingCode) Normalize() error {
 	if v.LifetimeMs <= 0 {
 		return fmt.Errorf("%s: must be positive", "lifetimeMs")
+	}
+	return nil
+}
+
+type PushKey struct {
+	Key string `json:"key"`
+}
+
+type PushNotice struct {
+	Body      string `json:"body"`
+	SessionID string `json:"sessionId"`
+	Title     string `json:"title"`
+}
+
+type PushRemoval struct {
+	Endpoint string `json:"endpoint"`
+}
+
+func (v *PushRemoval) UnmarshalJSON(data []byte) error {
+	type plain PushRemoval
+	p := plain{}
+	if err := json.Unmarshal(data, &p); err != nil {
+		return err
+	}
+	*v = PushRemoval(p)
+	return v.Normalize()
+}
+
+// Normalize trims and checks what the app sent, as its schema does.
+func (v *PushRemoval) Normalize() error {
+	if utf8.RuneCountInString(v.Endpoint) < 1 {
+		return fmt.Errorf("%s: must not be empty", "endpoint")
+	}
+	return nil
+}
+
+type PushSubscription struct {
+	Endpoint string               `json:"endpoint"`
+	Keys     PushSubscriptionKeys `json:"keys"`
+}
+
+func (v *PushSubscription) UnmarshalJSON(data []byte) error {
+	type plain PushSubscription
+	p := plain{}
+	if err := json.Unmarshal(data, &p); err != nil {
+		return err
+	}
+	*v = PushSubscription(p)
+	return v.Normalize()
+}
+
+// Normalize trims and checks what the app sent, as its schema does.
+func (v *PushSubscription) Normalize() error {
+	if utf8.RuneCountInString(v.Endpoint) < 1 {
+		return fmt.Errorf("%s: must not be empty", "endpoint")
+	}
+	return nil
+}
+
+type PushSubscriptionKeys struct {
+	Auth   string `json:"auth"`
+	P256dh string `json:"p256dh"`
+}
+
+func (v *PushSubscriptionKeys) UnmarshalJSON(data []byte) error {
+	type plain PushSubscriptionKeys
+	p := plain{}
+	if err := json.Unmarshal(data, &p); err != nil {
+		return err
+	}
+	*v = PushSubscriptionKeys(p)
+	return v.Normalize()
+}
+
+// Normalize trims and checks what the app sent, as its schema does.
+func (v *PushSubscriptionKeys) Normalize() error {
+	if utf8.RuneCountInString(v.Auth) < 1 {
+		return fmt.Errorf("%s: must not be empty", "auth")
+	}
+	if utf8.RuneCountInString(v.P256dh) < 1 {
+		return fmt.Errorf("%s: must not be empty", "p256dh")
 	}
 	return nil
 }

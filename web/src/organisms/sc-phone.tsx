@@ -10,17 +10,20 @@ import {
   secondsUntilRenewal,
   tailnetLine,
 } from '../lib/pairing-view';
+import { PUSH_BUTTONS, PUSH_LINES } from '../lib/push-view';
 import { qrElement } from '../lib/qr';
 import { daemonOrigin } from '../services/access';
 import { daemonState, daemonStatusBus, refreshStatus } from '../services/daemon-status';
 import { installApp, installBus, installState } from '../services/install';
 import { forgetDevice, NO_CODE, newPairingCode, pairedDevices, pairingLink } from '../services/pairing';
+import { pushState, turnPushOff, turnPushOn } from '../services/push';
 import { readTailnet, serveOnTailnet } from '../services/tailnet';
 import { BASE_STYLES } from '../styles/shared';
 import styles from './sc-phone.css?inline';
 
 import type { Device, PairingCode, Tailnet } from '../../../shared/protocol/pairing.schema';
 import type { InstallState } from '../types/install.types';
+import type { PushState } from '../types/push.types';
 
 const QR_LABEL = 'QR code of the link that pairs a phone with swcode';
 const MS_PER_SECOND = 1000;
@@ -51,6 +54,8 @@ export class ScPhone extends ScElement {
   private _problem = NO_CODE;
   private _renewing = false;
   private _clock: ReturnType<typeof setInterval> | undefined;
+  // Where notifications stood when last drawn: what a press on their button changes.
+  private _pushState: PushState = 'unsupported';
 
   private readonly _refs = this.useRefs((ref) => ({
     devices: ref('.devices'),
@@ -59,6 +64,9 @@ export class ScPhone extends ScElement {
     installLine: ref('.install-line'),
     link: ref('.link'),
     note: ref('.note'),
+    push: ref<JlButton>('.push'),
+    pushLine: ref('.push-line'),
+    pushProblem: ref('.push-problem'),
     qr: ref('.qr'),
     serve: ref<JlButton>('.serve'),
     tailnet: ref('.tailnet'),
@@ -95,6 +103,12 @@ export class ScPhone extends ScElement {
           <p class="lead install-line" />
           <JlButton class="install-now" icon="download" label="Install swcode" hidden />
         </section>
+        <section>
+          <h2>Notifications on this device</h2>
+          <p class="lead push-line" />
+          <p class="note push-problem" hidden />
+          <JlButton class="push" hidden />
+        </section>
       </div>
     );
   }
@@ -106,6 +120,10 @@ export class ScPhone extends ScElement {
   onConnect(): void {
     this._refs.install.events.register('press', () => void installApp());
     this._refs.serve.events.register('press', () => void this.serve());
+    this._refs.push.events.register('press', () => void this.togglePush());
+    // Installed, the app may notify where its page could not (an iPhone).
+    this.onBus(installBus, 'changed', () => void this.renderPush());
+    void this.renderPush();
     this.onBus(installBus, 'changed', () => this.renderInstall());
     // The address a phone reaches may change: the tailnet's, once Tailscale serves swcode there.
     this.onBus(daemonStatusBus, 'changed', () => this.renderPairing());
@@ -120,6 +138,29 @@ export class ScPhone extends ScElement {
     const state = installState();
     this._refs.installLine.textContent = INSTALL_LINES[state];
     this._refs.install.hidden = state !== 'offered';
+  }
+
+  /** Where notifications stand on the device showing this page, and the button that changes it where one can. */
+  private async renderPush(problem = ''): Promise<void> {
+    const state = await pushState();
+    if (!this.isConnected) {
+      return;
+    }
+    this._pushState = state;
+    const label = PUSH_BUTTONS[state];
+    this._refs.pushLine.textContent = PUSH_LINES[state];
+    this._refs.pushProblem.textContent = problem;
+    this._refs.pushProblem.hidden = problem === '';
+    this._refs.push.hidden = label === undefined;
+    this._refs.push.label.set(label ?? '');
+  }
+
+  /** Turns notifications on for this device, or off once they are: what did not go through is said under it. */
+  private async togglePush(): Promise<void> {
+    this._refs.push.loading.set(true);
+    const outcome = await (this._pushState === 'on' ? turnPushOff() : turnPushOn());
+    this._refs.push.loading.set(false);
+    await this.renderPush(outcome.ok ? '' : outcome.problem);
   }
 
   onDisconnect(): void {

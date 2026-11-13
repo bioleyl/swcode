@@ -41,6 +41,55 @@ const freshOf = async (key, request) => {
   return Promise.race([fetched.catch(() => kept), late]);
 };
 
+// A push from the daemon: a session waits for its person, or ended its turn. What it says was encrypted for this
+// browser alone, and is shown as it is.
+const APP_NAME = 'swcode';
+const ICON = '/icon-192.png';
+const SESSION_PAGE = '/#/sessions/';
+// What the page is told when a notification of one of its sessions is pressed: it goes there itself.
+const OPEN_SESSION = 'openSession';
+
+const noticeOf = (event) => {
+  try {
+    return event.data ? event.data.json() : {};
+  } catch {
+    return {};
+  }
+};
+
+self.addEventListener('push', (event) => {
+  const notice = noticeOf(event);
+  const sessionId = typeof notice.sessionId === 'string' ? notice.sessionId : '';
+  event.waitUntil(
+    self.registration.showNotification(typeof notice.title === 'string' && notice.title ? notice.title : APP_NAME, {
+      body: typeof notice.body === 'string' ? notice.body : '',
+      data: { sessionId },
+      icon: ICON,
+      // One notification a session: its latest word takes the place of the one before.
+      tag: sessionId || APP_NAME,
+    })
+  );
+});
+
+// Pressing a notification shows its session: in the window that is open, which goes there itself, else in a new one.
+const showSession = async (sessionId) => {
+  const windows = await self.clients.matchAll({ includeUncontrolled: true, type: 'window' });
+  const open = windows[0];
+  if (!open) {
+    return self.clients.openWindow(sessionId ? SESSION_PAGE + encodeURIComponent(sessionId) : PAGE);
+  }
+  if (sessionId) {
+    open.postMessage({ sessionId, type: OPEN_SESSION });
+  }
+  return open.focus();
+};
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const sessionId = event.notification.data?.sessionId;
+  event.waitUntil(showSession(typeof sessionId === 'string' ? sessionId : ''));
+});
+
 self.addEventListener('fetch', (event) => {
   const request = event.request;
   const url = new URL(request.url);

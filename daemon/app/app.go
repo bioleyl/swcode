@@ -28,6 +28,7 @@ import (
 	"swcode/daemon/permissions"
 	"swcode/daemon/projects"
 	"swcode/daemon/protocol"
+	"swcode/daemon/push"
 	"swcode/daemon/sessions"
 	"swcode/daemon/swcodebase"
 	"swcode/daemon/tailnet"
@@ -124,6 +125,8 @@ type App struct {
 	// deviceSockets is the sockets each paired phone has open, ended with it when it is forgotten.
 	deviceSockets *deviceSockets
 	tailnet       tailnetAddress
+	// push tells the browsers that asked for it what a session needs, the app closed; nil when its key cannot be kept.
+	push *push.Service
 	// servers are the MCP servers the person listed, whose tools the agent has beside its own.
 	servers *mcp.Manager
 	// sandboxes knows which hosts can run the agent's commands in a sandbox; nil when the settings turn it off.
@@ -289,6 +292,7 @@ func New(settings config.Config, options Options) (*App, error) {
 	})
 	app.Sessions = service
 	service.Load()
+	app.startPush(logError)
 	// Sessions from before projects, or whose project was lost, get one; a chat works in no folder.
 	for _, session := range service.List() {
 		if session.Kind == protocol.SessionKindChat {
@@ -358,6 +362,7 @@ func (a *App) routes() http.Handler {
 	a.updateRoutes(mux)
 	a.tailnetRoutes(mux)
 	a.mcpRoutes(mux)
+	a.pushRoutes(mux)
 	a.sandboxRoutes(mux)
 	mux.HandleFunc("GET "+protocol.EndpointSocket, a.socket)
 	mux.Handle("/", webApp(a.webFiles()))

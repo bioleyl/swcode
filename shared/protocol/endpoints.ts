@@ -17,6 +17,8 @@ export const ENDPOINTS = {
   pairing: '/api/pairing',
   // GET a new pairing code for the QR code, valid a minute and once.
   pairingCode: '/api/pairing/code',
+  // GET the daemon's push key; POST a browser's push subscription, DELETE it by its address.
+  push: '/api/push',
   // GET the settings in use, PUT new ones (the daemon restarts).
   // GET ?project=<id>: whether the project's host can run its sessions' commands in a sandbox.
   sandbox: '/api/sandbox',
