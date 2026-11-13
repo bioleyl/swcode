@@ -125,8 +125,15 @@ export const UsageSchema = z.object({
 });
 export type Usage = z.infer<typeof UsageSchema>;
 
-/** One of the project's notes files (an AGENTS.md), as the model read it: where it is, and what it says. */
-export const ProjectNoteSchema = z.object({ path: z.string(), text: z.string() });
+/**
+ * One of the project's notes files (an AGENTS.md), as the model read it: where it is, what it says, and how many of
+ * its characters were left out when it is longer than a session reads.
+ */
+export const ProjectNoteSchema = z.object({
+  leftOut: z.number().int().positive().optional(),
+  path: z.string(),
+  text: z.string(),
+});
 export type ProjectNote = z.infer<typeof ProjectNoteSchema>;
 
 const at = z.iso.datetime();

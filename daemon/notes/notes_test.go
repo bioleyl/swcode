@@ -2,10 +2,12 @@ package notes
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"swcode/daemon/hosts"
 )
@@ -35,6 +37,43 @@ func TestAFileOnePastTheLimitIsCutWithANote(t *testing.T) {
 	found := notesIn(t, strings.Repeat("é", maxChars+1))
 	if len(found) != 1 || found[0] != strings.Repeat("é", maxChars)+cutNote {
 		t.Fatalf("%d notes", len(found))
+	}
+}
+
+// longNotes is notes past the limit: a short section, then a long one of numbered notes, the oldest first.
+func longNotes(count int) string {
+	lines := []string{"# Project", "", "## Conventions", "", "- Tabs, not spaces.", "", "## Traps", ""}
+	for index := range count {
+		lines = append(lines, fmt.Sprintf("- Trap %d: %s", index, strings.Repeat("x", 190)), "  Its way around.")
+	}
+	return strings.Join(lines, "\n") + "\n"
+}
+
+func TestNotesPastTheLimitLoseTheOldestOfTheirLongestSection(t *testing.T) {
+	const count = 200
+	text := longNotes(count)
+	fitted, leftOut := Fit(text)
+	if length := utf8.RuneCountInString(fitted); length > maxChars || leftOut != utf8.RuneCountInString(text)-length {
+		t.Fatalf("%d characters kept, %d left out", length, leftOut)
+	}
+	for _, kept := range []string{"- Tabs, not spaces.", fmt.Sprintf("- Trap %d:", count-1), "## Traps"} {
+		if !strings.Contains(fitted, kept) {
+			t.Fatalf("%q is gone", kept)
+		}
+	}
+	if strings.Contains(fitted, "- Trap 0:") {
+		t.Fatal("the oldest note is still there")
+	}
+	gone := count - strings.Count(fitted, "- Trap ")
+	if !strings.Contains(fitted, "## Traps\n\n"+fmt.Sprintf(leftOutNote, gone)+"\n- Trap ") {
+		t.Fatalf("no line says %d notes are left out where they were", gone)
+	}
+}
+
+func TestANoteAddedToNotesPastTheLimitIsStillRead(t *testing.T) {
+	added := Add(longNotes(200), "Project", "Traps", "The newest trap.")
+	if fitted, _ := Fit(added); !strings.Contains(fitted, "- The newest trap.") {
+		t.Fatal("the note just added is left out")
 	}
 }
 

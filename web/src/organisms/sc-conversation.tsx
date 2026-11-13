@@ -23,6 +23,7 @@ import type { PictureRef } from '../../../shared/protocol/picture.schema';
 import type {
   DiffDisplay,
   PermissionDecision,
+  ProjectNote,
   ReminderReason,
   SessionEvent,
   ToolName,
@@ -60,6 +61,11 @@ const REMINDER_TITLES: Readonly<Record<ReminderReason, string>> = {
 
 // The project's notes as the model read them, folded: their files are long, and told once a session.
 const NOTES_LINE = 'The agent read the project’s notes (AGENTS.md)';
+// Notes longer than a session reads lose their oldest: the person is the one who can have them tidied.
+const NOTES_CUT_LINE = `${NOTES_LINE}, without their oldest: they are longer than a session reads`;
+
+const notesLine = (notes: readonly ProjectNote[]): string =>
+  notes.some((note) => note.leftOut !== undefined) ? NOTES_CUT_LINE : NOTES_LINE;
 
 const skillsLine = (skills: readonly SkillSummary[]): string =>
   skills.length === 0
@@ -184,7 +190,7 @@ export class ScConversation extends ScElement {
     projectNotesRead: (event) =>
       this.add(
         <details class="compaction">
-          <summary>{NOTES_LINE}</summary>
+          <summary>{notesLine(event.notes)}</summary>
           {event.notes.map((note) => (
             <p>
               <strong>{note.path}</strong>

@@ -876,8 +876,27 @@ func (v *PlanStep) Normalize() error {
 }
 
 type ProjectNote struct {
-	Path string `json:"path"`
-	Text string `json:"text"`
+	LeftOut int    `json:"leftOut,omitempty"`
+	Path    string `json:"path"`
+	Text    string `json:"text"`
+}
+
+func (v *ProjectNote) UnmarshalJSON(data []byte) error {
+	type plain ProjectNote
+	p := plain{}
+	if err := json.Unmarshal(data, &p); err != nil {
+		return err
+	}
+	*v = ProjectNote(p)
+	return v.Normalize()
+}
+
+// Normalize trims and checks what the app sent, as its schema does.
+func (v *ProjectNote) Normalize() error {
+	if v.LeftOut != 0 && v.LeftOut <= 0 {
+		return fmt.Errorf("%s: must be positive", "leftOut")
+	}
+	return nil
 }
 
 type Question struct {

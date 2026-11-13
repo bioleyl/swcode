@@ -4,8 +4,10 @@ package notes
 
 import (
 	"context"
+	"fmt"
 	"slices"
 	"strings"
+	"unicode/utf8"
 
 	"swcode/daemon/catalog"
 	"swcode/daemon/hosts"
@@ -17,8 +19,10 @@ const (
 	FileName = "AGENTS.md"
 	// maxChars is the most of one file the model reads: the whole file goes in every request of the session.
 	maxChars = 20_000
-	// cutNote ends a file cut at maxChars.
+	// cutNote ends a file cut at maxChars: one with no notes to leave out, a single long text.
 	cutNote = "\n\n[The file goes on: read it whole if you need the rest.]"
+	// leftOutNote stands in a section for its oldest notes, left out of a file longer than maxChars.
+	leftOutNote = "[%d older notes of this section are left out here: read the file for them.]"
 	// The Markdown the notes are written in: a title, a heading per section, a bullet per note, its further lines
 	// indented under it.
 	titleMark   = "# "
@@ -40,7 +44,8 @@ func Find(ctx context.Context, host hosts.Host, workspace string) []protocol.Pro
 		if err != nil || strings.TrimSpace(string(data)) == "" {
 			continue
 		}
-		found = append(found, protocol.ProjectNote{Path: path, Text: clipped(string(data))})
+		text, leftOut := Fit(string(data))
+		found = append(found, protocol.ProjectNote{LeftOut: leftOut, Path: path, Text: text})
 	}
 	return found
 }
@@ -113,11 +118,93 @@ func sectionEnd(lines []string, heading int) int {
 
 func joined(lines []string) string { return strings.Join(lines, "\n") + "\n" }
 
-// clipped is a file's text, cut at maxChars characters.
-func clipped(text string) string {
-	runes := []rune(text)
-	if len(runes) <= maxChars {
-		return text
+// section is a part of the notes under one heading: the heading with what stands before its first note, then its
+// notes, the oldest first, each with the lines under its bullet.
+type section struct {
+	lead    []string
+	notes   [][]string
+	leftOut int
+}
+
+// sectionsOf reads the notes into their sections; what comes before the first heading is a section without one.
+func sectionsOf(text string) []*section {
+	current := &section{}
+	sections := []*section{current}
+	for _, line := range strings.Split(text, "\n") {
+		switch {
+		case strings.HasPrefix(line, headingMark):
+			current = &section{lead: []string{line}}
+			sections = append(sections, current)
+		case strings.HasPrefix(line, bulletMark):
+			current.notes = append(current.notes, []string{line})
+		case len(current.notes) > 0:
+			last := len(current.notes) - 1
+			current.notes[last] = append(current.notes[last], line)
+		default:
+			current.lead = append(current.lead, line)
+		}
 	}
-	return string(runes[:maxChars]) + cutNote
+	return sections
+}
+
+func (s *section) lines() []string {
+	lines := slices.Clone(s.lead)
+	if s.leftOut > 0 {
+		lines = append(lines, fmt.Sprintf(leftOutNote, s.leftOut))
+	}
+	return append(lines, slices.Concat(s.notes...)...)
+}
+
+// notesChars is how long a section's notes are, which is what leaving one out can spare.
+func (s *section) notesChars() int {
+	total := 0
+	for _, note := range s.notes {
+		total += utf8.RuneCountInString(strings.Join(note, "\n"))
+	}
+	return total
+}
+
+func textOf(sections []*section) string {
+	lines := []string{}
+	for _, each := range sections {
+		lines = append(lines, each.lines()...)
+	}
+	return strings.Join(lines, "\n")
+}
+
+// leaveOutOldest leaves out the oldest note of the section whose notes are the longest, keeping each section's
+// newest one: false when no section has a note to spare.
+func leaveOutOldest(sections []*section) bool {
+	var longest *section
+	for _, each := range sections {
+		if len(each.notes) > 1 && (longest == nil || each.notesChars() > longest.notesChars()) {
+			longest = each
+		}
+	}
+	if longest == nil {
+		return false
+	}
+	longest.notes = longest.notes[1:]
+	longest.leftOut++
+	return true
+}
+
+// Fit is a notes file as a session reads it, and how many of its characters were left out: whole up to maxChars.
+// A longer one loses the oldest notes of its longest sections, a line in their place saying how many: notes are
+// added at the end of their section, so the ones a session just wrote are the ones the next reads. A file with no
+// notes to leave out is cut at maxChars.
+func Fit(text string) (string, int) {
+	whole := utf8.RuneCountInString(text)
+	if whole <= maxChars {
+		return text, 0
+	}
+	sections := sectionsOf(text)
+	fitted := text
+	for utf8.RuneCountInString(fitted) > maxChars {
+		if !leaveOutOldest(sections) {
+			return string([]rune(text)[:maxChars]) + cutNote, whole - maxChars
+		}
+		fitted = textOf(sections)
+	}
+	return fitted, whole - utf8.RuneCountInString(fitted)
 }

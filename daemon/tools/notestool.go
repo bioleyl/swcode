@@ -10,8 +10,23 @@ import (
 	"swcode/daemon/protocol"
 )
 
-// noteSummaryLength is how much of a note its call shows in a few words.
-const noteSummaryLength = 60
+const (
+	// noteSummaryLength is how much of a note its call shows in a few words.
+	noteSummaryLength = 60
+	// tidyRequest follows a note added to notes longer than a session reads: the agent that fills them is the one
+	// that can shorten them.
+	tidyRequest = " The notes are now longer than a session reads: %d of their characters are left out, the oldest notes of their longest sections. Edit %s: merge the notes that say the same, and remove those that are no longer true."
+)
+
+// addedOutput is what the model reads once its notes are in: where, how many, and that the file needs tidying when
+// it outgrew what a session reads.
+func addedOutput(label string, count int, after string) string {
+	output := fmt.Sprintf("Added to %s: %s.", label, counted(count, "note", "notes"))
+	if _, leftOut := notes.Fit(after); leftOut > 0 {
+		output += fmt.Sprintf(tidyRequest, leftOut, label)
+	}
+	return output
+}
 
 type noteInput struct {
 	Section string `json:"section"`
@@ -43,7 +58,7 @@ var notesTool = Define(Spec[notesInput]{
 			if problem := saveFile(ctx, tc, path, []byte(after), info, label); problem != "" {
 				return Failure(problem, "")
 			}
-			return Outcome{Display: diff, OK: true, Output: fmt.Sprintf("Added to %s: %s.", label, counted(len(input.Notes), "note", "notes"))}
+			return Outcome{Display: diff, OK: true, Output: addedOutput(label, len(input.Notes), after)}
 		}, diff)
 	},
 	Description: "Adds to the project’s notes, its AGENTS.md, which every session starts from: what you had to find out about the project and the next session would too. A command and what matters about it, a trap and its way around, a convention the code doesn’t show, how the user wants something done. Use it without being asked, before you end a task that taught you such a thing. When the project has no notes yet (none came with the first message), add its first ones at the end of your first task: how to build, test and run it, and what you found out. One checked fact per note, never a guess, nor what the code or the README already says, nor what only mattered to this task. To fix or remove a note, edit AGENTS.md.",
