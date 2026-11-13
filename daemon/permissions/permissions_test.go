@@ -75,3 +75,20 @@ func TestCommandPrograms(t *testing.T) {
 		}
 	}
 }
+
+func TestAnMCPServersToolsAreAskedAboutUntilTheServerIsAllowed(t *testing.T) {
+	tool := func(server string) Subject { return Subject{Access: AccessServer, Server: server} }
+	if !NeedsPermission(tool("github"), ask) || !NeedsPermission(tool("github"), withMode(protocol.PermissionModeAcceptEdits)) {
+		t.Fatal("a server's tool passed without asking")
+	}
+	if NeedsPermission(tool("github"), withMode(protocol.PermissionModeAuto)) {
+		t.Fatal("auto asked")
+	}
+	granted := GrantForSession(tool("github"), ask)
+	if NeedsPermission(tool("github"), granted) || !NeedsPermission(tool("files"), granted) {
+		t.Fatal("allowing a server covers its tools, and only its")
+	}
+	if !NeedsPermission(command("github"), granted) {
+		t.Fatal("allowing a server allowed a program of its name")
+	}
+}

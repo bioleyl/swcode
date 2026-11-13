@@ -126,12 +126,17 @@ func (s *Service) failTurn(session *live, message *agent.PromptMessage, err erro
 	s.record(session, protocol.SessionEventTurnFinished{ID: turnID, Message: "The host did not answer: " + err.Error(), Outcome: protocol.TurnOutcomeFailed})
 }
 
-// toolsFor is the main agent's tools: without agent when the preset allows no subagents.
+// toolsFor is the main agent's tools: without agent when the preset allows no subagents, and with the tools of the
+// MCP servers ready now.
 func (s *Service) toolsFor(limit *protocol.SubagentLimit) tools.Box {
+	box := s.deps.Tools
 	if limit != nil && limit.AtOnce == 0 {
-		return s.deps.Tools.Without(protocol.ToolNameAgent)
+		box = box.Without(protocol.ToolNameAgent)
 	}
-	return s.deps.Tools
+	if s.deps.ServerTools == nil {
+		return box
+	}
+	return box.With(s.deps.ServerTools())
 }
 
 func (s *Service) setupFor(session *live, meta Meta, main llm.Choice, where place, sees bool, limit *protocol.SubagentLimit) agent.Setup {
@@ -355,7 +360,7 @@ func (a permissionAsk) settled(session *live, id string, got answer) {
 	a.service.record(session, protocol.SessionEventPermissionAnswered{Decision: got.decision, RequestID: id})
 	if got.decision == protocol.PermissionDecisionAllowSession {
 		granted := permissions.GrantForSession(a.ask.Subject, a.service.grantsOf(session))
-		session.grants = permissions.Grants{Edits: granted.Edits, Programs: granted.Programs}
+		session.grants = permissions.Grants{Edits: granted.Edits, Programs: granted.Programs, Servers: granted.Servers}
 	}
 }
 

@@ -86,6 +86,9 @@ type Deps struct {
 	Tools         tools.Box
 	SubagentTools tools.Box
 	ChatTools     tools.Box
+	// ServerTools is the tools of the MCP servers ready now, which the main agent of a coding session has beside its
+	// own: asked at each turn, since a server may have started or stopped since; nil for none.
+	ServerTools func() []tools.Tool
 	// Search is the daemon's one web search, which keeps every session's searches apart in time.
 	Search web.Search
 	HTTP   *http.Client

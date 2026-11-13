@@ -45,7 +45,7 @@ var SessionKinds = []SessionKind{SessionKindCode, SessionKindChat}
 
 var SessionStatuses = []SessionStatus{SessionStatusIdle, SessionStatusWorking, SessionStatusWaiting}
 
-var ToolNames = []ToolName{ToolNameRead, ToolNameWrite, ToolNameEdit, ToolNameBash, ToolNameGrep, ToolNameGlob, ToolNameAgent, ToolNamePlan, ToolNameQuestion, ToolNameWebsearch, ToolNameWebfetch, ToolNameImage, ToolNameDraw, ToolNameOutput, ToolNameKill, ToolNameTerminal, ToolNameReadterminal, ToolNameSkill, ToolNameNotes, ToolNameTodo, ToolNameClosetodo, ToolNameSaveskill, ToolNameScreenshot}
+var ToolNames = []ToolName{ToolNameRead, ToolNameWrite, ToolNameEdit, ToolNameBash, ToolNameGrep, ToolNameGlob, ToolNameAgent, ToolNamePlan, ToolNameQuestion, ToolNameWebsearch, ToolNameWebfetch, ToolNameImage, ToolNameDraw, ToolNameOutput, ToolNameKill, ToolNameTerminal, ToolNameReadterminal, ToolNameSkill, ToolNameNotes, ToolNameTodo, ToolNameClosetodo, ToolNameSaveskill, ToolNameScreenshot, ToolNameMcp}
 
 var TurnOutcomes = []TurnOutcome{TurnOutcomeDone, TurnOutcomeStopped, TurnOutcomeFailed, TurnOutcomeLimit}
 
@@ -80,6 +80,7 @@ const (
 	EndpointDevices        = "/api/devices"
 	EndpointHealth         = "/api/health"
 	EndpointImages         = "/api/images"
+	EndpointMcp            = "/api/mcp"
 	EndpointModels         = "/api/models"
 	EndpointPairing        = "/api/pairing"
 	EndpointPairingCode    = "/api/pairing/code"
@@ -251,12 +252,13 @@ const (
 	ToolNameClosetodo    ToolName = "closetodo"
 	ToolNameSaveskill    ToolName = "saveskill"
 	ToolNameScreenshot   ToolName = "screenshot"
+	ToolNameMcp          ToolName = "mcp"
 )
 
 // Valid tells whether v is one of the ToolName values.
 func (v ToolName) Valid() bool {
 	switch v {
-	case ToolNameRead, ToolNameWrite, ToolNameEdit, ToolNameBash, ToolNameGrep, ToolNameGlob, ToolNameAgent, ToolNamePlan, ToolNameQuestion, ToolNameWebsearch, ToolNameWebfetch, ToolNameImage, ToolNameDraw, ToolNameOutput, ToolNameKill, ToolNameTerminal, ToolNameReadterminal, ToolNameSkill, ToolNameNotes, ToolNameTodo, ToolNameClosetodo, ToolNameSaveskill, ToolNameScreenshot:
+	case ToolNameRead, ToolNameWrite, ToolNameEdit, ToolNameBash, ToolNameGrep, ToolNameGlob, ToolNameAgent, ToolNamePlan, ToolNameQuestion, ToolNameWebsearch, ToolNameWebfetch, ToolNameImage, ToolNameDraw, ToolNameOutput, ToolNameKill, ToolNameTerminal, ToolNameReadterminal, ToolNameSkill, ToolNameNotes, ToolNameTodo, ToolNameClosetodo, ToolNameSaveskill, ToolNameScreenshot, ToolNameMcp:
 		return true
 	}
 	return false
@@ -310,6 +312,23 @@ const (
 func (v PeekState) Valid() bool {
 	switch v {
 	case PeekStateWaiting, PeekStateAnswering, PeekStateDone, PeekStateFailed:
+		return true
+	}
+	return false
+}
+
+type McpServerState string
+
+const (
+	McpServerStateStarting McpServerState = "starting"
+	McpServerStateReady    McpServerState = "ready"
+	McpServerStateFailed   McpServerState = "failed"
+)
+
+// Valid tells whether v is one of the McpServerState values.
+func (v McpServerState) Valid() bool {
+	switch v {
+	case McpServerStateStarting, McpServerStateReady, McpServerStateFailed:
 		return true
 	}
 	return false
@@ -4935,6 +4954,50 @@ func (v ModelsSavedFailed) MarshalJSON() ([]byte, error) {
 		Key bool `json:"ok"`
 		plain
 	}{false, p})
+}
+
+type McpServer struct {
+	Name    string         `json:"name"`
+	Problem string         `json:"problem,omitempty"`
+	State   McpServerState `json:"state"`
+	Target  string         `json:"target"`
+	Tools   int            `json:"tools"`
+}
+
+func (v *McpServer) UnmarshalJSON(data []byte) error {
+	type plain McpServer
+	p := plain{}
+	if err := json.Unmarshal(data, &p); err != nil {
+		return err
+	}
+	*v = McpServer(p)
+	return v.Normalize()
+}
+
+// Normalize trims and checks what the app sent, as its schema does.
+func (v *McpServer) Normalize() error {
+	if !v.State.Valid() {
+		return fmt.Errorf("%s: unknown value %q", "state", v.State)
+	}
+	if v.Tools < 0 {
+		return fmt.Errorf("%s: at least 0", "tools")
+	}
+	return nil
+}
+
+type McpStatus struct {
+	File    string      `json:"file"`
+	Problem string      `json:"problem,omitempty"`
+	Servers []McpServer `json:"servers"`
+}
+
+func (v McpStatus) MarshalJSON() ([]byte, error) {
+	type plain McpStatus
+	p := plain(v)
+	if p.Servers == nil {
+		p.Servers = []McpServer{}
+	}
+	return json.Marshal(p)
 }
 
 // ModelsAnswer holds one of its variants, told apart by "ok".

@@ -137,6 +137,7 @@ export async function startRig(options: E2eOptions): Promise<E2eRig> {
   const home = mkdtempSync(join(tmpdir(), 'swcode-e2e-home-'));
   writeAll(workspace, options.files ?? {});
   writeAll(home, options.homeFiles ?? {});
+  writeAll(dataDir, options.dataFiles ?? {});
   const model = options.model ?? MODEL;
   const llama = await startFakeLlama({
     contextTokens: CONTEXT_TOKENS,

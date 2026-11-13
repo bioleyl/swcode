@@ -36,6 +36,8 @@ export const TOOL_NAMES = [
   // Offered no longer: the calls older sessions hold keep their name.
   'saveskill',
   'screenshot',
+  // A tool of an MCP server the person listed: the call's few words say which server and which tool.
+  'mcp',
 ] as const;
 export const ToolNameSchema = z.enum(TOOL_NAMES);
 export type ToolName = z.infer<typeof ToolNameSchema>;

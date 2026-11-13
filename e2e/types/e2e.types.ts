@@ -26,6 +26,8 @@ export interface E2eOptions {
   files?: Readonly<Record<string, string>>;
   /** Files of the daemon's home folder, by path: the person's skills in .agents/skills. */
   homeFiles?: Readonly<Record<string, string>>;
+  /** Files of the daemon's data folder, by path: its MCP servers file, mcp.json. */
+  dataFiles?: Readonly<Record<string, string>>;
   /** The model llm-server serves, gpt-oss-120b when left out. */
   model?: string;
   /** Whether that model sees pictures. */

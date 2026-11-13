@@ -8,11 +8,13 @@ import {
   COMPUTERS_TOPIC,
   DEFAULT_SETTINGS_TOPIC,
   isSettingsTopic,
+  MCP_TOPIC,
   PHONE_TOPIC,
   SETTINGS_TOPIC_LABELS,
   SETTINGS_TOPICS,
 } from '../lib/settings-topics';
 import { ScComputers } from '../organisms/sc-computers';
+import { ScMcpServers } from '../organisms/sc-mcp-servers';
 import { ScModelsEditor } from '../organisms/sc-models-editor';
 import { ScPhone } from '../organisms/sc-phone';
 import { ScSshHosts } from '../organisms/sc-ssh-hosts';
@@ -77,6 +79,7 @@ const controlValue = (control: Control): string => fromChoice(control.value.get(
 /** The panels of the topics kept elsewhere than in the settings file, each its own organism. */
 const ORGANISM_PANELS: Readonly<Partial<Record<SettingsTopic, () => Node>>> = {
   computers: () => <ScComputers />,
+  mcp: () => <ScMcpServers />,
   models: () => <ScModelsEditor />,
   phone: () => <ScPhone />,
   ssh: () => <ScSshHosts />,
@@ -110,6 +113,7 @@ export class SettingsPage extends ScElement {
   private readonly _refs = this.useRefs((ref) => ({
     computers: ref(ScComputers),
     feedback: ref(JlAlert),
+    mcp: ref(ScMcpServers),
     phone: ref(ScPhone),
     save: ref<JlButton>('.save'),
     tabs: ref(JlTabs),
@@ -209,6 +213,7 @@ export class SettingsPage extends ScElement {
   private renderTopic(topic: SettingsTopic): void {
     this._refs.save.hidden = !FILE_TOPICS.has(topic);
     this._refs.computers.active.set(topic === COMPUTERS_TOPIC);
+    this._refs.mcp.active.set(topic === MCP_TOPIC);
     this._refs.phone.active.set(topic === PHONE_TOPIC);
   }
 

@@ -67,6 +67,13 @@ const TOOL_LABELS: Readonly<Record<ToolName, ToolLabel>> = {
     question: 'Stop this command?',
     writing: 'Stopping a command',
   },
+  mcp: {
+    doing: 'Calling',
+    icon: 'plug',
+    name: 'MCP',
+    question: 'Call this tool of an MCP server?',
+    writing: 'Calling an MCP server',
+  },
   notes: {
     doing: 'Noting',
     icon: 'book-plus',
@@ -180,6 +187,14 @@ export const toolLabel = (tool: ToolName | undefined): ToolLabel => (tool ? TOOL
 const ALL_EDITS = 'Allow all edits in this session';
 const never = (): undefined => undefined;
 
+// A call to an MCP server's tool is summed up as "<server> · <tool> <arguments>" (`ServerTool` in the daemon).
+const SERVER_MARK = ' · ';
+
+const serverGrant = (summary: string): string | undefined => {
+  const end = summary.indexOf(SERVER_MARK);
+  return end > 0 ? `Always allow ${summary.slice(0, end)}’s tools in this session` : undefined;
+};
+
 const programsGrant = (command: string): string | undefined => {
   const programs = commandPrograms(command);
   return programs ? `Always allow ${[...new Set(programs)].join(', ')} in this session` : undefined;
@@ -196,6 +211,7 @@ const SESSION_GRANTS: Readonly<Record<ToolName, (summary: string) => string | un
   grep: never,
   image: () => ALL_EDITS,
   kill: never,
+  mcp: serverGrant,
   notes: () => ALL_EDITS,
   output: never,
   plan: never,

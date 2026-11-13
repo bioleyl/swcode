@@ -33,6 +33,9 @@ var (
 	browserTools = []protocol.ToolName{protocol.ToolNameScreenshot}
 	// retiredTools are offered no longer: their names stay for the calls older sessions hold.
 	retiredTools = []protocol.ToolName{protocol.ToolNameSaveskill}
+	// serverTools are no tool of swcode's own: `mcp` names every tool of an MCP server, which a box is given beside
+	// its own (With).
+	serverTools = []protocol.ToolName{protocol.ToolNameMcp}
 	// waitingTools only read, and mostly wait while they do (a disk, a host over SSH, a page): the calls of one
 	// reply to them run together. They ask nobody anything and change nothing, so no order between them matters.
 	waitingTools = []protocol.ToolName{
@@ -40,31 +43,48 @@ var (
 	}
 )
 
-// Box is the tools an agent has: as the model reads them, and by name.
+// Box is the tools an agent has: as the model reads them, and by name. Its own tools, then the ones of the MCP
+// servers it was given.
 type Box struct {
 	names []protocol.ToolName
+	more  []Tool
+}
+
+// tools is the box's tools, its own first.
+func (b Box) tools() []Tool {
+	tools := make([]Tool, 0, len(b.names)+len(b.more))
+	for _, name := range b.names {
+		tools = append(tools, all[name])
+	}
+	return append(tools, b.more...)
 }
 
 func (b Box) Definitions() []llm.ToolDefinition {
 	definitions := []llm.ToolDefinition{}
-	for _, name := range b.names {
-		tool := all[name]
-		definitions = append(definitions, llm.ToolDefinition{Description: tool.Description, Name: string(name), Parameters: tool.Input.Parameters()})
+	for _, tool := range b.tools() {
+		definitions = append(definitions, llm.ToolDefinition{Description: tool.Description, Name: tool.functionName(), Parameters: tool.parameters()})
 	}
 	return definitions
 }
 
 // Without is the box but one tool: the main agent's without agent, for a preset that allows no subagents.
 func (b Box) Without(name protocol.ToolName) Box {
-	return Box{names: slices.DeleteFunc(slices.Clone(b.names), func(each protocol.ToolName) bool { return each == name })}
+	return Box{more: b.more, names: slices.DeleteFunc(slices.Clone(b.names), func(each protocol.ToolName) bool { return each == name })}
 }
 
-// Find is the tool of that name, when the agent has it.
+// With is the box with the tools of MCP servers beside its own.
+func (b Box) With(more []Tool) Box {
+	return Box{more: slices.Concat(b.more, more), names: b.names}
+}
+
+// Find is the tool the model calls by that name, when the agent has it.
 func (b Box) Find(name string) (Tool, bool) {
-	if !slices.Contains(b.names, protocol.ToolName(name)) {
-		return Tool{}, false
+	for _, tool := range b.tools() {
+		if tool.functionName() == name {
+			return tool, true
+		}
 	}
-	return all[protocol.ToolName(name)], true
+	return Tool{}, false
 }
 
 // RunsTogether tells whether calls to that tool may run at the same time as other calls of the same reply: it only
@@ -103,7 +123,7 @@ func Boxes(servers Servers) (Box, Box, Box) {
 
 // mainTools is every tool but a chat's own and those retired.
 var mainTools = slices.DeleteFunc(slices.Clone(protocol.ToolNames), func(name protocol.ToolName) bool {
-	return slices.Contains(chatOnlyTools, name) || slices.Contains(retiredTools, name)
+	return slices.Contains(chatOnlyTools, name) || slices.Contains(retiredTools, name) || slices.Contains(serverTools, name)
 })
 
 // Main is the main agent's tools, with all servers.

@@ -172,6 +172,27 @@ type Tool struct {
 	Description string
 	Input       Schema
 	Prepare     func(ctx context.Context, raw any, tc *Context) Preparation
+	// Function is the name the model calls the tool by, when it is not the tool's own: an MCP server's tools are
+	// all `mcp` to the app, and each has a name of its own for the model. Parameters is then the schema the server
+	// gave, as it gave it.
+	Function   string
+	Parameters map[string]any
+}
+
+// functionName is the name the model calls a tool by.
+func (t Tool) functionName() string {
+	if t.Function != "" {
+		return t.Function
+	}
+	return string(t.Name)
+}
+
+// parameters is the schema of what the tool takes, as the model reads it.
+func (t Tool) parameters() map[string]any {
+	if t.Parameters != nil {
+		return t.Parameters
+	}
+	return t.Input.Parameters()
 }
 
 // Spec is a tool written against its own input type.

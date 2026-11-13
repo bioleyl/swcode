@@ -9,6 +9,8 @@ export const ENDPOINTS = {
   health: '/api/health',
   // GET /api/images/<session>/<file>: a picture the agent made, as the daemon keeps it to show.
   images: '/api/images',
+  // GET the MCP servers the daemon reaches and where each stands; POST reads their file again.
+  mcp: '/api/mcp',
   // GET the llm-servers and the presets, with their keys; PUT them all, in use at once.
   models: '/api/models',
   // POST a pairing code, without a token: the phone gets its own. Open to anyone, the code being the secret.

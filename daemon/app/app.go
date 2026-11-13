@@ -22,6 +22,7 @@ import (
 	"swcode/daemon/config"
 	"swcode/daemon/hosts"
 	"swcode/daemon/llm"
+	"swcode/daemon/mcp"
 	"swcode/daemon/models"
 	"swcode/daemon/pairing"
 	"swcode/daemon/projects"
@@ -122,6 +123,8 @@ type App struct {
 	// deviceSockets is the sockets each paired phone has open, ended with it when it is forgotten.
 	deviceSockets *deviceSockets
 	tailnet       tailnetAddress
+	// servers are the MCP servers the person listed, whose tools the agent has beside its own.
+	servers *mcp.Manager
 	// hub sends what the services say to the open sockets.
 	hub          *hub
 	logger       *slog.Logger
@@ -216,7 +219,9 @@ func New(settings config.Config, options Options) (*App, error) {
 		imagesFolder: filepath.Join(settings.DataDir, imagesFolder), logger: logger, options: options, workspace: workspace,
 		pairing:       pairing.New(filepath.Join(settings.DataDir, devicesFile), options.Now, options.NewID),
 		deviceSockets: newDeviceSockets(),
+		servers:       mcp.NewManager(filepath.Join(settings.DataDir, mcp.File), options.HTTP, options.Version),
 	}
+	app.servers.Reload()
 	var service *sessions.Service
 	app.Projects = projects.NewService(projects.Deps{
 		ForgetSessions: func(path string, host protocol.HostRef) string { return service.RemoveIn(path, host) },
@@ -253,7 +258,8 @@ func New(settings config.Config, options Options) (*App, error) {
 		Store:       sessions.NewStore(filepath.Join(settings.DataDir, sessionsFolder)),
 		Checkpoints: checkpoints.NewStore(filepath.Join(settings.DataDir, checkpointsFolder), logError),
 		ChatTools:   chatTools, SubagentTools: exploreTools, Thinking: sessions.Thinking{Session: settings.Thinking, Subagents: settings.SubagentThinking},
-		Terminals: terminalService, Todos: app.Projects, Tools: mainTools, Workspace: workspace,
+		ServerTools: app.serverTools,
+		Terminals:   terminalService, Todos: app.Projects, Tools: mainTools, Workspace: workspace,
 	})
 	app.Sessions = service
 	service.Load()
@@ -323,6 +329,7 @@ func (a *App) routes() http.Handler {
 	a.startupRoutes(mux)
 	a.updateRoutes(mux)
 	a.tailnetRoutes(mux)
+	a.mcpRoutes(mux)
 	mux.HandleFunc("GET "+protocol.EndpointSocket, a.socket)
 	mux.Handle("/", webApp(a.webFiles()))
 	return withCORS(withAuth(mux, a.Token, a.pairing), a.pairing)
@@ -333,6 +340,7 @@ func (a *App) Close() {
 	a.stopWatching()
 	a.Sessions.StopAll()
 	a.Terminals.CloseAll()
+	a.servers.Close()
 	a.hosts.Close()
 }
 

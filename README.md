@@ -23,6 +23,7 @@ A coding agent for local models. It runs an LLM agent with file, terminal and we
 - **Permissions**: choose how much the agent can do without asking — run everything, ask before commands, or ask for everything.
 - **Projects**: sessions are grouped by project; a project's page lists its sessions, sets what its new sessions start with, and turns its skills on and off.
 - **Skills**: reusable instructions for recurring tasks, loaded from your home folder or the project, and run as `/<skill>`.
+- **MCP servers**: list [Model Context Protocol](https://modelcontextprotocol.io) servers in a file and the agent has their tools beside its own, asking before it calls one.
 - **Slash commands**: `/new` starts a session with the same settings, `/compact` summarizes the conversation now, `/peek` asks the agent something beside its work without entering the conversation, `/help` lists them all.
 - **Composer**: paste or drop pictures for models that see them, dictate your message with the microphone (your browser's speech recognition), and queue messages while a turn runs.
 - **Models and presets**: several llm-servers and models side by side, presets that pick the main agent's model and the subagents', a thinking level per session, and a token economy mode that asks for shorter answers.
@@ -126,6 +127,21 @@ Skills are instructions for recurring tasks. swcode reads them from two places o
 Each skill is a folder with a `SKILL.md` file containing a YAML frontmatter with `name` and `description`, followed by the instructions. The agent is told about available skills and loads them with the `skill` tool when a task matches.
 
 You can also trigger a skill directly from the composer with `/<skill-name>`.
+
+### MCP servers
+
+The agent of a Code session also has the tools of the [MCP](https://modelcontextprotocol.io) servers listed in `~/.swcode/mcp.json`, in the shape other agents use, so a server's entry can be copied from its documentation:
+
+```json
+{
+  "mcpServers": {
+    "docs": { "url": "https://example.com/mcp", "headers": { "Authorization": "Bearer …" } },
+    "files": { "command": "npx", "args": ["-y", "@modelcontextprotocol/server-filesystem", "/path/to/folder"], "env": {} }
+  }
+}
+```
+
+A server with a `command` is a program swcode starts on the daemon's computer and talks to over its standard streams; one with a `url` is reached over HTTP. Settings → MCP servers lists them with where each stands (starting, ready with its tools, or failed and why) and reads the file again on a press. The model calls a tool as `mcp_<server>_<tool>`; swcode asks before each call unless the session runs everything, and "for this session" allows every tool of that server. Tools only: resources, prompts and a server's own requests to the model are not used. Chats and subagents do not get these tools.
 
 ### swcode-base
 

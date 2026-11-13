@@ -42,6 +42,7 @@ import {
   Pencil,
   Pin,
   PinOff,
+  Plug,
   Plus,
   Power,
   RefreshCw,
@@ -133,6 +134,8 @@ const ICONS = {
   pencil: Pencil,
   pin: Pin,
   'pin-off': PinOff,
+  // An MCP server, and a call to one of its tools.
+  plug: Plug,
   plus: Plus,
   power: Power,
   refresh: RefreshCw,

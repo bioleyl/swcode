@@ -53,3 +53,28 @@ export const ModelsAnswerSchema = z.discriminatedUnion('ok', [
   z.object({ ok: z.literal(false), problem: z.string() }),
 ]);
 export type ModelsAnswer = z.infer<typeof ModelsAnswerSchema>;
+
+/** Where an MCP server stands: being reached, ready with its tools, or failed, with why. */
+export const McpServerStateSchema = z.enum(['starting', 'ready', 'failed']);
+export type McpServerState = z.infer<typeof McpServerStateSchema>;
+
+/** One server of the MCP servers file: its name there, its command or address, and where it stands. */
+export const McpServerSchema = z.object({
+  name: z.string(),
+  problem: z.string().optional(),
+  state: McpServerStateSchema,
+  target: z.string(),
+  tools: z.number().int().min(0),
+});
+export type McpServer = z.infer<typeof McpServerSchema>;
+
+/**
+ * `GET /api/mcp`, and `POST` to read the file again: the MCP servers the daemon reaches for its agents, the file
+ * that lists them, and why it could not be read when it could not.
+ */
+export const McpStatusSchema = z.object({
+  file: z.string(),
+  problem: z.string().optional(),
+  servers: z.array(McpServerSchema),
+});
+export type McpStatus = z.infer<typeof McpStatusSchema>;

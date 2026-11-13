@@ -1,0 +1,48 @@
+import { describe, expect, it } from 'vitest';
+
+import { anyStarting, SERVER_STATES, serverLine } from '../src/lib/mcp-view';
+import { sessionGrantLabel, toolLabel } from '../src/lib/tool-labels';
+
+import type { McpServer } from '../../shared/protocol/settings.schema';
+
+const server = (changes: Partial<McpServer>): McpServer => ({
+  name: 'files',
+  state: 'ready',
+  target: 'npx -y server-files .',
+  tools: 3,
+  ...changes,
+});
+
+describe('an MCP server’s row', () => {
+  it('says its command or address, then its tools once it is ready', () => {
+    expect(serverLine(server({}))).toBe('npx -y server-files . · 3 tools');
+    expect(serverLine(server({ target: 'https://example.com/mcp', tools: 1 }))).toBe(
+      'https://example.com/mcp · 1 tool'
+    );
+    expect(serverLine(server({ state: 'starting', tools: 0 }))).toBe('npx -y server-files .');
+  });
+
+  it('says why a server has no tools when it failed', () => {
+    expect(serverLine(server({ problem: 'exec: "npx": not found', state: 'failed', tools: 0 }))).toBe(
+      'npx -y server-files . · exec: "npx": not found'
+    );
+    expect(serverLine(server({ state: 'failed', tools: 0 }))).toBe('npx -y server-files . · It did not start.');
+  });
+
+  it('has a badge for each state, and is read again while one starts', () => {
+    expect(SERVER_STATES.ready).toEqual({ label: 'Ready', tone: 'ok' });
+    expect(SERVER_STATES.failed.tone).toBe('danger');
+    expect(anyStarting([server({}), server({ state: 'starting' })])).toBe(true);
+    expect(anyStarting([server({}), server({ state: 'failed' })])).toBe(false);
+  });
+});
+
+describe('a call to an MCP server’s tool', () => {
+  it('is asked about as one, and allowed for the session by its server', () => {
+    expect(toolLabel('mcp').question).toBe('Call this tool of an MCP server?');
+    expect(sessionGrantLabel('mcp', 'github · create_issue {"title":"Bug"}')).toBe(
+      'Always allow github’s tools in this session'
+    );
+    expect(sessionGrantLabel('mcp', 'no server here')).toBeUndefined();
+  });
+});

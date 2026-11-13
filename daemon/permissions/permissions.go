@@ -17,13 +17,17 @@ const (
 	AccessRead    Access = "read"
 	AccessEdit    Access = "edit"
 	AccessCommand Access = "command"
+	// AccessServer is a tool of an MCP server: what it does is the server's own, so it is asked about as a command
+	// is, and allowed for a session by its server.
+	AccessServer Access = "server"
 )
 
-// Subject is what a call touches: a file it edits, a command it runs.
+// Subject is what a call touches: a file it edits, a command it runs, an MCP server it calls.
 type Subject struct {
 	Access  Access
 	Path    string
 	Command string
+	Server  string
 }
 
 // Read is a call that only reads.
@@ -34,6 +38,8 @@ type Grants struct {
 	Mode     protocol.PermissionMode
 	Edits    bool
 	Programs map[string]bool
+	// Servers are the MCP servers whose tools were allowed.
+	Servers map[string]bool
 }
 
 // allowance is what a mode lets through by itself, before anything allowed for the session.
@@ -71,19 +77,26 @@ func NeedsPermission(subject Subject, grants Grants) bool {
 		return false
 	case AccessEdit:
 		return !modeAllows[grants.Mode].edits && !grants.Edits
+	case AccessServer:
+		return !modeAllows[grants.Mode].commands && !grants.Servers[subject.Server]
 	}
 	return !commandAllowed(subject.Command, grants)
 }
 
 // GrantForSession is the grants once a person allowed this kind of call for the rest of the session.
 func GrantForSession(subject Subject, grants Grants) Grants {
-	next := Grants{Edits: grants.Edits, Mode: grants.Mode, Programs: map[string]bool{}}
+	next := Grants{Edits: grants.Edits, Mode: grants.Mode, Programs: map[string]bool{}, Servers: map[string]bool{}}
 	for program := range grants.Programs {
 		next.Programs[program] = true
+	}
+	for server := range grants.Servers {
+		next.Servers[server] = true
 	}
 	switch subject.Access {
 	case AccessEdit:
 		next.Edits = true
+	case AccessServer:
+		next.Servers[subject.Server] = true
 	case AccessCommand:
 		programs, _ := CommandPrograms(subject.Command)
 		for _, program := range programs {
