@@ -19,7 +19,8 @@ A coding agent for local models. It runs an LLM agent with file, terminal and we
 - **Code and Chat**: a Code session puts the agent to work in a project; a Chat is a conversation with the model in no project, which searches and reads the web and draws pictures, but touches no files and runs no commands.
 - **Agent with tools**: reads, writes and edits files, runs commands (foreground and background, their output shown as it comes), searches code with grep/glob, browses the web, takes screenshots, draws images. Reads of one reply run together, an edit forgives a difference of indentation, and a project can run a formatter or a linter after each edit, whose findings go back to the agent.
 - **Plans and questions**: for a task of several steps the agent keeps a plan you watch it work through; it asks you multiple-choice questions when a decision is yours, and a command that asks for a password (`sudo`, ssh) runs in a terminal of the app, where you type it while the agent waits for the result.
-- **Subagents**: the agent can spin up parallel explore subagents to search the codebase or the web while it keeps working, on a smaller model if you give them one.
+- **Subagents**: the agent can spin up parallel explore subagents to search the codebase or the web while it keeps working, on a smaller model if you give them one. You define agents of your own too, with the tools you give them — writing and running commands included.
+- **Review and commit**: a session's Changes button shows what its folder has uncommitted, file by file, and commits it with your message.
 - **Permissions**: choose how much the agent can do without asking — run everything, ask before commands, or ask for everything. A request is answered for this call, for the session, or for the project: its Config tab lists what its sessions do without asking.
 - **Trust**: a folder you add as a project speaks for itself only once you trust it: until then its `AGENTS.md` and its skills are kept from the agent, and its commands keep their sandbox.
 - **Sandbox**: on Linux (this computer, WSL, a server over SSH) the agent's commands run in a [bubblewrap](https://github.com/containers/bubblewrap) sandbox: they write only in the project, and your keys are not there. What must leave it asks first.
@@ -134,6 +135,22 @@ Skills are instructions for recurring tasks. swcode reads them from two places o
 Each skill is a folder with a `SKILL.md` file containing a YAML frontmatter with `name` and `description`, followed by the instructions. The agent is told about available skills and loads them with the `skill` tool when a task matches.
 
 You can also trigger a skill directly from the composer with `/<skill-name>`.
+
+### Agents
+
+An agent of your own is a file `<name>.md` in `.agents/agents/` of your home or of the project (a project's own only once you trust its folder):
+
+```markdown
+---
+name: test-writer
+description: Writes the tests of a change. Use after a function was added or changed.
+tools: [read, grep, glob, write, edit, bash]
+---
+
+Write the tests beside the code, in the project's own test style, and run them.
+```
+
+`tools` are among read, grep, glob, websearch, webfetch, write, edit and bash (the reading ones when left out); the body is the agent's instructions. The main agent is told of your agents and starts one with its `agent` tool. An agent works under the session's permissions with nobody to ask: what the session's mode, its grants and the project's rules let through runs (commands in the sandbox), and a call that would have asked ends its task, which its report says. Its writes are in no restore point, and the project's check after an edit does not run for them.
 
 ### Sandbox
 
