@@ -3,8 +3,10 @@ package app_test
 import (
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -778,4 +780,36 @@ func TestAProgramAllowedInTheProjectGoesThroughInItsOtherSessionsUntilTakenBack(
 	answerNext(t, test, third, protocol.PermissionDecisionAllowOnce, 2)
 	test.UntilIdle(third)
 	Expect(t, Finished(test.Events(third))[0], `{"ok":true,"output":"three"}`)
+}
+
+func TestARestorePointCoversWhatACommandChangedInARepository(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("no git here")
+	}
+	test := Start(t, Options{Files: map[string]string{"app.ts": "const answer = 41;\n"}, Replies: []fakellama.Reply{
+		call("bash", map[string]any{"command": "sed -i s/41/42/ app.ts && echo made > made.txt"}), text("Changed."),
+	}})
+	for _, args := range [][]string{{"init", "-q"}, {"add", "-A"}, {"-c", "user.name=T", "-c", "user.email=t@example.com", "-c", "commit.gpgsign=false", "commit", "-q", "-m", "first"}} {
+		command := exec.Command("git", args...)
+		command.Dir = test.Workspace
+		if output, err := command.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, output)
+		}
+	}
+	session := test.NewSession(sessions.Request{})
+	if problem := test.App.Sessions.SendPrompt(session.ID, "Change the answer", nil); problem != "" {
+		t.Fatal(problem)
+	}
+	test.UntilIdle(session.ID)
+	saved := test.WaitForEvent("checkpointSaved", 1).Value.(protocol.SessionEventCheckpointSaved)
+	slices.Sort(saved.Files)
+	if !reflect.DeepEqual(saved.Files, []string{"app.ts", "made.txt"}) {
+		t.Fatalf("the restore point holds %v", saved.Files)
+	}
+	if problem := test.App.Sessions.RestoreCheckpoint(session.ID, saved.TurnID); problem != "" {
+		t.Fatal(problem)
+	}
+	if test.ReadFile("app.ts") != "const answer = 41;\n" || test.ReadFile("made.txt") != "" {
+		t.Fatalf("after the restore: %q, %q", test.ReadFile("app.ts"), test.ReadFile("made.txt"))
+	}
 }

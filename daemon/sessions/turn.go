@@ -147,6 +147,10 @@ func (s *Service) keepFilesOf(ready *prepared, session *live, turn *runningTurn)
 		return nil
 	}
 	recorder := s.deps.Checkpoints.Begin(ready.where.host, session.meta.ID, turn.id, session.meta.Workspace)
+	// What the turn's commands change is kept too, where git and a shell can tell: not on Windows' own shell.
+	if ready.where.platform != hosts.PlatformWindows {
+		recorder.WatchCommands(ready.where.scratch)
+	}
 	ready.where.host = recorder.Host()
 	return recorder
 }

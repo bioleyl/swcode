@@ -1,5 +1,6 @@
-// Package checkpoints keeps the files a turn writes or edits as they were before it changed them, so a person can
-// put them back.
+// Package checkpoints keeps the files a turn changes as they were before it changed them, so a person can put them
+// back: those its file tools write, copied before each first write, and in a git repository those its commands
+// change, found by looking at the workspace before the turn and after it.
 package checkpoints
 
 import (
@@ -65,6 +66,11 @@ type Recorder struct {
 	kept      map[string]bool
 	files     []KeptFile
 	closed    bool
+	// The turn's commands are watched through git: scratch is the session's scratch folder on the host, looked is
+	// closed once the workspace was looked at first, and before is its tree then; empty where git has none to give.
+	scratch string
+	looked  chan struct{}
+	before  string
 }
 
 // Begin takes the restore point of one turn: files outside the workspace, and the scratch folder's, are not kept.
@@ -95,6 +101,7 @@ func (r *Recorder) Close() ([]string, error) {
 		return r.paths(), nil
 	}
 	r.closed = true
+	r.keepCommandFiles()
 	if len(r.files) == 0 {
 		return nil, nil
 	}

@@ -12,7 +12,8 @@ import (
 	"swcode/daemon/protocol"
 )
 
-const windowsPlatform = "windows"
+// PlatformWindows is how a host on Windows names its system.
+const PlatformWindows = "windows"
 
 var (
 	hostLine  = regexp.MustCompile(`(?i)^\s*host\s+(.+)$`)
@@ -76,7 +77,7 @@ func SSHConfigHosts(home string) []string {
 // endpoints of the settings and of ~/.ssh/config.
 func Options(platform, home string, endpoints []string) []protocol.HostOption {
 	options := []protocol.HostOption{optionOf(protocol.LocalHost())}
-	if platform == windowsPlatform {
+	if platform == PlatformWindows {
 		for _, distro := range wslDistros() {
 			options = append(options, optionOf(protocol.HostRef{Value: protocol.HostRefWSL{Distro: distro}}))
 		}

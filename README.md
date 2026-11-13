@@ -30,6 +30,7 @@ A coding agent for local models. It runs an LLM agent with file, terminal and we
 - **Composer**: paste or drop pictures for models that see them, dictate your message with the microphone (your browser's speech recognition), and queue messages while a turn runs.
 - **Models and presets**: several llm-servers and models side by side, presets that pick the main agent's model and the subagents', a thinking level per session, and a token economy mode that asks for shorter answers.
 - **Prompt cache**: each agent keeps its own llm-server slot, so a long conversation only processes what is new.
+- **Restore points**: each turn keeps the files it changes as they were, to show what it changed and put it back — the files its tools wrote, and in a git repository those its commands changed too.
 - **Context management**: automatic conversation compaction when approaching the model's context limit.
 - **Search**: `Ctrl K` finds sessions, projects and settings, and searches inside the conversations.
 - **Web app**: follow what the agent does in real time, answer its questions, approve commands, chat with it. Works on desktop and phone, in light or dark.
