@@ -49,6 +49,7 @@ const UNSEEN_NOTE = 'This model cannot see pictures: it is only told they are he
 const CHOICES_ICON_SIZE = 14;
 const SUMMARY_SEPARATOR = ' · ';
 const CONCISE_LABEL = 'Token economy';
+const WORKTREE_LABEL = 'Worktree';
 const COMMAND_ICON_SIZE = 16;
 const SKILL_ICON = 'book-open';
 // The list's id and each option's, for the field to say which one is chosen (`aria-activedescendant`).
@@ -94,6 +95,11 @@ export class ScComposer extends ScElement {
     thinking: ThinkingMode;
     concise: boolean;
   }>();
+
+  /** Whether the session to come can work in a git worktree of its own: where a new coding session starts. */
+  readonly worktreeOffered = this.useChange(false, () => this.renderChoices(), { immediate: true });
+  /** The session to come works in a git worktree of its own. */
+  readonly worktree = this.useChange(false, () => this.renderChoices(), { immediate: true });
 
   // While a turn runs, a message waits for the next one: send stays, stop comes beside it, and a game to pass the
   // time. `working` counts the subagents at work too, the way the session's own status does.
@@ -273,6 +279,7 @@ export class ScComposer extends ScElement {
       this.concise.set(concise);
       this.events.emit('concise', concise);
     });
+    this._refs.choices.events.register('worktree', (worktree) => this.worktree.set(worktree));
     this.onBus(presetsBus, 'changed', () => this.renderChoices());
     this.renderChoices();
   }
@@ -655,6 +662,7 @@ export class ScComposer extends ScElement {
       code ? MODE_LABELS[this.mode.get()] : undefined,
       THINKING_LABELS[this.thinking.get()],
       this.concise.get() ? CONCISE_LABEL : undefined,
+      this.worktreeOffered.get() && this.worktree.get() ? WORKTREE_LABEL : undefined,
     ]
       .filter((part) => part !== undefined)
       .join(SUMMARY_SEPARATOR);
@@ -668,6 +676,8 @@ export class ScComposer extends ScElement {
     panel.mode.set(this.mode.get());
     panel.thinking.set(this.thinking.get());
     panel.concise.set(this.concise.get());
+    panel.worktreeOffered.set(code && this.worktreeOffered.get());
+    panel.worktree.set(this.worktree.get());
   }
 }
 

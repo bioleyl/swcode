@@ -72,11 +72,11 @@ func (s *Service) prepare(ctx context.Context, session *live) (prepared, error) 
 	if err != nil {
 		return prepared{}, err
 	}
-	untrusted := s.deps.Untrusted != nil && s.deps.Untrusted(meta.Workspace, meta.Host)
+	untrusted := s.deps.Untrusted != nil && s.deps.Untrusted(meta.projectFolder(), meta.Host)
 	where := place{
 		host: host, platform: platform, sandbox: s.sandboxFor(ctx, session, meta, host, scratch, untrusted), scratch: scratch,
 		skills: s.deps.Skills.PortFor(catalog.Place{
-			Host: host, Off: s.deps.SkillsOff(meta.Workspace, meta.Host), PersonalOnly: untrusted, Workspace: meta.Workspace,
+			Host: host, Off: s.deps.SkillsOff(meta.projectFolder(), meta.Host), PersonalOnly: untrusted, Workspace: meta.Workspace,
 		}),
 		untrusted: untrusted,
 		agents:    agentsOf(host, meta.Workspace, untrusted),
@@ -90,7 +90,7 @@ func (s *Service) prepare(ctx context.Context, session *live) (prepared, error) 
 // nor the session's project turned it off; nil otherwise, and they run as the person does. A folder that is not
 // trusted keeps its sandbox whatever its project says.
 func (s *Service) sandboxFor(ctx context.Context, session *live, meta Meta, host hosts.Host, scratch string, untrusted bool) *hosts.Sandbox {
-	turnedOff := !untrusted && s.deps.SandboxOff != nil && s.deps.SandboxOff(meta.Workspace, meta.Host)
+	turnedOff := !untrusted && s.deps.SandboxOff != nil && s.deps.SandboxOff(meta.projectFolder(), meta.Host)
 	if s.deps.Sandboxes == nil || turnedOff {
 		return nil
 	}
@@ -101,6 +101,12 @@ func (s *Service) sandboxFor(ctx context.Context, session *live, meta Meta, host
 	sandbox := &hosts.Sandbox{Host: state, Scratch: s.realPath(ctx, session, host, scratch), Workspace: s.realPath(ctx, session, host, meta.Workspace)}
 	if hosts.IsLocal(meta.Host) {
 		sandbox.Hidden = s.deps.SandboxHidden
+	}
+	// A worktree commits into its repository's own .git folder, which is elsewhere: it is opened, but for what git
+	// runs by itself later.
+	if common := s.commonGitFolder(ctx, session, host, meta); common != "" {
+		sandbox.Writable = []string{common}
+		sandbox.Kept = hosts.KeptInGitFolder(common)
 	}
 	return sandbox
 }
@@ -278,7 +284,7 @@ func (s *Service) hostFor(session *live, turn *runningTurn, ready prepared, sees
 		Skills:      where.skills,
 		Subagents:   subagents{limit: ready.subagents, service: s, session: session, subagent: subagent, where: where},
 		Terminals:   s.deps.Terminals,
-		Todos:       s.deps.Todos,
+		Todos:       s.todosOf(session),
 		Web:         s.webFor(subagent),
 		Workspace:   session.meta.Workspace,
 	}
@@ -291,7 +297,7 @@ func (s *Service) afterEditOf(session *live) string {
 	if s.deps.AfterEdit == nil {
 		return ""
 	}
-	return s.deps.AfterEdit(session.meta.Workspace, session.meta.Host)
+	return s.deps.AfterEdit(session.meta.projectFolder(), session.meta.Host)
 }
 
 // asksInTerminal notes whether a command of the turn waits for the person in a terminal of the app: the session
@@ -428,7 +434,7 @@ func (a permissionAsk) settled(session *live, id string, got answer) {
 	case protocol.PermissionDecisionAllowProject:
 		// The project keeps it, and every session of it reads the project's rules at each call: this one too.
 		if a.service.deps.AllowInProject != nil {
-			a.service.deps.AllowInProject(session.meta.Workspace, session.meta.Host, permissions.AllowedBy(a.ask.Subject))
+			a.service.deps.AllowInProject(session.meta.projectFolder(), session.meta.Host, permissions.AllowedBy(a.ask.Subject))
 		}
 	case protocol.PermissionDecisionAllowOnce, protocol.PermissionDecisionDeny:
 	}
@@ -523,7 +529,7 @@ func (s *Service) grantsOf(session *live) permissions.Grants {
 	if s.deps.Allowed == nil {
 		return grants
 	}
-	return grants.With(s.deps.Allowed(session.meta.Workspace, session.meta.Host))
+	return grants.With(s.deps.Allowed(session.meta.projectFolder(), session.meta.Host))
 }
 
 // sessionJobs is a session's background commands, on its host, in its folder: the session lists them while they

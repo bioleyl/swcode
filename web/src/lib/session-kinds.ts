@@ -1,15 +1,23 @@
 import { hostLabel } from '../../../shared/hosts/host-key';
 import { folderName } from './format';
 import { placeText } from './hosts';
+import { projectFolderOf } from './project-groups';
 
 import type { SessionKind, SessionSummary } from '../../../shared/protocol/session.schema';
 
 const CHAT_PLACE = 'Chat';
+const BRANCH_SEPARATOR = ' · ';
+
+/** A coding session's folder, then the branch of its own git worktree when it works in one. */
+const codePlace = (session: SessionSummary): string => {
+  const place = placeText(session.host, session.workspace);
+  return session.branch === undefined ? place : `${place}${BRANCH_SEPARATOR}${session.branch}`;
+};
 
 /** Where a session works, in full: a chat works nowhere. */
 const PLACES: Readonly<Record<SessionKind, (session: SessionSummary) => string>> = {
   chat: () => CHAT_PLACE,
-  code: (session) => placeText(session.host, session.workspace),
+  code: codePlace,
 };
 
 /** Where a session works, in a word: its host, or nowhere for a chat. */
@@ -21,7 +29,7 @@ const HOSTS: Readonly<Record<SessionKind, (session: SessionSummary) => string>> 
 /** Where a session works, by name: its project's folder, or nowhere for a chat. */
 const NAMES: Readonly<Record<SessionKind, (session: SessionSummary) => string>> = {
   chat: () => CHAT_PLACE,
-  code: (session) => folderName(session.workspace),
+  code: (session) => folderName(projectFolderOf(session)),
 };
 
 /** The sessions of a kind, in the order given (the daemon lists them newest first). */

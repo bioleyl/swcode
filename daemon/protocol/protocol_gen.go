@@ -2052,23 +2052,25 @@ type SessionPin struct {
 }
 
 type SessionSummary struct {
-	Concise   bool                `json:"concise"`
-	Host      HostRef             `json:"host"`
-	ID        string              `json:"id"`
-	Jobs      []SessionSummaryJob `json:"jobs"`
-	Kind      SessionKind         `json:"kind"`
-	Mode      PermissionMode      `json:"mode"`
-	Pins      []SessionPin        `json:"pins"`
-	Preset    string              `json:"preset,omitempty"`
-	Queued    []string            `json:"queued"`
-	QueuedNow bool                `json:"queuedNow"`
-	SeenAt    string              `json:"seenAt,omitempty"`
-	Status    SessionStatus       `json:"status"`
-	Subagents int                 `json:"subagents"`
-	Thinking  ThinkingMode        `json:"thinking"`
-	Title     string              `json:"title"`
-	UpdatedAt string              `json:"updatedAt"`
-	Workspace string              `json:"workspace"`
+	Branch     string              `json:"branch,omitempty"`
+	Concise    bool                `json:"concise"`
+	Host       HostRef             `json:"host"`
+	ID         string              `json:"id"`
+	Jobs       []SessionSummaryJob `json:"jobs"`
+	Kind       SessionKind         `json:"kind"`
+	Mode       PermissionMode      `json:"mode"`
+	Pins       []SessionPin        `json:"pins"`
+	Preset     string              `json:"preset,omitempty"`
+	Queued     []string            `json:"queued"`
+	QueuedNow  bool                `json:"queuedNow"`
+	SeenAt     string              `json:"seenAt,omitempty"`
+	Status     SessionStatus       `json:"status"`
+	Subagents  int                 `json:"subagents"`
+	Thinking   ThinkingMode        `json:"thinking"`
+	Title      string              `json:"title"`
+	UpdatedAt  string              `json:"updatedAt"`
+	Workspace  string              `json:"workspace"`
+	WorktreeOf string              `json:"worktreeOf,omitempty"`
 }
 
 func (v SessionSummary) MarshalJSON() ([]byte, error) {
@@ -2724,6 +2726,7 @@ type ClientMessageCreateSession struct {
 	Prompt        string          `json:"prompt,omitempty"`
 	Thinking      ThinkingMode    `json:"thinking,omitempty"`
 	Workspace     string          `json:"workspace,omitempty"`
+	Worktree      bool            `json:"worktree,omitempty"`
 }
 
 func (v ClientMessageCreateSession) MarshalJSON() ([]byte, error) {

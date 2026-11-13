@@ -294,7 +294,7 @@ func New(settings config.Config, options Options) (*App, error) {
 		if session.Kind == protocol.SessionKindChat {
 			continue
 		}
-		app.Projects.Ensure(session.Workspace, session.Host)
+		app.Projects.Ensure(projectFolderOf(session), session.Host)
 	}
 	if app.options.Busy == nil {
 		app.options.Busy = func() bool { return anyWorking(service.List()) }

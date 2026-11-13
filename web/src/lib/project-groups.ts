@@ -13,10 +13,20 @@ interface Place {
 
 const placeKey = (place: Place): string => `${hostKey(place.host)}|${place.path}`;
 
-const isIn = (session: SessionSummary, place: Place): boolean =>
-  session.workspace === place.path && sameHost(session.host, place.host);
+/**
+ * The folder of a session's project: the one its git worktree was made from, when it works in one, else the folder it
+ * works in.
+ */
+export const projectFolderOf = (session: Pick<SessionSummary, 'workspace' | 'worktreeOf'>): string =>
+  session.worktreeOf ?? session.workspace;
 
-/** Whether a session works in a project's folder on the project's host: the same path on two hosts is two projects. */
+const isIn = (session: SessionSummary, place: Place): boolean =>
+  projectFolderOf(session) === place.path && sameHost(session.host, place.host);
+
+/**
+ * Whether a session works in a project's folder on the project's host, or in a git worktree made from it: the same
+ * path on two hosts is two projects.
+ */
 export const sessionInProject = (project: Pick<Project, 'host' | 'path'>, session: SessionSummary): boolean =>
   isIn(session, project);
 
@@ -49,9 +59,9 @@ const looseGroup = (place: Place, sessions: readonly SessionSummary[]): ProjectG
  */
 export function groupByProject(projects: readonly Project[], sessions: readonly SessionSummary[]): ProjectGroup[] {
   const places = new Map(
-    sessions.map((session) => [placeKey({ host: session.host, path: session.workspace }), session])
+    sessions.map((session) => [placeKey({ host: session.host, path: projectFolderOf(session) }), session])
   );
-  const worked = [...places.values()].map((session) => ({ host: session.host, path: session.workspace }));
+  const worked = [...places.values()].map((session) => ({ host: session.host, path: projectFolderOf(session) }));
   const withSessions = worked.map((place) => {
     const project = projects.find((known) => placeKey(known) === placeKey(place));
     return project ? groupOf(project, sessions) : looseGroup(place, sessions);

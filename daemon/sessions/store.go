@@ -36,6 +36,18 @@ type Meta struct {
 	Thinking  protocol.ThinkingMode `json:"thinking"`
 	Title     string                `json:"title"`
 	Workspace string                `json:"workspace"`
+	// WorktreeOf is the project's folder the session's git worktree was made from, and Branch the worktree's
+	// branch: Workspace is then the worktree. Empty for a session that works in its project's own folder.
+	WorktreeOf string `json:"worktreeOf,omitempty"`
+	Branch     string `json:"branch,omitempty"`
+}
+
+// projectFolder is the folder of the session's project: the one its worktree was made from, or the one it works in.
+func (m Meta) projectFolder() string {
+	if m.WorktreeOf != "" {
+		return m.WorktreeOf
+	}
+	return m.Workspace
 }
 
 // UnmarshalJSON reads sessions from before hosts as on this computer, from before the choice as thinking as the

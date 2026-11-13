@@ -153,6 +153,8 @@ type Request struct {
 	PinnedTodos []string
 	// Concise: token economy from the first message on.
 	Concise bool
+	// Worktree: the session works in a git worktree of its own, made from its folder's repository.
+	Worktree bool
 }
 
 // pending is what a turn waits for from a person: a permission, or answers to the agent's questions. The answer
@@ -316,7 +318,7 @@ func (s *Service) RemoveIn(path string, host protocol.HostRef) string {
 	defer s.mu.Unlock()
 	found := []*live{}
 	for _, session := range s.sessions {
-		if session.meta.Workspace == path && hosts.SameHost(session.meta.Host, host) {
+		if session.meta.projectFolder() == path && hosts.SameHost(session.meta.Host, host) {
 			found = append(found, session)
 		}
 	}
@@ -345,6 +347,13 @@ func (s *Service) Create(ctx context.Context, request Request) (protocol.Session
 		CreatedAt: createdAt, Host: hostRef, ID: s.deps.NewID(), Kind: kind, Mode: orMode(request.Mode),
 		Concise: request.Concise, Preset: request.Preset, SeenAt: createdAt,
 		Thinking: orThinking(request.Thinking, s.deps.Thinking.Session), Title: Untitled, Workspace: workspace,
+	}
+	if request.Worktree && kind != protocol.SessionKindChat {
+		made, problem := makeWorktree(ctx, s.deps.Hosts.HostOf(hostRef), workspace, meta.ID)
+		if problem != "" {
+			return protocol.SessionSummary{}, problem
+		}
+		meta.Workspace, meta.WorktreeOf, meta.Branch = made.workspace, workspace, made.branch
 	}
 	s.saveMeta(meta)
 	session := revive(Stored{Meta: meta})
@@ -527,9 +536,13 @@ func (s *Service) forget(session *live) {
 	}
 	host := s.hostOf(session)
 	jobs := append([]protocol.SessionSummaryJob{}, session.jobs...)
+	meta := session.meta
 	go func() {
 		ctx := context.Background()
 		if err := host.RemoveScratch(ctx, session.meta.ID); err != nil {
+			s.deps.LogError(err)
+		}
+		if err := removeWorktree(ctx, host, meta); err != nil {
 			s.deps.LogError(err)
 		}
 		for _, job := range jobs {
@@ -1023,7 +1036,7 @@ func summaryOf(session *live) protocol.SessionSummary {
 		SeenAt: session.meta.SeenAt, Status: status,
 		Subagents: subagentsLeft(session),
 		Thinking:  session.meta.Thinking, Title: session.meta.Title, UpdatedAt: session.updatedAt,
-		Workspace: session.meta.Workspace,
+		Workspace: session.meta.Workspace, WorktreeOf: session.meta.WorktreeOf, Branch: session.meta.Branch,
 	}
 }
 

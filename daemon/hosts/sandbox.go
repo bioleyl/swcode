@@ -50,6 +50,12 @@ var (
 	keptInGit = []string{".git/hooks", ".git/config"}
 )
 
+// KeptInGitFolder is the parts of a repository's .git folder a sandboxed command reads but never writes: its hooks
+// and its settings, which git runs later, outside the sandbox, in the person's name.
+func KeptInGitFolder(gitFolder string) []string {
+	return []string{gitFolder + "/hooks", gitFolder + "/config"}
+}
+
 func shellWords(paths []string) string {
 	quoted := make([]string, len(paths))
 	for index, path := range paths {
@@ -94,6 +100,8 @@ type Sandbox struct {
 	Hidden []string
 	// Writable are more folders the command may write.
 	Writable []string
+	// Kept are more paths the command reads but never writes, inside what it may write.
+	Kept []string
 	// Host is what the host has to hide and to open, as it said when asked.
 	Host SandboxState
 }
@@ -110,6 +118,7 @@ func (s Sandbox) Wrap(command string) string {
 	for index, part := range keptInGit {
 		kept[index] = s.Workspace + "/" + part
 	}
+	kept = append(kept, s.Kept...)
 	lines := []string{
 		"[ -d " + ShellWord(tmp) + " ] || mkdir -p -- " + ShellWord(tmp),
 		"set -- --die-with-parent --unshare-pid --ro-bind / / --dev /dev --proc /proc --bind " + ShellWord(tmp) + " /tmp",

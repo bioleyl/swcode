@@ -8,6 +8,7 @@ import { SESSION_COMMANDS } from '../lib/commands';
 import { contextText, speedLine } from '../lib/format';
 import { currentPlan } from '../lib/plan';
 import { presetOf, presetStatusOf } from '../lib/presets';
+import { projectFolderOf } from '../lib/project-groups';
 import { skillsOn } from '../lib/project-skills';
 import { sessionPlace } from '../lib/session-kinds';
 import { canDeleteSession, deleteHintOf, liveStatus, SESSION_STATUS_LOOKS } from '../lib/session-status';
@@ -102,7 +103,11 @@ const sameSettings = (session: SessionSummary): ClientMessage => ({
   thinking: session.thinking,
   type: 'createSession',
   ...(session.preset === '' ? {} : { preset: session.preset }),
-  ...(session.kind === 'code' ? { host: session.host, mode: session.mode, workspace: session.workspace } : {}),
+  ...(session.kind === 'code'
+    ? { host: session.host, mode: session.mode, workspace: projectFolderOf(session) }
+    : {}),
+  // A session of a worktree's own starts the next one in a worktree of its own too.
+  ...(session.worktreeOf === undefined ? {} : { worktree: true }),
 });
 
 /**
@@ -649,7 +654,7 @@ export class SessionPage extends ScElement {
   private addTodo(text: string): void {
     this.showProblem('');
     const session = findSession(this._sessionId);
-    const project = session?.kind === 'code' ? projectAt(session.workspace, session.host) : undefined;
+    const project = session?.kind === 'code' ? projectAt(projectFolderOf(session), session.host) : undefined;
     if (!project) {
       this.showProblem(NO_PROJECT);
       return;
@@ -781,7 +786,7 @@ export class SessionPage extends ScElement {
    */
   private renderSkills(): void {
     const session = findSession(this._sessionId);
-    const project = session?.kind === 'code' ? projectAt(session.workspace, session.host) : undefined;
+    const project = session?.kind === 'code' ? projectAt(projectFolderOf(session), session.host) : undefined;
     this._refs.composer.skills.set(project ? skillsOn(foundSkills(project.id), project) : []);
     if (!project || project.id === this._skillsOf) {
       return;
@@ -793,7 +798,7 @@ export class SessionPage extends ScElement {
   /** The project's todos this session was pinned to, in the order the project lists them. */
   private renderLinkedTodos(): void {
     const session = findSession(this._sessionId);
-    const project = session?.kind === 'code' ? projectAt(session.workspace, session.host) : undefined;
+    const project = session?.kind === 'code' ? projectAt(projectFolderOf(session), session.host) : undefined;
     this._refs.todos.todos.set(project?.todos.filter((todo) => todo.sessionId === this._sessionId) ?? []);
   }
 

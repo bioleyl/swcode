@@ -354,6 +354,8 @@ export const SessionPinSchema = z.object({ id: z.string(), label: z.string() });
 export type SessionPin = z.infer<typeof SessionPinSchema>;
 
 export const SessionSummarySchema = z.object({
+  // The branch of the session's own git worktree, when it works in one.
+  branch: z.string().optional(),
   // Token economy: each message sent asks the model to be concise.
   concise: z.boolean().default(false),
   host: HostRefSchema.default(LOCAL_HOST),
@@ -381,5 +383,8 @@ export const SessionSummarySchema = z.object({
   title: z.string(),
   updatedAt: at,
   workspace: z.string(),
+  // The project's folder a session's git worktree was made from: its workspace is then the worktree, and it is
+  // still a session of that project.
+  worktreeOf: z.string().optional(),
 });
 export type SessionSummary = z.infer<typeof SessionSummarySchema>;

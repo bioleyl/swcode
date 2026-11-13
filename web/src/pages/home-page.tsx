@@ -87,7 +87,7 @@ export class HomePage extends ScElement {
         <JlCard class="todos" heading="Todos" description={TODOS_NOTE} hidden>
           <div class="todo-list" />
         </JlCard>
-        <ScComposer concise={CONCISE_AT_FIRST} draftPlace={NEW_DRAFT_PLACES.code} />
+        <ScComposer concise={CONCISE_AT_FIRST} draftPlace={NEW_DRAFT_PLACES.code} worktreeOffered={true} />
         <JlAlert tone="danger" hidden />
       </JlPage>
     );
@@ -142,6 +142,7 @@ export class HomePage extends ScElement {
         ? {}
         : { pinnedTodoIds: pinned.map((todo) => todo.id), pinnedTodos: pinned.map((todo) => todo.text) }),
       ...(project === undefined ? {} : { host: project.host, workspace: project.path }),
+      ...(this._refs.composer.worktree.get() ? { worktree: true } : {}),
     });
   }
 

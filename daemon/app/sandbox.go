@@ -36,3 +36,12 @@ func (a *App) sandboxRoutes(mux *http.ServeMux) {
 		answer(response, protocol.SandboxView{Available: state.Available, Problem: state.Problem})
 	})
 }
+
+// projectFolderOf is the folder of a session's project: the one its git worktree was made from, or the one it
+// works in.
+func projectFolderOf(session protocol.SessionSummary) string {
+	if session.WorktreeOf != "" {
+		return session.WorktreeOf
+	}
+	return session.Workspace
+}

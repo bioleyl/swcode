@@ -174,7 +174,7 @@ func (h handlers) CreateSession(message protocol.ClientMessageCreateSession) str
 	go func() {
 		session, refused := h.app.Sessions.Create(h.ctx, sessions.Request{
 			Concise: message.Concise, Host: message.Host, Kind: message.Kind, Mode: message.Mode, Pictures: message.Pictures, PinnedTodos: message.PinnedTodos, Preset: message.Preset,
-			Prompt: message.Prompt, Thinking: message.Thinking, Workspace: message.Workspace,
+			Prompt: message.Prompt, Thinking: message.Thinking, Workspace: message.Workspace, Worktree: message.Worktree,
 		})
 		if refused != "" {
 			h.reply(problem(refused))
@@ -191,7 +191,7 @@ func (h handlers) linkPinnedTodos(session protocol.SessionSummary, todoIDs []str
 	if len(todoIDs) == 0 {
 		return
 	}
-	project, ok := h.app.Projects.Find(session.Workspace, session.Host)
+	project, ok := h.app.Projects.Find(projectFolderOf(session), session.Host)
 	if !ok {
 		return
 	}

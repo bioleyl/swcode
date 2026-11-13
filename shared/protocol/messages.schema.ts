@@ -98,6 +98,8 @@ export const ClientMessageSchema = z.discriminatedUnion('type', [
     thinking: ThinkingModeSchema.optional(),
     type: z.literal('createSession'),
     workspace: z.string().trim().min(1).optional(),
+    // The session works in a git worktree of its own, on a branch of its own, made from the folder's repository.
+    worktree: z.boolean().optional(),
   }),
   z.object({ sessionId: z.string(), title: z.string().trim().min(1).max(120), type: z.literal('renameSession') }),
   z.object({ sessionId: z.string(), type: z.literal('deleteSession') }),

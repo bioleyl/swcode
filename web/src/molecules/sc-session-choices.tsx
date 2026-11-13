@@ -31,6 +31,9 @@ const THINKING_OPTIONS: SegmentedOption<ThinkingMode>[] = THINKING_MODES.map((th
   value: thinking,
 }));
 
+const WORKTREE_NOTE =
+  'A copy of the repository beside it, on a branch of its own: the project’s folder stays as it is.';
+
 /**
  * What a session works with, all in view: its preset (the models, with what each preset runs on), what it asks before
  * doing (a coding session's alone), how much its model thinks, and token economy. Each pick says so at once.
@@ -43,6 +46,7 @@ export class ScSessionChoices extends ScElement {
     mode: PermissionMode;
     thinking: ThinkingMode;
     concise: boolean;
+    worktree: boolean;
   }>();
 
   readonly choices = this.useChange<PresetChoices>(NO_PRESETS, (choices) => {
@@ -63,12 +67,18 @@ export class ScSessionChoices extends ScElement {
   readonly mode = this.useChange<PermissionMode>('auto', (value) => this._refs.mode.value.set(value));
   readonly thinking = this.useChange<ThinkingMode>('full', (value) => this._refs.thinking.value.set(value));
   readonly concise = this.useChange(false, (value) => this._refs.concise.checked.set(value));
+  /** Whether a git worktree can be chosen: for a new coding session only, the composer says. */
+  readonly worktreeOffered = this.useChange(false, (offered) => {
+    this._refs.worktree.hidden = !offered;
+  });
+  readonly worktree = this.useChange(false, (value) => this._refs.worktree.checked.set(value));
 
   private readonly _refs = this.useRefs((ref) => ({
-    concise: ref(JlSwitch),
+    concise: ref<JlSwitch>('.concise'),
     mode: ref<JlRadioGroup<PermissionMode>>('.mode'),
     presets: ref<JlRadioGroup>('.presets'),
     thinking: ref<JlSegmented<ThinkingMode>>('.thinking'),
+    worktree: ref<JlSwitch>('.worktree'),
   }));
 
   templateHtml(): Node {
@@ -86,7 +96,8 @@ export class ScSessionChoices extends ScElement {
             options={THINKING_OPTIONS}
           />
         </JlField>
-        <JlSwitch label="Token economy" />
+        <JlSwitch class="concise" label="Token economy" />
+        <JlSwitch class="worktree" label="Work in a git worktree" description={WORKTREE_NOTE} hidden />
       </div>
     );
   }
@@ -111,6 +122,10 @@ export class ScSessionChoices extends ScElement {
     this._refs.concise.events.register('change', (concise) => {
       this.concise.set(concise);
       this.events.emit('concise', concise);
+    });
+    this._refs.worktree.events.register('change', (worktree) => {
+      this.worktree.set(worktree);
+      this.events.emit('worktree', worktree);
     });
   }
 }
