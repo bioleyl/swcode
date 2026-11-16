@@ -2,6 +2,16 @@
 
 All notable changes to swcode are documented here.
 
+## [0.12.1] - 2026-11-16
+
+### Added
+
+- A preset says whether its main model sees pictures ("Sees pictures" in its dialog), for a source that does not report it, as a hosted API such as DeepSeek's usually does not. A preset that says so sends it the pictures; off, what the llm-server says decides.
+
+### Changed
+
+- `screenshot` shows the page in the conversation without a question or a model that sees; with `see` and no vision, it still captures and shows the picture, but keeps it out of the model's context.
+
 ## [0.12.0] - 2026-11-16
 
 ### Added
