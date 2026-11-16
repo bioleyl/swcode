@@ -51,6 +51,9 @@ type terminal struct {
 	// the commands the agent waits for.
 	typed     bool
 	announced bool
+	// agent: the agent opened it; personTyped: a person typed in it, so it is theirs to close.
+	agent       bool
+	personTyped bool
 	// cut says the start of its output was dropped: a view clears itself before drawing what is left.
 	cut         bool
 	watchers    map[int]func([]byte)
@@ -127,7 +130,7 @@ func (s *Service) remember(request Request, process *hosts.Terminal) (protocol.T
 	info := protocol.Terminal{
 		Cwd: request.Cwd, Host: request.Host, ID: s.deps.NewID(), State: runningState(), Title: title,
 	}
-	started := &terminal{info: info, process: process, running: true, watchers: map[int]func([]byte){}}
+	started := &terminal{info: info, process: process, running: true, watchers: map[int]func([]byte){}, agent: request.Agent}
 	s.terminals[info.ID] = started
 	s.order = append(s.order, info.ID)
 	return info, started
@@ -275,6 +278,7 @@ func (s *Service) Write(id, data string) string {
 	alive := ok && t.running
 	if alive {
 		t.typed = true
+		t.personTyped = true
 	}
 	s.mu.Unlock()
 	if !ok {
@@ -335,6 +339,18 @@ func (s *Service) Close(id string) {
 	}
 	t.process.Close()
 	s.publish()
+}
+
+// CloseFinished closes a terminal the agent opened once the command waited for there ended, so the side panel does
+// not fill with them; one a person typed in is theirs, and stays, with what a password they typed bought it.
+func (s *Service) CloseFinished(id string) {
+	s.mu.Lock()
+	t, ok := s.terminals[id]
+	finished := ok && t.agent && !t.personTyped
+	s.mu.Unlock()
+	if finished {
+		s.Close(id)
+	}
 }
 
 // CloseAll ends every terminal: the daemon stops.

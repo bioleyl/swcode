@@ -98,7 +98,7 @@ var terminalTool = Define(Spec[terminalInput]{
 		}
 		return Ready(func(ctx context.Context) Outcome { return startTerminal(ctx, input, tc) }, Text(input.Command))
 	},
-	Description: "Runs a command in a terminal of the app, in the workspace, which the person watches beside the session and can type in. Two uses. A long command (a dev server, a watcher): the call returns after a few seconds with what it printed so far, the terminal runs on, and readterminal reads it later. A command the person has to answer (sudo or ssh asking for a password, a login, an installer's questions): set wait, and the call waits until the command ends while the person types in the terminal, then gives what it printed and its exit code; say in your answer nothing of the password, the app tells the person where to type it. Give the terminal a short title people know it by.",
+	Description: "Runs a command in a terminal of the app, in the workspace, which the person watches beside the session and can type in. Two uses. A long command (a dev server, a watcher): the call returns after a few seconds with what it printed so far, the terminal runs on, and readterminal reads it later. A command the person has to answer (sudo or ssh asking for a password, a login, an installer's questions): set wait, and the call waits until the command ends while the person types in the terminal, then gives what it printed and its exit code; say in your answer nothing of the password, the app tells the person where to type it. A terminal whose waited command ended closes itself, unless the person typed in it; one started without wait stays. Give the terminal a short title people know it by.",
 	Input: Object(
 		Required("command", String().Min(1).Describe("The command, run by a shell in the workspace.")),
 		Required("title", String().Min(1).Max(terminalTitleMax).Describe("What the terminal is called in the app, in a few words: dev server, setup. With wait, a title already in use runs the command in that terminal: a password sudo took there is not asked for again for a while.")),
@@ -208,8 +208,8 @@ func terminalLines(port terminals.Port, chosen protocol.Terminal, count, most in
 // stands.
 func startTerminal(ctx context.Context, input terminalInput, tc *Context) Outcome {
 	info, refused := tc.Terminals.Open(ctx, terminals.Request{
-		Columns: terminalColumns, Command: input.Command, Cwd: tc.Workspace, Host: tc.HostRef, Rows: terminalRows,
-		Title: input.Title,
+		Agent: true, Columns: terminalColumns, Command: input.Command, Cwd: tc.Workspace, Host: tc.HostRef,
+		Rows: terminalRows, Title: input.Title,
 	})
 	if refused != "" {
 		return Failure(refused, "failed")
@@ -227,7 +227,7 @@ func waitingTerminal(ctx context.Context, title string, tc *Context) (protocol.T
 		}
 	}
 	return tc.Terminals.Open(ctx, terminals.Request{
-		Columns: terminalColumns, Cwd: tc.Workspace, Host: tc.HostRef, Rows: terminalRows, Title: title,
+		Agent: true, Columns: terminalColumns, Cwd: tc.Workspace, Host: tc.HostRef, Rows: terminalRows, Title: title,
 	})
 }
 
@@ -246,7 +246,12 @@ func runInTerminal(ctx context.Context, input terminalInput, tc *Context) Outcom
 	if refused != "" {
 		return Failure(refused, "failed")
 	}
-	return ranOutcome(ctx, terminal, ran)
+	outcome := ranOutcome(ctx, terminal, ran)
+	if ran.Ended {
+		// The command is over and the model has what it printed: a terminal it opened leaves the side panel.
+		tc.Terminals.CloseFinished(terminal.ID)
+	}
+	return outcome
 }
 
 // ranOutcome is how a command the person could answer went, as the model reads it: what it printed, then its exit

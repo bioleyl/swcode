@@ -15,6 +15,9 @@ type Request struct {
 	Command string
 	Columns int
 	Rows    int
+	// Agent: the agent opened it, so a command the person never typed in it leaves nothing behind (see
+	// CloseFinished).
+	Agent bool
 }
 
 // Port is what a session's tools do with terminals: open one in its folder, read what it printed so far, and tell how
@@ -28,6 +31,9 @@ type Port interface {
 	// Run types a command in a terminal's shell and waits for it to end, while the person answers what it asks
 	// there; asks hears whether it waits on a password now.
 	Run(ctx context.Context, id, command string, asks func(waits bool)) (Ran, string)
+	// CloseFinished closes a terminal the agent opened, once the command waited for there ended: a person's terminal,
+	// and one they typed in, stay.
+	CloseFinished(id string)
 }
 
 // Ran is how a command typed in a terminal went: what the terminal printed from its line on, and whether it ended

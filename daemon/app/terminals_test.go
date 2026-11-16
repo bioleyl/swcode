@@ -160,6 +160,22 @@ func TestACommandThePersonAnswersRunsInATerminalAndTheAgentGoesOnOnceItEnds(t *t
 	}
 }
 
+func TestATerminalWaitedForClosesWhenNobodyTypedInIt(t *testing.T) {
+	test := Start(t, Options{Replies: []fakellama.Reply{
+		call("terminal", map[string]any{"command": "echo built-here", "title": "build", "wait": true}),
+		text("Built."),
+	}})
+	sessionID := prompt(t, test, "Build it")
+	answerNext(t, test, sessionID, protocol.PermissionDecisionAllowOnce, 1)
+	test.UntilIdle(sessionID)
+	if list := test.App.Terminals.List(); len(list) != 0 {
+		t.Fatalf("a terminal the agent waited in stayed: %+v", list)
+	}
+	if result := OfKind(test.Events(sessionID), "toolFinished")[0].(map[string]any)["output"].(string); !strings.Contains(result, "built-here") {
+		t.Fatalf("what the model read: %q", result)
+	}
+}
+
 func TestACommandThatFoundNobodyToAskIsToldToRunInATerminal(t *testing.T) {
 	test := Start(t, Options{Replies: []fakellama.Reply{
 		call("bash", map[string]any{"command": `echo "sudo: a terminal is required to read the password" >&2; exit 1`}),
