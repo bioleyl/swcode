@@ -2,6 +2,23 @@
 
 All notable changes to swcode are documented here.
 
+## [0.13.0] - 2026-11-16
+
+### Added
+
+- **An Android app**, published as `swcode-android.apk` with the release: the same pages in a WebView of its own, no store involved. It pairs with the computers it keeps and looks for a newer release at every launch, checks its checksum and hands it to Android's installer. `.github/workflows/android.yml` builds it from the tag and needs the `ANDROID_*` secrets of the signing keystore.
+- A page or app whose swcode does not know the device yet shows how to pair: the six-digit number, and the `swcode pair <number>` to run on the computer.
+
+### Changed
+
+- **Pairing is a number, not a minute-long code**: the app shows six digits, `swcode pair 123456` on the computer makes the number wait five minutes for them, and the app trades it once for a token. A number refuses to be guessed (60 tries a minute per client, then a pause). The QR code in Settings → Phone carries the address alone.
+- Adding another computer asks for its name, address and port, and shows a number to type on it; the code and link of earlier releases are gone, and so is `swcode-desktop.exe --pair`. `swcode pair` takes the number, and starts the daemon when it is not running.
+- A computer's address takes swcode's 4500 over plain HTTP and the link's own port over HTTPS, so a tailnet address needs no port typed.
+
+### Removed
+
+- The pairing code and its QR link (`?pair=`), and the desktop app's `--pair` flag.
+
 ## [0.12.1] - 2026-11-16
 
 ### Added
