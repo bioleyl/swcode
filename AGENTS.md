@@ -191,6 +191,8 @@ Read `README.md` first.
 - The release workflow's `actions/setup-go` reads go.mod's `toolchain` line (1.27.3) even though the runner exports `GOTOOLCHAIN=local`, so CI's gofmt is this machine's: a `npm run check` here is what the tag will run.
 - A release is cut from the tree that is pushed: v0.9.0's release commit and tag were made and never pushed, so the latest published release stayed v0.7.0 and 0.10.0's notes had to cover 0.8 and 0.9 too. Check `gh release list` before writing RELEASE_NOTES.md.
 - The Android app's pages come from Capacitor's local server: with the default `https://localhost` the WebView blocks a plain-HTTP daemon as mixed content, so `server.androidScheme` must stay `'http'` (localhost is still a secure context, so `crypto` and `localStorage` work). Its first launch shows `sc-connect`, because `/api/status` on that server answers the app's HTML, which reads as `badAnswer`.
+- In Gradle's Groovy DSL a call like `versionCode (expr).toInteger()` passes the **String** to `versionCode`: the call binds before the `.toInteger()`, which then applies to the method's return (proved with a local Groovy probe). AGP answers `Value is null` at that line, so assign first (`def code = (...).toString().toInteger()`), then `versionCode code` — `mobile/android/app/build.gradle` does. `versionName (expr)` is unaffected, having no trailing call.
+- `dist/web` carries a `.gz` and a `.br` copy beside every text file (`web/vite.config.ts`, for the daemon to serve precompressed). Android's asset merger takes each pair as one resource and fails the APK with “Duplicate resources”, so `mobile/scripts/sync.mjs` copies everything but those two suffixes.
 
 ## Commands
 
