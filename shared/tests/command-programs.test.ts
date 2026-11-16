@@ -21,12 +21,27 @@ describe('commandPrograms', () => {
     ['a shell given a script', 'bash ./payload.sh'],
     ['a program run as root', 'sudo rm -rf /'],
     ['a program found and run', 'find . -exec rm {} +'],
+    ['ssh without a host', 'ssh'],
+    ['ssh with options and no host', 'ssh -o BatchMode=yes'],
   ])('cannot vouch for a program by its name with %s', (_case, command) => {
     expect(commandPrograms(command)).toBeUndefined();
   });
 
   it('still names git and npm for what they do themselves', () => {
     expect(commandPrograms('git commit -m fix && npm run build')).toEqual(['git', 'npm']);
+  });
+
+  it('reads a separator inside quotes as the argument', () => {
+    expect(commandPrograms("git commit -m 'fix; tests' && npm run build")).toEqual(['git', 'npm']);
+  });
+
+  it('names ssh by the host it reaches', () => {
+    expect(
+      commandPrograms(
+        "ssh marvin 'cd ~/tts/kokoro && curl -sL -o model.onnx https://example.com/model.onnx && ls -lh'"
+      )
+    ).toEqual(['ssh marvin']);
+    expect(commandPrograms('ssh -p 2222 marvin ls')).toEqual(['ssh marvin']);
   });
 
   it.each([

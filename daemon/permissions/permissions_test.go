@@ -58,6 +58,13 @@ func TestCommandPrograms(t *testing.T) {
 		"npm test -- --run":                       {"npm"},
 		"npm run build && git status; ls | wc -l": {"npm", "git", "ls", "wc"},
 		"git commit -m fix && npm run build":      {"git", "npm"},
+		// A separator inside quotes belongs to the argument.
+		"git commit -m 'fix; tests' && npm run build": {"git", "npm"},
+		"echo 'a > b'": {"echo"},
+		// What runs over ssh is the host's own shell, so ssh is named by the host it reaches.
+		"ssh marvin 'cd ~/tts/kokoro && curl -sL -o model.onnx https://example.com/model.onnx && ls -lh'": {"ssh marvin"},
+		"ssh -p 2222 marvin ls":       {"ssh marvin"},
+		"ssh -o BatchMode=yes marvin": {"ssh marvin"},
 	}
 	for text, want := range cases {
 		if got, known := CommandPrograms(text); !known || !reflect.DeepEqual(got, want) {
@@ -68,6 +75,7 @@ func TestCommandPrograms(t *testing.T) {
 	unnamed := []string{
 		"PATH=.:$PATH ls", "LD_PRELOAD=./x.so ls", "git -c core.fsmonitor=./payload.sh status", "git --exec-path=. status",
 		"npm exec -y -- some-package", "timeout 5 sh ./payload.sh", "bash ./payload.sh", "sudo rm -rf /", "find . -exec rm {} +",
+		"ssh", "ssh -o BatchMode=yes", `ssh marvin "echo $(date)"`, "V=1 ssh marvin ls", "ssh marvin 'unclosed",
 	}
 	for _, opaque := range append(unnamed, "echo $(rm -rf /)", "echo `whoami`", "npm test > out.txt", "sleep 10 & rm file", "(cd /tmp && rm x)", "ls\nrm x", "   ") {
 		if _, known := CommandPrograms(opaque); known {
@@ -106,6 +114,17 @@ func TestACommandThatLeavesTheSandboxIsAskedAboutEvenWhereEverythingRuns(t *test
 	// What was allowed inside the sandbox says nothing of the outside, nor the other way round.
 	inside := GrantForSession(command("git status"), ask)
 	if !NeedsPermission(outside("git push"), inside) || !NeedsPermission(command("git status"), GrantForSession(outside("git push"), ask)) {
+		t.Fatal("a grant crossed the sandbox's wall")
+	}
+}
+
+func TestAllowingSSHToAHostCoversThatHostAndNotAnother(t *testing.T) {
+	outside := func(text string) Subject { return Subject{Access: AccessCommand, Command: text, Outside: true} }
+	granted := GrantForSession(outside("ssh marvin 'ls'"), ask)
+	if NeedsPermission(outside("ssh marvin 'rm -rf build'"), granted) || !NeedsPermission(outside("ssh other 'ls'"), granted) {
+		t.Fatal("ssh")
+	}
+	if !NeedsPermission(command("ssh marvin 'ls'"), granted) {
 		t.Fatal("a grant crossed the sandbox's wall")
 	}
 }

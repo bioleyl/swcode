@@ -58,6 +58,21 @@ describe('a command that leaves the sandbox', () => {
     expect(sessionGrantLabel('bash', 'echo $(date)', true)).toBeUndefined();
   });
 
+  it('names ssh by the host it reaches, whatever it runs there', () => {
+    const reach =
+      "ssh marvin 'cd ~/tts/kokoro && curl -sL -o model.onnx https://example.com/model.onnx && ls -lh'";
+    expect(sessionGrantLabel('bash', reach, true)).toBe(
+      'Always allow ssh marvin outside the sandbox in this session'
+    );
+    expect(projectGrantLabel('bash', reach, true)).toBe(
+      'Always allow ssh marvin outside the sandbox in this project'
+    );
+    expect(sessionGrantLabel('bash', 'ssh -p 2222 marvin ls', true)).toBe(
+      'Always allow ssh marvin outside the sandbox in this session'
+    );
+    expect(sessionGrantLabel('bash', 'ssh', true)).toBeUndefined();
+  });
+
   it('is named by its command in a terminal, not by the terminal’s title', () => {
     expect(sessionGrantLabel('terminal', 'setup: sudo apt install jq', true)).toBeUndefined();
     expect(sessionGrantLabel('terminal', 'dev server: npm run dev', true)).toBe(

@@ -169,14 +169,7 @@ func AllowedBy(subject Subject) Allowed {
 	return Allowed{}
 }
 
-// opaqueMarks are the marks of a command that does more than run a list of programs: a substitution, a
-// redirection, a subshell, a background job or a second line. A rule about programs cannot vouch for those, so
-// they are always asked about.
-var opaqueMarks = []string{"`", "$(", ">", "<", "(", ")", "\n", "&"}
-
 var (
-	chains                = regexp.MustCompile(`&&|\|\|`)
-	separators            = regexp.MustCompile(`[;|]`)
 	environmentAssignment = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*=`)
 	// runners are programs that run what their words say rather than a thing of their own: allowing one by its
 	// name would allow anything after it.
@@ -208,35 +201,131 @@ func runsItsWords(program string, words []string) bool {
 	return false
 }
 
+// sshOptionsWithAWord are ssh's options whose value is a word of its own (`-p 2222`): skipping the option alone
+// would make its value look like the host.
+var sshOptionsWithAWord = map[byte]bool{
+	'b': true, 'c': true, 'D': true, 'E': true, 'e': true, 'F': true, 'I': true, 'i': true, 'J': true, 'L': true,
+	'l': true, 'm': true, 'O': true, 'o': true, 'p': true, 'Q': true, 'R': true, 'S': true, 'W': true, 'w': true,
+}
+
+// sshTarget is what an ssh command reaches: its host, which is the unit a person allows, since what runs there is
+// that host's own shell and no list of programs can tell it. `ssh marvin 'cd x && ls'` names `ssh marvin`.
+func sshTarget(words []string) (string, bool) {
+	if len(words) == 0 || words[0] != "ssh" {
+		return "", false
+	}
+	for i := 1; i < len(words); i++ {
+		word := words[i]
+		switch {
+		case word == "--":
+		case strings.HasPrefix(word, "-") && len(word) > 1:
+			if len(word) == 2 && sshOptionsWithAWord[word[1]] {
+				i++
+			}
+		default:
+			return "ssh " + word, true
+		}
+	}
+	return "", false
+}
+
 // programOf is the program a part of a command runs, when its name says what runs: not after a variable set for
-// it (PATH, LD_PRELOAD and git's own change what a name means), and not a program that runs what its words say.
+// it (PATH, LD_PRELOAD and git's own change what a name means), and not a program that runs what its words say,
+// unless its words name the host it reaches.
 func programOf(part string) (string, bool) {
 	words := strings.Fields(part)
-	if len(words) == 0 || environmentAssignment.MatchString(words[0]) || runsItsWords(words[0], words[1:]) {
+	if len(words) == 0 || environmentAssignment.MatchString(words[0]) {
 		return "", false
+	}
+	if runsItsWords(words[0], words[1:]) {
+		return sshTarget(words)
 	}
 	return words[0], true
 }
 
-const statementSeparator = ";"
-
-// CommandPrograms is the programs a shell command runs, one per part (`npm test && git status` gives npm and git),
-// or none known when the command does more than that list can tell: it sets a variable first, or one of its
-// programs runs what its words say. Quotes are not understood: a separator inside quotes only makes a part that
-// no rule allows, so the command is asked about. shared/permissions words the app's button with the same rule,
-// in TypeScript: the tests of both hold the same cases.
-func CommandPrograms(command string) ([]string, bool) {
-	statements := chains.ReplaceAllString(command, statementSeparator)
-	for _, mark := range opaqueMarks {
-		if strings.Contains(statements, mark) {
-			return nil, false
+// splitParts are the statements of a command, split at its separators (`;`, `|`, `&&`, `||`) and not inside its
+// quotes, or none when the command does more than a list of programs can tell: a substitution the shell runs (not
+// one in single quotes, which quotes it), a redirection, a subshell, a background job or a second line. A separator
+// inside quotes belongs to the argument, so `ssh marvin 'cd x && ls'` is one statement.
+func splitParts(command string) ([]string, bool) {
+	parts := []string{}
+	var current strings.Builder
+	var quote byte
+	flush := func() {
+		if part := strings.TrimSpace(current.String()); part != "" {
+			parts = append(parts, part)
+		}
+		current.Reset()
+	}
+	for i := 0; i < len(command); i++ {
+		c := command[i]
+		switch quote {
+		case '\'':
+			if c == '\'' {
+				quote = 0
+			} else {
+				current.WriteByte(c)
+			}
+		case '"':
+			switch {
+			case c == '"':
+				quote = 0
+			case c == '\\' && i+1 < len(command):
+				i++
+				current.WriteByte(command[i])
+			case c == '`', c == '$' && i+1 < len(command) && command[i+1] == '(':
+				return nil, false
+			default:
+				current.WriteByte(c)
+			}
+		default:
+			switch c {
+			case '\'', '"':
+				quote = c
+			case '\\':
+				if i+1 < len(command) {
+					i++
+					current.WriteByte(command[i])
+				}
+			case ';', '|':
+				flush()
+			case '&':
+				if i+1 >= len(command) || command[i+1] != '&' {
+					return nil, false
+				}
+				i++
+				flush()
+			case '`', '>', '<', '(', ')', '\n':
+				return nil, false
+			case '$':
+				if i+1 < len(command) && command[i+1] == '(' {
+					return nil, false
+				}
+				current.WriteByte(c)
+			default:
+				current.WriteByte(c)
+			}
 		}
 	}
+	if quote != 0 {
+		return nil, false
+	}
+	flush()
+	return parts, true
+}
+
+// CommandPrograms is the programs a shell command runs, one per statement (`npm test && git status` gives npm and
+// git), or none known when the command does more than that list can tell: it sets a variable first, one of its
+// programs runs what its words say (except ssh, which is named by the host it reaches), or it does something a list
+// of programs cannot describe. shared/permissions decides with the same rule, in TypeScript: the tests of both hold
+// the same cases.
+func CommandPrograms(command string) ([]string, bool) {
+	parts, known := splitParts(command)
+	if !known {
+		return nil, false
+	}
 	programs := []string{}
-	for _, part := range separators.Split(statements, -1) {
-		if strings.TrimSpace(part) == "" {
-			continue
-		}
+	for _, part := range parts {
 		program, named := programOf(part)
 		if !named {
 			return nil, false
