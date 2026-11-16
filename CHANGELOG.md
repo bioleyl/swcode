@@ -2,6 +2,21 @@
 
 All notable changes to swcode are documented here.
 
+## [0.12.0] - 2026-11-16
+
+### Added
+
+- The SSH hosts of the settings can be named, as `buildbox=me@build-box`: the new project dialog and Settings → SSH show the name, and each host added there is changed or removed from its row. The hosts of `~/.ssh/config` are listed too, without buttons.
+
+### Changed
+
+- A permission granted for `ssh` is for the host it reaches (`ssh marvin`), whatever it runs there; `ssh` without a host is asked about every time. A separator inside quotes no longer makes a command unknown, so `ssh marvin 'cd x && ls'` gets the same grant.
+- A terminal the agent opened for a command you answer closes itself once the command ends, unless you typed in it. One started without `wait` stays for the agent to read.
+
+### Fixed
+
+- The Phone topic in the desktop app no longer offers "Install on this device" or "Notifications on this device", and a Tailscale inside WSL is told apart from one on Windows: the Windows app cannot use it, and says so.
+
 ## [0.11.0] - 2026-11-13
 
 ### Added
