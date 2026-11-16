@@ -1,5 +1,10 @@
 apply plugin: 'com.android.application'
 
+// The version the build passes, as the other programs of the release carry it. Both are assigned before use: a call
+// like `versionCode (expr).toInteger()` hands the method the String, since the call binds before `.toInteger()`.
+def swcodeVersion = (project.findProperty('swcodeVersion') ?: '0.0.0').toString()
+def swcodeVersionCode = (project.findProperty('swcodeVersionCode') ?: '1').toString().toInteger()
+
 // The keystore the release is signed with, which the person keeps and the workflow writes from its secrets: without
 // it, a release build is unsigned and Android does not install it.
 def signingKeystore = new Properties()
@@ -15,9 +20,8 @@ android {
         applicationId "com.bioleyl.swcode"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        // The release's version, which the build passes: the same one its other programs carry.
-        versionCode (project.findProperty('swcodeVersionCode') ?: '1').toInteger()
-        versionName (project.findProperty('swcodeVersion') ?: '0.0.0')
+        versionCode swcodeVersionCode
+        versionName swcodeVersion
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
