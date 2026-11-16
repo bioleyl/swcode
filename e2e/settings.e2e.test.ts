@@ -380,6 +380,9 @@ describe('pairing a phone', () => {
     const phone = await rig.browser.newPage({ deviceScaleFactor: 2, viewport: PHONE });
     await phone.goto(address ?? '');
     const number = await shownPairNumber(phone);
+    // The status is asked again every fifteen seconds: the number the person reads stays the one they type.
+    await new Promise((resolve) => setTimeout(resolve, 17_000));
+    expect(await shownPairNumber(phone)).toBe(number);
     await expectPairNumber(rig.link, number);
     await expect.poll(() => phone.evaluate(KEPT_TOKEN)).toBe(true);
     await phone.locator('home-page textarea').waitFor();

@@ -2,6 +2,14 @@
 
 All notable changes to swcode are documented here.
 
+## [0.13.1] - 2026-11-16
+
+### Fixed
+
+- The pairing number a page shows no longer changes every fifteen seconds: the shell told the page it was still
+  waiting at every status answer, and the page drew a new number each time, so the one typed on the computer never
+  matched.
+
 ## [0.13.0] - 2026-11-16
 
 ### Added
