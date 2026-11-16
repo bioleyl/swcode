@@ -73,8 +73,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          for attempt in $(seq 1 20); do
+          # The release is another workflow's: wait for it, up to half an hour, since its checks are rerun by hand
+          # when a test flakes.
+          for attempt in $(seq 1 60); do
             gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1 && break
-            sleep 15
+            sleep 30
           done
           gh release upload "$GITHUB_REF_NAME" swcode-android.apk swcode-android.apk.sha256 --clobber
