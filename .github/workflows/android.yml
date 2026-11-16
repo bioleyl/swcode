@@ -14,18 +14,18 @@ permissions:
 
 jobs:
   apk:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
-      - uses: actions/setup-java@v7
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: 21
-      - uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@v4
       - run: npm ci
       - name: Build the pages the app brings
         run: npm run build
@@ -61,7 +61,7 @@ jobs:
           cp mobile/android/app/build/outputs/apk/release/app-release.apk swcode-android.apk
           sha256sum swcode-android.apk > swcode-android.apk.sha256
       - name: Keep the APK of a run, which needs no release
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: swcode-android
           path: |
