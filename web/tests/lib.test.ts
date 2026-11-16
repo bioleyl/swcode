@@ -341,8 +341,8 @@ describe('daemonLine', () => {
     expect(daemonLine({ kind: 'ready', status: statusOf(source('gmktec', false)) }).text).toBe(
       'llm-server unreachable'
     );
-    expect(daemonLine({ kind: 'locked', pairingFailed: false }).tone).toBe('problem');
-    expect(daemonLine({ kind: 'locked', pairingFailed: true }).text).toBe('This pairing code expired');
+    expect(daemonLine({ kind: 'locked' }).tone).toBe('problem');
+    expect(daemonLine({ kind: 'locked' }).text).toBe('This device is not paired');
   });
 });
 

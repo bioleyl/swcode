@@ -13,10 +13,10 @@ import (
 
 const (
 	maxBody = 64 << 20
-	refusal = "Open swcode with the link the daemon printed when it started, or pair this phone with the QR code: either brings a token."
+	refusal = "Open swcode with the link the daemon printed when it started, or pair this device: either brings a token."
 )
 
-// openRoutes are the health, and the pairing of a phone, which brings the code as its secret.
+// openRoutes are the health, and the pairing of a device, which brings the number as its secret.
 var openRoutes = map[string]bool{protocol.EndpointHealth: true, protocol.EndpointPairing: true}
 
 // message is an answer that says something to people.

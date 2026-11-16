@@ -36,10 +36,8 @@ const (
 
 	flagMinimized = "--minimized"
 	flagDaemon    = "--daemon"
-	flagPair      = "--pair"
 	flagHere      = "--here"
 	failedStart   = "swcode did not start.\n\n%s"
-	failedPairing = "No pairing code.\n\n%s"
 )
 
 type appFolders struct {
@@ -48,19 +46,18 @@ type appFolders struct {
 }
 
 // launch is how the program was started: the app (installed first when it is not), the app in the notification area
-// only (at logon), the daemon alone, for a pairing code, or the app where it is, not installed.
+// only (at logon), the daemon alone, or the app where it is, not installed.
 type launch int
 
 const (
 	launchApp launch = iota
 	launchTray
 	launchDaemon
-	launchPair
 	launchHere
 )
 
 var launchFlags = map[string]launch{
-	flagMinimized: launchTray, flagDaemon: launchDaemon, flagPair: launchPair, flagHere: launchHere,
+	flagMinimized: launchTray, flagDaemon: launchDaemon, flagHere: launchHere,
 }
 
 // launches is what each launch runs, and how its failure is told.
@@ -72,7 +69,6 @@ var launches = map[launch]struct {
 	launchHere:   {run: func() error { return runApp(true) }, failure: failedStart},
 	launchTray:   {run: func() error { return runApp(false) }, failure: failedStart},
 	launchDaemon: {run: runDaemon, failure: failedStart},
-	launchPair:   {run: showPairing, failure: failedPairing},
 }
 
 func launchOf(arguments []string) launch {

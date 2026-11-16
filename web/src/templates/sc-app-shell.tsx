@@ -16,9 +16,11 @@ import { daemonLine } from '../lib/daemon-lines';
 import { matchCommands, PALETTE_ACTION, paletteCommands, paletteTarget } from '../lib/palette';
 import { removalConsequence, sessionInProject, sessionsInProject } from '../lib/project-groups';
 import { PHONE_TOPIC, SETTINGS_TOPICS } from '../lib/settings-topics';
+import { ScConnect } from '../organisms/sc-connect';
 import { NAV_ID, projectNavId, ScNav, sessionNavId } from '../organisms/sc-nav';
 import { ScProjectDialog } from '../organisms/sc-project-dialog';
 import { ROUTES } from '../routes';
+import { storedComputers } from '../services/computer-store';
 import { daemon } from '../services/daemon';
 import { daemonState, daemonStatusBus } from '../services/daemon-status';
 import { inDesktopApp } from '../services/desktop';
@@ -70,6 +72,8 @@ const TRUST_QUESTION =
   'Its AGENTS.md and its own skills are instructions the agent follows as if they were yours. Trust a folder whose files you know. Otherwise they are kept from the agent and its commands keep their sandbox, until its Config tab says you trust it.';
 // A window as narrow as a phone's, where the session page puts its composer along the bottom.
 const PHONE_QUERY = '(max-width: 720px)';
+// The states in which no daemon the page may talk to answers: a page or app with no computer yet pairs in their place.
+const UNPAIRED_STATES: ReadonlySet<DaemonState['kind']> = new Set(['badAnswer', 'locked', 'offline', 'refused']);
 
 /** A phone's tabs, under the page: a new session or chat, every session, the settings; More opens the navigation. */
 const TAB = { new: 'new', sessions: 'sessions', settings: 'settings' } as const;
@@ -142,6 +146,7 @@ export class ScAppShell extends ScElement {
 
   private readonly _refs = this.useRefs((ref) => ({
     alert: ref(JlAlert),
+    connect: ref(ScConnect),
     frame: ref(JlAppShell),
     nav: ref(ScNav),
     outlet: ref(JlPageOutlet),
@@ -154,26 +159,29 @@ export class ScAppShell extends ScElement {
 
   templateHtml(): Node {
     return (
-      <JlAppShell narrowHeader>
-        <div slot="header" class="top-bar">
-          <a class="top-brand">
-            <ScBrand />
-          </a>
-          <JlSearchButton label="Search" compact />
-        </div>
-        <ScNav slot="nav" />
-        <div class="main">
-          <JlAlert tone="danger" hidden />
-          <JlPageOutlet />
-        </div>
-        <JlTabBar slot="tabs" more="More" label="swcode" />
-        <JlToaster />
-        <JlCommandPalette
-          label="Search swcode"
-          placeholder="Search sessions and what they say, projects, settings…"
-        />
-        <ScProjectDialog />
-      </JlAppShell>
+      <div class="shell">
+        <JlAppShell narrowHeader>
+          <div slot="header" class="top-bar">
+            <a class="top-brand">
+              <ScBrand />
+            </a>
+            <JlSearchButton label="Search" compact />
+          </div>
+          <ScNav slot="nav" />
+          <div class="main">
+            <JlAlert tone="danger" hidden />
+            <JlPageOutlet />
+          </div>
+          <JlTabBar slot="tabs" more="More" label="swcode" />
+          <JlToaster />
+          <JlCommandPalette
+            label="Search swcode"
+            placeholder="Search sessions and what they say, projects, settings…"
+          />
+          <ScProjectDialog />
+        </JlAppShell>
+        <ScConnect hidden />
+      </div>
     );
   }
 
@@ -328,12 +336,19 @@ export class ScAppShell extends ScElement {
     actions[action]();
   }
 
-  /** The daemon's state: a problem over every page, where a phone sees it. */
+  /**
+   * The daemon's state: a problem over every page, where a phone sees it. A page or app with no computer yet and no
+   * swcode that knows it shows how to pair in place of the frame, which has nothing to show.
+   */
   private renderDaemon(state: DaemonState): void {
     const line = daemonLine(state);
     this._refs.alert.hidden = line.tone !== 'problem';
     this._refs.alert.heading.set(line.text);
     this._refs.alert.description.set(line.detail);
+    const connecting = storedComputers().computers.length === 0 && UNPAIRED_STATES.has(state.kind);
+    this._refs.frame.hidden = connecting;
+    this._refs.connect.hidden = !connecting;
+    this._refs.connect.active.set(connecting);
   }
 
   /** Removes a project once the person confirms; leaves its page, and its session when one of them is open. */

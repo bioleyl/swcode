@@ -35,13 +35,12 @@ const (
 	ownerOnly    = 0o600
 	bearerHeader = "authorization"
 
-	noAddress   = "Type that computer's address: its name or IP address, and the port when it is not 4500."
-	noComputer  = "That computer is not kept here."
-	noCode      = "Type the code that computer's swcode shows to pair a device, or paste its link with the token."
-	codeRefused = "The code was refused: it works once, for a minute. Ask that computer's swcode for a new one."
-	linkRefused = "That computer's swcode refused the link's token."
-	notSwcode   = "%s answered, but not as swcode does."
-	unreachable = "%s did not answer: is swcode running there, and listening on the network (SWCODE_HOST)?"
+	noAddress    = "Type that computer's address: its name or IP address, and the port when it is not 4500."
+	noComputer   = "That computer is not kept here."
+	noToken      = "That computer has to be paired first: its app gives this one a token."
+	tokenRefused = "That computer's swcode refused the token this app paired with."
+	notSwcode    = "%s answered, but not as swcode does."
+	unreachable  = "%s did not answer: is swcode running there, and listening on the network (SWCODE_HOST)?"
 
 	// probeLimit is how long swcode at another computer has to answer before the app says it does not.
 	probeLimit = 2 * time.Second
@@ -134,75 +133,54 @@ func (s *Store) save() error {
 	return os.WriteFile(s.file, data, ownerOnly)
 }
 
-// Target is what a person typed to reach another computer's swcode: its address, its name, and the token when they
-// pasted a link that carries one.
-type Target struct {
-	Address string
-	Name    string
-	Token   string
-}
-
-// TargetOf reads an address as a person types it: a name or an IP address, with or without the scheme and the port
-// (http and 4500 when left out), or a whole link from that swcode, its token included.
-func TargetOf(typed string) (Target, error) {
+// AddressOf reads an address as a person types it: a name or an IP address, with or without the scheme and the port
+// (http and 4500 when left out).
+func AddressOf(typed string) (string, error) {
 	text := strings.TrimSpace(typed)
 	if text == "" {
-		return Target{}, errors.New(noAddress)
+		return "", errors.New(noAddress)
 	}
 	if !strings.Contains(text, schemeMark) {
 		text = plainScheme + schemeMark + text
 	}
 	link, err := url.Parse(text)
 	if err != nil || link.Hostname() == "" {
-		return Target{}, errors.New(noAddress)
+		return "", errors.New(noAddress)
 	}
 	host := link.Host
 	if link.Scheme == plainScheme && link.Port() == "" {
 		host = net.JoinHostPort(link.Hostname(), strconv.Itoa(config.DefaultPort))
 	}
 	address := url.URL{Host: host, Scheme: link.Scheme}
-	return Target{Address: address.String(), Name: link.Hostname(), Token: link.Query().Get(protocol.TokenParam)}, nil
+	return address.String(), nil
 }
 
-// Connect reaches another computer's swcode: it trades the code for a token of this app's own, named after this
-// computer in that swcode's list of devices, or checks the token of the link it was given.
-func Connect(ctx context.Context, client *http.Client, typed, code, deviceName string) (Computer, error) {
-	target, err := TargetOf(typed)
+// Connect reaches another computer's swcode with the token its pairing gave the page: it checks that swcode answers
+// with that token, and keeps the computer under the name the person gave it.
+func Connect(ctx context.Context, client *http.Client, typed, name, token string) (Computer, error) {
+	address, err := AddressOf(typed)
 	if err != nil {
 		return Computer{}, err
 	}
-	token, err := tokenFor(ctx, client, target, strings.TrimSpace(code), deviceName)
-	if err != nil {
+	if token == "" {
+		return Computer{}, errors.New(noToken)
+	}
+	if err := check(ctx, client, address, token); err != nil {
 		return Computer{}, err
 	}
-	return Computer{Address: target.Address, ID: newID(), Name: target.Name, Token: token}, nil
+	if name == "" {
+		name = nameOf(address)
+	}
+	return Computer{Address: address, ID: newID(), Name: name, Token: token}, nil
 }
 
-func tokenFor(ctx context.Context, client *http.Client, target Target, code, deviceName string) (string, error) {
-	if target.Token != "" {
-		return target.Token, check(ctx, client, target.Address, target.Token)
-	}
-	if code == "" {
-		return "", errors.New(noCode)
-	}
-	return pair(ctx, client, target.Address, code, deviceName)
-}
-
-// pair trades a pairing code for a token, as a phone does.
-func pair(ctx context.Context, client *http.Client, address, code, deviceName string) (string, error) {
-	body, _ := json.Marshal(protocol.PairRequest{Code: code, Name: deviceName})
-	status, answer, err := call(ctx, client, http.MethodPost, address+protocol.EndpointPairing, "", body)
+// nameOf is an address's own name, for a computer the person gave none: its host, without the port.
+func nameOf(address string) string {
+	link, err := url.Parse(address)
 	if err != nil {
-		return "", err
+		return address
 	}
-	if status == http.StatusForbidden || status == http.StatusBadRequest {
-		return "", errors.New(codeRefused)
-	}
-	var paired protocol.PairAnswer
-	if status != http.StatusOK || json.Unmarshal(answer, &paired) != nil || paired.Token == "" {
-		return "", fmt.Errorf(notSwcode, address)
-	}
-	return paired.Token, nil
+	return link.Hostname()
 }
 
 // check asks the daemon's status with a token: whether that swcode takes it.
@@ -212,7 +190,7 @@ func check(ctx context.Context, client *http.Client, address, token string) erro
 		return err
 	}
 	if status == http.StatusUnauthorized {
-		return errors.New(linkRefused)
+		return errors.New(tokenRefused)
 	}
 	if status != http.StatusOK {
 		return fmt.Errorf(notSwcode, address)

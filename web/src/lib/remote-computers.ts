@@ -1,19 +1,15 @@
-import { PAIR_PARAM, TOKEN_PARAM } from '../../../shared/protocol/endpoints';
-
 import type { Answer } from '../types/answer.types';
-import type { PairingTarget } from '../types/computers.types';
 
 const SCHEME_MARK = '://';
 const SECURE = 'https:';
 const PLAIN = 'http:';
-// The port swcode listens on when it was given none: a plain address without one means that port.
-const DEFAULT_PORT = '4500';
+// The port swcode listens on when it was given none: 4500, and the address form's own.
+export const DEFAULT_PORT = '4500';
+const LOWEST_PORT = 1;
+const HIGHEST_PORT = 65_535;
 
-export const NO_ADDRESS = 'Type that computer’s address, or paste the link under its QR code.';
-export const NO_CODE =
-  'Type the pairing code that computer shows in Settings → Computers, or paste the link under its QR code, which holds one.';
-export const TOKEN_LINK =
-  'A link with a token opens that computer’s own swcode. To show it here, use its pairing code or the link under its QR code.';
+export const NO_ADDRESS = 'Type that computer’s address: its name or IP address.';
+export const BAD_PORT = 'The port is a number from 1 to 65535, or nothing for 4500.';
 export const NOT_SECURE =
   'This page came over HTTPS, and a browser lets it talk only to addresses that are HTTPS too. Give that computer one (a tailnet does: tailscale serve), then add it by that address.';
 
@@ -25,30 +21,47 @@ const urlOf = (text: string): URL | undefined => {
   }
 };
 
+const portOf = (typed: string): string | undefined => {
+  const number = Number(typed);
+  if (!Number.isInteger(number) || number < LOWEST_PORT || number > HIGHEST_PORT) {
+    return undefined;
+  }
+  return String(number);
+};
+
+// The port an address without one takes: swcode's 4500 over plain HTTP; over HTTPS the link keeps its own, which is
+// the tailnet's 443 when it says nothing.
+const defaultPortOf = (link: URL): string | undefined => {
+  if (link.port !== '') {
+    return link.port;
+  }
+  return link.protocol === SECURE ? undefined : DEFAULT_PORT;
+};
+
 /**
- * Where a computer to add is and the code that pairs with it, from what the person typed or scanned: the link under
- * a QR code holds both, an address needs the code typed beside it. An address without a scheme takes the page's
- * own, and a plain one without a port swcode's usual one. Refused: no address, no code, a link that carries a token
- * (which a page of another computer must never hold), and a plain address from a page that came over HTTPS.
+ * Where the computer to add answers, from the address and the port the person typed: a name or an IP address, or a
+ * whole link. An address without a scheme takes the page's own; a port left out is swcode's 4500 over plain HTTP, and
+ * the link's own over HTTPS. Refused: no address, a port that is not one, and a plain address from a page that came
+ * over HTTPS, which no browser would let the page reach.
  */
-export function pairingTarget(typed: string, typedCode: string, pageProtocol: string): Answer<PairingTarget> {
+export function pairingOrigin(typed: string, typedPort: string, pageProtocol: string): Answer<string> {
   const text = typed.trim();
   const link = urlOf(text.includes(SCHEME_MARK) ? text : `${pageProtocol}//${text}`);
   if (text === '' || !link || link.hostname === '') {
     return { ok: false, problem: NO_ADDRESS };
   }
-  if (link.searchParams.has(TOKEN_PARAM)) {
-    return { ok: false, problem: TOKEN_LINK };
+  if (link.protocol !== PLAIN && link.protocol !== SECURE) {
+    return { ok: false, problem: NO_ADDRESS };
   }
-  const code = link.searchParams.get(PAIR_PARAM) ?? typedCode.trim();
-  if (code === '') {
-    return { ok: false, problem: NO_CODE };
+  const port = typedPort.trim() === '' ? defaultPortOf(link) : portOf(typedPort.trim());
+  if (typedPort.trim() !== '' && port === undefined) {
+    return { ok: false, problem: BAD_PORT };
   }
   if (pageProtocol === SECURE && link.protocol !== SECURE) {
     return { ok: false, problem: NOT_SECURE };
   }
-  if (link.protocol === PLAIN && link.port === '') {
-    link.port = DEFAULT_PORT;
+  if (port !== undefined) {
+    link.port = port;
   }
-  return { answer: { code, origin: link.origin }, ok: true };
+  return { answer: link.origin, ok: true };
 }

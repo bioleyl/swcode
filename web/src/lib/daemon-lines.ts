@@ -39,18 +39,11 @@ const LINES: { [Kind in keyof DaemonStateMap]: (state: DaemonStateMap[Kind]) => 
     text: 'The daemon answered badly',
     tone: 'problem',
   }),
-  locked: ({ pairingFailed }) =>
-    pairingFailed
-      ? {
-          detail: 'Scan the QR code again: its code works once, for a minute.',
-          text: 'This pairing code expired',
-          tone: 'problem',
-        }
-      : {
-          detail: 'Open the link the daemon printed when it started, or pair with the QR code.',
-          text: 'The access token is missing',
-          tone: 'problem',
-        },
+  locked: () => ({
+    detail: 'Type the number this page shows on this computer: swcode pair <number>.',
+    text: 'This device is not paired',
+    tone: 'problem',
+  }),
   offline: () => ({ detail: 'Is it running?', text: 'The daemon does not answer', tone: 'problem' }),
   ready: ({ status }) => llamaLine(status),
   refused: ({ problem }) => ({

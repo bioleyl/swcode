@@ -47,6 +47,30 @@ export const navItem = (page: Page, label: string) =>
 /** The settings' cog, at the foot of the navigation. */
 export const settingsLink = (page: Page) => page.locator('sc-nav .settings');
 
+/**
+ * The number a page shows to pair with a computer, as the person types it there: read from the command it shows, which
+ * `swcode pair` would run.
+ */
+export const shownPairNumber = async (page: Page, selector = 'sc-connect .connect-command'): Promise<string> => {
+  const command = page.locator(selector);
+  await expect.poll(async () => (await command.textContent()) ?? '').toMatch(/^swcode pair \d{6}$/);
+  return ((await command.textContent()) ?? '').replace('swcode pair ', '').trim();
+};
+
+/** Makes a number wait on a daemon, as `swcode pair <number>` does on its computer. */
+export async function expectPairNumber(link: string, number: string): Promise<void> {
+  const address = new URL(link);
+  const response = await fetch(`${address.origin}/api/pairing/pending`, {
+    body: JSON.stringify({ number }),
+    headers: {
+      authorization: `Bearer ${address.searchParams.get('token') ?? ''}`,
+      'content-type': 'application/json',
+    },
+    method: 'POST',
+  });
+  expect(response.ok).toBe(true);
+}
+
 /** The style of the first shape of a navigation item's icon, by the start of its id: its light's fill, or none. */
 export const navIconFill = (page: Page, id: string) =>
   page.locator(`sc-nav .item[data-id^="${id}"] svg > *`).first().getAttribute('style');

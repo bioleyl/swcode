@@ -1,0 +1,17 @@
+{
+  "name": "swcode-app",
+  "private": true,
+  "type": "module",
+  "description": "swcode's Android app: the web app in a WebView of its own, built from the release's web assets",
+  "scripts": {
+    "sync": "node scripts/sync.mjs",
+    "open": "cap open android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.6.2",
+    "@capacitor/core": "^8.6.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.6.2"
+  }
+}

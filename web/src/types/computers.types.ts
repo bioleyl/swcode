@@ -17,9 +17,3 @@ export interface StoredComputers {
 
 /** What a page asks about the computers it shows: the desktop app answers in its window, the browser itself elsewhere. */
 export type ComputerRequest = Exclude<DesktopRequest, { type: 'openOutside' }>;
-
-/** Where another computer's swcode is, and the code that pairs with it. */
-export interface PairingTarget {
-  origin: string;
-  code: string;
-}

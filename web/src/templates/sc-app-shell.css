@@ -3,8 +3,17 @@
   height: 100dvh;
 }
 
+.shell {
+  height: 100%;
+}
+
 jl-app-shell {
   height: 100%;
+}
+
+jl-app-shell[hidden],
+sc-connect[hidden] {
+  display: none;
 }
 
 /* A phone's top bar: swcode, and the search at its end. */

@@ -35,10 +35,11 @@ export type Computer = z.infer<typeof ComputerSchema>;
 /** What the page asks the app. */
 export const DesktopRequestSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('listComputers') }),
-  // An address and the code another computer's swcode shows to pair with it; a link with its token needs no code.
+  // An address, the name the app should call that computer, and the token its pairing gave this page.
   z.object({
     address: z.string().trim().min(1).max(300),
-    code: z.string().trim().max(100).optional(),
+    name: z.string().trim().min(1).max(60),
+    token: z.string().min(1).max(200),
     type: z.literal('addComputer'),
   }),
   z.object({ id: z.string(), type: z.literal('openComputer') }),

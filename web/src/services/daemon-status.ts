@@ -4,7 +4,6 @@ import { ENDPOINTS } from '../../../shared/protocol/endpoints';
 import { StatusSchema } from '../../../shared/protocol/messages.schema';
 import { problemOf } from '../lib/daemon-lines';
 import { jsonOfText, request, textOf } from './api';
-import { pairingFailed } from './pairing';
 
 import type { DaemonState } from '../types/daemon.types';
 
@@ -26,7 +25,7 @@ async function fetchState(): Promise<DaemonState> {
   const body = await textOf(response);
   if (!response.ok) {
     return response.status === UNAUTHORIZED
-      ? { kind: 'locked', pairingFailed: pairingFailed() }
+      ? { kind: 'locked' }
       : { kind: 'refused', problem: problemOf(response.status, body), status: response.status };
   }
   const parsed = StatusSchema.safeParse(jsonOfText(body));

@@ -10,7 +10,6 @@ import { adoptToken } from './services/access';
 import { daemon, daemonBus } from './services/daemon';
 import { refreshStatus, watchStatus } from './services/daemon-status';
 import { startApp } from './services/install';
-import { pairFromLink } from './services/pairing';
 import { followPushes } from './services/push';
 import { applyTheme } from './services/theme';
 import { ScAppShell } from './templates/sc-app-shell';
@@ -34,8 +33,5 @@ document.addEventListener(
   }
 );
 window.addEventListener('online', () => daemon.wake(), { signal: forever });
-// A phone opened from the QR code trades its pairing code for a token before it talks to the daemon.
-void pairFromLink().finally(() => {
-  daemon.connect();
-  watchStatus(forever);
-});
+daemon.connect();
+watchStatus(forever);

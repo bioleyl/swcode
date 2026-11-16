@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">swcode</string>
+    <string name="title_activity_main">swcode</string>
+    <string name="package_name">com.bioleyl.swcode</string>
+    <string name="custom_url_scheme">com.bioleyl.swcode</string>
+</resources>

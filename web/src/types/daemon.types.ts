@@ -7,8 +7,8 @@ import type { Status } from '../../../shared/protocol/messages.schema';
 export type DaemonState =
   | { kind: 'unknown' }
   | { kind: 'ready'; status: Status }
-  // `pairingFailed`: the page came from a pairing code the daemon refused.
-  | { kind: 'locked'; pairingFailed: boolean }
+  // The daemon refused the token: this device is not paired with it.
+  | { kind: 'locked' }
   // The daemon answered with something other than the status: its code, and what it said about itself.
   | { kind: 'refused'; problem: string; status: number }
   // The daemon answered, but not with a status the app can read.

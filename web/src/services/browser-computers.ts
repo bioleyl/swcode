@@ -3,24 +3,17 @@ import { Bus } from '@jadis/core';
 import { THIS_COMPUTER } from '../../../shared/protocol/desktop.schema';
 import { BEARER_PREFIX, ENDPOINTS } from '../../../shared/protocol/endpoints';
 import { StatusSchema } from '../../../shared/protocol/messages.schema';
-import { PairAnswerSchema } from '../../../shared/protocol/pairing.schema';
-import { pairingTarget } from '../lib/remote-computers';
 import { homeToken } from './access';
 import { keepComputers, storedComputers } from './computer-store';
-import { deviceName } from './pairing';
 
 import type { Computer, DesktopAnswer } from '../../../shared/protocol/desktop.schema';
-import type { ComputerRequest, PairingTarget, StoredComputer } from '../types/computers.types';
+import type { ComputerRequest, StoredComputer } from '../types/computers.types';
 
 // How long a computer has to answer before it counts as out of reach.
 const REACH_TIMEOUT_MS = 2000;
 const LOOPBACK_NAMES: ReadonlySet<string> = new Set(['localhost', '127.0.0.1', '[::1]']);
 const THIS_COMPUTER_NAME = 'This computer';
 const SAME_COMPUTER = 'That is the computer this page came from: it is in the list already.';
-const NO_ANSWER = 'Nothing answered there as swcode. Is it running, and reachable from this device?';
-const CODE_REFUSED =
-  'That computer refused the code: it works once and changes every minute. Read a new one in its Settings → Computers.';
-const JSON_TYPE = { 'content-type': 'application/json' };
 
 /**
  * What the browser answers about the computers it shows, the way the desktop app answers in its window: the pages
@@ -87,54 +80,37 @@ async function list(): Promise<void> {
   listed(await Promise.all([location.origin, ...kept.computers.map((computer) => computer.address)].map(reaches)));
 }
 
-/** The page loads again at its first address, talking to the computer now kept as shown: another one's sessions and
- * projects are not this one's. */
+/** The page loads again where the computer now shown answers: another one's sessions and projects are not this one's. */
 function showAnother(id: string): void {
   keepComputers({ ...storedComputers(), current: id });
   history.replaceState(null, '', location.pathname);
   location.reload();
 }
 
-/** Trades a pairing code for a token of this browser's own, at another computer's swcode; why not, otherwise. */
-async function pair(target: PairingTarget): Promise<string | undefined> {
-  const response = await fetch(`${target.origin}${ENDPOINTS.pairing}`, {
-    body: JSON.stringify({ code: target.code, name: deviceName(navigator.userAgent) }),
-    headers: JSON_TYPE,
-    method: 'POST',
-  }).catch(() => undefined);
-  if (!response) {
-    refuse(NO_ANSWER);
-    return undefined;
-  }
-  const paired = PairAnswerSchema.safeParse(await response.json().catch(() => undefined));
-  if (!response.ok || !paired.success) {
-    refuse(CODE_REFUSED);
-    return undefined;
-  }
-  return paired.data.token;
+/** Keeps a computer its pairing gave this browser a token for, in place of one at the same address, and its id. */
+function keep(address: string, name: string, token: string): StoredComputer {
+  const kept = storedComputers();
+  // Paired again, a computer takes its new token, and keeps the name and colour it was given here.
+  const known = kept.computers.find((computer) => computer.address === address);
+  const computer = known ? { ...known, token } : { address, id: crypto.randomUUID(), name, token };
+  keepComputers({ ...kept, computers: [...kept.computers.filter((each) => each !== known), computer] });
+  return computer;
 }
 
-async function add(address: string, code: string): Promise<void> {
-  const target = pairingTarget(address, code, location.protocol);
-  if (!target.ok) {
-    refuse(target.problem);
-    return;
-  }
-  if (target.answer.origin === location.origin) {
+/**
+ * Keeps the computer a page paired with and shows it at once: the very first one, from a page no daemon serves, which
+ * has nothing else to show.
+ */
+export function connectTo(address: string, name: string, token: string): void {
+  showAnother(keep(address, name, token).id);
+}
+
+async function add(request: Extract<ComputerRequest, { type: 'addComputer' }>): Promise<void> {
+  if (request.address === location.origin) {
     refuse(SAME_COMPUTER);
     return;
   }
-  const token = await pair(target.answer);
-  if (token === undefined) {
-    return;
-  }
-  const { origin } = target.answer;
-  const kept = storedComputers();
-  const added = { address: origin, id: crypto.randomUUID(), name: await machineName(origin, token), token };
-  // Paired again, a computer takes its new token, and keeps the name and colour it was given here.
-  const known = kept.computers.find((computer) => computer.address === origin);
-  const others = kept.computers.filter((computer) => computer !== known);
-  keepComputers({ ...kept, computers: [...others, known ? { ...known, token } : added] });
+  keep(request.address, request.name, request.token);
   await list();
 }
 
@@ -170,7 +146,7 @@ async function forget(id: string): Promise<void> {
 const ANSWERS: {
   [Type in ComputerRequest['type']]: (request: Extract<ComputerRequest, { type: Type }>) => Promise<void>;
 } = {
-  addComputer: (request) => add(request.address, request.code ?? ''),
+  addComputer: (request) => add(request),
   editComputer: (request) => edit(request),
   forgetComputer: (request) => forget(request.id),
   listComputers: () => list(),

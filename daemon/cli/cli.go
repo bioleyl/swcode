@@ -60,6 +60,8 @@ type Command struct {
 	Exit int
 	// Run is what swcode run asks for.
 	Run RunOptions
+	// PairNumber is the number an app shows, which swcode pair makes this computer wait for.
+	PairNumber string
 }
 
 // plainCommands are the commands that take no arguments.
@@ -67,7 +69,6 @@ var plainCommands = map[string]Command{
 	"daemon":  {Kind: KindServe, Mode: ModeBackground},
 	"install": {Kind: KindInstall},
 	"open":    {Kind: KindOpen},
-	"pair":    {Kind: KindPair},
 	"start":   {Kind: KindStart},
 	"stop":    {Kind: KindStop},
 }
@@ -101,8 +102,10 @@ var runModes = map[string]bool{"auto": true, "acceptEdits": true, "ask": true}
 const (
 	serveWord   = "serve"
 	serviceWord = "service"
+	pairWord    = "pair"
 	// serviceFlag runs the daemon so that its service manager starts it again after a restart or an update.
 	serviceFlag = "--service"
+	pairUsage   = "swcode pair takes the number the app that pairs shows: swcode pair 123456."
 )
 
 func help(problem string) Command { return Command{Kind: KindHelp, Problem: problem} }
@@ -124,6 +127,8 @@ func Parse(arguments []string) Command {
 		return serveCommand(rest)
 	case serviceWord:
 		return serviceCommand(rest)
+	case pairWord:
+		return pairCommand(rest)
 	case runWord:
 		return runCommand(rest)
 	}
@@ -207,6 +212,14 @@ func (o *RunOptions) set(flag, value string) string {
 	return ""
 }
 
+// pairCommand reads swcode pair's one argument: the number an app shows, which the daemon then waits for.
+func pairCommand(arguments []string) Command {
+	if len(arguments) != 1 || strings.TrimSpace(arguments[0]) == "" {
+		return help(pairUsage)
+	}
+	return Command{Kind: KindPair, PairNumber: arguments[0]}
+}
+
 func serviceCommand(arguments []string) Command {
 	if len(arguments) != 1 {
 		return help("swcode service takes install or uninstall.")
@@ -231,7 +244,7 @@ func Usage(build string) string {
 		"  swcode start                Start the daemon in the background.",
 		"  swcode stop                 Stop the daemon.",
 		"  swcode serve                Run the daemon in this terminal (Ctrl+C stops it).",
-		"  swcode pair                 A code to pair another computer's swcode, or a phone, with this one.",
+		"  swcode pair <number>       Wait for the app that shows this number to pair with this swcode.",
 		`  swcode run "<prompt>"       Run one turn of a new session in this folder and print its answer, starting`,
 		"                              the daemon if needed. --cwd <folder>, --mode auto|acceptEdits|ask (auto),",
 		"                              --json (the session's events, a line each), --timeout <duration> (30m).",

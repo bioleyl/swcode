@@ -18,15 +18,18 @@ import (
 
 const (
 	noPicture = "There is no such picture."
-	noCode    = "Send the pairing code of the QR code."
-	// maxPairingBody is the most a pairing request holds: a code and a name.
+	noNumber  = "Send the pairing number the app shows, six digits."
+	// maxPairingBody is the most a pairing request holds: a number and a name.
 	maxPairingBody = 4 << 10
-	codeUsed       = "This pairing code expired or was already used: scan the QR code again, it changes every minute."
-	noDevice       = "There is no such phone."
-	noProject      = "There is no such project."
-	busy           = "A session is working: stop it first. The daemon restarts to take the new settings."
-	unreadable     = "The settings page sent something the daemon does not understand."
-	unreached      = "Nothing answered there as llm-server."
+	// numberNotWaiting is what an app hears when nothing made its number wait, or the wait is over: either the number
+	// is wrong, or `swcode pair` has not run on the computer yet.
+	numberNotWaiting = "This pairing number does not wait here, or its time is over: run swcode pair with it on the computer."
+	tooManyTries     = "Too many pairing attempts: wait a minute, then let the app try again."
+	noDevice         = "There is no such phone."
+	noProject        = "There is no such project."
+	busy             = "A session is working: stop it first. The daemon restarts to take the new settings."
+	unreadable       = "The settings page sent something the daemon does not understand."
+	unreached        = "Nothing answered there as llm-server."
 	// keepCached: a picture's address never shows another one, it can stay in the browser's cache.
 	keepCached = "private, max-age=31536000, immutable"
 )
@@ -80,23 +83,34 @@ func (a *App) imageRoutes(mux *http.ServeMux) {
 	})
 }
 
-// pairingRoutes pair a phone: the computer asks for a code to show (behind the token, like every route), the phone
-// trades it for its own token (open: the code is the secret), and the paired phones can be listed and forgotten.
+// pairingRoutes pair a phone or another computer: the app shows a number, a person types it here with `swcode pair`
+// (behind the token, like every route), and the app trades it for its own token (open: the number is the secret). The
+// paired phones can then be listed and forgotten.
 func (a *App) pairingRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET "+protocol.EndpointPairingCode, func(response http.ResponseWriter, _ *http.Request) {
-		answer(response, a.pairing.Issue())
+	mux.HandleFunc("POST "+protocol.EndpointPairingPending, func(response http.ResponseWriter, request *http.Request) {
+		var asked protocol.PairPendingRequest
+		request.Body = http.MaxBytesReader(response, request.Body, maxPairingBody)
+		if readBody(response, request, &asked) != nil {
+			fail(response, http.StatusBadRequest, noNumber)
+			return
+		}
+		answer(response, a.pairing.Pend(asked.Number))
 	})
 	mux.HandleFunc("POST "+protocol.EndpointPairing, func(response http.ResponseWriter, request *http.Request) {
 		var asked protocol.PairRequest
-		// Anyone may ask this route: what it reads before it knows the code is good stays small.
+		// Anyone may ask this route: what it reads before it knows the number is good stays small.
 		request.Body = http.MaxBytesReader(response, request.Body, maxPairingBody)
-		if readBody(response, request, &asked) != nil || asked.Code == "" {
-			fail(response, http.StatusBadRequest, noCode)
+		if readBody(response, request, &asked) != nil {
+			fail(response, http.StatusBadRequest, noNumber)
 			return
 		}
-		token := a.pairing.Redeem(asked.Code, asked.Name, request.Header.Get(originHeader))
+		if !a.pairing.Allow(request.RemoteAddr) {
+			fail(response, http.StatusTooManyRequests, tooManyTries)
+			return
+		}
+		token := a.pairing.Redeem(asked.Number, asked.Name, request.Header.Get(originHeader))
 		if token == "" {
-			fail(response, http.StatusForbidden, codeUsed)
+			fail(response, http.StatusForbidden, numberNotWaiting)
 			return
 		}
 		answer(response, protocol.PairAnswer{Token: token})

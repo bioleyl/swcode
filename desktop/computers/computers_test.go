@@ -13,57 +13,51 @@ import (
 )
 
 func TestAnAddressIsReadAsAPersonTypesIt(t *testing.T) {
-	for typed, expected := range map[string]computers.Target{
-		"gmktec":                           {Address: "http://gmktec:4500", Name: "gmktec"},
-		" 192.168.1.20:4600 ":              {Address: "http://192.168.1.20:4600", Name: "192.168.1.20"},
-		"https://gmktec.tailnet.ts.net/x":  {Address: "https://gmktec.tailnet.ts.net", Name: "gmktec.tailnet.ts.net"},
-		"http://gmktec:4500/?token=abc123": {Address: "http://gmktec:4500", Name: "gmktec", Token: "abc123"},
+	for typed, expected := range map[string]string{
+		"gmktec":                          "http://gmktec:4500",
+		" 192.168.1.20:4600 ":             "http://192.168.1.20:4600",
+		"https://gmktec.tailnet.ts.net/x": "https://gmktec.tailnet.ts.net",
 	} {
-		if found, err := computers.TargetOf(typed); err != nil || found != expected {
-			t.Fatalf("%q: expected %+v, found %+v (%v)", typed, expected, found, err)
+		if found, err := computers.AddressOf(typed); err != nil || found != expected {
+			t.Fatalf("%q: expected %s, found %s (%v)", typed, expected, found, err)
 		}
 	}
-	if _, err := computers.TargetOf("  "); err == nil {
+	if _, err := computers.AddressOf("  "); err == nil {
 		t.Fatal("an empty address was taken")
 	}
 }
 
-func issueCode(t *testing.T, test *App) string {
+// pairedToken pairs a phone with the test daemon's number, as a page does: the token that pairing gives it.
+func pairedToken(t *testing.T, test *App) string {
 	t.Helper()
-	_, issued := test.Call("GET", protocol.EndpointPairingCode, nil)
-	return issued.(map[string]any)["code"].(string)
+	test.Call("POST", protocol.EndpointPairingPending, map[string]string{"number": "123456"})
+	_, paired := test.Call("POST", protocol.EndpointPairing, map[string]string{"name": "swcode on LAPTOP", "number": "123456"})
+	return paired.(map[string]any)["token"].(string)
 }
 
-func TestACodeIsTradedForATokenOfTheAppsOwnOnce(t *testing.T) {
+func TestAComputerTakesTheTokenItsPairingGaveAndKeepsItsName(t *testing.T) {
 	test := Start(t, Options{})
-	code := issueCode(t, test)
-	computer, err := computers.Connect(context.Background(), http.DefaultClient, test.Server.URL, code, "swcode on LAPTOP")
-	if err != nil || computer.Token == "" || computer.Token == Token || computer.Address != test.Server.URL {
+	token := pairedToken(t, test)
+	computer, err := computers.Connect(context.Background(), http.DefaultClient, test.Server.URL, "gmktec", token)
+	if err != nil || computer.Token != token || computer.Token == Token || computer.Address != test.Server.URL || computer.Name != "gmktec" {
 		t.Fatalf("found %+v (%v)", computer, err)
 	}
 	_, devices := test.Call("GET", protocol.EndpointDevices, nil)
 	Expect(t, devices, `{"devices":[{"name":"swcode on LAPTOP"}]}`)
-	if _, err := computers.Connect(context.Background(), http.DefaultClient, test.Server.URL, code, "again"); err == nil || !strings.Contains(err.Error(), "works once") {
-		t.Fatalf("a used code was taken: %v", err)
-	}
 }
 
-func TestALinkWithItsTokenNeedsNoCodeAndAWrongOneIsRefused(t *testing.T) {
+func TestAComputerWithAWrongOrNoTokenIsRefused(t *testing.T) {
 	test := Start(t, Options{})
-	computer, err := computers.Connect(context.Background(), http.DefaultClient, test.Server.URL+"/?token="+Token, "", "")
-	if err != nil || computer.Token != Token {
-		t.Fatalf("found %+v (%v)", computer, err)
-	}
-	if _, err := computers.Connect(context.Background(), http.DefaultClient, test.Server.URL+"/?token=wrong", "", ""); err == nil || !strings.Contains(err.Error(), "refused") {
+	if _, err := computers.Connect(context.Background(), http.DefaultClient, test.Server.URL, "gmktec", "wrong"); err == nil || !strings.Contains(err.Error(), "refused") {
 		t.Fatalf("a wrong token was taken: %v", err)
 	}
-	if _, err := computers.Connect(context.Background(), http.DefaultClient, test.Server.URL, "", ""); err == nil || !strings.Contains(err.Error(), "code") {
-		t.Fatalf("an address without code nor token was taken: %v", err)
+	if _, err := computers.Connect(context.Background(), http.DefaultClient, test.Server.URL, "gmktec", ""); err == nil || !strings.Contains(err.Error(), "paired first") {
+		t.Fatalf("an address without a token was taken: %v", err)
 	}
 }
 
 func TestAComputerNoSwcodeAnswersOnSaysSo(t *testing.T) {
-	_, err := computers.Connect(context.Background(), http.DefaultClient, "127.0.0.1:1", "123456", "")
+	_, err := computers.Connect(context.Background(), http.DefaultClient, "127.0.0.1:1", "gmktec", "token")
 	if err == nil || !strings.Contains(err.Error(), "127.0.0.1:1 did not answer") {
 		t.Fatalf("found %v", err)
 	}

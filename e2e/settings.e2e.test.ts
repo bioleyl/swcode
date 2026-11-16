@@ -4,13 +4,24 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { E2E_VERSION } from './e2e.constants.js';
 import { programOf } from './fake-releases.js';
-import { DESKTOP, overflow, PHONE, settingsLink, settle, start, stopRigs, tab } from './support.js';
+import {
+  DESKTOP,
+  expectPairNumber,
+  overflow,
+  PHONE,
+  settingsLink,
+  settle,
+  shownPairNumber,
+  start,
+  stopRigs,
+  tab,
+} from './support.js';
 
 import type { Page } from 'playwright-core';
 
 afterEach(stopRigs);
 
-// Whether the page kept a token of its own, which a pairing code is traded for.
+// Whether the page kept a token of its own, which pairing a number gives it.
 const KEPT_TOKEN = "localStorage.getItem('swcode.token') !== null";
 
 const GMKTEC = { address: 'http://gmktec:4500', id: 'g1', name: 'gmktec', reachable: true };
@@ -18,8 +29,9 @@ const OFFLINE = { address: 'http://offline:4500', id: 'o1', name: 'offline', rea
 
 /**
  * Run in the page before it loads: the desktop app around it, as WebView2 lets the page talk to it, showing a
- * computer among those it knows. It keeps what the page asked, sends each message back as WebView2 does, and pairs
- * with gmktec on the code 123456. Opening one that is not reachable answers as the app does: it did not answer.
+ * computer among those it knows. It keeps what the page asked, sends each message back as WebView2 does, and keeps
+ * gmktec once its pairing gave the page the token it expects. Opening one that is not reachable answers as the app
+ * does: it did not answer.
  */
 const fakeDesktopApp = (current = 'local', others: readonly object[] = []): string => `(() => {
   const listeners = [];
@@ -35,8 +47,8 @@ const fakeDesktopApp = (current = 'local', others: readonly object[] = []): stri
       window.desktopAsked.push(text);
       send(text);
       const request = JSON.parse(text);
-      if (request.type === 'addComputer' && request.code !== '123456') {
-        answer({ message: 'The code was refused: it works once, for a minute.', type: 'computerRefused' });
+      if (request.type === 'addComputer' && request.token !== 'paired-token') {
+        answer({ message: 'That computer refused the token its pairing gave.', type: 'computerRefused' });
         return;
       }
       if (request.type === 'addComputer') {
@@ -214,7 +226,7 @@ describe('settings', () => {
     await browser.locator('sc-phone').getByText('Notifications on this device', { exact: true }).waitFor();
   });
 
-  it('list the desktop app’s computers, pair another one with its code, and open it', async () => {
+  it('list the desktop app’s computers, pair another one with its number, and open it', async () => {
     const rig = await start({ replies: [] });
     const page = await rig.browser.newPage({ viewport: DESKTOP });
     await page.addInitScript(fakeDesktopApp());
@@ -223,14 +235,25 @@ describe('settings', () => {
     await computers.first().getByText('This computer', { exact: true }).filter({ visible: true }).waitFor();
     await computers.first().getByText('Shown here').waitFor();
 
+    // That computer answers the pairing route as swcode does: first refusing the number, then giving a token.
+    let refuse = true;
+    await page.route('http://gmktec:4500/api/pairing', (route) =>
+      route.fulfill({
+        body: JSON.stringify(
+          refuse ? { message: 'This pairing number does not wait here.' } : { token: 'paired-token' }
+        ),
+        contentType: 'application/json',
+        status: refuse ? 400 : 200,
+      })
+    );
+
+    await page.locator('#computer-name input').fill('gmktec');
     await page.locator('#computer-address input').fill('gmktec');
-    await page.locator('#computer-code input').fill('000000');
     await page.locator('sc-computers .add').click();
-    await settle(page);
-    await page.locator('sc-computers jl-alert').getByText('refused', { exact: false }).waitFor();
-    await page.locator('#computer-code input').fill('123456');
+    await page.locator('sc-computers jl-alert').getByText('does not wait here', { exact: false }).waitFor();
+
+    refuse = false;
     await page.locator('sc-computers .add').click();
-    await settle(page);
     await page.locator('sc-computers jl-alert').getByText('Added', { exact: false }).waitFor();
     expect(await computers.count()).toBe(2);
     expect(await page.locator('#computer-address input').inputValue()).toBe('');
@@ -239,7 +262,9 @@ describe('settings', () => {
     await settle(page);
     const asked = await page.evaluate('window.desktopAsked');
     expect(asked).toContainEqual('{"id":"g1","type":"openComputer"}');
-    expect(asked).toContainEqual('{"address":"gmktec","code":"123456","type":"addComputer"}');
+    expect(asked).toContainEqual(
+      '{"address":"http://gmktec:4500","name":"gmktec","token":"paired-token","type":"addComputer"}'
+    );
     expect(await overflow(page)).toBe(0);
   });
 });
@@ -341,7 +366,7 @@ describe('the computer', () => {
 });
 
 describe('pairing a phone', () => {
-  it('takes the QR code’s link once: the phone gets in, the same link again does not', async () => {
+  it('shows a number the phone types here: the phone gets in, and the number works once', async () => {
     const rig = await start({ replies: [] });
     const computer = await rig.browser.newPage({ viewport: DESKTOP });
     await computer.goto(rig.link);
@@ -350,20 +375,13 @@ describe('pairing a phone', () => {
     await topicTab(computer, 'Phone').click();
     await settle(computer);
     expect(computer.url()).toContain('#/settings/phone');
-    const link = computer.locator('sc-phone .link');
-    await expect.poll(async () => (await link.textContent()) ?? '').toContain('pair=');
-    const shown = new URL((await link.textContent()) ?? '');
-    expect(shown.searchParams.has('token')).toBe(false);
-    // The page shows the address a phone on the network reaches; the test's daemon listens here only.
-    const pairing = new URL(`/?pair=${shown.searchParams.get('pair')}`, rig.link).toString();
-
+    // The address a phone on the network reaches; the test's daemon listens here only.
+    const address = await computer.locator('sc-phone .link').textContent();
     const phone = await rig.browser.newPage({ deviceScaleFactor: 2, viewport: PHONE });
-    await phone.goto(pairing);
+    await phone.goto(address ?? '');
+    const number = await shownPairNumber(phone);
+    await expectPairNumber(rig.link, number);
     await expect.poll(() => phone.evaluate(KEPT_TOKEN)).toBe(true);
-    expect(phone.url()).not.toContain('pair=');
-
-    const stranger = await rig.browser.newPage({ deviceScaleFactor: 2, viewport: PHONE });
-    await stranger.goto(pairing);
-    await stranger.locator('jl-alert').getByText('This pairing code expired').waitFor();
+    await phone.locator('home-page textarea').waitFor();
   });
 });

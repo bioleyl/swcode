@@ -17,6 +17,7 @@ import (
 	"github.com/coder/websocket"
 
 	"swcode/daemon/fakellama"
+	"swcode/daemon/pairing"
 	"swcode/daemon/protocol"
 	"swcode/daemon/sessions"
 	. "swcode/daemon/testapp"
@@ -71,16 +72,16 @@ func TestTheAPIServesThePicturesWithTheTokenAndNothingOutsideTheirFolder(t *test
 	}
 }
 
-func TestAPhonePairedWithACodeOpensTheAPIUntilItIsForgotten(t *testing.T) {
+func TestAPhonePairedWithANumberOpensTheAPIUntilItIsForgotten(t *testing.T) {
 	test := startHello(t)
-	if status, _, _ := raw(t, test, "GET", protocol.EndpointPairingCode, "", nil); status != 401 {
-		t.Fatalf("status %d", status)
+	if status, _, _ := raw(t, test, "POST", protocol.EndpointPairingPending, "", map[string]string{"number": "123456"}); status != 401 {
+		t.Fatalf("status %d without the token", status)
 	}
-	_, data, _ := raw(t, test, "GET", protocol.EndpointPairingCode, Token, nil)
-	var code protocol.PairingCode
-	_ = json.Unmarshal(data, &code)
+	_, data, _ := raw(t, test, "POST", protocol.EndpointPairingPending, Token, map[string]string{"number": "123456"})
+	var pending protocol.PairPending
+	_ = json.Unmarshal(data, &pending)
 	pair := func() (int, []byte) {
-		status, body, _ := raw(t, test, "POST", protocol.EndpointPairing, "", map[string]string{"code": code.Code, "name": "iPhone"})
+		status, body, _ := raw(t, test, "POST", protocol.EndpointPairing, "", map[string]string{"number": "123456", "name": "iPhone"})
 		return status, body
 	}
 	status, body := pair()
@@ -93,7 +94,7 @@ func TestAPhonePairedWithACodeOpensTheAPIUntilItIsForgotten(t *testing.T) {
 		t.Fatalf("status %d with the phone's token", status)
 	}
 	if status, _ := pair(); status != 403 {
-		t.Fatalf("status %d for a code used", status)
+		t.Fatalf("status %d for a number used", status)
 	}
 	_, data, _ = raw(t, test, "GET", protocol.EndpointDevices, Token, nil)
 	var devices protocol.Devices
@@ -104,13 +105,11 @@ func TestAPhonePairedWithACodeOpensTheAPIUntilItIsForgotten(t *testing.T) {
 	}
 }
 
-// pairedPhone pairs a phone with a fresh code: its token, and the id the daemon lists it under.
+// pairedPhone pairs a phone with a fresh number: its token, and the id the daemon lists it under.
 func pairedPhone(t *testing.T, test *App) (string, string) {
 	t.Helper()
-	_, data, _ := raw(t, test, "GET", protocol.EndpointPairingCode, Token, nil)
-	var code protocol.PairingCode
-	_ = json.Unmarshal(data, &code)
-	_, data, _ = raw(t, test, "POST", protocol.EndpointPairing, "", map[string]string{"code": code.Code, "name": "iPhone"})
+	raw(t, test, "POST", protocol.EndpointPairingPending, Token, map[string]string{"number": "123456"})
+	_, data, _ := raw(t, test, "POST", protocol.EndpointPairing, "", map[string]string{"number": "123456", "name": "iPhone"})
 	var paired protocol.PairAnswer
 	_ = json.Unmarshal(data, &paired)
 	_, data, _ = raw(t, test, "GET", protocol.EndpointDevices, Token, nil)
@@ -372,10 +371,8 @@ func TestAPageFromAnotherSwcodeTalksToThisOneOnceItsPhonePairedFromThere(t *test
 	if status, allowed, _ := fromOrigin(t, test, "OPTIONS", protocol.EndpointPairing, home, asks, nil); status != 204 || allowed != home {
 		t.Fatalf("pairing: %d, allowed %q", status, allowed)
 	}
-	_, data, _ := raw(t, test, "GET", protocol.EndpointPairingCode, Token, nil)
-	var code protocol.PairingCode
-	_ = json.Unmarshal(data, &code)
-	status, allowed, body := fromOrigin(t, test, "POST", protocol.EndpointPairing, home, nil, map[string]string{"code": code.Code, "name": "iPhone"})
+	raw(t, test, "POST", protocol.EndpointPairingPending, Token, map[string]string{"number": "123456"})
+	status, allowed, body := fromOrigin(t, test, "POST", protocol.EndpointPairing, home, nil, map[string]string{"number": "123456", "name": "iPhone"})
 	var paired protocol.PairAnswer
 	_ = json.Unmarshal(body, &paired)
 	if status != 200 || allowed != home || paired.Token == "" {
@@ -479,5 +476,38 @@ func TestTheDataFolderAndASessionsFilesAreThePersonsAlone(t *testing.T) {
 		if err != nil || info.Mode().Perm() != expected {
 			t.Fatalf("%s: mode %v, error %v", path, info.Mode().Perm(), err)
 		}
+	}
+}
+
+func TestAPairingNumberPairsOnceAndOnlyAfterTheComputerWaitsForIt(t *testing.T) {
+	test := startHello(t)
+	// Nothing was typed on the computer: no number pairs.
+	if status, _, _ := raw(t, test, "POST", protocol.EndpointPairing, "", map[string]string{"number": "424242"}); status != 403 {
+		t.Fatalf("status %d before the number waited", status)
+	}
+	// A number that is not six digits never waits.
+	if status, _, _ := raw(t, test, "POST", protocol.EndpointPairingPending, Token, map[string]string{"number": "42"}); status != 400 {
+		t.Fatalf("status %d for a number of two digits", status)
+	}
+	raw(t, test, "POST", protocol.EndpointPairingPending, Token, map[string]string{"number": "424242"})
+	if status, _, _ := raw(t, test, "POST", protocol.EndpointPairing, "", map[string]string{"number": "424242", "name": "iPhone"}); status != 200 {
+		t.Fatalf("status %d for a waiting number", status)
+	}
+	// The number serves once: `swcode pair` again with it is needed for another device.
+	if status, _, _ := raw(t, test, "POST", protocol.EndpointPairing, "", map[string]string{"number": "424242"}); status != 403 {
+		t.Fatalf("status %d for a number used", status)
+	}
+}
+
+func TestAPairingNumberCannotBeGuessedByOneClient(t *testing.T) {
+	test := startHello(t)
+	tries := pairing.TriesPerMinute
+	for try := 0; try < tries; try++ {
+		if status, _, _ := raw(t, test, "POST", protocol.EndpointPairing, "", map[string]string{"number": "000000"}); status != 403 {
+			t.Fatalf("try %d: status %d", try, status)
+		}
+	}
+	if status, _, _ := raw(t, test, "POST", protocol.EndpointPairing, "", map[string]string{"number": "000000"}); status != 429 {
+		t.Fatalf("status %d once the tries ran out", status)
 	}
 }

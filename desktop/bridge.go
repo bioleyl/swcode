@@ -6,7 +6,6 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"os"
 
 	"github.com/wailsapp/wails/webview2/pkg/edge"
 
@@ -17,7 +16,6 @@ import (
 const (
 	wmComputerAdded = wmApp + 5
 	thisComputer    = "This computer"
-	deviceName      = "swcode on "
 )
 
 // added is how pairing with another computer ended, back on the window's thread.
@@ -46,7 +44,7 @@ func (b bridge) ListComputers(protocol.DesktopRequestListComputers) struct{} {
 }
 
 func (b bridge) AddComputer(request protocol.DesktopRequestAddComputer) struct{} {
-	go b.w.pair(request.Address, request.Code)
+	go b.w.add(request.Address, request.Name, request.Token)
 	return struct{}{}
 }
 
@@ -71,11 +69,10 @@ func (b bridge) OpenOutside(request protocol.DesktopRequestOpenOutside) struct{}
 	return struct{}{}
 }
 
-// pair reaches another computer's swcode, away from the window's thread: it takes a few seconds when it does not
-// answer.
-func (w *window) pair(address, code string) {
-	host, _ := os.Hostname()
-	computer, err := computers.Connect(context.Background(), http.DefaultClient, address, code, deviceName+host)
+// add reaches another computer's swcode with the token its pairing gave the page, away from the window's thread: it
+// takes a few seconds when it does not answer.
+func (w *window) add(address, name, token string) {
+	computer, err := computers.Connect(context.Background(), http.DefaultClient, address, name, token)
 	w.pairings <- added{computer: computer, err: err}
 	postMessage(w.hwnd, wmComputerAdded, 0)
 }

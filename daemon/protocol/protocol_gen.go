@@ -73,6 +73,8 @@ var EditableSettings = []SettingName{SettingNameSwcodeThinking, SettingNameSwcod
 
 var Restarts = []Restart{RestartSelf, RestartPerson}
 
+const PairNumberDigits = 6
+
 var StartupModes = []StartupMode{StartupModeOff, StartupModeTray, StartupModeDaemon}
 
 var ComputerColors = []ComputerColor{ComputerColorAmber, ComputerColorBlue, ComputerColorGreen, ComputerColorOrange, ComputerColorPink, ComputerColorRed, ComputerColorSlate, ComputerColorTeal, ComputerColorViolet}
@@ -91,7 +93,7 @@ const (
 	EndpointMcp            = "/api/mcp"
 	EndpointModels         = "/api/models"
 	EndpointPairing        = "/api/pairing"
-	EndpointPairingCode    = "/api/pairing/code"
+	EndpointPairingPending = "/api/pairing/pending"
 	EndpointPush           = "/api/push"
 	EndpointSandbox        = "/api/sandbox"
 	EndpointSettings       = "/api/settings"
@@ -109,8 +111,6 @@ const (
 	EndpointUpdateInstall  = "/api/update/install"
 )
 
-const PairParam = "pair"
-
 const ProjectParam = "project"
 
 const TokenParam = "token"
@@ -120,6 +120,8 @@ var pattern1 = regexp.MustCompile("^[A-Za-z0-9+/]+={0,2}$")
 var pattern2 = regexp.MustCompile("^([01]\\d|2[0-3]):[0-5]\\d$")
 
 var pattern3 = regexp.MustCompile("^[^/\\\\]+$")
+
+var pattern4 = regexp.MustCompile("^\\d{6}$")
 
 type PermissionMode string
 
@@ -6076,9 +6078,54 @@ type PairAnswer struct {
 	Token string `json:"token"`
 }
 
+type PairPendingRequest struct {
+	Number string `json:"number"`
+}
+
+func (v *PairPendingRequest) UnmarshalJSON(data []byte) error {
+	type plain PairPendingRequest
+	p := plain{}
+	if err := json.Unmarshal(data, &p); err != nil {
+		return err
+	}
+	*v = PairPendingRequest(p)
+	return v.Normalize()
+}
+
+// Normalize trims and checks what the app sent, as its schema does.
+func (v *PairPendingRequest) Normalize() error {
+	if !pattern4.MatchString(v.Number) {
+		return fmt.Errorf("%s: %s", "number", "is 6 digits")
+	}
+	return nil
+}
+
+type PairPending struct {
+	ExpiresAt  string `json:"expiresAt"`
+	LifetimeMs int    `json:"lifetimeMs"`
+}
+
+func (v *PairPending) UnmarshalJSON(data []byte) error {
+	type plain PairPending
+	p := plain{}
+	if err := json.Unmarshal(data, &p); err != nil {
+		return err
+	}
+	*v = PairPending(p)
+	return v.Normalize()
+}
+
+// Normalize trims and checks what the app sent, as its schema does.
+func (v *PairPending) Normalize() error {
+	if v.LifetimeMs <= 0 {
+		return fmt.Errorf("%s: must be positive", "lifetimeMs")
+	}
+	return nil
+}
+
 type PairRequest struct {
-	Code string `json:"code"`
-	Name string `json:"name,omitempty"`
+	Name   string `json:"name,omitempty"`
+	Number string `json:"number"`
 }
 
 func (v *PairRequest) UnmarshalJSON(data []byte) error {
@@ -6093,39 +6140,12 @@ func (v *PairRequest) UnmarshalJSON(data []byte) error {
 
 // Normalize trims and checks what the app sent, as its schema does.
 func (v *PairRequest) Normalize() error {
-	if utf8.RuneCountInString(v.Code) < 1 {
-		return fmt.Errorf("%s: must not be empty", "code")
-	}
-	if utf8.RuneCountInString(v.Code) > 100 {
-		return fmt.Errorf("%s: at most 100 characters", "code")
-	}
 	v.Name = strings.TrimSpace(v.Name)
 	if utf8.RuneCountInString(v.Name) > 60 {
 		return fmt.Errorf("%s: at most 60 characters", "name")
 	}
-	return nil
-}
-
-type PairingCode struct {
-	Code       string `json:"code"`
-	ExpiresAt  string `json:"expiresAt"`
-	LifetimeMs int    `json:"lifetimeMs"`
-}
-
-func (v *PairingCode) UnmarshalJSON(data []byte) error {
-	type plain PairingCode
-	p := plain{}
-	if err := json.Unmarshal(data, &p); err != nil {
-		return err
-	}
-	*v = PairingCode(p)
-	return v.Normalize()
-}
-
-// Normalize trims and checks what the app sent, as its schema does.
-func (v *PairingCode) Normalize() error {
-	if v.LifetimeMs <= 0 {
-		return fmt.Errorf("%s: must be positive", "lifetimeMs")
+	if !pattern4.MatchString(v.Number) {
+		return fmt.Errorf("%s: %s", "number", "is 6 digits")
 	}
 	return nil
 }
@@ -6528,7 +6548,8 @@ func (v DesktopRequestListComputers) MarshalJSON() ([]byte, error) {
 
 type DesktopRequestAddComputer struct {
 	Address string `json:"address"`
-	Code    string `json:"code,omitempty"`
+	Name    string `json:"name"`
+	Token   string `json:"token"`
 }
 
 func (v DesktopRequestAddComputer) MarshalJSON() ([]byte, error) {
@@ -6559,9 +6580,18 @@ func (v *DesktopRequestAddComputer) Normalize() error {
 	if utf8.RuneCountInString(v.Address) > 300 {
 		return fmt.Errorf("%s: at most 300 characters", "address")
 	}
-	v.Code = strings.TrimSpace(v.Code)
-	if utf8.RuneCountInString(v.Code) > 100 {
-		return fmt.Errorf("%s: at most 100 characters", "code")
+	v.Name = strings.TrimSpace(v.Name)
+	if utf8.RuneCountInString(v.Name) < 1 {
+		return fmt.Errorf("%s: must not be empty", "name")
+	}
+	if utf8.RuneCountInString(v.Name) > 60 {
+		return fmt.Errorf("%s: at most 60 characters", "name")
+	}
+	if utf8.RuneCountInString(v.Token) < 1 {
+		return fmt.Errorf("%s: must not be empty", "token")
+	}
+	if utf8.RuneCountInString(v.Token) > 200 {
+		return fmt.Errorf("%s: at most 200 characters", "token")
 	}
 	return nil
 }

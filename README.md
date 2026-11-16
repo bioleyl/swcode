@@ -40,7 +40,7 @@ A coding agent for local models. It runs an LLM agent with file, terminal and we
 - **Search**: `Ctrl K` finds sessions, projects and settings, and searches inside the conversations.
 - **Markdown**: answers are drawn with highlighted code blocks, each copied with a press, tables, quotes and nested lists.
 - **Web app**: follow what the agent does in real time, answer its questions, approve commands, chat with it. Works on desktop and phone, in light or dark.
-- **Phones**: pair a phone with a QR code from Settings → Phone, then follow and steer your sessions from it, on your network or over a tailnet (one press has Tailscale serve swcode over HTTPS). swcode installs on the phone as an app, notifies it when a session waits for you or its turn ends (Web Push, over HTTPS), and a browser adds other computers' swcode by scanning their code, as the desktop app does.
+- **Phones**: open swcode's address on a phone (Settings → Phone shows it as a QR code), then run `swcode pair <number>` here with the number its page shows, and follow and steer your sessions from it, on your network or over a tailnet (one press has Tailscale serve swcode over HTTPS). swcode installs on the phone as an app, notifies it when a session waits for you or its turn ends (Web Push, over HTTPS), and a browser or the phone app adds other computers' swcode the same way, by a number.
 - **Remote projects**: work on projects over SSH or in WSL without moving the daemon.
 - **Windows desktop app**: the daemon inside a window, in the Start menu and the tray, for projects in Windows or in WSL; it pairs other computers' swcode and switches between them.
 - **Updates**: swcode looks for new releases and, on a computer, offers to install them.
@@ -214,7 +214,7 @@ swcode              # open the web app (starts daemon if not running)
 swcode start        # start the daemon in the background
 swcode stop         # stop the daemon
 swcode serve        # run the daemon in the foreground
-swcode pair         # generate a pairing code for phones or other computers
+swcode pair <number>  # wait for the app that shows this number to pair with this swcode
 swcode install      # install the binary and create shortcuts
 swcode service install    # run swcode as a service, started when you log in
 swcode service uninstall  # remove the service, keeping settings and sessions

@@ -20,49 +20,27 @@
   gap: var(--jl-space-1);
 }
 
-.connect-from {
-  display: flex;
-  flex-direction: column;
-  gap: var(--jl-space-3);
-  padding-top: var(--jl-space-4);
-  border-top: 1px solid var(--jl-line);
-}
-
-.pairing {
-  display: flex;
-  flex-direction: column;
-  gap: var(--jl-space-2);
-}
-
-.pair {
+.command {
   display: flex;
   align-items: center;
   gap: var(--jl-space-3);
+  padding: 10px 12px;
+  border-radius: var(--jl-radius);
+  background: var(--jl-surface-2);
 }
 
-.pair .label {
-  flex: 0 0 6.5rem;
-}
-
-.pair code {
+.command code {
   flex: 1;
   min-width: 0;
   overflow-wrap: anywhere;
+  font-family: var(--jl-font-mono);
   font-size: var(--jl-font-md);
   user-select: all;
 }
 
-.expires {
+.waiting {
   font-size: 12px;
   color: var(--jl-muted);
-}
-
-.note {
-  padding: 10px 12px;
-  border-radius: var(--jl-radius);
-  background: var(--jl-danger-soft);
-  font-size: 13px;
-  color: var(--jl-danger);
 }
 
 form {
@@ -84,6 +62,7 @@ h3 {
   gap: var(--jl-space-2);
 }
 
+.wait-body,
 .edit-body {
   display: flex;
   flex-direction: column;

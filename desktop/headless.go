@@ -7,8 +7,6 @@ import (
 	"os"
 
 	"golang.org/x/sys/windows"
-
-	"swcode/daemon/local"
 )
 
 // daemonInstance is held as long as the daemon alone runs: a second one finds it taken.
@@ -43,18 +41,4 @@ func runDaemon() error {
 			return run.problem()
 		}
 	}
-}
-
-// showPairing is swcode-desktop.exe --pair: a code that pairs another computer's swcode with this one's, which runs.
-func showPairing() error {
-	settings, _, err := loadSettings()
-	if err != nil {
-		return err
-	}
-	pairing, err := local.PairingOf(settings)
-	if err != nil {
-		return err
-	}
-	messageBox(0, local.PairingText(pairing), mbIconInformation|mbSetForeground)
-	return nil
 }

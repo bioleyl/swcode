@@ -1,21 +1,37 @@
 import { z } from 'zod';
 
-/** `GET /api/pairing/code`: a code a phone trades once for its own token, valid until it expires. */
-export const PairingCodeSchema = z.object({
-  code: z.string(),
-  expiresAt: z.iso.datetime(),
-  lifetimeMs: z.number().int().positive(),
-});
-export type PairingCode = z.infer<typeof PairingCodeSchema>;
+/** How many digits a pairing number has: the app that pairs shows them, and the person types them on the computer. */
+export const PAIR_NUMBER_DIGITS = 6;
 
-/** `POST /api/pairing`: the code from the QR code, and what the phone calls itself. */
+const PAIR_NUMBER = new RegExp(`^\\d{${PAIR_NUMBER_DIGITS}}$`);
+
+/**
+ * `POST /api/pairing`: the number an app shows, traded once for a token of its own, and what the app calls itself.
+ * Open to anyone, the number being the secret: `swcode pair` on the computer has already made it wait.
+ */
 export const PairRequestSchema = z.object({
-  code: z.string().min(1).max(100),
   name: z.string().trim().max(60).optional(),
+  number: z.string().regex(PAIR_NUMBER, `is ${PAIR_NUMBER_DIGITS} digits`),
 });
 export type PairRequest = z.infer<typeof PairRequestSchema>;
 
 export const PairAnswerSchema = z.object({ token: z.string() });
+
+/**
+ * `POST /api/pairing/pending`: the number `swcode pair <number>` typed here, which the phone's app then redeems. Behind
+ * the token, so only this computer's person can make one wait.
+ */
+export const PairPendingRequestSchema = z.object({
+  number: z.string().regex(PAIR_NUMBER, `is ${PAIR_NUMBER_DIGITS} digits`),
+});
+export type PairPendingRequest = z.infer<typeof PairPendingRequestSchema>;
+
+/** What `swcode pair` gets back: until when the number waits for the app to redeem it. */
+export const PairPendingSchema = z.object({
+  expiresAt: z.iso.datetime(),
+  lifetimeMs: z.number().int().positive(),
+});
+export type PairPending = z.infer<typeof PairPendingSchema>;
 
 /** A paired phone, as the phone dialog lists it: its token is the phone's alone. */
 export const DeviceSchema = z.object({

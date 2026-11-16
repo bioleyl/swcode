@@ -130,7 +130,7 @@ func run(command cli.Command) int {
 	case cli.KindServiceUninstall:
 		return local.ServiceUninstall(settings(environment), place(environment))
 	case cli.KindPair:
-		return local.Pair(settings(environment))
+		return local.Pair(settings(environment), place(environment), command.PairNumber)
 	case cli.KindRun:
 		return local.RunSession(settings(environment), place(environment), command.Run)
 	case cli.KindUpdate:

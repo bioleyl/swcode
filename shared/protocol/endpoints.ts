@@ -13,10 +13,11 @@ export const ENDPOINTS = {
   mcp: '/api/mcp',
   // GET the llm-servers and the presets, with their keys; PUT them all, in use at once.
   models: '/api/models',
-  // POST a pairing code, without a token: the phone gets its own. Open to anyone, the code being the secret.
+  // POST a pairing number, without a token: the app that shows it gets a token of its own. Open to anyone, the number
+  // being the secret, which `swcode pair` makes wait here first.
   pairing: '/api/pairing',
-  // GET a new pairing code for the QR code, valid a minute and once.
-  pairingCode: '/api/pairing/code',
+  // POST a pairing number to wait for, behind the token: what `swcode pair <number>` does.
+  pairingPending: '/api/pairing/pending',
   // GET the daemon's push key; POST a browser's push subscription, DELETE it by its address.
   push: '/api/push',
   // GET the settings in use, PUT new ones (the daemon restarts).
@@ -55,8 +56,5 @@ export const TOKEN_PARAM = 'token';
 
 /** The project whose skills `GET /api/skills` lists travels in this query parameter. */
 export const PROJECT_PARAM = 'project';
-
-/** The pairing code travels in this query parameter of the QR code's link. */
-export const PAIR_PARAM = 'pair';
 
 export const BEARER_PREFIX = 'Bearer ';

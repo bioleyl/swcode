@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { DESKTOP, PHONE, settle, start, stopRigs, tab } from './support.js';
+import { DESKTOP, expectPairNumber, PHONE, settle, shownPairNumber, start, stopRigs, tab } from './support.js';
 
 afterEach(stopRigs);
 
@@ -73,34 +73,28 @@ describe('a tailnet', () => {
 });
 
 describe('another computer’s swcode', () => {
-  it('is added from its pairing link, shown in this browser, and left again for the one the page came from', async () => {
+  it('is added with the number its app shows, and left again for the one the page came from', async () => {
     const home = await start({ replies: [{ text: 'From home.' }] });
     const other = await start({ replies: [{ text: 'From the other one.' }] });
 
-    // The other computer has a session of its own, and shows the link that pairs with it.
+    // The other computer has a session of its own.
     const there = await other.browser.newPage({ viewport: DESKTOP });
     await there.goto(other.link);
     await there.locator('home-page textarea').fill('Over there');
     await there.locator('home-page textarea').press('Enter');
     await there.getByText('From the other one.').waitFor();
-    await there.goto(`${other.link}#/settings/computers`);
-    const link = there.locator('sc-computers .pair .link');
-    await expect.poll(() => link.textContent()).toContain('pair=');
-    const pairing = (await link.textContent()) ?? '';
 
-    // This browser pairs with it from the link alone, and lists it beside the computer its page came from.
+    // This browser asks for a number, then has it wait on the other computer, as `swcode pair` would there.
     const page = await home.browser.newPage({ viewport: DESKTOP });
     await page.goto(`${home.link}#/settings/computers`);
     const computers = page.locator('sc-computers jl-list-item.computer');
     await computers.first().getByText('Shown here').waitFor();
-    await page.locator('#computer-address input').fill(pairing);
+    await page.locator('#computer-name input').fill('the other one');
+    await page.locator('#computer-address input').fill(new URL(other.link).origin);
     await page.locator('sc-computers .add').click();
+    await expectPairNumber(other.link, await shownPairNumber(page, 'sc-computers .pair-command'));
     await page.locator('sc-computers jl-alert').getByText('Added', { exact: false }).waitFor();
     await expect.poll(() => computers.count()).toBe(2);
-    // The link served once: the same one again is refused, with why.
-    await page.locator('#computer-address input').fill(pairing);
-    await page.locator('sc-computers .add').click();
-    await page.locator('sc-computers jl-alert').getByText('refused the code', { exact: false }).waitFor();
 
     // Opened, the page shows the other computer's sessions, marked as another computer's.
     const where = page.locator('sc-computer-switch');

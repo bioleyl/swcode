@@ -1,0 +1,9 @@
+{
+  "appId": "com.bioleyl.swcode",
+  "appName": "swcode",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "http",
+    "cleartext": true
+  }
+}

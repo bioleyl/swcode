@@ -14,31 +14,24 @@ import {
 
 import { COMPUTER_COLORS, ComputerColorSchema, THIS_COMPUTER } from '../../../shared/protocol/desktop.schema';
 import { ScElement } from '../base/sc-element';
-import {
-  isLocalBase,
-  LOCAL_ADDRESS_NOTE,
-  reachableBaseOf,
-  renewalLine,
-  secondsUntilRenewal,
-} from '../lib/pairing-view';
+import { newPairNumber } from '../lib/pair-number';
+import { DEFAULT_PORT, pairingOrigin } from '../lib/remote-computers';
 import { ScQrScanner } from '../molecules/sc-qr-scanner';
-import { daemonOrigin } from '../services/access';
 import { askComputers, onComputersAnswer } from '../services/computers';
-import { daemonState } from '../services/daemon-status';
 import { inDesktopApp } from '../services/desktop';
-import { NO_CODE, newPairingCode, pairingLink } from '../services/pairing';
+import { deviceName, waitForPairing } from '../services/pairing';
 import { canScan } from '../services/qr-scan';
 import { BASE_STYLES } from '../styles/shared';
 import styles from './sc-computers.css?inline';
 
 import type { MenuItem, SelectOption, Tone } from '@syware/jlib';
 import type { Computer, ComputerColor, DesktopAnswer } from '../../../shared/protocol/desktop.schema';
-import type { PairingCode } from '../../../shared/protocol/pairing.schema';
 import type { ComputerAction, DesktopAnswerHandlers, DesktopAnswerMap } from '../types/desktop.types';
 
-const PAIRING = 'Pairing…';
+const PAIR_COMMAND = 'swcode pair ';
+const WAITING = 'Waiting for that computer to take the number…';
+const WAIT_LEAD = 'On that computer, run this where its swcode runs. The number waits a few minutes.';
 const ADDED = 'Added: open it to show its swcode here.';
-const NO_ADDRESS = 'Type that computer’s address.';
 const NO_NAME = 'Type the name this app should call that computer.';
 const DEFAULT_COLOR = 'default';
 const COLOR_LABELS: Readonly<Record<ComputerColor, string>> = {
@@ -63,28 +56,19 @@ const COMPUTER_ACTIONS: MenuItem<ComputerAction>[] = [
 ];
 const UNREACHABLE = 'not reachable';
 const CONNECT_LEAD =
-  'On the other computer’s swcode, or in the app a phone installed, open Settings → Computers and paste this link there, or type this address and this code, then Add. The code works once, and a new one comes every minute.';
-const ADDRESS_LABEL = 'Address';
-const CODE_LABEL = 'Pairing code';
-const LINK_LABEL = 'Link';
-// What the form asks for, by who keeps the computers: the desktop app reaches any address and takes a link with a
-// token; a browser pairs with a code, from an address its page may talk to.
-const ADD_TEXTS = {
+  'Add another computer here, then open it to show its swcode: its sessions and projects work on while this one is off, and its sessions notify you here.';
+// What the form asks for, by who keeps the computers: the desktop app reaches any address, a browser only those its
+// page may talk to.
+const ADDRESS_TEXTS = {
   app: {
-    addressHint:
-      'Its swcode has to listen on the network (its Settings → Network), or have an address on a tailnet.',
-    addressPlaceholder: 'gmktec, 192.168.1.20:4500, or a link with its token',
-    codeHint:
-      'That computer’s swcode shows one in its Settings → Computers topic, or run swcode pair there (swcode-desktop.exe --pair on Windows). A link with its token needs none.',
+    hint: 'Its swcode has to listen on the network (its Settings → Network), or have an address on a tailnet.',
+    placeholder: 'gmktec, 192.168.1.20, or its tailnet address',
   },
   browser: {
-    addressHint:
-      'The link that computer’s swcode shows in Settings → Computers, or under its QR code; or its address.',
-    addressPlaceholder: 'https://gmktec.tailnet.ts.net/?pair=…',
-    codeHint: 'Only with an address: the link holds its code already.',
+    hint: 'Its name or IP address, or the address this page came from if that computer serves it. It has to be HTTPS when this page is.',
+    placeholder: 'https://gmktec.tailnet.ts.net',
   },
 } as const;
-const MS_PER_SECOND = 1000;
 
 /**
  * The settings' Computers: the computers the desktop app's window shows, this one and the others paired with it,
@@ -93,22 +77,19 @@ const MS_PER_SECOND = 1000;
 export class ScComputers extends ScElement {
   static readonly selector = 'sc-computers';
 
-  /** Whether its topic is shown: codes are asked for while they can be read. */
-  readonly active = this.useChange(false, (active) => (active ? this.startCode() : this.stopClock()));
-
-  // Set from asking the app to pair until it answers.
-  private _pairing = false;
+  // Set from asking to pair until the app takes the computer.
+  private _adding = false;
   // The computer the edit dialog is open on, until it closes.
   private _editing: Computer | undefined;
-  private _code: PairingCode | undefined;
-  // Why there is no code: what the daemon said, or that it does not answer.
-  private _problem = NO_CODE;
-  private _renewing = false;
-  private _clock: ReturnType<typeof setInterval> | undefined;
+  // The number shown while waiting for its computer to take it, and the wait itself.
+  private _number = '';
+  private _origin = '';
+  private _name = '';
+  private _waiting: AbortController | undefined;
 
   private readonly _handlers: DesktopAnswerHandlers = {
     computerRefused: (answer) => {
-      this._pairing = false;
+      this._adding = false;
       this._refs.add.loading.set(false);
       if (this._editing) {
         this.refuseEdit(answer.message);
@@ -121,14 +102,13 @@ export class ScComputers extends ScElement {
       if (this._editing) {
         this._refs.edit.close();
       }
-      if (!this._pairing) {
+      if (!this._adding) {
         return;
       }
-      this._pairing = false;
+      this._adding = false;
       this._refs.add.loading.set(false);
       this.say(ADDED, 'ok');
-      this._refs.address.value.set('');
-      this._refs.code.value.set('');
+      this.clearForm();
     },
     computerUnreachable: () => {
       // The switch says that computer did not answer; the list says which ones are not reachable.
@@ -140,27 +120,24 @@ export class ScComputers extends ScElement {
     add: ref<JlButton>('.add'),
     address: ref<JlInput>('#computer-address'),
     addressField: ref<JlField>('.address-field'),
-    code: ref<JlInput>('#computer-code'),
-    codeField: ref<JlField>('.code-field'),
+    cancelWait: ref<JlButton>('.cancel-wait'),
+    command: ref('.pair-command'),
     computers: ref('.computers'),
-    copyAddress: ref<JlCopyButton>('.copy-address'),
-    copyCode: ref<JlCopyButton>('.copy-code'),
-    copyLink: ref<JlCopyButton>('.copy-link'),
+    copyCommand: ref<JlCopyButton>('.copy-command'),
     edit: ref(JlDialog),
     editCancel: ref<JlButton>('.edit-cancel'),
     editColor: ref<JlSelect>('.edit-color'),
     editName: ref<JlInput>('.edit-name'),
     editProblem: ref<JlAlert>('.edit-problem'),
     editSave: ref<JlButton>('.edit-save'),
-    expires: ref('.expires'),
     feedback: ref<JlAlert>('.feedback'),
     form: ref<HTMLFormElement>('form'),
-    note: ref('.note'),
-    pairAddress: ref('.address'),
-    pairingCode: ref('.code'),
-    pairLink: ref('.link'),
+    name: ref<JlInput>('#computer-name'),
+    port: ref<JlInput>('#computer-port'),
     scan: ref<JlButton>('.scan'),
     scanner: ref(ScQrScanner),
+    wait: ref(JlDialog),
+    waiting: ref('.waiting'),
   }));
 
   templateHtml(): Node {
@@ -171,46 +148,36 @@ export class ScComputers extends ScElement {
           swcode works on while this one is off, and its sessions notify you here.
         </p>
         <div class="computers" />
-        <section class="connect-from">
-          <h3>Connect from another computer</h3>
-          <p class="lead">{CONNECT_LEAD}</p>
-          <div class="pairing">
-            <div class="pair">
-              <span class="label">{ADDRESS_LABEL}</span>
-              <code class="address" />
-              <JlCopyButton class="copy-address" />
-            </div>
-            <div class="pair">
-              <span class="label">{CODE_LABEL}</span>
-              <code class="code" />
-              <JlCopyButton class="copy-code" />
-            </div>
-            <div class="pair">
-              <span class="label">{LINK_LABEL}</span>
-              <code class="link" />
-              <JlCopyButton class="copy-link" />
-            </div>
-          </div>
-          <p class="expires" />
-          <p class="note" hidden>
-            {LOCAL_ADDRESS_NOTE}
-          </p>
-        </section>
         <form>
           <h3>Add a computer</h3>
-          <JlField class="address-field" label="Link or address">
+          <p class="lead">{CONNECT_LEAD}</p>
+          <JlField label="Name" hint="What this app calls that computer.">
+            <JlInput id="computer-name" autocomplete="off" />
+          </JlField>
+          <JlField class="address-field" label="Address">
             <JlInput id="computer-address" autocomplete="off" />
           </JlField>
-          <JlField class="code-field" label="Pairing code">
-            <JlInput id="computer-code" autocomplete="off" />
+          <JlField label="Port" hint="Empty for 4500 over HTTP, or the link’s own over HTTPS.">
+            <JlInput id="computer-port" autocomplete="off" placeholder={DEFAULT_PORT} />
           </JlField>
           <JlAlert class="feedback" hidden />
           <div class="actions">
-            <JlButton class="scan" icon="camera" label="Scan its QR code" hidden />
-            <JlButton class="add" type="submit" variant="primary" label="Add" />
+            <JlButton class="scan" icon="camera" label="Scan its address" hidden />
+            <JlButton class="add" type="submit" variant="primary" label="Get a number" />
           </div>
         </form>
         <ScQrScanner />
+        <JlDialog class="wait" heading="Pair a computer" size="sm">
+          <div class="wait-body">
+            <p class="lead">{WAIT_LEAD}</p>
+            <div class="command">
+              <code class="pair-command" />
+              <JlCopyButton class="copy-command" />
+            </div>
+            <p class="waiting">{WAITING}</p>
+          </div>
+          <JlButton slot="actions" class="cancel-wait" label="Cancel" />
+        </JlDialog>
         <JlDialog class="edit" heading="Edit computer" size="sm">
           <div class="edit-body">
             <JlField label="Name" hint="What this app calls that computer. Its address and token stay.">
@@ -235,107 +202,96 @@ export class ScComputers extends ScElement {
   onConnect(): void {
     this.renderForm();
     this._refs.scan.events.register('press', () => this._refs.scanner.scan());
-    this._refs.scanner.events.register('found', (link) => this.addScanned(link));
+    this._refs.scanner.events.register('found', (link) => this.scanned(link));
     this.on(this._refs.form, 'submit', (event) => {
       event.preventDefault();
       this.add();
     });
     this._refs.add.events.register('press', () => this.add());
+    this._refs.cancelWait.events.register('press', () => this.cancel());
+    this._refs.wait.events.register('close', () => this.cancel());
     this._refs.edit.events.register('close', () => this.stopEditing());
     this._refs.editCancel.events.register('press', () => this._refs.edit.close());
     this._refs.editSave.events.register('press', () => this.edit());
     onComputersAnswer((answer) => this.hear(answer), this.killSignal);
     askComputers({ type: 'listComputers' });
-    if (this.active.get()) {
-      this.startCode();
-    }
   }
 
   onDisconnect(): void {
-    this.stopClock();
+    this.cancel();
   }
 
   /** What the form asks for where the computers are kept, and the scan button where the device can scan. */
   private renderForm(): void {
-    const texts = ADD_TEXTS[inDesktopApp() ? 'app' : 'browser'];
-    this._refs.addressField.hint.set(texts.addressHint);
-    this._refs.address.placeholder.set(texts.addressPlaceholder);
-    this._refs.codeField.hint.set(texts.codeHint);
+    const texts = ADDRESS_TEXTS[inDesktopApp() ? 'app' : 'browser'];
+    this._refs.addressField.hint.set(texts.hint);
+    this._refs.address.placeholder.set(texts.placeholder);
     this._refs.scan.hidden = inDesktopApp() || !canScan();
   }
 
-  /** The link a QR code held goes in the form, and is added at once: it carries its code. */
-  private addScanned(link: string): void {
+  /** An address a QR code held goes in the form: the number is still asked of that computer. */
+  private scanned(link: string): void {
     this._refs.address.value.set(link);
-    this._refs.code.value.set('');
-    this.add();
   }
 
-  /** A first code, renewed every minute for as long as the topic is shown. */
-  private startCode(): void {
-    if (!this.isConnected) {
+  /** A number for the app to show, and the wait for the person to run `swcode pair` with it there. */
+  private add(): void {
+    if (this._waiting) {
       return;
     }
-    this._code = undefined;
-    this.renderPairing();
-    void this.renew();
-    this.startClock();
-  }
-
-  private startClock(): void {
-    this.stopClock();
-    this._clock = setInterval(() => this.tick(), MS_PER_SECOND);
-  }
-
-  private stopClock(): void {
-    clearInterval(this._clock);
-    this._clock = undefined;
-  }
-
-  private tick(): void {
-    const code = this._code;
-    if (!code || secondsUntilRenewal(code.expiresAt, Date.now()) === 0) {
-      void this.renew();
-    }
-    this.renderExpiry();
-  }
-
-  private async renew(): Promise<void> {
-    if (this._renewing) {
+    const name = this._refs.name.value.get().trim();
+    if (name === '') {
+      this.say(NO_NAME, 'danger');
       return;
     }
-    this._renewing = true;
-    try {
-      const code = await newPairingCode();
-      this._code = code.ok ? code.answer : undefined;
-      this._problem = code.ok ? '' : code.problem;
-    } finally {
-      this._renewing = false;
+    const target = pairingOrigin(this._refs.address.value.get(), this._refs.port.value.get(), location.protocol);
+    if (!target.ok) {
+      this.say(target.problem, 'danger');
+      return;
     }
-    this.renderPairing();
+    this._name = name;
+    this._origin = target.answer;
+    this._number = newPairNumber();
+    this.showFeedback('');
+    this._refs.command.textContent = PAIR_COMMAND + this._number;
+    this._refs.copyCommand.value.set(this._refs.command.textContent);
+    this._refs.waiting.textContent = WAITING;
+    this._refs.wait.heading.set(`Pair with ${name}`);
+    this._refs.wait.show();
+    const waiting = new AbortController();
+    this._waiting = waiting;
+    void this.waitFor(waiting);
   }
 
-  private renderPairing(): void {
-    const base = reachableBaseOf(daemonState(), daemonOrigin());
-    const code = this._code?.code ?? '';
-    this._refs.pairAddress.textContent = base;
-    this._refs.pairingCode.textContent = code;
-    this._refs.copyAddress.value.set(base);
-    this._refs.copyCode.value.set(code);
-    this._refs.copyCode.hidden = code === '';
-    const link = code === '' ? '' : pairingLink(base, code);
-    this._refs.pairLink.textContent = link;
-    this._refs.copyLink.value.set(link);
-    this._refs.copyLink.hidden = code === '';
-    this._refs.note.hidden = !isLocalBase(base);
-    this.renderExpiry();
+  private async waitFor(waiting: AbortController): Promise<void> {
+    const answered = await waitForPairing(
+      this._origin,
+      this._number,
+      deviceName(navigator.userAgent),
+      waiting.signal
+    );
+    if (waiting.signal.aborted || !this.isConnected) {
+      return;
+    }
+    this._waiting = undefined;
+    this._refs.wait.close();
+    if (!answered.ok) {
+      this.say(answered.problem, 'danger');
+      return;
+    }
+    this._adding = true;
+    this._refs.add.loading.set(true);
+    askComputers({ address: this._origin, name: this._name, token: answered.answer, type: 'addComputer' });
   }
 
-  private renderExpiry(): void {
-    const code = this._code;
-    this._refs.expires.textContent = code
-      ? renewalLine(secondsUntilRenewal(code.expiresAt, Date.now()))
-      : this._problem;
+  private cancel(): void {
+    this._waiting?.abort();
+    this._waiting = undefined;
+  }
+
+  private clearForm(): void {
+    this._refs.address.value.set('');
+    this._refs.name.value.set('');
   }
 
   private hear(answer: DesktopAnswer): void {
@@ -348,23 +304,12 @@ export class ScComputers extends ScElement {
 
   private say(text: string, tone: Tone): void {
     this._refs.feedback.tone.set(tone);
-    this._refs.feedback.description.set(text);
-    this._refs.feedback.hidden = text === '';
+    this.showFeedback(text);
   }
 
-  private add(): void {
-    if (this._pairing) {
-      return;
-    }
-    const address = this._refs.address.value.get().trim();
-    if (address === '') {
-      this.say(NO_ADDRESS, 'danger');
-      return;
-    }
-    this._pairing = true;
-    this._refs.add.loading.set(true);
-    this.say(PAIRING, 'info');
-    askComputers({ address, code: this._refs.code.value.get().trim(), type: 'addComputer' });
+  private showFeedback(text: string): void {
+    this._refs.feedback.description.set(text);
+    this._refs.feedback.hidden = text === '';
   }
 
   /** The actions of a paired computer, in its row's More menu: the menu keeps its clicks to itself. */
