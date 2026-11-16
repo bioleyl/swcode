@@ -493,13 +493,23 @@ func TestAScreenshotIsGivenToTheAgentThatAsksToSeeIt(t *testing.T) {
 	}
 }
 
-func TestAScreenshotIsRefusedWithoutABrowserAModelThatSeesOrAQuestion(t *testing.T) {
+func TestAScreenshotIsShownEvenWithoutAQuestionOrAModelThatSees(t *testing.T) {
 	f := setUp(t)
-	f.refused("screenshot", `{"see":true,"url":"http://localhost:5173/"}`, `No browser`)
-	f.tc.Screenshots = &fakeScreenshots{}
-	f.refused("screenshot", `{"see":true,"url":"http://localhost:5173/"}`, `without vision`)
-	f.tc.Screenshots = &fakeScreenshots{seen: true}
-	f.refused("screenshot", `{"url":"http://localhost:5173/"}`, `question`)
+	shots := &fakeScreenshots{}
+	f.tc.Screenshots = shots
+	got := f.call("screenshot", `{"url":"http://localhost:5173/"}`)
+	if !got.OK || got.Display == nil || len(got.Pictures) != 0 || !strings.Contains(got.Output, "shown in the conversation") {
+		t.Fatalf("got %+v", got)
+	}
+	asked := f.call("screenshot", `{"question":"Is the title there?","see":true,"url":"http://localhost:5173/"}`)
+	if !asked.OK || len(asked.Pictures) != 0 || len(shots.asked) != 0 || !strings.Contains(asked.Output, "without vision") {
+		t.Fatalf("got %+v", asked)
+	}
+}
+
+func TestAScreenshotIsRefusedWithoutABrowser(t *testing.T) {
+	f := setUp(t)
+	f.refused("screenshot", `{"url":"http://localhost:5173/"}`, `No browser`)
 }
 
 func TestApplyEdit(t *testing.T) {

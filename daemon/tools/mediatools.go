@@ -31,8 +31,9 @@ const (
 	notPNG        = "The picture is saved as a PNG: give a path ending in .png."
 	shotTimeout   = 30 * time.Second
 	noBrowser     = "No browser to draw pages with here."
-	unseen        = "The main model is loaded without vision: no model here can look at a screenshot (llm-server needs its vision projector, mmproj)."
-	askOrSee      = "Give a question about the page, or see: true to look at it yourself."
+	unseen        = "The main model is loaded without vision: it cannot look at the screenshot (llm-server needs its vision projector, mmproj). The picture is shown in the conversation for the person."
+	shown         = "The picture is shown in the conversation."
+	follows       = "It follows as a picture."
 	desktopSize   = "desktop"
 	phoneSize     = "phone"
 )
@@ -273,6 +274,13 @@ type screenshotInput struct {
 	WaitFor  string `json:"waitFor"`
 }
 
+// screenshotLook is what a question about a captured screenshot needs.
+type screenshotLook struct {
+	About    string
+	Picture  protocol.PictureRef
+	Question string
+}
+
 func (input screenshotInput) size() string {
 	if input.Size == "" {
 		return desktopSize
@@ -300,6 +308,36 @@ func errorsOf(shot browser.Shot) string {
 	return strings.Join(lines, "\n")
 }
 
+// answerOf is what a question about the page gets: an answer from a model that sees, or why none can look. No
+// question, no request.
+func answerOf(ctx context.Context, shots Screenshots, look screenshotLook) (string, error) {
+	if look.Question == "" {
+		return "", nil
+	}
+	if !shots.Seen() {
+		return unseen, nil
+	}
+	return shots.Ask(ctx, look.Picture, look.Question, look.About)
+}
+
+// lookingNote says what a screenshot does for the agent: just shown to the person, put in its context, or why it
+// cannot look.
+func lookingNote(input screenshotInput, seen bool) string {
+	if input.Question == "" && !input.See {
+		return shown
+	}
+	if !input.See {
+		return ""
+	}
+	if seen {
+		return follows
+	}
+	if input.Question != "" {
+		return ""
+	}
+	return unseen
+}
+
 func takeScreenshot(ctx context.Context, shots Screenshots, input screenshotInput) Outcome {
 	drawn := shots.Capture(ctx, browser.ShotRequest{
 		FullPage: input.FullPage, Timeout: shotTimeout, URL: input.URL, Viewport: viewports[input.size()], WaitFor: input.WaitFor,
@@ -312,23 +350,18 @@ func takeScreenshot(ctx context.Context, shots Screenshots, input screenshotInpu
 		return Failure(err.Error(), "failed")
 	}
 	about := aboutOf(input, drawn.Shot)
-	answer := ""
-	if input.Question != "" {
-		if answer, err = shots.Ask(ctx, picture, input.Question, about); err != nil {
-			return Failure(err.Error(), "failed")
-		}
+	answer, err := answerOf(ctx, shots, screenshotLook{About: about, Picture: picture, Question: input.Question})
+	if err != nil {
+		return Failure(err.Error(), "failed")
 	}
-	seeing := ""
-	if input.See {
-		seeing = "It follows as a picture."
-	}
+	seeing := lookingNote(input, shots.Seen())
 	outcome := Outcome{
 		Display: &protocol.ToolDisplay{Value: protocol.ToolDisplayImage{Path: input.URL, URL: address}},
 		Meta:    fmt.Sprintf("%d × %d", drawn.Shot.Width, drawn.Shot.Height),
 		OK:      true,
 		Output:  strings.Join(nonEmpty(about, answer, seeing, errorsOf(drawn.Shot)), "\n\n"),
 	}
-	if input.See {
+	if input.See && shots.Seen() {
 		outcome.Pictures = []protocol.PictureRef{picture}
 	}
 	return outcome
@@ -339,21 +372,16 @@ func takeScreenshot(ctx context.Context, shots Screenshots, input screenshotInpu
 // it. The person sees it in the conversation either way.
 var screenshotTool = Define(Spec[screenshotInput]{
 	Check: func(_ context.Context, input screenshotInput, tc *Context) Check {
-		switch {
-		case input.Question == "" && !input.See:
-			return Refuse(askOrSee)
-		case tc.Screenshots == nil:
+		if tc.Screenshots == nil {
 			return Refuse(noBrowser)
-		case !tc.Screenshots.Seen():
-			return Refuse(unseen)
 		}
 		return Ready(func(ctx context.Context) Outcome { return takeScreenshot(ctx, tc.Screenshots, input) }, nil)
 	},
-	Description: "Draws a web page in a browser, at a desktop or a phone size, and answers a question about how it looks; set see to look at it yourself. The user sees it too. Start a dev server first, with bash in the background.",
+	Description: "Draws a web page in a browser, at a desktop or a phone size, and shows the picture in the conversation. With question, a model that sees answers it; set see to look at it yourself. Without either, it only shows the page to the user. Start a dev server first, with bash in the background.",
 	Input: Object(
 		Optional("fullPage", Boolean().Describe("The whole page, scrolled, rather than the window (4000 px at most).")),
 		Optional("question", String().Trimmed().Min(1).Describe(`What you need to know from the picture: "Do the send and stop buttons stay on one row?". A model that sees answers it from the screenshot, which stays out of your context.`)),
-		Optional("see", Boolean().Describe("Put the screenshot itself in your context, to look at it yourself, when a question is not enough: it costs a thousand tokens or so.")),
+		Optional("see", Boolean().Describe("Put the screenshot itself in your context, to look at it yourself, when a question is not enough: it costs a thousand tokens or so. Needs a model that sees.")),
 		Optional("size", Enum(desktopSize, phoneSize).Describe("desktop: 1440 × 900, the default; phone: 390 × 844, as a phone.")),
 		Required("url", String().WebAddress().Describe("The page: a dev server running in the background (http://localhost:5173/), or any web page.")),
 		Optional("waitFor", String().Trimmed().Min(1).Describe("Text the page shows once ready: the picture waits for it.")),

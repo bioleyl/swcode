@@ -1,5 +1,5 @@
 import { css } from '@jadis/core';
-import { JlAlert, JlButton, JlDialog, JlField, JlInput, JlSelect } from '@syware/jlib';
+import { JlAlert, JlButton, JlDialog, JlField, JlInput, JlSelect, JlSwitch } from '@syware/jlib';
 
 import { ScElement } from '../base/sc-element';
 import { newId } from '../lib/model-settings';
@@ -24,6 +24,8 @@ const CONTEXT_EMPTY = 'As the llm-server says';
 const CONTEXT_HINT =
   'Tokens a conversation holds, compacted before it is full: 131072, or 128k. The llm-server’s own, when it says one, is the most.';
 const BAD_CONTEXT = 'A context is a number of tokens: 131072, or 128k.';
+const VISION_NOTE =
+  'Send it the pictures of a message even when its llm-server does not say it sees them, as a hosted API often does not. Off, what the llm-server says decides.';
 
 const withContext = (ref: ModelRef, typed: TokensInput): ModelRef =>
   typed.kind === 'tokens' ? { ...ref, contextTokens: typed.tokens } : ref;
@@ -53,6 +55,7 @@ export class ScPresetDialog extends ScElement {
     subagentLimit: ref<JlSelect>('.subagent-limit'),
     subagents: ref<ScModelPicker>('.subagents'),
     subagentsContext: ref<JlInput>('.subagents-context'),
+    vision: ref<JlSwitch>('.vision'),
   }));
 
   templateHtml(): Node {
@@ -65,6 +68,7 @@ export class ScPresetDialog extends ScElement {
           <JlField label="Main agent" hint="It plans, edits and answers: the best model there is.">
             <ScModelPicker class="main" empty={MAIN_EMPTY} />
           </JlField>
+          <JlSwitch class="vision" label="Sees pictures" description={VISION_NOTE} />
           <JlField label="Main agent’s context" hint={CONTEXT_HINT}>
             <JlInput class="main-context" autocomplete="off" placeholder={CONTEXT_EMPTY} />
           </JlField>
@@ -109,6 +113,7 @@ export class ScPresetDialog extends ScElement {
       picker.sources.set(settings.sources);
     }
     this._refs.main.show(preset?.main ?? { model: '', source: first });
+    this._refs.vision.checked.set(preset?.main.vision === true);
     this._refs.subagents.show(preset?.workers ?? { model: '', source: first });
     this._refs.mainContext.value.set(this.contextShown(preset?.main));
     this._refs.subagentsContext.value.set(this.contextShown(preset?.workers));
@@ -158,7 +163,7 @@ export class ScPresetDialog extends ScElement {
     const limit = subagentLimitOf(this._refs.subagentLimit.value.get());
     this.events.emit('save', {
       id: this._id || newId(name, this._taken),
-      main: withContext(this._refs.main.value(), mainContext),
+      main: { ...withContext(this._refs.main.value(), mainContext), vision: this._refs.vision.checked.get() },
       name,
       workers: withContext(this._refs.subagents.value(), subagentsContext),
       ...(limit === undefined ? {} : { subagentLimit: limit }),

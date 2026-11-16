@@ -264,7 +264,7 @@ func (s *Service) SubagentLimit(presetID string) *protocol.SubagentLimit {
 }
 
 func (s *Service) mainOf(ctx context.Context, preset protocol.Preset) llm.Choice {
-	main := llm.Choice{ContextTokens: preset.Main.ContextTokens, Model: preset.Main.Model, Source: preset.Main.Source}
+	main := llm.Choice{ContextTokens: preset.Main.ContextTokens, Model: preset.Main.Model, Source: preset.Main.Source, Vision: preset.Main.Vision}
 	server, found := s.servers.Server(main.Source)
 	if !found {
 		return main
@@ -277,7 +277,9 @@ func (s *Service) mainOf(ctx context.Context, preset protocol.Preset) llm.Choice
 		main.Model = server.Status.FirstLoaded(ctx, avoid)
 	}
 	main.ContextTokens = contextFor(server.Status.ContextOf(ctx, main.Model), preset.Main.ContextTokens)
-	main.Vision = server.Status.VisionOf(ctx, main.Model)
+	if !main.Vision {
+		main.Vision = server.Status.VisionOf(ctx, main.Model)
+	}
 	return main
 }
 

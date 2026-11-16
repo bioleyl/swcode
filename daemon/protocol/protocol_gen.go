@@ -5084,6 +5084,7 @@ type ModelRef struct {
 	ContextTokens int    `json:"contextTokens,omitempty"`
 	Model         string `json:"model"`
 	Source        string `json:"source"`
+	Vision        bool   `json:"vision,omitempty"`
 }
 
 func (v *ModelRef) UnmarshalJSON(data []byte) error {

@@ -26,6 +26,9 @@ export const ModelRefSchema = z.object({
   contextTokens: z.number().int().positive().max(MAX_CONTEXT_TOKENS).optional(),
   model: z.string().trim(),
   source: z.string().min(1),
+  // Whether it sees pictures when its server does not say, as a hosted API: the preset then sends it them. Left
+  // out, what the server says decides.
+  vision: z.boolean().optional(),
 });
 export type ModelRef = z.infer<typeof ModelRefSchema>;
 
@@ -91,7 +94,7 @@ export const PresetStatusSchema = z.object({
   id: z.string(),
   // The model asked for: a router's first loaded one when the preset names none.
   model: z.string().optional(),
-  // Whether it sees pictures: llm-server loaded a vision projector (--mmproj) for it.
+  // Whether it sees pictures: the preset says so, or llm-server loaded a vision projector (--mmproj) for it.
   vision: z.boolean().optional(),
 });
 export type PresetStatus = z.infer<typeof PresetStatusSchema>;

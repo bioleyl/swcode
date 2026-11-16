@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
 
 	"swcode/daemon/fakellama"
@@ -233,5 +234,25 @@ func TestAPresetsContextIsUsedUpToTheOneItsServerSays(t *testing.T) {
 	}
 	if got := contextOfStatus(131_072); got != float64(65_536) {
 		t.Fatalf("a larger one: %v", got)
+	}
+}
+
+func TestAPresetSaysItsModelSeesPicturesWhenItsServerDoesNot(t *testing.T) {
+	test := Start(t, Options{Replies: []fakellama.Reply{text("A red dot.")}})
+	if vision := presetStatus(t, test)["vision"]; vision != nil {
+		t.Fatalf("the fake server says no vision: %v", vision)
+	}
+	settings := test.App.Models.Settings()
+	settings.Presets[0].Main.Vision = true
+	if status, body := test.Call("PUT", protocol.EndpointModels, settings); status != 200 {
+		t.Fatalf("status %d: %v", status, body)
+	}
+	if vision := presetStatus(t, test)["vision"]; vision != true {
+		t.Fatalf("vision %v", vision)
+	}
+	session := test.NewSession(sessions.Request{Pictures: []protocol.PictureUpload{screenshot}, Prompt: "What is this?"})
+	test.UntilIdle(session.ID)
+	if !strings.Contains(RequestText(test.Requests()[0]), "data:image/png;base64,"+pngData) {
+		t.Fatal("the picture did not go to the model")
 	}
 }
