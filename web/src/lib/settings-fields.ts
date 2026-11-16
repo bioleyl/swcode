@@ -44,8 +44,8 @@ export const SETTING_FIELDS: Readonly<Record<SettingName, SettingField>> = {
     label: 'Port',
   },
   SWCODE_SSH_ENDPOINTS: {
-    control: { kind: 'text', placeholder: 'me@build-box, gmktec' },
-    hint: 'Machines projects can be on, reached with ssh, by commas: user@host, or a Host of ~/.ssh/config (those come by themselves). A key or the SSH agent must let ssh in without a password. Linux x64 only, for now.',
+    control: { kind: 'text', placeholder: 'buildbox=me@build-box, gmktec' },
+    hint: 'Machines projects can be on, reached with ssh, by commas: user@host, or a Host of ~/.ssh/config (those come by themselves). A name and = before it names the machine in the app: buildbox=me@build-box. A key or the SSH agent must let ssh in without a password. Linux x64 only, for now.',
     label: 'SSH endpoints',
   },
   SWCODE_SUBAGENT_MAX_STEPS: {

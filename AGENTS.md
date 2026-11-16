@@ -108,6 +108,7 @@ Read `README.md` first.
   output to a file.
 - **The tools never touch the disk themselves**: they go through the context's `Host` (`hosts.LocalHost`, or a
   `hosts.ShellHost` for WSL and SSH), and paths use the host's style (`Paths()`, POSIX or Windows).
+- **The settings' SSH hosts are `name=endpoint` entries**, by commas or spaces (`marvin=me@marvin`; a bare endpoint names itself, and a name can hold no space, `,` or `=` since the line is split on them). `hosts.Named` reads an entry for the daemon's options, so the new project dialog shows the name (`hosts.Options` labels), and `sshHostsOf`/`sshHostsLine` in `web/src/lib/ssh-hosts.ts` for Settings → SSH: the dialog has Name and Host, and each host the person added has Change and Remove (`TestHostOptionsNameAnEndpointOfTheSettings`, the settings e2e test). The hosts listed from `~/.ssh/config` are that file's, with no buttons.
 - **The web tools run in the daemon, not on the project's host**: the context's `Web` (`daemon/web`). A page's text
   only ever goes to the reader model, which has no tools (`daemon/web/reader.go`): never hand page text to an agent
   that can run commands.

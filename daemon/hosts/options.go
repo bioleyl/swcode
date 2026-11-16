@@ -24,8 +24,17 @@ var (
 	listDistros    = []string{"-l", "-q"}
 )
 
-func optionOf(ref protocol.HostRef) protocol.HostOption {
-	return protocol.HostOption{Label: Label(ref), Ref: ref}
+func optionOf(ref protocol.HostRef, label string) protocol.HostOption {
+	return protocol.HostOption{Label: label, Ref: ref}
+}
+
+// Named is a setting entry's name and endpoint: `marvin=me@marvin` names the endpoint `me@marvin`, and an entry
+// without a name is named by its endpoint.
+func Named(entry string) (string, string) {
+	if name, endpoint, found := strings.Cut(entry, "="); found && name != "" && endpoint != "" {
+		return name, endpoint
+	}
+	return entry, entry
 }
 
 // wslDistros is the WSL distributions of this Windows: wsl.exe lists them in UTF-16, one a line.
@@ -74,19 +83,23 @@ func SSHConfigHosts(home string) []string {
 }
 
 // Options is where a new project can be: this computer, its WSL distributions when it is Windows, and the SSH
-// endpoints of the settings and of ~/.ssh/config.
+// endpoints of the settings and of ~/.ssh/config. A setting's entry may name its endpoint (`marvin=me@marvin`), and
+// the name is what people read; the endpoint names itself otherwise. One endpoint, one option: the settings' name
+// wins over the config's alias.
 func Options(platform, home string, endpoints []string) []protocol.HostOption {
-	options := []protocol.HostOption{optionOf(protocol.LocalHost())}
+	options := []protocol.HostOption{optionOf(protocol.LocalHost(), Label(protocol.LocalHost()))}
 	if platform == PlatformWindows {
 		for _, distro := range wslDistros() {
-			options = append(options, optionOf(protocol.HostRef{Value: protocol.HostRefWSL{Distro: distro}}))
+			ref := protocol.HostRef{Value: protocol.HostRefWSL{Distro: distro}}
+			options = append(options, optionOf(ref, Label(ref)))
 		}
 	}
 	seen := map[string]bool{}
-	for _, endpoint := range append(append([]string{}, endpoints...), SSHConfigHosts(home)...) {
+	for _, entry := range append(append([]string{}, endpoints...), SSHConfigHosts(home)...) {
+		name, endpoint := Named(entry)
 		if !seen[endpoint] {
 			seen[endpoint] = true
-			options = append(options, optionOf(protocol.HostRef{Value: protocol.HostRefSSH{Endpoint: endpoint}}))
+			options = append(options, optionOf(protocol.HostRef{Value: protocol.HostRefSSH{Endpoint: endpoint}}, name))
 		}
 	}
 	return options

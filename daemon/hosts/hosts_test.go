@@ -284,6 +284,18 @@ func TestHostOptionsAreThisComputerThenTheSSHEndpointsOnceEach(t *testing.T) {
 	}
 }
 
+func TestHostOptionsNameAnEndpointOfTheSettings(t *testing.T) {
+	home := t.TempDir()
+	write(t, filepath.Join(home, ".ssh", "config"), "Host me@box\n")
+	want := []protocol.HostOption{
+		{Label: "This computer", Ref: protocol.LocalHost()},
+		{Label: "buildbox", Ref: protocol.HostRef{Value: protocol.HostRefSSH{Endpoint: "me@box"}}},
+	}
+	if got := Options("linux", home, []string{"buildbox=me@box"}); !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %+v", got)
+	}
+}
+
 func TestPosixPathsRelative(t *testing.T) {
 	cases := map[[2]string]string{
 		{"/a/b", "/a/b/c/d"}: "c/d",

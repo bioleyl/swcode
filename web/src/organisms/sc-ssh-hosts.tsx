@@ -3,7 +3,7 @@ import { confirmDialog, JlAlert, JlButton, JlListItem } from '@syware/jlib';
 
 import { ScElement } from '../base/sc-element';
 import { RESTART_WARNING, restartsOnSave, SETTINGS_SAVED } from '../lib/settings-saved';
-import { sshHostsLine, sshHostsOf } from '../lib/ssh-hosts';
+import { sshHostDetail, sshHostsLine, sshHostsOf } from '../lib/ssh-hosts';
 import { daemonBus } from '../services/daemon';
 import { askHosts } from '../services/daemon-answers';
 import { refreshStatus } from '../services/daemon-status';
@@ -14,6 +14,7 @@ import styles from './sc-ssh-hosts.css?inline';
 
 import type { Tone } from '@syware/jlib';
 import type { Restart, SettingName } from '../../../shared/protocol/settings.schema';
+import type { SshHost } from '../lib/ssh-hosts';
 
 const SETTING: SettingName = 'SWCODE_SSH_ENDPOINTS';
 const UNREADABLE = 'The daemon did not say its settings.';
@@ -29,7 +30,7 @@ const FROM_CONFIG = 'A Host of ~/.ssh/config';
 export class ScSshHosts extends ScElement {
   static readonly selector = 'sc-ssh-hosts';
 
-  private _hosts: string[] = [];
+  private _hosts: SshHost[] = [];
   // How a change applies, from the settings loaded: whether saving asks first.
   private _restart: Restart | undefined;
   // Set from saving until the daemon answers again on the new settings.
@@ -49,10 +50,10 @@ export class ScSshHosts extends ScElement {
     return (
       <div class="ssh-topic">
         <p class="lead">
-          The machines projects can be on, reached with ssh: the new project dialog offers them. A key or the SSH
-          agent must let ssh in without a password; Linux x64 only, for now. Kept in{' '}
-          <code class="file">~/.swcode/settings.env</code>: each change restarts swcode in a few seconds, once no
-          session works.
+          The machines projects can be on, reached with ssh: the new project dialog offers them, by the name each
+          is given here. A key or the SSH agent must let ssh in without a password; Linux x64 only, for now. Kept
+          in <code class="file">~/.swcode/settings.env</code>: each change restarts swcode in a few seconds, once
+          no session works.
         </p>
         <JlAlert hidden />
         <section>
@@ -76,7 +77,7 @@ export class ScSshHosts extends ScElement {
   }
 
   onConnect(): void {
-    this._refs.add.events.register('press', () => this._refs.dialog.edit('', this._hosts));
+    this._refs.add.events.register('press', () => this._refs.dialog.edit(undefined, this._hosts));
     this._refs.dialog.events.register('save', ({ host, replaced }) => void this.saveHost(host, replaced));
     this.onBus(daemonBus, 'online', (online) => {
       if (online && this._restarting) {
@@ -114,7 +115,7 @@ export class ScSshHosts extends ScElement {
     }
     const fromConfig = hosts.answer
       .flatMap((option) => (option.ref.kind === 'ssh' ? [option.ref.endpoint] : []))
-      .filter((endpoint) => !this._hosts.includes(endpoint));
+      .filter((endpoint) => !this._hosts.some((host) => host.endpoint === endpoint));
     this._refs.configSection.hidden = fromConfig.length === 0;
     this._refs.configHosts.replaceChildren(...fromConfig.map((endpoint) => this.configNode(endpoint)));
   }
@@ -126,7 +127,7 @@ export class ScSshHosts extends ScElement {
   }
 
   /** Saves the list as changed: the problem when the daemon refuses it, nothing once it is saved. */
-  private async save(hosts: readonly string[]): Promise<string> {
+  private async save(hosts: readonly SshHost[]): Promise<string> {
     this.say(SETTINGS_SAVED.saving, 'info');
     const saved = await saveSettings({ [SETTING]: sshHostsLine(hosts) });
     if (!saved.ok) {
@@ -140,12 +141,14 @@ export class ScSshHosts extends ScElement {
   }
 
   /** A host added or changed from its dialog, which stays open if the person does not want swcode restarted. */
-  private async saveHost(host: string, replaced: string): Promise<void> {
+  private async saveHost(host: SshHost, replaced: SshHost | undefined): Promise<void> {
     if (!(await confirmRestart(this._restart))) {
       return;
     }
     const hosts =
-      replaced === '' ? [...this._hosts, host] : this._hosts.map((each) => (each === replaced ? host : each));
+      replaced === undefined
+        ? [...this._hosts, host]
+        : this._hosts.map((each) => (each === replaced ? host : each));
     const problem = await this.save(hosts);
     if (problem !== '') {
       this._refs.dialog.refuse(problem);
@@ -158,10 +161,10 @@ export class ScSshHosts extends ScElement {
    * A host goes after a confirmation, which also warns of the restart; its projects stay, and open again once it is
    * back.
    */
-  private async removeHost(host: string): Promise<void> {
+  private async removeHost(host: SshHost): Promise<void> {
     const confirmed = await confirmDialog({
       confirmLabel: 'Remove',
-      heading: `Remove ${host}?`,
+      heading: `Remove ${host.name}?`,
       text: restartsOnSave(this._restart) ? `${REMOVED} ${RESTART_WARNING}` : REMOVED,
       tone: 'danger',
     });
@@ -181,7 +184,7 @@ export class ScSshHosts extends ScElement {
     await this.loadFromConfig();
   }
 
-  private render(hosts: string[], fixed: boolean): void {
+  private render(hosts: SshHost[], fixed: boolean): void {
     this._hosts = hosts;
     this._refs.hosts.replaceChildren(
       ...(hosts.length === 0 ? [<p class="none">{NO_HOSTS}</p>] : hosts.map((host) => this.hostNode(host, fixed)))
@@ -189,12 +192,15 @@ export class ScSshHosts extends ScElement {
   }
 
   /** A host, and its buttons unless the environment sets the list: a button keeps its clicks, so each knows its host. */
-  private hostNode(host: string, fixed: boolean): Node {
-    const row = createElement(JlListItem, { props: { heading: host, icon: 'server' } });
+  private hostNode(host: SshHost, fixed: boolean): Node {
+    const detail = sshHostDetail(host);
+    const row = createElement(JlListItem, {
+      props: { heading: host.name, icon: 'server', ...(detail === undefined ? {} : { description: detail }) },
+    });
     if (!fixed) {
       row.append(
-        this.rowButton('Change', `Change ${host}`, () => this._refs.dialog.edit(host, this._hosts)),
-        this.rowButton('Remove', `Remove ${host}`, () => void this.removeHost(host))
+        this.rowButton('Change', `Change ${host.name}`, () => this._refs.dialog.edit(host, this._hosts)),
+        this.rowButton('Remove', `Remove ${host.name}`, () => void this.removeHost(host))
       );
     }
     return row;

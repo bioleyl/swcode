@@ -79,7 +79,7 @@ describe('settings', () => {
     expect(await page.locator('#setting-SWCODE_IMAGE_URL input').inputValue()).toBe('http://garfield:8090');
   });
 
-  it('list the SSH hosts, a new one added from its dialog and saved at once', async () => {
+  it('list the SSH hosts, one added by name, changed and removed from its dialog', async () => {
     const rig = await start({ replies: [] });
     const page = await rig.browser.newPage({ viewport: DESKTOP });
     await page.goto(rig.link);
@@ -97,9 +97,31 @@ describe('settings', () => {
     await page.locator('sc-ssh-host-dialog .save').click();
     await page.locator('sc-ssh-host-dialog').getByText('One host, without spaces or commas.').waitFor();
     await page.locator('sc-ssh-host-dialog .host input').fill('me@build-box');
+    await page.locator('sc-ssh-host-dialog .name input').fill('build box');
     await page.locator('sc-ssh-host-dialog .save').click();
-    await hosts.locator('.hosts jl-list-item', { hasText: 'me@build-box' }).waitFor();
+    await page.locator('sc-ssh-host-dialog').getByText('A name without spaces, commas or =.').waitFor();
+    await page.locator('sc-ssh-host-dialog .name input').fill('buildbox');
+    await page.locator('sc-ssh-host-dialog .save').click();
+    await hosts.locator('.hosts jl-list-item', { hasText: 'buildbox' }).waitFor();
     await hosts.locator('jl-alert').getByText('Saved', { exact: false }).waitFor();
+
+    // A host is changed from its row: the name stays, the endpoint it reaches changes.
+    await hosts
+      .locator('.hosts jl-list-item', { hasText: 'buildbox' })
+      .getByRole('button', { name: 'Change' })
+      .click();
+    await settle(page);
+    await page.locator('sc-ssh-host-dialog .host input').fill('me@other-box');
+    await page.locator('sc-ssh-host-dialog .save').click();
+    await hosts.locator('.hosts').getByText('me@other-box').waitFor();
+
+    await hosts
+      .locator('.hosts jl-list-item', { hasText: 'buildbox' })
+      .getByRole('button', { name: 'Remove' })
+      .click();
+    await settle(page);
+    await page.locator('jl-confirm').getByRole('button', { name: 'Remove' }).click();
+    await hosts.getByText('No SSH host yet', { exact: false }).waitFor();
   });
 
   it('add an llm-server and a preset of its models, which a new session then picks in its composer', async () => {

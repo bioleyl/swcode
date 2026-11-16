@@ -27,7 +27,7 @@ import {
 } from '../src/lib/project-groups';
 import { isSkillOn, skillsOn } from '../src/lib/project-skills';
 import { SESSION_STATUS_ICONS } from '../src/lib/session-status';
-import { sshHostProblem, sshHostsLine, sshHostsOf } from '../src/lib/ssh-hosts';
+import { sshHostDetail, sshHostProblem, sshHostsLine, sshHostsOf } from '../src/lib/ssh-hosts';
 import { sessionGrantLabel, toolLabel } from '../src/lib/tool-labels';
 import { toolMeta } from '../src/lib/tool-meta';
 
@@ -506,16 +506,43 @@ describe('a project’s skills', () => {
 
 describe('SSH hosts', () => {
   it('read the setting’s line by commas or spaces, and write it by commas', () => {
-    expect(sshHostsOf('me@box, gmktec  laptop,')).toEqual(['me@box', 'gmktec', 'laptop']);
+    expect(sshHostsOf('me@box, gmktec  laptop,')).toEqual([
+      { endpoint: 'me@box', name: 'me@box' },
+      { endpoint: 'gmktec', name: 'gmktec' },
+      { endpoint: 'laptop', name: 'laptop' },
+    ]);
     expect(sshHostsOf('')).toEqual([]);
-    expect(sshHostsLine(['me@box', 'gmktec'])).toBe('me@box, gmktec');
+    expect(
+      sshHostsLine([
+        { endpoint: 'me@box', name: 'me@box' },
+        { endpoint: 'gmktec', name: 'gmktec' },
+      ])
+    ).toBe('me@box, gmktec');
+  });
+
+  it('keep the name a host is given, and read it back', () => {
+    expect(sshHostsOf('buildbox=me@box')).toEqual([{ endpoint: 'me@box', name: 'buildbox' }]);
+    expect(sshHostsLine([{ endpoint: 'me@box', name: 'buildbox' }])).toBe('buildbox=me@box');
+    // A "=" with nothing before or after it is part of the endpoint, not a name.
+    expect(sshHostsOf('=me@box')).toEqual([{ endpoint: '=me@box', name: '=me@box' }]);
+    expect(sshHostDetail({ endpoint: 'me@box', name: 'buildbox' })).toBe('me@box');
+    expect(sshHostDetail({ endpoint: 'me@box', name: 'me@box' })).toBeUndefined();
   });
 
   it('take one host the list does not have', () => {
-    expect(sshHostProblem('me@box', ['gmktec'])).toBe('');
-    expect(sshHostProblem('', [])).not.toBe('');
-    expect(sshHostProblem('me@box gmktec', [])).toBe('One host, without spaces or commas.');
-    expect(sshHostProblem('gmktec', ['gmktec'])).toBe('This host is in the list already.');
+    const box = { endpoint: 'me@box', name: 'me@box' };
+    expect(sshHostProblem(box, [{ endpoint: 'gmktec', name: 'gmktec' }])).toBe('');
+    expect(sshHostProblem({ endpoint: '', name: '' }, [])).not.toBe('');
+    expect(sshHostProblem({ endpoint: 'me@box gmktec', name: 'x' }, [])).toBe(
+      'One host, without spaces or commas.'
+    );
+    expect(sshHostProblem(box, [box])).toBe('This host is in the list already.');
+    expect(sshHostProblem({ endpoint: 'me@other', name: 'build box' }, [box])).toBe(
+      'A name without spaces, commas or =.'
+    );
+    expect(sshHostProblem({ endpoint: 'me@other', name: 'me@box' }, [box])).toBe(
+      'A host of this name is in the list already.'
+    );
   });
 });
 
