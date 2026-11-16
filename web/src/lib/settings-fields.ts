@@ -25,7 +25,7 @@ export const SETTING_FIELDS: Readonly<Record<SettingName, SettingField>> = {
         { label: 'Every interface: phones and computers on the network too', value: '0.0.0.0' },
       ],
     },
-    hint: 'On the network, swcode speaks plain HTTP: whoever sees its link there can use it. A tailnet reaches it on this computer alone, over HTTPS (Settings → Phone).',
+    hint: 'On the network, swcode speaks plain HTTP: whoever sees its link there can use it. A tailnet reaches it on this computer alone, over HTTPS (tailscale serve).',
     label: 'Listen on',
   },
   SWCODE_IMAGE_URL: {

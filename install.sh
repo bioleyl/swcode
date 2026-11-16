@@ -14,7 +14,7 @@ checksums="SHA256SUMS"
 case "$(uname -s)" in
   Linux) system=linux ;;
   *)
-    echo "swcode is built for Linux and WSL only. On Windows, install the desktop app with install.ps1." >&2
+    echo "swcode is built for Linux and WSL only. On Windows, open swcode-desktop.exe from the release: it installs itself." >&2
     exit 1
     ;;
 esac

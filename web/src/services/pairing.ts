@@ -1,9 +1,9 @@
 import { ENDPOINTS } from '../../../shared/protocol/endpoints';
-import { DevicesSchema, PairAnswerSchema } from '../../../shared/protocol/pairing.schema';
+import { DevicesSchema, PairAnswerSchema, PairPendingSchema } from '../../../shared/protocol/pairing.schema';
 import { problemOf } from '../lib/daemon-lines';
 import { jsonOf, jsonOfText, request } from './api';
 
-import type { Device } from '../../../shared/protocol/pairing.schema';
+import type { Device, PairPending } from '../../../shared/protocol/pairing.schema';
 import type { Answer } from '../types/answer.types';
 import type { PairAsk } from '../types/pairing.types';
 
@@ -27,6 +27,7 @@ const POLL_MS = 3000;
 // A refused try for lack of attempts: the wait is longer than a poll, or it would never get through.
 const RATE_LIMITED_MS = 30_000;
 const PAIRING_STOPPED = 'Pairing stopped before that computer made the number wait.';
+const UNREACHABLE = 'The daemon did not answer.';
 
 /** What a device calls itself when it pairs. */
 export const deviceName = (userAgent: string): string =>
@@ -99,4 +100,18 @@ export async function pairedDevices(): Promise<Device[]> {
 /** Forgets a paired phone: its token stops working at once. */
 export async function forgetDevice(id: string): Promise<void> {
   await request('DELETE', `${ENDPOINTS.devices}/${encodeURIComponent(id)}`);
+}
+
+/** Makes a number the phone's page showed wait here for it to redeem: `swcode pair <number>`, from the page. */
+export async function pendPairing(number: string): Promise<Answer<PairPending>> {
+  const response = await request('POST', ENDPOINTS.pairingPending, { number });
+  if (!response) {
+    return { ok: false, problem: UNREACHABLE };
+  }
+  const body = await response.text().catch(() => '');
+  const waiting = PairPendingSchema.safeParse(jsonOfText(body));
+  if (response.ok && waiting.success) {
+    return { answer: waiting.data, ok: true };
+  }
+  return { ok: false, problem: problemOf(response.status, body) };
 }

@@ -1,6 +1,9 @@
 package local
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,8 +16,10 @@ const (
 	edgePath          = `Microsoft\Edge\Application\msedge.exe`
 	// windowProfile is the window's own browser profile: it keeps the access token and the window's size, apart
 	// from the person's.
-	windowProfile = `swcode\window`
-	windowSize    = "--window-size=1400,900"
+	windowProfile     = `swcode\window`
+	windowProfileName = "Default"
+	webAppFolder      = "Web Applications"
+	windowSize        = "--window-size=1400,900"
 )
 
 var (
@@ -95,13 +100,57 @@ func EdgeOf(environment map[string]string) string {
 
 // AppWindowCall is swcode in a window of its own, as an app: Edge in app mode, with its own profile, so no tabs, no
 // address bar and its own icon in the taskbar. It is started apart: the swcode command ends while the window stays.
-func AppWindowCall(link, edge string, environment map[string]string) Call {
+// Installed as an app, the window is that app's: Edge knows its icon and the taskbar lists it by name.
+func AppWindowCall(link, edge string, environment map[string]string, appID string) Call {
+	target := "--app=" + link
+	args := []string{"--user-data-dir=" + windowFolder(environment), "--no-first-run", "--no-default-browser-check"}
+	if appID == "" {
+		args = append(args, target, windowSize)
+	} else {
+		args = append(args, "--app-id="+appID, "--profile-directory="+windowProfileName)
+	}
+	return Call{Args: args, Program: edge}
+}
+
+// windowFolder is the folder Edge keeps the window's own profile in.
+func windowFolder(environment map[string]string) string {
 	data := environment["LOCALAPPDATA"]
 	if data == "" {
 		data = environment["USERPROFILE"]
 	}
-	return Call{Args: []string{
-		"--app=" + link, "--user-data-dir=" + filepath.Join(data, windowProfile), "--no-first-run",
-		"--no-default-browser-check", windowSize,
-	}, Program: edge}
+	return filepath.Join(data, windowProfile)
+}
+
+// installedAppID is the id Edge installed swcode's window as an app under, empty when it did not: Chromium files an
+// installed web app under its manifest's id, here the origin the page is served at, hashed into a's and p's.
+func installedAppID(link string, place Place) string {
+	if place.Platform != "windows" || place.WSLDistro != "" {
+		return ""
+	}
+	address, err := url.Parse(link)
+	if err != nil || address.Host == "" {
+		return ""
+	}
+	id := webAppID(address.Scheme + "://" + address.Host + "/")
+	installed := filepath.Join(windowFolder(place.Environment), windowProfileName, webAppFolder, id)
+	if _, err := os.Stat(installed); err != nil {
+		return ""
+	}
+	return id
+}
+
+// webAppID is Chromium's app id for a manifest id: the SHA-256's first 32 hexadecimal digits, each a letter, 0 to 9
+// being a to j and a to f being k to p (web_app::GenerateAppIdFromManifestId).
+func webAppID(manifestID string) string {
+	digest := sha256.Sum256([]byte(manifestID))
+	digits := hex.EncodeToString(digest[:])
+	id := make([]byte, 0, 32)
+	for _, digit := range digits[:32] {
+		if digit <= '9' {
+			id = append(id, byte('a'+digit-'0'))
+			continue
+		}
+		id = append(id, byte('k'+digit-'a'))
+	}
+	return string(id)
 }

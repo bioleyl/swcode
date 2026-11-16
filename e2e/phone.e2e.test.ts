@@ -44,31 +44,14 @@ describe('on a phone', () => {
     await page.goto(rig.link);
     await tab(page, 'Settings').click();
     await settle(page);
-    await page.locator('settings-page jl-tabs').getByText('Phone', { exact: true }).click();
+    await page.locator('settings-page jl-tabs').getByText('Computers', { exact: true }).click();
     await settle(page);
-    await page.locator('sc-phone').getByText('Add to Home Screen', { exact: false }).waitFor();
-    expect(await page.locator('sc-phone .install-now').isHidden()).toBe(true);
-    expect(new URL(page.url()).hash).toBe('#/settings/phone');
+    await page.locator('sc-computers').getByText('Add to Home Screen', { exact: false }).waitFor();
+    expect(await page.locator('sc-computers .install-now').isHidden()).toBe(true);
+    expect(new URL(page.url()).hash).toBe('#/settings/computers');
     // The topic has its own address, which opens on it.
     await page.reload();
-    await page.locator('sc-phone').getByText('Add to Home Screen', { exact: false }).waitFor();
-  });
-});
-
-describe('a tailnet', () => {
-  it('gives swcode an HTTPS address with a press, which the QR code then leads to', async () => {
-    const rig = await start({ replies: [] });
-    const page = await rig.browser.newPage({ viewport: DESKTOP });
-    await page.goto(`${rig.link}#/settings/phone`);
-    const phone = page.locator('sc-phone');
-    await phone.getByText('Tailscale can give swcode an HTTPS address', { exact: false }).waitFor();
-    await expect.poll(() => phone.locator('.link').textContent()).toContain('http://127.0.0.1');
-
-    await phone.locator('.serve').click();
-    await phone.getByText('swcode is at https://laptop.tail1234.ts.net', { exact: false }).waitFor();
-    await expect.poll(() => phone.locator('.link').textContent()).toContain('https://laptop.tail1234.ts.net:');
-    expect(await phone.locator('.serve').isHidden()).toBe(true);
-    expect(await phone.locator('.tailnet-problem').isHidden()).toBe(true);
+    await page.locator('sc-computers').getByText('Add to Home Screen', { exact: false }).waitFor();
   });
 });
 
@@ -87,6 +70,8 @@ describe('another computer’s swcode', () => {
     // This browser asks for a number, then has it wait on the other computer, as `swcode pair` would there.
     const page = await home.browser.newPage({ viewport: DESKTOP });
     await page.goto(`${home.link}#/settings/computers`);
+    await page.locator('sc-computers jl-tabs').getByRole('tab', { name: 'Connect a device' }).click();
+    await settle(page);
     const computers = page.locator('sc-computers jl-list-item.computer');
     await computers.first().getByText('Shown here').waitFor();
     await page.locator('#computer-name input').fill('the other one');
@@ -94,6 +79,9 @@ describe('another computer’s swcode', () => {
     await page.locator('sc-computers .add').click();
     await expectPairNumber(other.link, await shownPairNumber(page, 'sc-computers .pair-command'));
     await page.locator('sc-computers jl-alert').getByText('Added', { exact: false }).waitFor();
+    await page.locator('sc-computers .edit').getByText('Edit the other one', { exact: true }).waitFor();
+    await page.locator('sc-computers .edit-cancel').click();
+    await settle(page);
     await expect.poll(() => computers.count()).toBe(2);
 
     // Opened, the page shows the other computer's sessions, marked as another computer's.

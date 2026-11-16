@@ -32,8 +32,8 @@ import java.util.concurrent.Executors;
  * release, downloads swcode-android.apk when its version is newer, checks the release's checksum, and hands the file
  * to Android's installer. Android asks once for permission to install apps from swcode, which opens here.
  *
- * Nothing about a check that failed reaches the person: the app keeps running as it is, and the check is made again
- * when the app opens next.
+ * It looks when the app opens or comes back, at most every ten minutes; Settings → Phone's "Look now" looks when the
+ * person asks, and says what it found. A look that fails on its own reaches nobody: the app keeps running as it is.
  */
 final class Updater {
     private static final String TAG = "swcode";
@@ -44,8 +44,11 @@ final class Updater {
     private static final String READY_VERSION = "readyVersion";
     private static final String ASKED_VERSION = "askedVersion";
     private static final String ASKED_AT = "askedAt";
+    private static final String LOOKED_AT = "lookedAt";
     // The person who turned the installer down is asked again a day later, and not at every launch.
     private static final long ASK_AGAIN_MS = 24L * 60L * 60L * 1000L;
+    // A look of its own, at each return to the app, asks GitHub at most this often.
+    private static final long LOOK_EVERY_MS = 10L * 60L * 1000L;
     private static final int TIMEOUT_MS = 20_000;
     private static final int BUFFER = 8_192;
     private static final int PARTS = 3;
@@ -53,57 +56,96 @@ final class Updater {
 
     private Updater() {}
 
-    /** Looks for a newer release, and has Android install it: called as the app opens. */
+    /** What the web app's look found: the version Android is installing, empty when the app is the latest. */
+    interface Looked {
+        void found(String version);
+
+        void failed(String problem);
+    }
+
+    /** Looks for a newer release, and has Android install it: called as the app opens, and as it comes back. */
     static void check(Activity activity) {
         ONCE.execute(() -> {
             try {
-                String current = versionOf(activity);
-                File file = new File(new File(activity.getFilesDir(), DIRECTORY), APK);
-                SharedPreferences kept = activity.getPreferences(Activity.MODE_PRIVATE);
-                String ready = kept.getString(READY_VERSION, "");
-                if (!file.isFile() || !isNewer(ready, current)) {
-                    String latest = downloadLatest(activity, file, current);
-                    if (latest.isEmpty()) {
-                        return;
-                    }
-                    kept.edit().putString(READY_VERSION, latest).apply();
-                    ready = latest;
-                }
-                if (!isNewer(ready, current) || !mayAsk(kept, ready)) {
-                    return;
-                }
-                kept.edit().putString(ASKED_VERSION, ready).putLong(ASKED_AT, System.currentTimeMillis()).apply();
-                activity.runOnUiThread(() -> install(activity, file));
+                look(activity, false);
             } catch (Exception failure) {
                 Log.w(TAG, "the update check found nothing it could use", failure);
             }
         });
     }
 
-    /** The version of the release downloaded into file, or empty when there is no newer one, or none to download. */
-    private static String downloadLatest(Activity activity, File file, String current) throws Exception {
+    /** Looks now, whatever the last look, and says what it found: the Settings → Phone's "Look now". */
+    static void lookNow(Activity activity, Looked looked) {
+        ONCE.execute(() -> {
+            try {
+                looked.found(look(activity, true));
+            } catch (Exception failure) {
+                Log.w(TAG, "the update check failed", failure);
+                looked.failed(problemOf(failure));
+            }
+        });
+    }
+
+    /**
+     * Looks for a newer release, downloads it, and has Android install it when the person may be asked. Gives the
+     * version it asked to install, or empty when there is nothing newer to offer.
+     */
+    private static String look(Activity activity, boolean forced) throws Exception {
+        SharedPreferences kept = activity.getPreferences(Activity.MODE_PRIVATE);
+        String current = versionOf(activity);
+        File file = new File(new File(activity.getFilesDir(), DIRECTORY), APK);
+        String ready = kept.getString(READY_VERSION, "");
+        if (!forced && !worthLooking(kept, ready, current, file)) {
+            return "";
+        }
+        kept.edit().putLong(LOOKED_AT, System.currentTimeMillis()).apply();
+        if (!isNewer(ready, current)) {
+            ready = downloadLatest(file, current, ready);
+            if (ready.isEmpty()) {
+                return "";
+            }
+            kept.edit().putString(READY_VERSION, ready).apply();
+        }
+        // A look the person asked for asks again even when the same version was turned down lately.
+        if (!forced && !mayAsk(kept, ready)) {
+            return "";
+        }
+        kept.edit().putString(ASKED_VERSION, ready).putLong(ASKED_AT, System.currentTimeMillis()).apply();
+        activity.runOnUiThread(() -> install(activity, kept, file));
+        return ready;
+    }
+
+    /** Whether a look of its own has anything to do: a newer release already downloaded, or no look in ten minutes. */
+    private static boolean worthLooking(SharedPreferences kept, String ready, String current, File file) {
+        return (file.isFile() && isNewer(ready, current))
+                || System.currentTimeMillis() - kept.getLong(LOOKED_AT, 0) >= LOOK_EVERY_MS;
+    }
+
+    /** The version of the release downloaded into file, empty when there is no newer one, or none to download. */
+    private static String downloadLatest(File file, String current, String ready) throws Exception {
         JSONObject release = new JSONObject(read(RELEASES));
         String tag = release.optString("tag_name");
         if (!isNewer(tag, current)) {
             return "";
         }
+        if (tag.equals(ready) && file.isFile()) {
+            return tag;
+        }
         JSONArray assets = release.getJSONArray("assets");
         String apk = addressOf(assets, APK);
         String checksum = addressOf(assets, CHECKSUM);
         if (apk.isEmpty() || checksum.isEmpty()) {
-            Log.w(TAG, "release " + tag + " has no app to install");
-            return "";
+            throw new IOException("release " + tag + " has no app to install");
         }
         if (!file.getParentFile().isDirectory() && !file.getParentFile().mkdirs()) {
-            return "";
+            throw new IOException("the folder the app is downloaded into could not be made");
         }
         download(apk, file);
         if (!sha256(file).equals(firstWord(read(checksum)).toLowerCase(Locale.ROOT))) {
             if (!file.delete()) {
                 Log.w(TAG, "a download that did not match is left behind");
             }
-            Log.w(TAG, "the app of " + tag + " does not match its checksum");
-            return "";
+            throw new IOException("the app of " + tag + " does not match its checksum");
         }
         return tag;
     }
@@ -116,9 +158,11 @@ final class Updater {
         return System.currentTimeMillis() - kept.getLong(ASKED_AT, 0) >= ASK_AGAIN_MS;
     }
 
-    private static void install(Activity activity, File file) {
+    private static void install(Activity activity, SharedPreferences kept, File file) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
                 && !activity.getPackageManager().canRequestPackageInstalls()) {
+            // Answered, Android's permission screen has the app ask again rather than a day later: it was not asked.
+            kept.edit().remove(ASKED_VERSION).apply();
             activity.startActivity(
                     new Intent(
                             Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
@@ -130,6 +174,11 @@ final class Updater {
                 .setDataAndType(address, "application/vnd.android.package-archive")
                 .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
         activity.startActivity(installer);
+    }
+
+    private static String problemOf(Exception failure) {
+        String said = failure.getMessage();
+        return said == null || said.isEmpty() ? failure.toString() : said;
     }
 
     private static String versionOf(Activity activity) {

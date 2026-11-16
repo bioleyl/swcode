@@ -64,19 +64,20 @@ swcode needs an LLM server that supports tool calls. Set that up first, then ins
 
 ### From the release
 
-Download the binary for your platform from the [latest release](https://github.com/bioleyl/swcode/releases/latest), or install with the script:
+Each release carries one program for each platform, and these to install it with:
+
+- **Windows**: `swcode-desktop.exe` — open it once and it installs itself in `%LOCALAPPDATA%\Programs\swcode` with its shortcuts, its icon in the notification area, and its server started at logon.
+- **Ubuntu / Debian**: `swcode_<version>_amd64.deb` (or `_arm64`) — `sudo apt install ./swcode_0.13.1_amd64.deb`, then `swcode`.
+- **Android**: `swcode-android.apk` — open it on the phone, allow this source in Android’s settings for that one install, and the app takes its next releases itself.
+
+Or, from a terminal:
 
 ```bash
-# Linux / WSL
+# Linux / WSL: the program in ~/.local/bin/swcode
 curl -fsSL https://raw.githubusercontent.com/bioleyl/swcode/main/install.sh | sh
 ```
 
-```powershell
-# Windows: the desktop app
-irm https://raw.githubusercontent.com/bioleyl/swcode/main/install.ps1 | iex
-```
-
-The script installs `swcode` to `~/.local/bin/swcode`; on Windows, the desktop app goes to `%LOCALAPPDATA%\Programs\swcode`, with its Start menu shortcut.
+The script installs `swcode` to `~/.local/bin/swcode`; on Windows, `swcode-desktop.exe` installs itself the first time it opens.
 
 ### From source
 

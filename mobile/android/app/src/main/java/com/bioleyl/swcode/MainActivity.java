@@ -7,8 +7,15 @@ import com.getcapacitor.BridgeActivity;
 public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle state) {
+        // The page's "Look now" reaches the app's own update check through it.
+        registerPlugin(UpdaterPlugin.class);
         super.onCreate(state);
-        // The app comes from a release, not from a store: it takes the next one itself.
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        // The app usually comes back rather than opening anew, so a release out since the last look is offered here.
         Updater.check(this);
     }
 }

@@ -12,10 +12,10 @@ import type { SettingsTopic } from './settings-topics';
 
 /** The palette's own actions, by id. */
 export const PALETTE_ACTION = {
+  device: 'device',
   newChat: 'new-chat',
   newProject: 'new-project',
   newSession: 'new-session',
-  phone: 'phone',
   theme: 'theme',
 } as const;
 type PaletteAction = (typeof PALETTE_ACTION)[keyof typeof PALETTE_ACTION];
@@ -60,9 +60,9 @@ const ACTIONS: readonly PaletteCommand[] = [
   {
     group: GROUP.actions,
     icon: 'smartphone',
-    id: PALETTE_ACTION.phone,
-    keywords: ['pair', 'qr'],
-    label: 'Use swcode on a phone',
+    id: PALETTE_ACTION.device,
+    keywords: ['pair', 'qr', 'phone', 'device'],
+    label: 'Pair a device',
   },
   {
     group: GROUP.actions,

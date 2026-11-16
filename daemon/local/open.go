@@ -48,7 +48,7 @@ func openApp(link string, place Place) Result {
 	if edge == "" {
 		return Run(BrowserCall(link, place))
 	}
-	if err := StartDetached(AppWindowCall(link, edge, place.Environment)); err != nil {
+	if err := StartDetached(AppWindowCall(link, edge, place.Environment, installedAppID(link, place))); err != nil {
 		return Result{Output: err.Error()}
 	}
 	return Result{OK: true}

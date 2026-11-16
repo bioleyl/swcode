@@ -6,7 +6,6 @@ import { E2E_VERSION } from './e2e.constants.js';
 import { programOf } from './fake-releases.js';
 import {
   DESKTOP,
-  expectPairNumber,
   overflow,
   PHONE,
   settingsLink,
@@ -211,19 +210,18 @@ describe('settings', () => {
     const rig = await start({ replies: [] });
     const app = await rig.browser.newPage({ viewport: DESKTOP });
     await app.addInitScript(fakeDesktopApp());
-    await app.goto(`${rig.link}#/settings/phone`);
-    const phone = app.locator('sc-phone');
-    await phone.getByText('Pair a phone', { exact: true }).waitFor();
-    await phone.getByText('Over HTTPS, on your tailnet', { exact: true }).waitFor();
+    await app.goto(`${rig.link}#/settings/computers`);
+    const phone = app.locator('sc-computers');
+    await phone.getByText('Open it on a phone', { exact: true }).waitFor();
     expect(await phone.locator('.install').isHidden()).toBe(true);
     expect(await phone.locator('.notifications').isHidden()).toBe(true);
 
     // A browser has both: there, swcode is a page until it is installed.
     const browser = await rig.browser.newPage({ viewport: DESKTOP });
     await browser.goto(rig.link);
-    await browser.goto(`${rig.link.split('?')[0]}#/settings/phone`);
-    await browser.locator('sc-phone').getByText('Install on this device', { exact: true }).waitFor();
-    await browser.locator('sc-phone').getByText('Notifications on this device', { exact: true }).waitFor();
+    await browser.goto(`${rig.link.split('?')[0]}#/settings/computers`);
+    await browser.locator('sc-computers').getByText('Install on this device', { exact: true }).waitFor();
+    await browser.locator('sc-computers').getByText('Notifications on this device', { exact: true }).waitFor();
   });
 
   it('list the desktop app’s computers, pair another one with its number, and open it', async () => {
@@ -231,6 +229,9 @@ describe('settings', () => {
     const page = await rig.browser.newPage({ viewport: DESKTOP });
     await page.addInitScript(fakeDesktopApp());
     await page.goto(`${rig.link}#/settings/computers`);
+    // The devices paired with this swcode come first; the computers this app may show are the second tab.
+    await page.locator('sc-computers jl-tabs').getByRole('tab', { name: 'Connect a device' }).click();
+    await settle(page);
     const computers = page.locator('sc-computers jl-list-item.computer');
     await computers.first().getByText('This computer', { exact: true }).filter({ visible: true }).waitFor();
     await computers.first().getByText('Shown here').waitFor();
@@ -255,6 +256,10 @@ describe('settings', () => {
     refuse = false;
     await page.locator('sc-computers .add').click();
     await page.locator('sc-computers jl-alert').getByText('Added', { exact: false }).waitFor();
+    // Paired, it is named and coloured in its own dialog, which opens on it.
+    await page.locator('sc-computers .edit').getByText('Edit gmktec', { exact: true }).waitFor();
+    await page.locator('sc-computers .edit-cancel').click();
+    await settle(page);
     expect(await computers.count()).toBe(2);
     expect(await page.locator('#computer-address input').inputValue()).toBe('');
 
@@ -322,6 +327,8 @@ describe('the computer', () => {
     await computers.selectOption('manage');
     await settle(page);
     expect(await computers.inputValue()).toBe('local');
+    await page.locator('sc-computers jl-tabs').getByRole('tab', { name: 'Connect a device' }).click();
+    await settle(page);
     await page.locator('sc-computers').getByText('Add a computer').waitFor();
   });
 
@@ -372,18 +379,23 @@ describe('pairing a phone', () => {
     await computer.goto(rig.link);
     await settingsLink(computer).click();
     await settle(computer);
-    await topicTab(computer, 'Phone').click();
+    await topicTab(computer, 'Computers').click();
     await settle(computer);
-    expect(computer.url()).toContain('#/settings/phone');
+    expect(computer.url()).toContain('#/settings/computers');
     // The address a phone on the network reaches; the test's daemon listens here only.
-    const address = await computer.locator('sc-phone .link').textContent();
+    const address = await computer.locator('sc-computers .reach .link').textContent();
     const phone = await rig.browser.newPage({ deviceScaleFactor: 2, viewport: PHONE });
     await phone.goto(address ?? '');
     const number = await shownPairNumber(phone);
     // The status is asked again every fifteen seconds: the number the person reads stays the one they type.
     await new Promise((resolve) => setTimeout(resolve, 17_000));
     expect(await shownPairNumber(phone)).toBe(number);
-    await expectPairNumber(rig.link, number);
+    // The number is typed in the computer's own page: Settings → Computers, the first tab.
+    await topicTab(computer, 'Computers').click();
+    await settle(computer);
+    await computer.locator('sc-computers .pair-input input').fill(number);
+    await computer.getByRole('button', { name: 'Pair the device' }).click();
+    await computer.locator('sc-computers .pair-line').getByText('waits', { exact: false }).waitFor();
     await expect.poll(() => phone.evaluate(KEPT_TOKEN)).toBe(true);
     await phone.locator('home-page textarea').waitFor();
   });

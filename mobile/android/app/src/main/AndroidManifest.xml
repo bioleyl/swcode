@@ -41,4 +41,7 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- The app installs its next release itself, from swcode's GitHub releases. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- Capacitor asks for this when a page reads a QR code with the camera; without it declared, Android denies
+         the ask at once, and the scanner's page never gets the camera. -->
+    <uses-permission android:name="android.permission.CAMERA" />
 </manifest>

@@ -10,29 +10,66 @@ import {
   JlListItem,
   JlMenu,
   JlSelect,
+  JlTabPanel,
+  JlTabs,
 } from '@syware/jlib';
 
 import { COMPUTER_COLORS, ComputerColorSchema, THIS_COMPUTER } from '../../../shared/protocol/desktop.schema';
+import { PAIR_NUMBER_DIGITS } from '../../../shared/protocol/pairing.schema';
 import { ScElement } from '../base/sc-element';
+import { appUpdateNote } from '../lib/app-update';
 import { newPairNumber } from '../lib/pair-number';
+import {
+  isLocalBase,
+  LOCAL_ADDRESS_NOTE,
+  PAIR_NUMBER_HINT,
+  pairingWaitingText,
+  reachableBaseOf,
+} from '../lib/pairing-view';
+import { PUSH_BUTTONS, PUSH_LINES, pushProblemShown } from '../lib/push-view';
+import { qrElement } from '../lib/qr';
 import { DEFAULT_PORT, pairingOrigin } from '../lib/remote-computers';
 import { ScQrScanner } from '../molecules/sc-qr-scanner';
+import { daemonOrigin } from '../services/access';
+import { checkAppUpdate } from '../services/app-update';
 import { askComputers, onComputersAnswer } from '../services/computers';
+import { daemonState, daemonStatusBus } from '../services/daemon-status';
 import { inDesktopApp } from '../services/desktop';
-import { deviceName, waitForPairing } from '../services/pairing';
+import { installApp, installBus, installState } from '../services/install';
+import { inAndroidApp } from '../services/native-app';
+import { deviceName, forgetDevice, pairedDevices, pendPairing, waitForPairing } from '../services/pairing';
+import { pushState, turnPushOff, turnPushOn } from '../services/push';
 import { canScan } from '../services/qr-scan';
 import { BASE_STYLES } from '../styles/shared';
 import styles from './sc-computers.css?inline';
 
 import type { MenuItem, SelectOption, Tone } from '@syware/jlib';
 import type { Computer, ComputerColor, DesktopAnswer } from '../../../shared/protocol/desktop.schema';
+import type { Device } from '../../../shared/protocol/pairing.schema';
 import type { ComputerAction, DesktopAnswerHandlers, DesktopAnswerMap } from '../types/desktop.types';
+import type { InstallState } from '../types/install.types';
+import type { PushState } from '../types/push.types';
 
 const PAIR_COMMAND = 'swcode pair ';
 const WAITING = 'Waiting for that computer to take the number…';
 const WAIT_LEAD = 'On that computer, run this where its swcode runs. The number waits a few minutes.';
 const ADDED = 'Added: open it to show its swcode here.';
 const NO_NAME = 'Type the name this app should call that computer.';
+const NO_DEVICES = 'No device is paired yet.';
+const CONNECTED_LEAD =
+  'The devices paired with this swcode hold a token of their own: a phone, or another computer. Each one’s Forget stops its token at once.';
+const PAIR_LEAD = 'The device shows a number as it pairs: type it here, and it is paired with this swcode.';
+const PAIR_NUMBER = new RegExp(`^\\d{${PAIR_NUMBER_DIGITS}}$`);
+const QR_LABEL = 'QR code of the address swcode answers at on this network';
+// What installing swcode on the device that shows this page takes, by where it stands.
+const INSTALL_LINES: Readonly<Record<InstallState, string>> = {
+  insecure:
+    'A browser installs an app only from an HTTPS address, and this page came without it. Give swcode one (tailscale serve does, or a reverse proxy), then open swcode from that address.',
+  installed: 'swcode is installed on this device: it opens from its own icon, in a window of its own.',
+  manual:
+    'In the browser’s menu, choose “Add to Home Screen” (in Safari, the Share button first) or “Install app”: swcode then opens from its own icon, in a window of its own.',
+  offered: 'Install swcode to open it from its own icon, in a window of its own.',
+};
 const DEFAULT_COLOR = 'default';
 const COLOR_LABELS: Readonly<Record<ComputerColor, string>> = {
   amber: 'Amber',
@@ -79,8 +116,11 @@ export class ScComputers extends ScElement {
 
   // Set from asking to pair until the app takes the computer.
   private _adding = false;
-  // The computer the edit dialog is open on, until it closes.
+  // The computer the edit dialog is open on, until it closes, and whether its Save was asked.
   private _editing: Computer | undefined;
+  private _saving = false;
+  // Where notifications stood when last drawn: what a press on their button changes.
+  private _pushState: PushState = 'unsupported';
   // The number shown while waiting for its computer to take it, and the wait itself.
   private _number = '';
   private _origin = '';
@@ -90,6 +130,7 @@ export class ScComputers extends ScElement {
   private readonly _handlers: DesktopAnswerHandlers = {
     computerRefused: (answer) => {
       this._adding = false;
+      this._saving = false;
       this._refs.add.loading.set(false);
       if (this._editing) {
         this.refuseEdit(answer.message);
@@ -99,7 +140,9 @@ export class ScComputers extends ScElement {
     },
     computers: (answer) => {
       this.renderComputers(answer.computers, answer.current);
-      if (this._editing) {
+      // The dialog closes on the answer to its own Save, not on a list that arrives while it is open.
+      if (this._saving) {
+        this._saving = false;
         this._refs.edit.close();
       }
       if (!this._adding) {
@@ -109,6 +152,12 @@ export class ScComputers extends ScElement {
       this._refs.add.loading.set(false);
       this.say(ADDED, 'ok');
       this.clearForm();
+      // Paired, it is this app's to name and colour: the dialog opens on it, rather than a form that asked before
+      // the computer had even answered.
+      const added = answer.computers.find((computer) => computer.address === this._origin);
+      if (added) {
+        this.openEdit(added);
+      }
     },
     computerUnreachable: () => {
       // The switch says that computer did not answer; the list says which ones are not reachable.
@@ -120,11 +169,15 @@ export class ScComputers extends ScElement {
     add: ref<JlButton>('.add'),
     address: ref<JlInput>('#computer-address'),
     addressField: ref<JlField>('.address-field'),
+    app: ref('.app'),
+    appLine: ref<JlAlert>('.app-line'),
+    appLook: ref<JlButton>('.app-look'),
     cancelWait: ref<JlButton>('.cancel-wait'),
     command: ref('.pair-command'),
     computers: ref('.computers'),
     copyCommand: ref<JlCopyButton>('.copy-command'),
-    edit: ref(JlDialog),
+    devices: ref('.devices'),
+    edit: ref<JlDialog>('.edit'),
     editCancel: ref<JlButton>('.edit-cancel'),
     editColor: ref<JlSelect>('.edit-color'),
     editName: ref<JlInput>('.edit-name'),
@@ -132,40 +185,99 @@ export class ScComputers extends ScElement {
     editSave: ref<JlButton>('.edit-save'),
     feedback: ref<JlAlert>('.feedback'),
     form: ref<HTMLFormElement>('form'),
+    install: ref<JlButton>('.install-now'),
+    installLine: ref('.install-line'),
+    installSection: ref('.install'),
+    link: ref('.link'),
     name: ref<JlInput>('#computer-name'),
+    note: ref('.note'),
+    notifications: ref('.notifications'),
+    pairButton: ref<JlButton>('.pair-device'),
+    pairInput: ref<JlInput>('.pair-input'),
+    pairLine: ref<JlAlert>('.pair-line'),
     port: ref<JlInput>('#computer-port'),
+    push: ref<JlButton>('.push'),
+    pushLine: ref('.push-line'),
+    pushProblem: ref('.push-problem'),
+    qr: ref('.qr'),
     scan: ref<JlButton>('.scan'),
     scanner: ref(ScQrScanner),
-    wait: ref(JlDialog),
+    wait: ref<JlDialog>('.wait'),
     waiting: ref('.waiting'),
   }));
 
   templateHtml(): Node {
     return (
       <div class="computers-topic">
-        <p class="lead">
-          The window shows swcode on this computer, or on another one paired with this app once. Another computer’s
-          swcode works on while this one is off, and its sessions notify you here.
-        </p>
-        <div class="computers" />
-        <form>
-          <h3>Add a computer</h3>
-          <p class="lead">{CONNECT_LEAD}</p>
-          <JlField label="Name" hint="What this app calls that computer.">
-            <JlInput id="computer-name" autocomplete="off" />
-          </JlField>
-          <JlField class="address-field" label="Address">
-            <JlInput id="computer-address" autocomplete="off" />
-          </JlField>
-          <JlField label="Port" hint="Empty for 4500 over HTTP, or the link’s own over HTTPS.">
-            <JlInput id="computer-port" autocomplete="off" placeholder={DEFAULT_PORT} />
-          </JlField>
-          <JlAlert class="feedback" hidden />
-          <div class="actions">
-            <JlButton class="scan" icon="camera" label="Scan its address" hidden />
-            <JlButton class="add" type="submit" variant="primary" label="Get a number" />
-          </div>
-        </form>
+        <JlTabs label="Devices">
+          <JlTabPanel name="connected" icon="laptop" label="Connected devices">
+            <p class="lead">{CONNECTED_LEAD}</p>
+            <section class="reach">
+              <h3>Open it on a phone</h3>
+              <p class="lead">
+                Open this address on the phone (its camera reads the code). Its page shows a number: type it below,
+                and the phone is paired.
+              </p>
+              <div class="qr" />
+              <p class="link" />
+              <p class="note" hidden />
+            </section>
+            <div class="devices" />
+            <div class="pair">
+              <h3>Pair a device</h3>
+              <p class="lead">{PAIR_LEAD}</p>
+              <JlField label="The number the device shows">
+                <JlInput class="pair-input" autocomplete="off" placeholder="123456" />
+              </JlField>
+              <JlButton class="pair-device" variant="primary" label="Pair the device" />
+              <JlAlert class="pair-line" hidden />
+            </div>
+            <section class="install" hidden>
+              <h3>Install on this device</h3>
+              <p class="lead install-line" />
+              <JlButton class="install-now" icon="download" label="Install swcode" hidden />
+            </section>
+            <section class="notifications" hidden>
+              <h3>Notifications on this device</h3>
+              <p class="lead push-line" />
+              <p class="note push-problem" hidden />
+              <JlButton class="push" hidden />
+            </section>
+            <section class="app" hidden>
+              <h3>This app</h3>
+              <p class="lead">
+                The Android app takes its next release from GitHub. It looks when it comes back; this looks now.
+              </p>
+              <JlButton class="app-look" icon="refresh" label="Look now" />
+              <JlAlert class="app-line" hidden />
+            </section>
+          </JlTabPanel>
+          <JlTabPanel name="connect" icon="plug" label="Connect a device">
+            <p class="lead">
+              The window shows swcode on this computer, or on another one paired with this app once. Another
+              computer’s swcode works on while this one is off, and its sessions notify you here.
+            </p>
+            <div class="computers" />
+            <form>
+              <h3>Add a computer</h3>
+              <p class="lead">{CONNECT_LEAD}</p>
+              <JlField label="Name" hint="What this app calls that computer.">
+                <JlInput id="computer-name" autocomplete="off" />
+              </JlField>
+              <JlField class="address-field" label="Address">
+                <JlInput id="computer-address" autocomplete="off" />
+              </JlField>
+              <JlField label="Port" hint="Empty for 4500 over HTTP, or the link’s own over HTTPS.">
+                <JlInput id="computer-port" autocomplete="off" placeholder={DEFAULT_PORT} />
+              </JlField>
+              <JlAlert class="feedback" hidden />
+              <div class="actions">
+                <JlButton class="scan" icon="camera" label="Scan its address" hidden />
+                <JlButton class="add" type="submit" variant="primary" label="Get a number" />
+              </div>
+            </form>
+          </JlTabPanel>
+        </JlTabs>
         <ScQrScanner />
         <JlDialog class="wait" heading="Pair a computer" size="sm">
           <div class="wait-body">
@@ -213,8 +325,28 @@ export class ScComputers extends ScElement {
     this._refs.edit.events.register('close', () => this.stopEditing());
     this._refs.editCancel.events.register('press', () => this._refs.edit.close());
     this._refs.editSave.events.register('press', () => this.edit());
+    this._refs.pairButton.events.register('press', () => void this.pairDevice());
+    this._refs.pairInput.events.register('enter', () => void this.pairDevice());
+    this._refs.install.events.register('press', () => void installApp());
+    this._refs.push.events.register('press', () => void this.togglePush());
+    this._refs.appLook.events.register('press', () => void this.lookForAppUpdate());
+    // The desktop app is installed already, and tells the person of a session that waits through Windows itself:
+    // its window offers neither an install nor web notifications, which it refuses. The phone app is installed too,
+    // and its WebView has no push service.
+    this._refs.installSection.hidden = inDesktopApp() || inAndroidApp();
+    this._refs.notifications.hidden = inDesktopApp() || inAndroidApp();
+    // Only the Android app updates itself: its own look is the only one a page can ask for.
+    this._refs.app.hidden = !inAndroidApp();
+    // Installed, the app may notify where its page could not (an iPhone).
+    this.onBus(installBus, 'changed', () => void this.renderPush());
+    this.onBus(installBus, 'changed', () => this.renderInstall());
+    this.onBus(daemonStatusBus, 'changed', () => this.renderPairing());
+    this.renderInstall();
+    this.renderPairing();
+    void this.renderPush();
     onComputersAnswer((answer) => this.hear(answer), this.killSignal);
     askComputers({ type: 'listComputers' });
+    void this.renderDevices();
   }
 
   onDisconnect(): void {
@@ -312,6 +444,72 @@ export class ScComputers extends ScElement {
     this._refs.feedback.hidden = text === '';
   }
 
+  /** Makes the number a device shows wait here for it to take: it pairs with this swcode, a phone or a computer. */
+  private async pairDevice(): Promise<void> {
+    const number = this._refs.pairInput.value.get().trim();
+    if (!PAIR_NUMBER.test(number)) {
+      this.sayPairing(PAIR_NUMBER_HINT, 'danger');
+      return;
+    }
+    this._refs.pairButton.loading.set(true);
+    const answer = await pendPairing(number);
+    this._refs.pairButton.loading.set(false);
+    if (!this.isConnected) {
+      return;
+    }
+    this.sayPairing(
+      answer.ok ? pairingWaitingText(number, answer.answer.lifetimeMs) : answer.problem,
+      answer.ok ? 'ok' : 'danger'
+    );
+    if (!answer.ok) {
+      return;
+    }
+    this._refs.pairInput.value.set('');
+  }
+
+  private sayPairing(text: string, tone: Tone): void {
+    this._refs.pairLine.tone.set(tone);
+    this._refs.pairLine.description.set(text);
+    this._refs.pairLine.hidden = text === '';
+  }
+
+  /** The devices paired with this swcode, each holding a token of its own. */
+  private async renderDevices(): Promise<void> {
+    const devices = await pairedDevices();
+    if (!this.isConnected) {
+      return;
+    }
+    this._refs.devices.replaceChildren(
+      ...(devices.length === 0
+        ? [<p class="none">{NO_DEVICES}</p>]
+        : devices.map((device) => this.deviceNode(device)))
+    );
+  }
+
+  /** A paired device, and its forget button: a button keeps its clicks to itself, so each knows its device. */
+  private deviceNode(device: Device): Node {
+    const forget = createElement(JlButton, {
+      attrs: { class: 'forget', slot: 'end' },
+      props: {
+        hint: `Forget ${device.name}: its token stops working`,
+        label: 'Forget',
+        size: 'sm',
+        variant: 'ghost',
+      },
+    });
+    forget.events.register('press', () => void forgetDevice(device.id).then(() => this.renderDevices()));
+    const row = createElement(JlListItem, {
+      attrs: { class: 'device' },
+      props: {
+        description: `paired ${new Date(device.pairedAt).toLocaleDateString()}`,
+        heading: device.name,
+        icon: 'smartphone',
+      },
+    });
+    row.append(forget);
+    return row;
+  }
+
   /** The actions of a paired computer, in its row's More menu: the menu keeps its clicks to itself. */
   private actionsNode(computer: Computer): Node {
     const menu = createElement(JlMenu<ComputerAction>, {
@@ -357,6 +555,7 @@ export class ScComputers extends ScElement {
     }
     const color = this.colorChosen();
     this._refs.editSave.loading.set(true);
+    this._saving = true;
     askComputers({ id: computer.id, name, type: 'editComputer', ...(color === undefined ? {} : { color }) });
   }
 
@@ -374,6 +573,61 @@ export class ScComputers extends ScElement {
     this._refs.editSave.loading.set(false);
     this._refs.editProblem.description.set(problem);
     this._refs.editProblem.hidden = problem === '';
+  }
+
+  /** How the device showing this page installs swcode, and the button that does it when the browser offers one. */
+  private renderInstall(): void {
+    const state = installState();
+    this._refs.installLine.textContent = INSTALL_LINES[state];
+    this._refs.install.hidden = state !== 'offered';
+  }
+
+  /** Where notifications stand on the device showing this page, and the button that changes it where one can. */
+  private async renderPush(problem = ''): Promise<void> {
+    const state = await pushState();
+    if (!this.isConnected) {
+      return;
+    }
+    this._pushState = state;
+    const label = PUSH_BUTTONS[state];
+    // A refusal that left notifications blocked is what the line itself says: it is said once.
+    const said = pushProblemShown(state, problem);
+    this._refs.pushLine.textContent = PUSH_LINES[state];
+    this._refs.pushProblem.textContent = said;
+    this._refs.pushProblem.hidden = said === '';
+    this._refs.push.hidden = label === undefined;
+    this._refs.push.label.set(label ?? '');
+  }
+
+  /** Turns notifications on for this device, or off once they are: what did not go through is said under it. */
+  private async togglePush(): Promise<void> {
+    this._refs.push.loading.set(true);
+    const outcome = await (this._pushState === 'on' ? turnPushOff() : turnPushOn());
+    this._refs.push.loading.set(false);
+    await this.renderPush(outcome.ok ? '' : outcome.problem);
+  }
+
+  /** Asks the Android app to look for a newer release now, and says what it found under the button. */
+  private async lookForAppUpdate(): Promise<void> {
+    this._refs.appLook.loading.set(true);
+    const update = await checkAppUpdate();
+    this._refs.appLook.loading.set(false);
+    if (!this.isConnected) {
+      return;
+    }
+    const note = appUpdateNote(update);
+    this._refs.appLine.tone.set(note.tone);
+    this._refs.appLine.description.set(note.text);
+    this._refs.appLine.hidden = false;
+  }
+
+  /** The address a phone opens: this computer's, as the daemon says it is reached. */
+  private renderPairing(): void {
+    const base = reachableBaseOf(daemonState(), daemonOrigin());
+    this._refs.qr.replaceChildren(qrElement(base, QR_LABEL));
+    this._refs.link.textContent = base;
+    this._refs.note.hidden = !isLocalBase(base);
+    this._refs.note.textContent = LOCAL_ADDRESS_NOTE;
   }
 
   private renderComputers(computers: readonly Computer[], current: string): void {

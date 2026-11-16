@@ -5,7 +5,7 @@ export const PUSH_LINES: Readonly<Record<PushState, string>> = {
   denied:
     'Notifications are blocked for this page: allow them for this site in the browser’s settings, then come back.',
   insecure:
-    'A browser notifies only from an HTTPS address, and this page came without it. Give swcode one (a tailnet does, above), then open swcode from that address.',
+    'A browser notifies only from an HTTPS address, and this page came without it. Give swcode one (tailscale serve does, or a reverse proxy), then open swcode from that address.',
   needsInstall:
     'On an iPhone or an iPad, add swcode to the Home Screen first (above), then turn notifications on from the app it opens.',
   off: 'Be told on this device when a session waits for you or ends its turn, with swcode closed.',

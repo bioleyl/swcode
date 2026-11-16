@@ -9,7 +9,6 @@ export const SETTINGS_TOPICS = [
   'mcp',
   'pictures',
   'network',
-  'phone',
   'startup',
   'computers',
   'updates',
@@ -17,9 +16,6 @@ export const SETTINGS_TOPICS = [
 export type SettingsTopic = (typeof SETTINGS_TOPICS)[number];
 
 export const DEFAULT_SETTINGS_TOPIC: SettingsTopic = 'models';
-
-/** Pairing a phone, and the phones paired: the palette leads there too. */
-export const PHONE_TOPIC: SettingsTopic = 'phone';
 
 /** The MCP servers whose tools the agent has: read while their topic is shown. */
 export const MCP_TOPIC: SettingsTopic = 'mcp';
@@ -33,7 +29,6 @@ export const SETTINGS_TOPIC_LABELS: Readonly<Record<SettingsTopic, { label: stri
   mcp: { icon: 'plug', label: 'MCP servers' },
   models: { icon: 'cpu', label: 'Models' },
   network: { icon: 'network', label: 'Network' },
-  phone: { icon: 'smartphone', label: 'Phone' },
   pictures: { icon: 'image', label: 'Pictures' },
   projects: { icon: 'folder', label: 'Projects' },
   ssh: { icon: 'server', label: 'SSH' },

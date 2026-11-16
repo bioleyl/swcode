@@ -2,6 +2,26 @@
 
 All notable changes to swcode are documented here.
 
+## [0.14.0] - 2026-11-16
+
+### Added
+
+- **Every device is paired from Settings → Computers**, in two tabs: *Connected devices* (the phones and computers paired with this swcode, each with Forget, the number a device shows, and the address a phone opens as a QR code) and *Connect a device* (this app's computers and the form that adds one). The Phone topic is gone.
+- A Debian package with each release, `swcode_<version>_amd64.deb` and `_arm64`: `/usr/bin/swcode` and its copyright, built by `scripts/build-deb.sh`.
+- The Android app reads QR codes with its camera (`android.permission.CAMERA`), and where Android refuses it the scanner says so, and where to allow it.
+- The Android app looks for its next release when it comes back to the front, at most every ten minutes; *Look now* under Connected devices asks at once, and says what it found.
+- On Windows, `swcode` opens the web app installed in Edge by its app id when the window's profile has one, so the taskbar and the pin carry swcode's icon.
+
+### Changed
+
+- Adding a computer opens its Edit dialog — name and colour — once it is paired, rather than asking the name before.
+- A phone's frame keeps its top bar below the status bar and its tab bar above the home indicator (`env(safe-area-inset-*)`).
+
+### Removed
+
+- The Windows installer (`install.ps1`, `swcode-setup.exe`): `swcode-desktop.exe` installs itself again, and the pairing number is typed in its own page.
+- The tailnet section of the settings: `tailscale serve` gives swcode an HTTPS address by hand, and the daemon's own route stays for scripts.
+
 ## [0.13.1] - 2026-11-16
 
 ### Fixed

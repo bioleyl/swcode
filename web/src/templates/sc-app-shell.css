@@ -3,8 +3,15 @@
   height: 100dvh;
 }
 
+/*
+ * A phone's status bar and home indicator sit over the page (index.html asks for viewport-fit=cover, without which
+ * these insets are zero): the frame keeps its top bar below the clock and its tab bar above the gesture area.
+ */
 .shell {
+  box-sizing: border-box;
   height: 100%;
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
 }
 
 jl-app-shell {

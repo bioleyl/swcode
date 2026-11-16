@@ -1,4 +1,3 @@
-import type { Tailnet } from '../../../shared/protocol/pairing.schema';
 import type { DaemonState } from '../types/daemon.types';
 
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
@@ -16,15 +15,9 @@ export const reachableBaseOf = (state: DaemonState, pageOrigin: string): string 
 /** Whether an address only works on this computer: the daemon listens there alone. */
 export const isLocalBase = (base: string): boolean => LOCAL_HOSTS.has(new URL(base).hostname);
 
-/**
- * What the tailnet does for a phone, in a line: swcode's HTTPS address there once Tailscale serves it, the address
- * it would have, or why this computer has none.
- */
-export function tailnetLine(tailnet: Tailnet): string {
-  if (!tailnet.available) {
-    return tailnet.problem ?? '';
-  }
-  return tailnet.served
-    ? `swcode is at ${tailnet.address} on your tailnet, over HTTPS: the QR code leads there, and a phone on the tailnet installs swcode from it and reaches it from anywhere.`
-    : `Tailscale can give swcode an HTTPS address on your tailnet, ${tailnet.address}: a phone on the tailnet installs swcode from it, and reaches it from anywhere.`;
-}
+/** The number the phone shows is six digits, as `swcode pair` takes it. */
+export const PAIR_NUMBER_HINT = 'The number the phone shows is six digits.';
+
+/** What the Phone topic says once the number waits here for the phone to take it. */
+export const pairingWaitingText = (number: string, lifetimeMs: number): string =>
+  `Pairing number ${number} waits ${Math.round(lifetimeMs / 60_000)} minutes: the phone takes it, and is paired.`;

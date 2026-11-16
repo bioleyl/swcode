@@ -14,10 +14,66 @@
   color: var(--jl-text-2);
 }
 
-.computers {
+.computers,
+.devices {
   display: flex;
   flex-direction: column;
   gap: var(--jl-space-1);
+}
+
+.none {
+  font-size: 12px;
+  color: var(--jl-muted);
+}
+
+.pair,
+.reach,
+.install,
+.notifications,
+.app {
+  display: flex;
+  flex-direction: column;
+  gap: var(--jl-space-3);
+  padding-top: var(--jl-space-4);
+  border-top: 1px solid var(--jl-line);
+}
+
+.pair-device,
+.install-now,
+.push,
+.app-look {
+  align-self: flex-start;
+}
+
+/* White in both themes: a camera reads a QR code as dark squares on a light ground. */
+.qr {
+  align-self: flex-start;
+  width: 200px;
+  padding: 8px;
+  border-radius: var(--jl-radius);
+  background: #ffffff;
+}
+
+.qr svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.link {
+  overflow-wrap: anywhere;
+  font-family: var(--jl-font-mono);
+  font-size: 12px;
+  color: var(--jl-text-2);
+  user-select: all;
+}
+
+.note {
+  padding: 10px 12px;
+  border-radius: var(--jl-radius);
+  background: var(--jl-danger-soft);
+  font-size: 13px;
+  color: var(--jl-danger);
 }
 
 .command {

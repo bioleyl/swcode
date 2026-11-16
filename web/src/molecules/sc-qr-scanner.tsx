@@ -2,6 +2,7 @@ import { css } from '@jadis/core';
 import { JlAlert, JlButton, JlDialog } from '@syware/jlib';
 
 import { ScElement } from '../base/sc-element';
+import { inAndroidApp } from '../services/native-app';
 import { backCamera, qrReader } from '../services/qr-scan';
 import { BASE_STYLES } from '../styles/shared';
 import styles from './sc-qr-scanner.css?inline';
@@ -11,6 +12,9 @@ import type { CodeDetector } from '../types/qr-scan.types';
 // How often the picture of the camera is read for a code.
 const READ_EVERY_MS = 250;
 const NO_CAMERA = 'The camera could not be used: allow it for this page, or paste the link instead.';
+// In the Android app there is no page to allow: the camera is swcode's own permission, in Android's settings.
+const NO_CAMERA_IN_APP =
+  'The camera could not be used: allow it for swcode in Android’s settings, then try again, or paste the link instead.';
 
 /**
  * Reads a QR code with the device's camera, in a dialog: the code another computer's swcode shows to pair with it.
@@ -67,7 +71,7 @@ export class ScQrScanner extends ScElement {
     this._refs.dialog.show();
     const stream = await backCamera().catch(() => undefined);
     if (!stream) {
-      this.showProblem(NO_CAMERA);
+      this.showProblem(inAndroidApp() ? NO_CAMERA_IN_APP : NO_CAMERA);
       return;
     }
     this._stream = stream;
