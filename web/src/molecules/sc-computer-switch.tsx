@@ -47,6 +47,8 @@ export class ScComputerSwitch extends ScElement {
   private readonly _answers: ComputerAnswers = {
     computers: (answer) => this.renderComputers(answer.computers, answer.current),
     computerUnreachable: (answer) => this.refuse(answer),
+    // Where the app's notifications stand is the settings' business, not the switch's: nothing to draw here.
+    notifications: () => undefined,
   };
 
   private readonly _refs = this.useRefs((ref) => ({

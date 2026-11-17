@@ -44,6 +44,8 @@ const (
 	wmComputerTried = wmApp + 7
 
 	computersFile = "computers.json"
+	// Where the tray's notifications stand, kept between starts.
+	notificationsFile = "notifications.json"
 	// The app told once that it stays in the notification area.
 	trayHintShown = "tray-hint"
 	trayHintTitle = "swcode keeps running"
@@ -186,7 +188,7 @@ func openWindow(d *daemon, first *daemonRun, folders appFolders, opened bool) er
 	}
 	app.tray.add(hwnd)
 	app.display(app.computers.Current())
-	app.notices = newNoticeBoard(hwnd)
+	app.notices = newNoticeBoard(hwnd, filepath.Join(folders.data, notificationsFile))
 	app.notices.follow(protocol.ThisComputer, first.address(), first.token())
 	for _, computer := range app.computers.All() {
 		app.notices.follow(computer.ID, computer.Address, computer.Token)

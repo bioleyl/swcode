@@ -17,13 +17,14 @@ export const PROJECT_TAB_LABELS: Readonly<Record<ProjectTab, { label: string; ic
 export const isProjectTab = (value: string | null | undefined): value is ProjectTab =>
   PROJECT_TABS.some((tab) => tab === value);
 
-/** The Config tab's own tabs, in the order it shows them: the defaults, what the project may do, its schedules. */
-export const CONFIG_TABS = ['defaults', 'permissions', 'schedules'] as const;
+/** The Config tab's own tabs, in the order it shows them: the defaults, what the project may do, its schedules, its notices. */
+export const CONFIG_TABS = ['defaults', 'permissions', 'schedules', 'notifications'] as const;
 export type ConfigTab = (typeof CONFIG_TABS)[number];
 
 /** How each of Config's tabs shows: a new one does not compile until it is here. */
 export const CONFIG_TAB_LABELS: Readonly<Record<ConfigTab, { label: string; icon: IconName }>> = {
   defaults: { icon: 'sliders-horizontal', label: 'Defaults' },
+  notifications: { icon: 'bell', label: 'Notifications' },
   permissions: { icon: 'shield', label: 'Permissions' },
   schedules: { icon: 'refresh', label: 'Schedules' },
 };

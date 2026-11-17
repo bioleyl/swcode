@@ -168,6 +168,8 @@ export class ScComputers extends ScElement {
       // The switch says that computer did not answer; the list says which ones are not reachable.
       askComputers({ type: 'listComputers' });
     },
+    // The app kept the answer: the section reads what it says, not what the press asked for.
+    notifications: () => void this.renderPush(),
   };
 
   private readonly _refs = this.useRefs((ref) => ({
@@ -320,11 +322,11 @@ export class ScComputers extends ScElement {
     this._refs.pairInput.events.register('enter', () => void this.pairDevice());
     this._refs.install.events.register('press', () => void installApp());
     this._refs.push.events.register('press', () => void this.togglePush());
-    // The desktop app is installed already, and tells the person of a session that waits through Windows itself:
-    // its window offers neither an install nor web notifications, which it refuses. The phone app is installed too,
-    // and its WebView has no push service.
+    // The desktop app is installed already, and tells the person of a session that waits through Windows itself: its
+    // window offers neither an install nor web notifications, which it refuses. The phone app is installed too, and
+    // its WebView has no push service, so its section offers Android's own notifications.
     this._refs.installSection.hidden = inDesktopApp() || inAndroidApp();
-    this._refs.notifications.hidden = inDesktopApp() || inAndroidApp();
+    this._refs.notifications.hidden = inDesktopApp();
     // Installed, the app may notify where its page could not (an iPhone).
     this.onBus(installBus, 'changed', () => void this.renderPush());
     this.onBus(installBus, 'changed', () => this.renderInstall());

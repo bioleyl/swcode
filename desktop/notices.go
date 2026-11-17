@@ -25,17 +25,42 @@ type computerNotice struct {
 }
 
 // noticeBoard follows the sessions of every computer the app knows, a socket each, as the web app has: what needs
-// the person comes to the window's thread, which shows it as Windows' notifications.
+// the person comes to the window's thread, which shows it as Windows' notifications. The person turns those
+// notifications on and off for every computer at once; a project that says nothing goes by that answer.
 type noticeBoard struct {
+	file      string
 	hwnd      uintptr
 	mu        sync.Mutex
+	on        bool
 	queue     []computerNotice
 	reachable map[string]bool
+	rules     map[string]*watch.Rules
 	stops     map[string]context.CancelFunc
 }
 
-func newNoticeBoard(hwnd uintptr) *noticeBoard {
-	return &noticeBoard{hwnd: hwnd, reachable: map[string]bool{}, stops: map[string]context.CancelFunc{}}
+func newNoticeBoard(hwnd uintptr, file string) *noticeBoard {
+	return &noticeBoard{
+		file: file, hwnd: hwnd, on: loadNotifications(file),
+		reachable: map[string]bool{}, rules: map[string]*watch.Rules{}, stops: map[string]context.CancelFunc{},
+	}
+}
+
+// setNotifications keeps the person's answer, for every computer the app follows and for the next start.
+func (b *noticeBoard) setNotifications(on bool) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.on = on
+	saveNotifications(b.file, on)
+	for _, rules := range b.rules {
+		rules.SetOff(!on)
+	}
+}
+
+// notifications is where the person left them, on for a app that never was asked.
+func (b *noticeBoard) notifications() bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.on
 }
 
 // follow follows a computer's swcode, in place of what it followed of it before (another port, another token).
@@ -44,8 +69,14 @@ func (b *noticeBoard) follow(computer, address, token string) {
 	ctx, cancel := context.WithCancel(context.Background())
 	b.mu.Lock()
 	b.stops[computer] = cancel
+	rules := b.rules[computer]
+	if rules == nil {
+		rules = watch.NewRules()
+		rules.SetOff(!b.on)
+		b.rules[computer] = rules
+	}
 	b.mu.Unlock()
-	go watch.Follow(ctx, address, token, watch.Handlers{
+	go watch.Follow(ctx, address, token, rules, watch.Handlers{
 		Connected: func(open bool) { b.setReachable(computer, open) },
 		Notice: func(notice watch.Notice) {
 			b.mu.Lock()

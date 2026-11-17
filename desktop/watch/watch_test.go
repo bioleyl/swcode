@@ -88,7 +88,7 @@ func TestFollowingADaemonTellsWhenASessionNeedsItsPersonThenFinishes(t *testing.
 	defer cancel()
 	notices := make(chan watch.Notice, 4)
 	connected := make(chan bool, 4)
-	go watch.Follow(ctx, test.Server.URL, Token, watch.Handlers{
+	go watch.Follow(ctx, test.Server.URL, Token, watch.NewRules(), watch.Handlers{
 		Connected: func(open bool) { connected <- open },
 		Notice:    func(notice watch.Notice) { notices <- notice },
 	})

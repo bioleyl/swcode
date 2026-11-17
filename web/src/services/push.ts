@@ -2,6 +2,9 @@ import { ENDPOINTS } from '../../../shared/protocol/endpoints';
 import { PushKeySchema, PushSubscriptionSchema } from '../../../shared/protocol/pairing.schema';
 import { isAppleMobile, keyBytes } from '../lib/push-view';
 import { jsonOf, request } from './api';
+import { askNotifications, inDesktopApp } from './desktop';
+import { inAndroidApp } from './native-app';
+import { noticesRunning, startNotices, stopNotices } from './native-notifications';
 import { navigate, sessionPath } from './navigation';
 
 import type { PushOutcome, PushState } from '../types/push.types';
@@ -21,6 +24,14 @@ const canPush = (): boolean => 'serviceWorker' in navigator && 'PushManager' in 
 
 /** Where notifications stand on this device. */
 export async function pushState(): Promise<PushState> {
+  // The desktop app's window is not a browser: its tray notifies through Windows, and keeps the answer between starts.
+  if (inDesktopApp()) {
+    return (await askNotifications()) ? 'on' : 'off';
+  }
+  // The phone app is installed already, and its WebView has no push service: Android itself does the notifying.
+  if (inAndroidApp()) {
+    return (await noticesRunning()) ? 'on' : 'off';
+  }
   if (!window.isSecureContext) {
     return 'insecure';
   }
@@ -44,6 +55,13 @@ export async function pushState(): Promise<PushState> {
 
 /** Subscribes this browser to its push service with the daemon's key, and has the daemon keep the subscription. */
 export async function turnPushOn(): Promise<PushOutcome> {
+  if (inDesktopApp()) {
+    await askNotifications(true);
+    return { ok: true };
+  }
+  if (inAndroidApp()) {
+    return startNotices();
+  }
   if ((await Notification.requestPermission()) !== GRANTED) {
     return { ok: false, problem: NOT_ALLOWED };
   }
@@ -70,6 +88,13 @@ export async function turnPushOn(): Promise<PushOutcome> {
 
 /** Has the daemon forget this browser, then the browser let its subscription go. */
 export async function turnPushOff(): Promise<PushOutcome> {
+  if (inDesktopApp()) {
+    await askNotifications(false);
+    return { ok: true };
+  }
+  if (inAndroidApp()) {
+    return stopNotices();
+  }
   const registration = await navigator.serviceWorker.getRegistration();
   const subscription = await registration?.pushManager.getSubscription();
   if (!subscription) {

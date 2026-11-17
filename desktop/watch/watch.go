@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -60,9 +61,69 @@ type Notice struct {
 	Text      string
 }
 
+// Rules says which sessions tell the person: the device's own answer, and what each project chose for it. It lives
+// as long as the app follows a computer, so a socket that connects again keeps the same answer.
+type Rules struct {
+	mu       sync.Mutex
+	off      bool
+	offByKey map[string]bool
+	keyBy    map[string]string
+}
+
+// NewRules makes the device's answer, on for every project until one says otherwise.
+func NewRules() *Rules {
+	return &Rules{offByKey: map[string]bool{}, keyBy: map[string]string{}}
+}
+
+// SetOff turns the device's own answer; a project that says nothing goes by it.
+func (r *Rules) SetOff(off bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.off = off
+}
+
+// SetProjects keeps what each project chose, by its host and folder.
+func (r *Rules) SetProjects(projects []protocol.Project) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	off := map[string]bool{}
+	for _, project := range projects {
+		off[placeOf(project.Host, project.Path)] = project.NotificationsOff
+	}
+	r.offByKey = off
+}
+
+// SetPlace keeps where a session works, which is the project it belongs to.
+func (r *Rules) SetPlace(sessionID, place string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.keyBy[sessionID] = place
+}
+
+// Off says whether a session tells its person: its project's answer, the device's when it belongs to none.
+func (r *Rules) Off(sessionID string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.off {
+		return true
+	}
+	off, known := r.offByKey[r.keyBy[sessionID]]
+	return off && known
+}
+
+// placeOf is a project's host and folder, the pair a session belongs to.
+func placeOf(host protocol.HostRef, path string) string {
+	data, err := json.Marshal(host)
+	if err != nil {
+		return path
+	}
+	return string(data) + "|" + path
+}
+
 // Tracker turns what a daemon's socket says into notices. It keeps what words them: the sessions' titles, their
 // last answers, and their calls, which an approval names; and how many subagents each has at work.
 type Tracker struct {
+	rules     *Rules
 	titles    map[string]string
 	replies   map[string]string
 	calls     map[string]map[string]string
@@ -70,9 +131,23 @@ type Tracker struct {
 }
 
 func NewTracker() *Tracker {
+	return NewTrackerWith(NewRules())
+}
+
+// NewTrackerWith makes a tracker that asks these rules before it tells: the device's answer, and each project's.
+func NewTrackerWith(rules *Rules) *Tracker {
+	if rules == nil {
+		rules = NewRules()
+	}
 	return &Tracker{
+		rules: rules,
 		calls: map[string]map[string]string{}, replies: map[string]string{}, subagents: map[string]int{}, titles: map[string]string{},
 	}
+}
+
+// SetProjects keeps what each project chose, so a session of one is told as that project says.
+func (t *Tracker) SetProjects(projects []protocol.Project) {
+	t.rules.SetProjects(projects)
 }
 
 // Take reads one message of the socket: a notice, when it is one.
@@ -82,9 +157,16 @@ func (t *Tracker) Take(message protocol.ServerMessage) (Notice, bool) {
 		for _, session := range value.Sessions {
 			t.titles[session.ID] = session.Title
 			t.subagents[session.ID] = session.Subagents
+			t.rules.SetPlace(session.ID, placeOf(session.Host, session.Workspace))
 		}
+	case protocol.ServerMessageProjects:
+		t.rules.SetProjects(value.Projects)
 	case protocol.ServerMessageSessionEvent:
-		return t.event(value.SessionID, value.Event)
+		notice, told := t.event(value.SessionID, value.Event)
+		if told && t.rules.Off(value.SessionID) {
+			return Notice{}, false
+		}
+		return notice, told
 	}
 	return Notice{}, false
 }
@@ -202,11 +284,11 @@ type Handlers struct {
 }
 
 // Follow reads the socket of the daemon at address and tells each notice, connecting again when the connection
-// drops, until ctx ends.
-func Follow(ctx context.Context, address, token string, handlers Handlers) {
+// drops, until ctx ends. The rules it asks before telling live across the reconnects.
+func Follow(ctx context.Context, address, token string, rules *Rules, handlers Handlers) {
 	wait := firstRetry
 	for ctx.Err() == nil {
-		if listen(ctx, address, token, handlers) {
+		if listen(ctx, address, token, rules, handlers) {
 			wait = firstRetry
 			handlers.Connected(false)
 		}
@@ -221,7 +303,7 @@ func Follow(ctx context.Context, address, token string, handlers Handlers) {
 
 // listen reads the socket until it closes: false when it could not connect. The daemon speaks first, once it
 // follows its sessions for this socket: the socket counts as open from then on.
-func listen(ctx context.Context, address, token string, handlers Handlers) bool {
+func listen(ctx context.Context, address, token string, rules *Rules, handlers Handlers) bool {
 	target, err := SocketURL(address, token)
 	if err != nil {
 		return false
@@ -232,7 +314,7 @@ func listen(ctx context.Context, address, token string, handlers Handlers) bool 
 	}
 	defer func() { _ = connection.CloseNow() }()
 	connection.SetReadLimit(readLimit)
-	tracker := NewTracker()
+	tracker := NewTrackerWith(rules)
 	_, data, err := connection.Read(ctx)
 	if err != nil {
 		return false

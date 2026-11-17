@@ -277,6 +277,8 @@ export const ClientMessageSchema = z.discriminatedUnion('type', [
   z.object({ projectId: z.string(), trusted: z.boolean(), type: z.literal('setProjectTrust') }),
   // Whether the commands of the project's sessions run in a sandbox, where its host can make one.
   z.object({ on: z.boolean(), projectId: z.string(), type: z.literal('setProjectSandbox') }),
+  // Whether the project's sessions tell the person on the device that shows them: the device's own setting decides.
+  z.object({ on: z.boolean(), projectId: z.string(), type: z.literal('setProjectNotifications') }),
   // Turns one of the skills the project's sessions find on or off for them, from their next turn on.
   z.object({
     name: z.string().min(1),

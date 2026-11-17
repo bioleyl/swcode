@@ -282,6 +282,10 @@ func (h handlers) SetProjectSandbox(message protocol.ClientMessageSetProjectSand
 	return h.problem(h.app.Projects.SetSandbox(message.ProjectID, message.On))
 }
 
+func (h handlers) SetProjectNotifications(message protocol.ClientMessageSetProjectNotifications) struct{} {
+	return h.problem(h.app.Projects.SetNotifications(message.ProjectID, message.On))
+}
+
 func (h handlers) SetProjectAfterEdit(message protocol.ClientMessageSetProjectAfterEdit) struct{} {
 	return h.problem(h.app.Projects.SetAfterEdit(message.ProjectID, message.Command))
 }

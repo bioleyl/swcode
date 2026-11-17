@@ -1,5 +1,6 @@
 package com.bioleyl.swcode;
 
+import android.content.Intent;
 import android.os.Bundle;
 
 import com.getcapacitor.BridgeActivity;
@@ -7,9 +8,17 @@ import com.getcapacitor.BridgeActivity;
 public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle state) {
-        // The page's "Look now" reaches the app's own update check through it.
+        // The page's "Look now" reaches the app's own update check through it, and its notices through Notifier.
         registerPlugin(UpdaterPlugin.class);
+        registerPlugin(NotifierPlugin.class);
         super.onCreate(state);
+    }
+
+    @Override
+    public void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        // A notice tapped while the app ran: the session it opens rides on this intent, until the page takes it.
+        setIntent(intent);
     }
 
     @Override

@@ -47,6 +47,7 @@ import {
   setProjectAfterEdit,
   setProjectTrust,
 } from '../services/project-list';
+import { setProjectNotifications } from '../services/project-notifications';
 import { foundSkills, readProjectSkills, setProjectSkill } from '../services/project-skills';
 import {
   addProjectTodo,
@@ -114,6 +115,8 @@ const AFTER_EDIT_NOTE =
   'A command run in the project’s folder after each file the agent writes or edits: a formatter, a linter, a type check. What it says goes back to the agent with its edit, so it corrects itself without being asked.';
 const AFTER_EDIT_SAVED = 'The check after each edit is saved';
 const AFTER_EDIT_CLEARED = 'No check runs after an edit any more';
+const NOTIFICATIONS_NOTE =
+  'Its sessions tell you on the device that shows them — its desktop app, its phone app, a browser — when one waits for you, ends its turn, or fails. Turn it off for a project that runs in the background, and the device’s own setting decides for it.';
 // A skill's line under its name: where it is, then the start of what it is for.
 const MAX_SKILL_LINE = 100;
 const ELLIPSIS = '…';
@@ -166,6 +169,7 @@ export class ProjectPage extends ScElement {
     empty: ref(JlEmpty),
     list: ref('.sessions'),
     newSession: ref<JlButton>('.new-session'),
+    notifications: ref<JlSwitch>('.notifies'),
     page: ref(JlPage),
     remove: ref<JlButton>('.remove'),
     reset: ref<JlButton>('.reset'),
@@ -270,6 +274,14 @@ export class ProjectPage extends ScElement {
                 icon={CONFIG_TAB_LABELS.schedules.icon}>
                 <ScProjectSchedules />
               </JlTabPanel>
+              <JlTabPanel
+                name="notifications"
+                label={CONFIG_TAB_LABELS.notifications.label}
+                icon={CONFIG_TAB_LABELS.notifications.icon}>
+                <JlCard class="notifications" heading="Notifications" description={NOTIFICATIONS_NOTE}>
+                  <JlSwitch class="notifies" label="Tell me on this device" />
+                </JlCard>
+              </JlTabPanel>
             </JlTabs>
           </JlTabPanel>
           <JlTabPanel name="skills" label={PROJECT_TAB_LABELS.skills.label} icon={PROJECT_TAB_LABELS.skills.icon}>
@@ -310,6 +322,7 @@ export class ProjectPage extends ScElement {
     this._refs.remove.events.register('press', () => askToRemoveProject(this.route.id ?? ''));
     this._refs.trust.events.register('press', () => setProjectTrust(this.route.id ?? '', true));
     this._refs.reset.events.register('press', () => this.saveDefaults(undefined));
+    this._refs.notifications.events.register('change', (on) => setProjectNotifications(this.route.id ?? '', on));
     this._refs.skillsState.events.register('retry', () => this.loadSkills(this.route.id ?? ''));
     this._refs.swcodeBaseInProject.events.register('press', () => void this.changeSwcodeBase('project'));
     this._refs.swcodeBaseInHome.events.register('press', () => void this.changeSwcodeBase('home'));
@@ -377,6 +390,7 @@ export class ProjectPage extends ScElement {
     this._refs.sandbox.project.set(project);
     this._refs.allowed.project.set(project);
     this._refs.schedules.project.set(project);
+    this._refs.notifications.checked.set(project.notificationsOff !== true);
     this.renderTodos(project);
     this.renderSkills(project);
     if (this._skillsOf !== project.id) {
