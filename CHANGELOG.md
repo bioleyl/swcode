@@ -2,6 +2,21 @@
 
 All notable changes to swcode are documented here.
 
+## [0.15.0] - 2026-11-17
+
+### Added
+
+- **Workflows**: a team of sessions, each a named role with its own preset (model pair), its task, and its outputs with the condition for taking each. A step’s session calls `handoff` with its report and the output it takes, so steps pass reports in `.swcode/workflows/<run>/<step>-<n>.md` and may loop back (QA to Dev for a fix, Dev to QA, PO to Dev for the next ticket). Every workflow has a **Start** (whose next step receives the brief) and an **End** (an output leading there finishes the run). A run session shows the live graph, step sessions, status and Stop; the project lists only the run, and removing it removes its step sessions and handoff files.
+- **Workflows page and editor**: create, edit, confirm or remove workflows, global or a project’s, with a `jl-flow` graph; the `workflow` tool lets an agent propose one as a draft, which its person confirms. A new coding session picks a confirmed workflow in its composer, and its first message is the brief.
+- **Settings** in second-level tabs: Models has llm-servers, Image server, Presets and Thinking; Network has MCP servers, SSH and the network config. The Android app gets its own **Updates** tab; its computers list keeps remotes only; Computers shows pairing on top, then the device table, then the address and QR.
+- **Project Config** tabs: Defaults, Permissions, Schedules and Notifications.
+- **Notifications** for the desktop app and the Android app, each on or off per device and per project. The Android app uses a native notification channel and a foreground service so its socket keeps running while the phone sleeps.
+
+### Fixed
+
+- A workflow handoff names an output by its id or its label; the graph keeps each edge on its output, so a step with two outputs shows both connected; a step with outputs must choose one.
+- The e2e rig waits for the daemon’s own “ready” line before a health check, with a timeout on a socket that never answers.
+
 ## [0.14.0] - 2026-11-16
 
 ### Added
