@@ -66,26 +66,38 @@ const fakeDesktopApp = (current = 'local', others: readonly object[] = []): stri
 /** A topic's tab on the settings page, by its label; `selected` the one shown. */
 const topicTab = (page: Page, label: string, selected?: boolean) =>
   page
-    .locator('settings-page jl-tabs')
+    .locator('settings-page jl-page > jl-tabs')
     .getByRole('tab', { exact: true, name: label, ...(selected ? { selected } : {}) });
 
+/** A tab of a topic's own row, under it: the models' four, or the network's three. */
+const subTab = (page: Page, row: '.model-tabs' | '.network-tabs', label: string) =>
+  page.locator(`settings-page ${row}`).getByRole('tab', { exact: true, name: label });
+
+const saveButton = (page: Page) => page.locator('settings-page jl-page > jl-button.save');
+
 describe('settings', () => {
-  it('open on the models, and keep what the form holds from one topic to the other', async () => {
+  it('open on the models, and keep what the form holds from one topic and tab to the other', async () => {
     const rig = await start({ replies: [] });
     const page = await rig.browser.newPage({ viewport: DESKTOP });
     await page.goto(rig.link);
     await settingsLink(page).click();
     await settle(page);
     await topicTab(page, 'Models', true).waitFor();
-    await topicTab(page, 'Pictures').click();
+    // The llm-servers save as they change: Save belongs to the settings file, under its own tabs.
+    expect(await saveButton(page).isHidden()).toBe(true);
+    await subTab(page, '.model-tabs', 'Image server').click();
     await settle(page);
+    expect(await saveButton(page).isVisible()).toBe(true);
     await page.locator('#setting-SWCODE_IMAGE_URL input').fill('http://garfield:8090');
     await topicTab(page, 'Network').click();
+    await settle(page);
+    await subTab(page, '.network-tabs', 'Network').click();
     await settle(page);
     expect(await page.locator('#setting-SWCODE_IMAGE_URL').isHidden()).toBe(true);
     expect(await page.locator('#setting-SWCODE_PORT').isVisible()).toBe(true);
     expect(page.url()).toContain('#/settings/network');
-    await topicTab(page, 'Pictures').click();
+    await topicTab(page, 'Models').click();
+    await subTab(page, '.model-tabs', 'Image server').click();
     await settle(page);
     expect(await page.locator('#setting-SWCODE_IMAGE_URL input').inputValue()).toBe('http://garfield:8090');
   });
@@ -96,11 +108,13 @@ describe('settings', () => {
     await page.goto(rig.link);
     await settingsLink(page).click();
     await settle(page);
-    await topicTab(page, 'SSH').click();
+    await topicTab(page, 'Network').click();
+    await settle(page);
+    await subTab(page, '.network-tabs', 'SSH').click();
     await settle(page);
     const hosts = page.locator('sc-ssh-hosts');
     await hosts.getByText('No SSH host yet', { exact: false }).waitFor();
-    expect(await page.locator('settings-page jl-page > jl-button.save').isHidden()).toBe(true);
+    expect(await saveButton(page).isHidden()).toBe(true);
 
     await hosts.locator('.add').click();
     await settle(page);
@@ -151,6 +165,9 @@ describe('settings', () => {
     await settle(page);
     await editor.locator('.sources jl-list-item', { hasText: 'second' }).waitFor();
 
+    await subTab(page, '.model-tabs', 'Presets').click();
+    await settle(page);
+    await editor.locator('.presets jl-list-item').first().waitFor();
     await editor.locator('.add-preset button').click();
     await settle(page);
     const preset = page.locator('sc-preset-dialog');
@@ -310,6 +327,19 @@ describe('updates', () => {
     expect(await topicTab(page, 'Updates').count()).toBe(0);
     expect(await page.getByText(offer).count()).toBe(0);
   });
+
+  it('are the Android app’s own on a phone, which takes its release from GitHub', async () => {
+    const rig = await start({ replies: [] });
+    const page = await rig.browser.newPage({ viewport: PHONE });
+    // What Capacitor's bridge sets in the Android app, which its core reads as the platform.
+    await page.addInitScript('window.androidBridge = {};');
+    await page.goto(`${rig.link}#/settings/updates`);
+    await topicTab(page, 'Updates', true).waitFor();
+    const app = page.locator('sc-app-update-settings');
+    await app.getByText('Look now', { exact: true }).waitFor();
+    expect(await page.locator('sc-update-settings').count()).toBe(0);
+    expect(await overflow(page)).toBe(0);
+  });
 });
 
 describe('the computer', () => {
@@ -356,6 +386,18 @@ describe('the computer', () => {
     expect(await overflow(phone)).toBe(0);
   });
 
+  it('works only with other computers in the Android app, which has no swcode of its own', async () => {
+    const rig = await start({ replies: [] });
+    const page = await rig.browser.newPage({ viewport: PHONE });
+    // What Capacitor's bridge sets in the Android app, which its core reads as the platform.
+    await page.addInitScript('window.androidBridge = {};');
+    await page.goto(rig.link);
+    const where = page.locator('sc-nav sc-computer-switch');
+    await expect
+      .poll(() => where.locator('jl-select select option').allTextContents())
+      .toEqual(['Manage computers…']);
+  });
+
   it('stays on the one it shows when the computer picked does not answer, and says which', async () => {
     const rig = await start({ replies: [] });
     const page = await rig.browser.newPage({ viewport: DESKTOP });
@@ -379,6 +421,8 @@ describe('pairing a phone', () => {
     await computer.goto(rig.link);
     await settingsLink(computer).click();
     await settle(computer);
+    // Startup goes once the daemon says it cannot: the tabs shift when it does.
+    await topicTab(computer, 'Startup').waitFor({ state: 'detached' });
     await topicTab(computer, 'Computers').click();
     await settle(computer);
     expect(computer.url()).toContain('#/settings/computers');

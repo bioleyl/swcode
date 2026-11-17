@@ -53,7 +53,7 @@ import { searchSessions, sessionSearchBus } from '../services/session-search';
 import { loadStartup } from '../services/startup';
 import { offerSwcodeBase, readSwcodeBase } from '../services/swcode-base';
 import { offerUpdate } from '../services/update-offer';
-import { installsUpdates } from '../services/updates';
+import { offersUpdates } from '../services/updates';
 import { setWorkMode, workMode, workModeBus } from '../services/work-mode';
 import { BASE_STYLES } from '../styles/shared';
 import styles from './sc-app-shell.css?inline';
@@ -293,13 +293,13 @@ export class ScAppShell extends ScElement {
 
   /**
    * The topics only some places have: the other computers in the desktop app, startup where the daemon can, updates
-   * on a computer.
+   * on a computer and in the Android app.
    */
   private offersTopic(topic: SettingsTopic): boolean {
     const offered: Partial<Record<SettingsTopic, () => boolean>> = {
       computers: inDesktopApp,
       startup: () => this._startup,
-      updates: installsUpdates,
+      updates: offersUpdates,
     };
     return offered[topic]?.() ?? true;
   }

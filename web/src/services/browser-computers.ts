@@ -5,9 +5,10 @@ import { BEARER_PREFIX, ENDPOINTS } from '../../../shared/protocol/endpoints';
 import { StatusSchema } from '../../../shared/protocol/messages.schema';
 import { homeToken } from './access';
 import { keepComputers, storedComputers } from './computer-store';
+import { inAndroidApp } from './native-app';
 
 import type { Computer, DesktopAnswer } from '../../../shared/protocol/desktop.schema';
-import type { ComputerRequest, StoredComputer } from '../types/computers.types';
+import type { ComputerRequest, StoredComputer, StoredComputers } from '../types/computers.types';
 
 // How long a computer has to answer before it counts as out of reach.
 const REACH_TIMEOUT_MS = 2000;
@@ -60,6 +61,31 @@ const shownAs = (kept: StoredComputer, reachable: boolean): Computer => ({
   ...(kept.color === undefined ? {} : { color: kept.color }),
 });
 
+/** Whether the page shows the computer that served it: swcode's Android app has no swcode of its own. */
+const showsHome = (): boolean => !inAndroidApp();
+
+/** The addresses the list checks: the page's own computer first, where there is one. */
+const addressesOf = (kept: StoredComputers): string[] => {
+  const others = kept.computers.map((computer) => computer.address);
+  return showsHome() ? [location.origin, ...others] : others;
+};
+
+/** The computers the list holds: the one that served the page, then those kept; on a phone, only the others. */
+const computersOf = (kept: StoredComputers, reached: readonly boolean[]): Computer[] => {
+  const first = showsHome() ? 1 : 0;
+  const others = kept.computers.map((computer, index) => shownAs(computer, reached[index + first] ?? true));
+  return showsHome() ? [homeComputer(reached[0] ?? true), ...others] : others;
+};
+
+/** The computer shown: on a phone, one of the others even when it was swcode's own that was kept. */
+const currentOf = (kept: StoredComputers): string => {
+  if (showsHome()) {
+    return kept.current;
+  }
+  const shown = kept.computers.some((computer) => computer.id === kept.current) ? kept.current : '';
+  return shown || (kept.computers[0]?.id ?? '');
+};
+
 /**
  * The computers, at once as they are kept, then again once each one answered or did not: a page shows its list
  * without waiting for a computer that is off.
@@ -67,17 +93,12 @@ const shownAs = (kept: StoredComputer, reachable: boolean): Computer => ({
 async function list(): Promise<void> {
   const kept = storedComputers();
   const listed = (reached: readonly boolean[]): void =>
-    answer({
-      computers: [
-        homeComputer(reached[0] ?? true),
-        ...kept.computers.map((computer, index) => shownAs(computer, reached[index + 1] ?? true)),
-      ],
-      current: kept.current,
-      type: 'computers',
-    });
+    answer({ computers: computersOf(kept, reached), current: currentOf(kept), type: 'computers' });
   listed([]);
-  home.name ||= await machineName(location.origin, homeToken());
-  listed(await Promise.all([location.origin, ...kept.computers.map((computer) => computer.address)].map(reaches)));
+  if (showsHome()) {
+    home.name ||= await machineName(location.origin, homeToken());
+  }
+  listed(await Promise.all(addressesOf(kept).map(reaches)));
 }
 
 /** The page loads again where the computer now shown answers: another one's sessions and projects are not this one's. */

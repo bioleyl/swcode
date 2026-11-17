@@ -1,5 +1,8 @@
 import type { SettingName } from '../../../shared/protocol/settings.schema';
-import type { SettingsTopic } from '../lib/settings-topics';
+import type { SettingsPane } from '../lib/settings-topics';
+
+/** Which list the models editor shows: the llm-servers, or the presets made from their models. */
+export type ModelEditorKind = 'sources' | 'presets';
 
 /** A choice of a select: the value it saves ('' for the default), and what it says. */
 export interface SettingOption {
@@ -18,9 +21,9 @@ export interface SettingField {
   control: SettingControl;
 }
 
-/** A part of the page: a title, and its settings in order, under one of the page's topics. */
+/** A part of the page: a title, and its settings in order, under one of the page's topics or tabs. */
 export interface SettingSection {
   title: string;
   names: readonly SettingName[];
-  topic: SettingsTopic;
+  pane: SettingsPane;
 }

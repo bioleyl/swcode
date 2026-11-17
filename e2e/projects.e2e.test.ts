@@ -4,7 +4,19 @@ import { basename, join } from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { DESKTOP, GREET, navItem, overflow, PHONE, projectTab, settle, start, stopRigs, tab } from './support.js';
+import {
+  configTab,
+  DESKTOP,
+  GREET,
+  navItem,
+  overflow,
+  PHONE,
+  projectTab,
+  settle,
+  start,
+  stopRigs,
+  tab,
+} from './support.js';
 
 import type { Page } from 'playwright-core';
 import type { E2eRig } from './types/e2e.types.js';
@@ -113,6 +125,8 @@ describe('a project’s check after each edit', () => {
     await settle(page);
     await projectTab(page, 'Config').click();
     await settle(page);
+    await configTab(page, 'Defaults').click();
+    await settle(page);
 
     // The command is typed once, and stays through the page's own redraws and a reload.
     const field = page.locator('project-page .after-edit-input input');
@@ -164,6 +178,8 @@ describe('a project’s rules', () => {
     await settle(page);
     await projectTab(page, 'Config').click();
     await settle(page);
+    await configTab(page, 'Permissions').click();
+    await settle(page);
     const rules = page.locator('sc-project-allowed');
     await rules.locator('.rule .heading').getByText('echo', { exact: true }).waitFor();
     await rules.locator('.rule .remove').click();
@@ -193,6 +209,8 @@ describe('a project’s sandbox', () => {
     await settle(page);
     await projectTab(page, 'Config').click();
     await settle(page);
+    await configTab(page, 'Permissions').click();
+    await settle(page);
 
     const card = page.locator('sc-project-sandbox');
     const toggle = card.locator('.sandboxed').getByRole('switch');
@@ -214,6 +232,8 @@ describe('a project’s sandbox', () => {
     await page.evaluate('0');
     await expect.poll(() => toggle.isChecked()).toBe(false);
     await page.reload();
+    await configTab(page, 'Permissions').click();
+    await settle(page);
     await expect.poll(() => card.locator('.sandboxed').getByRole('switch').isChecked()).toBe(false);
     expect(await overflow(page)).toBe(0);
   });
@@ -273,6 +293,8 @@ describe('a project’s page', () => {
     const page = await openProject(rig);
     await projectTab(page, 'Config').click();
     await settle(page);
+    await configTab(page, 'Defaults').click();
+    await settle(page);
     const card = page.locator('project-page .defaults');
     const reset = page.locator('project-page .reset');
     await card.getByText('until you pick otherwise here', { exact: false }).waitFor();
@@ -303,6 +325,8 @@ describe('a project’s page', () => {
     await navItem(page, basename(rig.workspace)).click();
     await settle(page);
     await projectTab(page, 'Config').click();
+    await settle(page);
+    await configTab(page, 'Defaults').click();
     await settle(page);
     await reset.click();
     await settle(page);

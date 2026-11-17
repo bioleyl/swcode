@@ -7,10 +7,17 @@ import { SETTINGS_SAVED } from '../lib/settings-saved';
 import {
   DEFAULT_SETTINGS_TOPIC,
   isSettingsTopic,
-  MCP_TOPIC,
+  MCP_SETTINGS_TAB,
+  MODEL_SETTINGS_TAB_LABELS,
+  MODEL_SETTINGS_TABS,
+  NETWORK_SETTINGS_TAB_LABELS,
+  NETWORK_SETTINGS_TABS,
+  PRESETS_SETTINGS_TAB,
   SETTINGS_TOPIC_LABELS,
   SETTINGS_TOPICS,
+  SOURCES_SETTINGS_TAB,
 } from '../lib/settings-topics';
+import { ScAppUpdateSettings } from '../organisms/sc-app-update-settings';
 import { ScComputers } from '../organisms/sc-computers';
 import { ScMcpServers } from '../organisms/sc-mcp-servers';
 import { ScModelsEditor } from '../organisms/sc-models-editor';
@@ -19,35 +26,40 @@ import { ScStartupSettings } from '../organisms/sc-startup-settings';
 import { ScUpdateSettings } from '../organisms/sc-update-settings';
 import { daemonBus } from '../services/daemon';
 import { refreshStatus } from '../services/daemon-status';
+import { inAndroidApp } from '../services/native-app';
 import { hrefOf, settingsPath } from '../services/navigation';
 import { confirmRestart, loadSettings, saveSettings } from '../services/settings';
 import { loadStartup } from '../services/startup';
-import { installsUpdates } from '../services/updates';
+import { offersUpdates } from '../services/updates';
 import { BASE_STYLES } from '../styles/shared';
 import styles from './settings-page.css?inline';
 
 import type { SelectOption, Tone } from '@syware/jlib';
 import type { SettingName, SettingsView, SettingValues } from '../../../shared/protocol/settings.schema';
-import type { SettingsTopic } from '../lib/settings-topics';
+import type { IconName } from '../lib/icons';
+import type { ModelSettingsTab, NetworkSettingsTab, SettingsPane, SettingsTopic } from '../lib/settings-topics';
 import type { SettingControl, SettingOption, SettingSection } from '../types/settings.types';
 
 type Control = JlInput | JlSelect;
 
 const APP_NAME = 'swcode';
+const MODELS_TOPIC: SettingsTopic = 'models';
+const NETWORK_TOPIC: SettingsTopic = 'network';
+const PROJECTS_TOPIC: SettingsTopic = 'projects';
+const PROJECTS_PANE: SettingsPane = 'projects';
 const PORT_SETTING: SettingName = 'SWCODE_PORT';
 const DEFAULT_PORT = '4500';
 // A setting left empty takes its default; jlib's select takes an empty value for nothing chosen, so that choice has
 // a value of its own on the page.
 const DEFAULT_CHOICE = 'default';
 const SECRET_TYPE = 'password';
-// The topics the page's form holds, saved together: the others (models, SSH hosts…) save as they change.
-const FILE_TOPICS: ReadonlySet<SettingsTopic> = new Set(SETTING_SECTIONS.map((section) => section.topic));
-// The settings of those topics: the page sends these alone, and the file keeps the others as they are.
+// The settings of the topics and tabs the page's form holds, saved together: the others save as they change.
 const FORM_SETTINGS: readonly SettingName[] = SETTING_SECTIONS.flatMap((section) => section.names);
+const FILE_PANES: ReadonlySet<string> = new Set(SETTING_SECTIONS.map((section) => section.pane));
 
 const toChoice = (value: string): string => (value === '' ? DEFAULT_CHOICE : value);
 const fromChoice = (value: string): string => (value === DEFAULT_CHOICE ? '' : value);
-const choiceOf = (option: SettingOption): SelectOption => ({ label: option.label, value: toChoice(option.value) });
+const choiceOf = (option: SettingOption): SelectOption => ({ label: option.label, value: option.value });
 
 // How each kind of control is made.
 const CONTROLS: {
@@ -73,24 +85,14 @@ const controlOf = (control: SettingControl): Control => controlFrom(control.kind
 
 const controlValue = (control: Control): string => fromChoice(control.value.get().trim());
 
-/** The panels of the topics kept elsewhere than in the settings file, each its own organism. */
-const ORGANISM_PANELS: Readonly<Partial<Record<SettingsTopic, () => Node>>> = {
-  computers: () => <ScComputers />,
-  mcp: () => <ScMcpServers />,
-  models: () => <ScModelsEditor />,
-  ssh: () => <ScSshHosts />,
-  startup: () => <ScStartupSettings />,
-  updates: () => <ScUpdateSettings />,
-};
-
 const portNote = (port: string): string =>
   `Saved. swcode now answers on port ${port}: open http://${location.hostname}:${port}/ (the access token stays).`;
 
 /**
- * The settings of this swcode, a tab for each topic, each with its own address: how much the agents think, where
- * projects go, pictures, how it listens, kept in its settings file and saved together; the llm-servers and the
- * presets, the SSH hosts, the phones, how it starts, the other computers and its updates, each saved as it changes.
- * Saving the file restarts the daemon on it; a setting set in the environment cannot change.
+ * The settings of this swcode, a tab for each topic, each with its own address: the models, their llm-servers, the
+ * picture server, the presets and how much the agents think; where projects go; the MCP servers, the SSH hosts and how
+ * it listens; how it starts, the other computers and its updates. The settings file's topics save together; the others
+ * save as they change. Saving the file restarts the daemon on it; a setting set in the environment cannot change.
  */
 export class SettingsPage extends ScElement {
   static readonly selector = 'settings-page';
@@ -107,12 +109,47 @@ export class SettingsPage extends ScElement {
   });
 
   private readonly _refs = this.useRefs((ref) => ({
-    computers: ref(ScComputers),
     feedback: ref(JlAlert),
     mcp: ref(ScMcpServers),
+    modelTabs: ref<JlTabs>('.model-tabs'),
+    networkTabs: ref<JlTabs>('.network-tabs'),
+    presetsEditor: ref<ScModelsEditor>('.presets-editor'),
     save: ref<JlButton>('.save'),
+    sourcesEditor: ref<ScModelsEditor>('.sources-editor'),
     tabs: ref(JlTabs),
   }));
+
+  /** The tab whose settings file the Save button saves: the topic itself, or the tab of the topic shown. */
+  private readonly _paneOf: Readonly<Partial<Record<SettingsTopic, () => string>>> = {
+    [MODELS_TOPIC]: () => this._refs.modelTabs.value.get(),
+    [NETWORK_TOPIC]: () => this._refs.networkTabs.value.get(),
+    [PROJECTS_TOPIC]: () => PROJECTS_PANE,
+  };
+
+  /** What each topic shows: its settings, or the tabs of the models and the network. */
+  private readonly _topicNodes: Readonly<Record<SettingsTopic, () => Node>> = {
+    computers: () => <ScComputers />,
+    models: () => this.modelsNode(),
+    network: () => this.networkNode(),
+    projects: () => this.filePaneNode(PROJECTS_PANE),
+    startup: () => <ScStartupSettings />,
+    updates: () => (inAndroidApp() ? <ScAppUpdateSettings /> : <ScUpdateSettings />),
+  };
+
+  /** What each tab of the Models topic shows. */
+  private readonly _modelTabNodes: Readonly<Record<ModelSettingsTab, () => Node>> = {
+    'image-server': () => this.filePaneNode('image-server'),
+    'llm-servers': () => <ScModelsEditor class="sources-editor" kind="sources" />,
+    presets: () => <ScModelsEditor class="presets-editor" kind="presets" />,
+    thinking: () => this.filePaneNode('thinking'),
+  };
+
+  /** What each tab of the Network topic shows. */
+  private readonly _networkTabNodes: Readonly<Record<NetworkSettingsTab, () => Node>> = {
+    mcp: () => <ScMcpServers />,
+    network: () => this.filePaneNode('network'),
+    ssh: () => <ScSshHosts />,
+  };
 
   templateHtml(): Node {
     return (
@@ -133,13 +170,15 @@ export class SettingsPage extends ScElement {
 
   onConnect(): void {
     this._refs.tabs.events.register('change', (topic) => this.pickTopic(topic));
+    this._refs.modelTabs.events.register('change', () => this.renderTopic(MODELS_TOPIC));
+    this._refs.networkTabs.events.register('change', () => this.renderTopic(NETWORK_TOPIC));
     this._refs.save.events.register('press', () => void this.save());
     this.onBus(daemonBus, 'online', (online) => {
       if (online && this._restarting) {
         void this.restarted();
       }
     });
-    if (!installsUpdates()) {
+    if (!offersUpdates()) {
       this.panelFor('updates').remove();
     }
     this.renderTopic(this.topicShown());
@@ -148,22 +187,54 @@ export class SettingsPage extends ScElement {
   }
 
   private panelNode(topic: SettingsTopic): Node {
-    const look = SETTINGS_TOPIC_LABELS[topic];
-    const content = ORGANISM_PANELS[topic]?.() ?? this.fileTopicNode(topic);
-    const panel = createElement(JlTabPanel, { props: { icon: look.icon, label: look.label, name: topic } });
-    panel.append(content);
+    const panel = createElement(JlTabPanel, {
+      props: { icon: SETTINGS_TOPIC_LABELS[topic].icon, label: SETTINGS_TOPIC_LABELS[topic].label, name: topic },
+    });
+    panel.append(this._topicNodes[topic]());
     this._panels.set(topic, panel);
     return panel;
   }
 
-  private fileTopicNode(topic: SettingsTopic): Node {
+  /** The Models topic: its llm-servers, its picture server, its presets and how much the agents think. */
+  private modelsNode(): Node {
     return (
-      <div class="file-topic">
+      <JlTabs class="model-tabs" label="Models" value={SOURCES_SETTINGS_TAB}>
+        {MODEL_SETTINGS_TABS.map((tab) =>
+          this.tabNode(tab, MODEL_SETTINGS_TAB_LABELS[tab], this._modelTabNodes[tab]())
+        )}
+      </JlTabs>
+    );
+  }
+
+  /** The Network topic: the MCP servers, the SSH hosts, and how swcode listens. */
+  private networkNode(): Node {
+    return (
+      <JlTabs class="network-tabs" label="Network" value={MCP_SETTINGS_TAB}>
+        {NETWORK_SETTINGS_TABS.map((tab) =>
+          this.tabNode(tab, NETWORK_SETTINGS_TAB_LABELS[tab], this._networkTabNodes[tab]())
+        )}
+      </JlTabs>
+    );
+  }
+
+  private tabNode(
+    name: ModelSettingsTab | NetworkSettingsTab,
+    look: { label: string; icon: IconName },
+    content: Node
+  ): JlTabPanel {
+    const panel = createElement(JlTabPanel, { props: { icon: look.icon, label: look.label, name } });
+    panel.append(content);
+    return panel;
+  }
+
+  private filePaneNode(pane: SettingsPane): Node {
+    return (
+      <div class="file-pane">
         <p class="lead">
           Kept in <code class="file">~/.swcode/settings.env</code>. Saving restarts swcode on them in a few
           seconds; it waits while a session works.
         </p>
-        {SETTING_SECTIONS.filter((section) => section.topic === topic).map((section) => this.sectionNode(section))}
+        {SETTING_SECTIONS.filter((section) => section.pane === pane).map((section) => this.sectionNode(section))}
       </div>
     );
   }
@@ -204,10 +275,15 @@ export class SettingsPage extends ScElement {
     this.renderTopic(topic);
   }
 
-  /** Save is for the settings file: the other topics save as they change. */
+  /** Save is for the settings file: the other topics and tabs save as they change. */
   private renderTopic(topic: SettingsTopic): void {
-    this._refs.save.hidden = !FILE_TOPICS.has(topic);
-    this._refs.mcp.active.set(topic === MCP_TOPIC);
+    const pane = this._paneOf[topic]?.();
+    this._refs.save.hidden = pane === undefined || !FILE_PANES.has(pane);
+    this._refs.mcp.active.set(topic === NETWORK_TOPIC && this._refs.networkTabs.value.get() === MCP_SETTINGS_TAB);
+    // The models' editors read the models while their tab is shown: the other one may have changed them.
+    const modelTab = this._refs.modelTabs.value.get();
+    this._refs.sourcesEditor.active.set(topic === MODELS_TOPIC && modelTab === SOURCES_SETTINGS_TAB);
+    this._refs.presetsEditor.active.set(topic === MODELS_TOPIC && modelTab === PRESETS_SETTINGS_TAB);
   }
 
   private sectionNode(section: SettingSection): Node {

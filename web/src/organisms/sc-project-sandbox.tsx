@@ -19,10 +19,10 @@ const SANDBOX_NOTES = {
 } as const;
 
 /**
- * A project's trust and sandbox, in its Config tab: whether the person trusts its folder (what it says of itself is
- * given to the agent only then), whether its sessions' commands run in a sandbox, which they do unless turned off
- * here, and why they cannot where the project's host makes none. It asks the daemon about the host when the project
- * changes.
+ * A project's trust and sandbox, in its Config › Permissions tab: whether the person trusts its folder (what it says
+ * of itself is given to the agent only then), whether its sessions' commands run in a sandbox, which they do unless
+ * turned off here, and why they cannot where the project's host makes none. It asks the daemon about the host when the
+ * project changes.
  */
 export class ScProjectSandbox extends ScElement {
   static readonly selector = 'sc-project-sandbox';

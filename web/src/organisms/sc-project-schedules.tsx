@@ -26,9 +26,9 @@ const NONE = 'No schedule yet.';
 const PROMPT_PLACEHOLDER = 'Run the tests and fix what fails';
 
 /**
- * A project's schedules, in its Config tab: the sessions it starts by itself, each with when it runs and when it
- * last did, a switch that turns it off, a link to the session it last started and its removal; under them, the form
- * that adds one.
+ * A project's schedules, in its Config › Schedules tab: the sessions it starts by itself, each with when it runs and
+ * when it last did, a switch that turns it off, a link to the session it last started and its removal; under them, the
+ * form that adds one.
  */
 export class ScProjectSchedules extends ScElement {
   static readonly selector = 'sc-project-schedules';

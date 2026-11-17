@@ -3,6 +3,7 @@ import { UpdateInstalledSchema, UpdateViewSchema } from '../../../shared/protoco
 import { isPhone } from '../lib/devices';
 import { jsonOf, request } from './api';
 import { daemonBus } from './daemon';
+import { inAndroidApp } from './native-app';
 
 import type { UpdateInstalled, UpdateView } from '../../../shared/protocol/update.schema';
 
@@ -27,6 +28,9 @@ export const checkNow = async (): Promise<UpdateView | undefined> =>
 
 /** Whether updates are offered and installed here: on a computer, not on a phone. */
 export const installsUpdates = (): boolean => !isPhone(navigator.userAgent);
+
+/** Whether the settings offer updates here: a computer installs swcode itself, the Android app its own release. */
+export const offersUpdates = (): boolean => inAndroidApp() || installsUpdates();
 
 /** Loads the page again once the daemon came back from going away, until the signal aborts. */
 function reloadWhenBack(signal: AbortSignal): void {

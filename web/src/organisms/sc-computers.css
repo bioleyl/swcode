@@ -29,8 +29,7 @@
 .pair,
 .reach,
 .install,
-.notifications,
-.app {
+.notifications {
   display: flex;
   flex-direction: column;
   gap: var(--jl-space-3);
@@ -40,8 +39,7 @@
 
 .pair-device,
 .install-now,
-.push,
-.app-look {
+.push {
   align-self: flex-start;
 }
 

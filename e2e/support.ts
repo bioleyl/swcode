@@ -79,6 +79,10 @@ export const navIconFill = (page: Page, id: string) =>
 export const projectTab = (page: Page, label: string) =>
   page.locator('project-page jl-tabs').getByRole('tab', { exact: true, name: label });
 
+/** A tab of the project's Config, by its label: Defaults, Permissions or Schedules. */
+export const configTab = (page: Page, label: string) =>
+  page.locator('project-page .config-tabs').getByRole('tab', { exact: true, name: label });
+
 /** A tab of a phone's bar under the page, by its label. */
 export const tab = (page: Page, label: string) => page.locator('jl-tab-bar').getByText(label, { exact: true });
 

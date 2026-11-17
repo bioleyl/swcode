@@ -20,17 +20,12 @@ section {
   gap: var(--jl-space-2);
 }
 
-/* A list's title, and the button that adds to it. */
-.head {
+/* A list's add button, at its end. */
+.actions {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: var(--jl-space-3);
-}
-
-h2 {
-  font-size: var(--jl-font-lg);
-  font-weight: 700;
 }
 
 .sources,

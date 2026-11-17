@@ -10,8 +10,8 @@ jl-tab-panel {
   padding-top: var(--jl-space-6);
 }
 
-/* A topic of the settings file: what it is, then its sections, a heading over each. */
-.file-topic {
+/* A pane of the settings file: what it is, then its sections, a heading over each. */
+.file-pane {
   display: flex;
   flex-direction: column;
   gap: var(--jl-space-6);

@@ -15,8 +15,8 @@ const NOTE =
 const NONE = 'Nothing yet.';
 
 /**
- * A project's rules, in its Config tab: the programs and MCP servers its sessions use without asking, each taken
- * back with its button; sessions ask about it again from their next call.
+ * A project's rules, in its Config › Permissions tab: the programs and MCP servers its sessions use without asking,
+ * each taken back with its button; sessions ask about it again from their next call.
  */
 export class ScProjectAllowed extends ScElement {
   static readonly selector = 'sc-project-allowed';

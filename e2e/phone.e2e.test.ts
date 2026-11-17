@@ -44,7 +44,12 @@ describe('on a phone', () => {
     await page.goto(rig.link);
     await tab(page, 'Settings').click();
     await settle(page);
-    await page.locator('settings-page jl-tabs').getByText('Computers', { exact: true }).click();
+    // Startup goes once the daemon says it cannot: the tabs shift when it does.
+    await page
+      .locator('settings-page jl-page > jl-tabs')
+      .getByRole('tab', { name: 'Startup' })
+      .waitFor({ state: 'detached' });
+    await page.locator('settings-page jl-page > jl-tabs').getByText('Computers', { exact: true }).click();
     await settle(page);
     await page.locator('sc-computers').getByText('Add to Home Screen', { exact: false }).waitFor();
     expect(await page.locator('sc-computers .install-now').isHidden()).toBe(true);

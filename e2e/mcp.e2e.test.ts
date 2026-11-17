@@ -25,7 +25,9 @@ const greeterFile = async (): Promise<Readonly<Record<string, string>>> => {
 const openServers = async (page: Page): Promise<void> => {
   await settingsLink(page).click();
   await settle(page);
-  await page.locator('settings-page jl-tabs').getByRole('tab', { exact: true, name: 'MCP servers' }).click();
+  await page.locator('settings-page jl-page > jl-tabs').getByRole('tab', { exact: true, name: 'Network' }).click();
+  await settle(page);
+  await page.locator('settings-page .network-tabs').getByRole('tab', { exact: true, name: 'MCP servers' }).click();
   await settle(page);
 };
 
@@ -38,7 +40,7 @@ describe('MCP servers', () => {
     await openServers(page);
     const panel = page.locator('sc-mcp-servers');
     await panel.getByText('No MCP server is listed yet.', { exact: false }).waitFor();
-    expect(new URL(page.url()).hash).toBe('#/settings/mcp');
+    expect(new URL(page.url()).hash).toBe('#/settings/network');
 
     // The file is written by hand: the daemon reads it again when asked, and reaches the server it now lists.
     const file = String(await panel.locator('.file').textContent());

@@ -17,7 +17,6 @@ import {
 import { COMPUTER_COLORS, ComputerColorSchema, THIS_COMPUTER } from '../../../shared/protocol/desktop.schema';
 import { PAIR_NUMBER_DIGITS } from '../../../shared/protocol/pairing.schema';
 import { ScElement } from '../base/sc-element';
-import { appUpdateNote } from '../lib/app-update';
 import { newPairNumber } from '../lib/pair-number';
 import {
   isLocalBase,
@@ -31,7 +30,6 @@ import { qrElement } from '../lib/qr';
 import { DEFAULT_PORT, pairingOrigin } from '../lib/remote-computers';
 import { ScQrScanner } from '../molecules/sc-qr-scanner';
 import { daemonOrigin } from '../services/access';
-import { checkAppUpdate } from '../services/app-update';
 import { askComputers, onComputersAnswer } from '../services/computers';
 import { daemonState, daemonStatusBus } from '../services/daemon-status';
 import { inDesktopApp } from '../services/desktop';
@@ -94,6 +92,13 @@ const COMPUTER_ACTIONS: MenuItem<ComputerAction>[] = [
 const UNREACHABLE = 'not reachable';
 const CONNECT_LEAD =
   'Add another computer here, then open it to show its swcode: its sessions and projects work on while this one is off, and its sessions notify you here.';
+// What the second tab is, by where the page stands: the Android app has no swcode of its own, only the one it paired
+// with.
+const CONNECT_PANEL_LEAD = {
+  app: 'The window shows swcode on this computer, or on another one paired with this app once. Another computer’s swcode works on while this one is off, and its sessions notify you here.',
+  phone:
+    'The app shows swcode on the computer it is paired with, and on another one paired with it once. Another computer’s swcode works on while the first is off, and its sessions notify you here.',
+} as const;
 // What the form asks for, by who keeps the computers: the desktop app reaches any address, a browser only those its
 // page may talk to.
 const ADDRESS_TEXTS = {
@@ -169,9 +174,6 @@ export class ScComputers extends ScElement {
     add: ref<JlButton>('.add'),
     address: ref<JlInput>('#computer-address'),
     addressField: ref<JlField>('.address-field'),
-    app: ref('.app'),
-    appLine: ref<JlAlert>('.app-line'),
-    appLook: ref<JlButton>('.app-look'),
     cancelWait: ref<JlButton>('.cancel-wait'),
     command: ref('.pair-command'),
     computers: ref('.computers'),
@@ -212,17 +214,6 @@ export class ScComputers extends ScElement {
         <JlTabs label="Devices">
           <JlTabPanel name="connected" icon="laptop" label="Connected devices">
             <p class="lead">{CONNECTED_LEAD}</p>
-            <section class="reach">
-              <h3>Open it on a phone</h3>
-              <p class="lead">
-                Open this address on the phone (its camera reads the code). Its page shows a number: type it below,
-                and the phone is paired.
-              </p>
-              <div class="qr" />
-              <p class="link" />
-              <p class="note" hidden />
-            </section>
-            <div class="devices" />
             <div class="pair">
               <h3>Pair a device</h3>
               <p class="lead">{PAIR_LEAD}</p>
@@ -232,6 +223,7 @@ export class ScComputers extends ScElement {
               <JlButton class="pair-device" variant="primary" label="Pair the device" />
               <JlAlert class="pair-line" hidden />
             </div>
+            <div class="devices" />
             <section class="install" hidden>
               <h3>Install on this device</h3>
               <p class="lead install-line" />
@@ -243,20 +235,19 @@ export class ScComputers extends ScElement {
               <p class="note push-problem" hidden />
               <JlButton class="push" hidden />
             </section>
-            <section class="app" hidden>
-              <h3>This app</h3>
+            <section class="reach">
+              <h3>Open it on a phone</h3>
               <p class="lead">
-                The Android app takes its next release from GitHub. It looks when it comes back; this looks now.
+                Open this address on the phone (its camera reads the code). Its page shows a number: type it here,
+                and the phone is paired.
               </p>
-              <JlButton class="app-look" icon="refresh" label="Look now" />
-              <JlAlert class="app-line" hidden />
+              <div class="qr" />
+              <p class="link" />
+              <p class="note" hidden />
             </section>
           </JlTabPanel>
           <JlTabPanel name="connect" icon="plug" label="Connect a device">
-            <p class="lead">
-              The window shows swcode on this computer, or on another one paired with this app once. Another
-              computer’s swcode works on while this one is off, and its sessions notify you here.
-            </p>
+            <p class="lead">{CONNECT_PANEL_LEAD[inAndroidApp() ? 'phone' : 'app']}</p>
             <div class="computers" />
             <form>
               <h3>Add a computer</h3>
@@ -329,14 +320,11 @@ export class ScComputers extends ScElement {
     this._refs.pairInput.events.register('enter', () => void this.pairDevice());
     this._refs.install.events.register('press', () => void installApp());
     this._refs.push.events.register('press', () => void this.togglePush());
-    this._refs.appLook.events.register('press', () => void this.lookForAppUpdate());
     // The desktop app is installed already, and tells the person of a session that waits through Windows itself:
     // its window offers neither an install nor web notifications, which it refuses. The phone app is installed too,
     // and its WebView has no push service.
     this._refs.installSection.hidden = inDesktopApp() || inAndroidApp();
     this._refs.notifications.hidden = inDesktopApp() || inAndroidApp();
-    // Only the Android app updates itself: its own look is the only one a page can ask for.
-    this._refs.app.hidden = !inAndroidApp();
     // Installed, the app may notify where its page could not (an iPhone).
     this.onBus(installBus, 'changed', () => void this.renderPush());
     this.onBus(installBus, 'changed', () => this.renderInstall());
@@ -605,20 +593,6 @@ export class ScComputers extends ScElement {
     const outcome = await (this._pushState === 'on' ? turnPushOff() : turnPushOn());
     this._refs.push.loading.set(false);
     await this.renderPush(outcome.ok ? '' : outcome.problem);
-  }
-
-  /** Asks the Android app to look for a newer release now, and says what it found under the button. */
-  private async lookForAppUpdate(): Promise<void> {
-    this._refs.appLook.loading.set(true);
-    const update = await checkAppUpdate();
-    this._refs.appLook.loading.set(false);
-    if (!this.isConnected) {
-      return;
-    }
-    const note = appUpdateNote(update);
-    this._refs.appLine.tone.set(note.tone);
-    this._refs.appLine.description.set(note.text);
-    this._refs.appLine.hidden = false;
   }
 
   /** The address a phone opens: this computer's, as the daemon says it is reached. */

@@ -16,7 +16,7 @@ const UNREACHABLE = 'The daemon did not answer.';
 
 /**
  * The settings' Updates: the version that runs, whether swcode looks for a newer one every 10 minutes, looking now,
- * and the newer one found, with what it brings, to install. A computer shows it, not a phone.
+ * and the newer one found, with what it brings, to install. A computer shows it; the Android app has its own.
  */
 export class ScUpdateSettings extends ScElement {
   static readonly selector = 'sc-update-settings';

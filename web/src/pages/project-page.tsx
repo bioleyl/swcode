@@ -22,7 +22,13 @@ import { appDefaults } from '../lib/new-session';
 import { presetOf } from '../lib/presets';
 import { sessionsInProject } from '../lib/project-groups';
 import { isSkillOn, SKILL_ORIGIN_LABELS } from '../lib/project-skills';
-import { DEFAULT_PROJECT_TAB, isProjectTab, PROJECT_TAB_LABELS } from '../lib/project-tabs';
+import {
+  CONFIG_TAB_LABELS,
+  CONFIG_TABS,
+  DEFAULT_PROJECT_TAB,
+  isProjectTab,
+  PROJECT_TAB_LABELS,
+} from '../lib/project-tabs';
 import { isSwcodeBaseIn } from '../lib/swcode-base';
 import { ScSessionChoices } from '../molecules/sc-session-choices';
 import { ScSessionRow } from '../molecules/sc-session-row';
@@ -126,9 +132,9 @@ class Unread extends Error {}
 
 /**
  * A project, where its folder is, in tabs each with its own address: its sessions, the newest first, each with its
- * delete button; what its new sessions start with (its preset, permissions, thinking and token economy), saved as
- * they are picked; the skills its sessions find, each turned on or off for them with its switch, and swcode-base,
- * put in the project or in the home.
+ * delete button; what its new sessions start with and the check after an edit, what the folder may do, and the
+ * schedules it starts itself, in three tabs of its config; the skills its sessions find, each turned on or off for
+ * them with its switch, and swcode-base, put in the project or in the home.
  */
 export class ProjectPage extends ScElement {
   static readonly selector = 'project-page';
@@ -222,26 +228,49 @@ export class ProjectPage extends ScElement {
             </JlCard>
           </JlTabPanel>
           <JlTabPanel name="config" label={PROJECT_TAB_LABELS.config.label} icon={PROJECT_TAB_LABELS.config.icon}>
-            <JlCard class="defaults" heading="New sessions start with">
-              <ScSessionChoices />
-              <JlButton class="reset" variant="ghost" size="sm" icon="refresh" label="Use the app’s defaults" />
-            </JlCard>
-            <JlCard class="after-edit" heading="After each edit" description={AFTER_EDIT_NOTE}>
-              <form class="after-edit-form">
-                <JlField label="Command" hint="{file} stands for the file the agent wrote. Empty for none.">
-                  <JlInput
-                    class="after-edit-input"
-                    autocomplete="off"
-                    placeholder="npx biome check --write {file}"
-                    maxlength={String(MAX_AFTER_EDIT)}
+            <JlTabs class="config-tabs" label="Config" value={CONFIG_TABS[0]}>
+              <JlTabPanel
+                name="defaults"
+                label={CONFIG_TAB_LABELS.defaults.label}
+                icon={CONFIG_TAB_LABELS.defaults.icon}>
+                <JlCard class="defaults" heading="New sessions start with">
+                  <ScSessionChoices />
+                  <JlButton
+                    class="reset"
+                    variant="ghost"
+                    size="sm"
+                    icon="refresh"
+                    label="Use the app’s defaults"
                   />
-                </JlField>
-                <JlButton type="submit" label="Save" />
-              </form>
-            </JlCard>
-            <ScProjectSandbox />
-            <ScProjectAllowed />
-            <ScProjectSchedules />
+                </JlCard>
+                <JlCard class="after-edit" heading="After each edit" description={AFTER_EDIT_NOTE}>
+                  <form class="after-edit-form">
+                    <JlField label="Command" hint="{file} stands for the file the agent wrote. Empty for none.">
+                      <JlInput
+                        class="after-edit-input"
+                        autocomplete="off"
+                        placeholder="npx biome check --write {file}"
+                        maxlength={String(MAX_AFTER_EDIT)}
+                      />
+                    </JlField>
+                    <JlButton type="submit" label="Save" />
+                  </form>
+                </JlCard>
+              </JlTabPanel>
+              <JlTabPanel
+                name="permissions"
+                label={CONFIG_TAB_LABELS.permissions.label}
+                icon={CONFIG_TAB_LABELS.permissions.icon}>
+                <ScProjectSandbox />
+                <ScProjectAllowed />
+              </JlTabPanel>
+              <JlTabPanel
+                name="schedules"
+                label={CONFIG_TAB_LABELS.schedules.label}
+                icon={CONFIG_TAB_LABELS.schedules.icon}>
+                <ScProjectSchedules />
+              </JlTabPanel>
+            </JlTabs>
           </JlTabPanel>
           <JlTabPanel name="skills" label={PROJECT_TAB_LABELS.skills.label} icon={PROJECT_TAB_LABELS.skills.icon}>
             <div class="side">
