@@ -2,6 +2,12 @@
 
 All notable changes to swcode are documented here.
 
+## [0.15.1] - 2026-11-17
+
+### Fixed
+
+- The Android app builds again, so `swcode-android.apk` and its checksum come with the release: the notifier declares `POST_NOTIFICATIONS` as `@Permission(strings = …)` and asks for it through Capacitor's permission callback while `start` brings the service to Android's front, and the service imports `NotificationChannel` for its channel. v0.15.0's release had no APK.
+
 ## [0.15.0] - 2026-11-17
 
 ### Added
