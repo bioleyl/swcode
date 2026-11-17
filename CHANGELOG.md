@@ -2,6 +2,12 @@
 
 All notable changes to swcode are documented here.
 
+## [0.15.2] - 2026-11-17
+
+### Fixed
+
+- The picture server takes at most 32,000 characters of a prompt: `image` and `draw` now refuse a longer one before asking, and say how long it is.
+
 ## [0.15.1] - 2026-11-17
 
 ### Fixed

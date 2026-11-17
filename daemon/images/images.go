@@ -27,7 +27,9 @@ const (
 	editsPath       = "/v1/images/edits"
 	referenceField  = "image[]"
 	// A picture takes about a minute, several references a few: well under this.
-	drawTimeout     = 10 * time.Minute
+	drawTimeout = 10 * time.Minute
+	// maxPromptChars is what the picture server takes of a prompt.
+	maxPromptChars  = 32_000
 	maxProblemChars = 200
 )
 
@@ -165,6 +167,9 @@ func requestOf(ctx context.Context, serverURL string, draw DrawRequest) (*http.R
 
 // DrawPicture asks a stable-diffusion.cpp sd-server for one picture, as a PNG.
 func DrawPicture(ctx context.Context, serverURL string, draw DrawRequest, client *http.Client) DrawOutcome {
+	if chars := len([]rune(draw.Prompt)); chars > maxPromptChars {
+		return DrawOutcome{Problem: fmt.Sprintf("The prompt is %d characters: the picture server takes at most %d.", chars, maxPromptChars)}
+	}
 	ctx, cancel := context.WithTimeout(ctx, drawTimeout)
 	defer cancel()
 	request, err := requestOf(ctx, serverURL, draw)
