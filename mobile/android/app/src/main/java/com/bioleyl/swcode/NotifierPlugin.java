@@ -62,14 +62,41 @@ public class NotifierPlugin extends Plugin {
 
     /** What a tap left behind: the session to open, empty once the page took it. */
     @PluginMethod
-    public void takeSession(PluginCall call) {
-        Intent intent = getActivity().getIntent();
+    public void takeSession(PluginCall call) {        Intent intent = getActivity().getIntent();
         String sessionId = intent == null ? "" : intent.getStringExtra(SESSION);
         JSObject answer = new JSObject();
         answer.put("sessionId", sessionId == null ? "" : sessionId);
         if (sessionId != null && !sessionId.isEmpty()) {
             intent.removeExtra(SESSION);
         }
+        call.resolve(answer);
+    }
+
+    /** Keeps the phone awake for the sessions: Android runs the service at its front until the page stops it. */
+    @PluginMethod
+    public void start(PluginCall call) {
+        Context context = getActivity();
+        requestPermissions();
+        Intent intent = new Intent(context, NotifierService.class);
+        if (Build.VERSION.SDK_INT >= 26) {
+            context.startForegroundService(intent);
+        } else {
+            context.startService(intent);
+        }
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void stop(PluginCall call) {
+        getActivity().stopService(new Intent(getActivity(), NotifierService.class));
+        call.resolve();
+    }
+
+    /** Whether the app is kept at the front of Android's list, which the settings' button reads. */
+    @PluginMethod
+    public void status(PluginCall call) {
+        JSObject answer = new JSObject();
+        answer.put("running", NotifierService.isRunning());
         call.resolve(answer);
     }
 

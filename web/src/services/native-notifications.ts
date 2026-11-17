@@ -6,18 +6,20 @@ import { inAndroidApp } from './native-app';
 import { navigate, sessionPath } from './navigation';
 
 import type { Notice } from '../lib/notice-tracker';
+import type { PushOutcome } from '../types/push.types';
 
-// The Android app asks its own permission once, and keeps telling after that: what the person picks in Android's
-// settings is what the app finds again, so nothing of it is kept here.
-const PERMISSION = 'notifications';
 // The app shows again: Android hands over the session a notification tapped while it slept.
 const RESUME = 'resume';
 const VISIBLE = 'visible';
+const NO_SERVICE = 'Android did not take the app to its front: the phone is not kept awake.';
 
 /** The Android app's own plugin (mobile/android/app/src/main/java/com/bioleyl/swcode/NotifierPlugin.java). */
 const Notifier = registerPlugin<{
-  requestPermissions(): Promise<Partial<Record<typeof PERMISSION, string>>>;
-  show(notice: { body: string; sessionId: string; title: string }): Promise<void>;
+  requestPermissions(): Promise<unknown>;
+  start(): Promise<unknown>;
+  status(): Promise<{ running?: boolean }>;
+  stop(): Promise<unknown>;
+  show(notice: { body: string; sessionId: string; title: string }): Promise<unknown>;
   takeSession(): Promise<{ sessionId?: string }>;
 }>('Notifier');
 
@@ -33,13 +35,14 @@ export function notify(notice: Notice): void {
 
 /**
  * Follows the daemon's socket and notifies this phone through Android, for the app that has no web push service: the
- * same notices the desktop app's tray shows. A tap on one opens the session it came from.
+ * same notices the desktop app's tray shows. A tap on one opens the session it came from, and the app goes to
+ * Android's front so the phone keeps being told while it sleeps.
  */
 export function followNotices(signal: AbortSignal): void {
   if (!inAndroidApp()) {
     return;
   }
-  void Notifier.requestPermissions().catch(() => undefined);
+  void startNotices();
   const tracker = new NoticeTracker();
   daemonBus.register(
     'message',
@@ -58,6 +61,30 @@ export function followNotices(signal: AbortSignal): void {
   };
   document.addEventListener('visibilitychange', opened, { signal });
   window.addEventListener(RESUME, opened, { signal });
+}
+
+/** Whether Android keeps the app at its front, which is what a sleeping phone is told by. */
+export async function noticesRunning(): Promise<boolean> {
+  const status = await Notifier.status().catch(() => undefined);
+  return status?.running === true;
+}
+
+/** Goes to Android's front, and asks its notification permission with it. */
+export async function startNotices(): Promise<PushOutcome> {
+  const started = await Notifier.start().then(
+    () => true,
+    () => false
+  );
+  return started ? { ok: true } : { ok: false, problem: NO_SERVICE };
+}
+
+/** Lets Android freeze the app again: fewer notices, a phone that sleeps deeper. */
+export async function stopNotices(): Promise<PushOutcome> {
+  const stopped = await Notifier.stop().then(
+    () => true,
+    () => false
+  );
+  return stopped ? { ok: true } : { ok: false, problem: NO_SERVICE };
 }
 
 /** The session the last tapped notification named, once the app is back to the front. */
