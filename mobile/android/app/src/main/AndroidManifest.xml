@@ -52,6 +52,11 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <!-- The app tells the person through Android itself (NotifierPlugin): on Android 13+ this is what Android asks. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <!-- Its service at the front of Android's list, which keeps the daemon's socket alive while the phone sleeps. -->
+    <!-- Its service at the front of Android's list, which keeps the daemon's socket alive while the phone sleeps.
+         Android 14+ refuses to bring a connectedDevice service to the front without its own permission, and throws
+         SecurityException from the service when it is missing, which takes the whole app down as it opens. That
+         type also needs one of its prerequisites granted: the socket's network one, which Android grants itself. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+    <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
 </manifest>

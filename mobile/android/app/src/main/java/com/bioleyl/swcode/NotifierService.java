@@ -8,6 +8,7 @@ import android.content.Intent;
 import android.content.pm.ServiceInfo;
 import android.os.Build;
 import android.os.IBinder;
+import android.util.Log;
 
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationManagerCompat;
@@ -24,6 +25,7 @@ public class NotifierService extends Service {
 
     private static final int ONGOING = 1;
     private static final String CHANNEL = "swcode-background";
+    private static final String TAG = "swcode";
 
     /** Whether the phone is kept awake for swcode's sessions, which the settings' button shows. */
     public static boolean isRunning() {
@@ -56,8 +58,15 @@ public class NotifierService extends Service {
             .setContentText("Watches your sessions on this computer")
             .setContentIntent(tap)
             .setOngoing(true);
-        // The type tells Android the socket goes to a device of the network, which is what keeps it running.
-        ServiceCompat.startForeground(this, ONGOING, notice.build(), ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE);
+        // The type tells Android the socket goes to a device of the network, which is what keeps it running. A device
+        // that refuses it anyway (an Android version whose rules the manifest does not meet, an OEM's own) throws
+        // here, and an uncaught throw would take the app down as it opens: the notices go, the app stays.
+        try {
+            ServiceCompat.startForeground(this, ONGOING, notice.build(), ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE);
+        } catch (RuntimeException refused) {
+            Log.w(TAG, "Android did not take the notice service to its front", refused);
+            stopSelf();
+        }
         return START_STICKY;
     }
 

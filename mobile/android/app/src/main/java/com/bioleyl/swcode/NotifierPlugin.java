@@ -80,10 +80,16 @@ public class NotifierPlugin extends Plugin {
     public void start(PluginCall call) {
         Context context = getActivity();
         Intent intent = new Intent(context, NotifierService.class);
-        if (Build.VERSION.SDK_INT >= 26) {
-            context.startForegroundService(intent);
-        } else {
-            context.startService(intent);
+        try {
+            if (Build.VERSION.SDK_INT >= 26) {
+                context.startForegroundService(intent);
+            } else {
+                context.startService(intent);
+            }
+        } catch (RuntimeException refused) {
+            // The page says the phone is not kept awake instead of the app going down with Android's refusal.
+            call.reject("Android did not take the app to its front", refused);
+            return;
         }
         requestAllPermissions(call, PERMISSIONS_ASKED);
     }
