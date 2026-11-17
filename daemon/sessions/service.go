@@ -534,6 +534,27 @@ func (s *Service) Remove(sessionID string) string {
 	})
 }
 
+// RemoveRun removes a workflow's run session and every step session of it, when none works: its record and handoff
+// files are the app's.
+func (s *Service) RemoveRun(runID string) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	found := []*live{}
+	for _, session := range s.sessions {
+		if session.meta.WorkflowRunID == runID {
+			if working(session) {
+				return stillWorking
+			}
+			found = append(found, session)
+		}
+	}
+	for _, session := range found {
+		s.forget(session)
+	}
+	s.publishSessions()
+	return ""
+}
+
 // forget deletes a session: its files, its pictures, and its scratch folder on its host when the host answers.
 func (s *Service) forget(session *live) {
 	delete(s.sessions, session.meta.ID)

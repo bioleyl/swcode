@@ -24,6 +24,8 @@ export class ScSessionRow extends ScElement {
   readonly session = this.useChange<SessionSummary | undefined>(undefined, (session) => this.render(session));
   /** Whether the row has its delete button. */
   readonly removable = this.useChange(false, () => this.render(this.session.get()));
+  /** Whether a workflow run's step session works: its run cannot be deleted until it stops. */
+  readonly workflowBusy = this.useChange(false, () => this.render(this.session.get()));
 
   private readonly _refs = this.useRefs((ref) => ({
     badge: ref(JlBadge),
@@ -63,9 +65,12 @@ export class ScSessionRow extends ScElement {
     this._refs.row.href.set(hrefOf(sessionPath(session.id)));
     this._refs.badge.showStatus(SESSION_STATUS_LOOKS[liveStatus(session)]);
     const remove = this._refs.remove;
+    const busy = this.workflowBusy.get();
     remove.hidden = !this.removable.get();
-    remove.disabled.set(!canDeleteSession(session));
-    remove.hint.set(deleteHintOf(session));
+    remove.disabled.set(!canDeleteSession(session) || busy);
+    remove.hint.set(
+      busy ? 'A step of this workflow is working: stop it before deleting it' : deleteHintOf(session)
+    );
   }
 }
 

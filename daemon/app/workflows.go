@@ -478,6 +478,20 @@ func (a *App) startWorkflowRun(ctx context.Context, message protocol.ClientMessa
 	return runSession, ""
 }
 
+// forgetWorkflowRun removes a run's record and its handoff files: its sessions are removed before, by RemoveRun.
+func (a *App) forgetWorkflowRun(runID string) {
+	if run, ok := a.Workflows.Run(runID); ok {
+		if project, found := a.Projects.ByID(run.ProjectID); found {
+			host := a.hosts.HostOf(project.Host)
+			folder := host.Paths().Join(project.Path, workflowHandoffFolder, workflowHandoffs, run.ID)
+			if err := host.RemoveFolder(context.Background(), folder); err != nil {
+				a.logger.Warn("a run's handoff folder could not be removed", "problem", err.Error(), "run", run.ID)
+			}
+		}
+	}
+	_ = a.Workflows.ForgetRun(runID)
+}
+
 // stopWorkflowRun stops a run's step at work and starts no other.
 func (a *App) stopWorkflowRun(runID string) {
 	a.workflowRuns.stop(runID)

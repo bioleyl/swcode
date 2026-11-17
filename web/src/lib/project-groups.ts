@@ -34,7 +34,8 @@ export const sessionInProject = (project: Pick<Project, 'host' | 'path'>, sessio
 export const sessionsInProject = (
   project: Pick<Project, 'host' | 'path'>,
   sessions: readonly SessionSummary[]
-): SessionSummary[] => sessions.filter((session) => sessionInProject(project, session));
+): SessionSummary[] =>
+  sessions.filter((session) => sessionInProject(project, session) && session.workflowStepId === undefined);
 
 const groupOf = (project: Project, sessions: readonly SessionSummary[]): ProjectGroup => ({
   host: project.host,

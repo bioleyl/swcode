@@ -29,6 +29,7 @@ import {
   isProjectTab,
   PROJECT_TAB_LABELS,
 } from '../lib/project-tabs';
+import { liveStatus } from '../lib/session-status';
 import { isSwcodeBaseIn } from '../lib/swcode-base';
 import { ScSessionChoices } from '../molecules/sc-session-choices';
 import { ScSessionRow } from '../molecules/sc-session-row';
@@ -588,7 +589,16 @@ export class ProjectPage extends ScElement {
 
   /** A session's row, its delete button asking first: a jl-* event does not bubble, so each row has its own. */
   private rowOf(session: SessionSummary): Node {
-    const row = createElement(ScSessionRow, { props: { removable: true, session } });
+    const workflowBusy =
+      session.workflowRunId !== undefined
+      && session.workflowStepId === undefined
+      && allSessions().some(
+        (other) =>
+          other.workflowRunId === session.workflowRunId
+          && other.workflowStepId !== undefined
+          && liveStatus(other) !== 'idle'
+      );
+    const row = createElement(ScSessionRow, { props: { removable: true, session, workflowBusy } });
     row.events.register('remove', (removed) => void deleteSession(removed));
     return row;
   }

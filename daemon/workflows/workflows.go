@@ -244,6 +244,19 @@ func (s *Service) Run(id string) (protocol.WorkflowRun, bool) {
 	return protocol.WorkflowRun{}, false
 }
 
+// ForgetRun removes a run from the list: its sessions and handoff files are removed by the app.
+func (s *Service) ForgetRun(id string) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	index := slices.IndexFunc(s.runs, func(run protocol.WorkflowRun) bool { return run.ID == id })
+	if index < 0 {
+		return unknownRun
+	}
+	s.runs = slices.Delete(s.runs, index, index+1)
+	s.change()
+	return ""
+}
+
 // StopRun marks a run stopped: the runner stops its running step and starts no other.
 func (s *Service) StopRun(id string) string {
 	s.mu.Lock()

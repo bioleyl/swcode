@@ -208,6 +208,16 @@ func (h handlers) linkPinnedTodos(session protocol.SessionSummary, todoIDs []str
 }
 
 func (h handlers) DeleteSession(message protocol.ClientMessageDeleteSession) struct{} {
+	for _, session := range h.app.Sessions.List() {
+		if session.ID != message.SessionID || session.WorkflowRunID == "" || session.WorkflowStepID != "" {
+			continue
+		}
+		if problem := h.app.Sessions.RemoveRun(session.WorkflowRunID); problem != "" {
+			return h.problem(problem)
+		}
+		h.app.forgetWorkflowRun(session.WorkflowRunID)
+		return struct{}{}
+	}
 	return h.problem(h.app.Sessions.Remove(message.SessionID))
 }
 
@@ -316,6 +326,16 @@ func (h handlers) ConfirmWorkflow(message protocol.ClientMessageConfirmWorkflow)
 }
 
 func (h handlers) RemoveWorkflow(message protocol.ClientMessageRemoveWorkflow) struct{} {
+	_, runs := h.app.Workflows.List()
+	for _, run := range runs {
+		if run.WorkflowID != message.WorkflowID {
+			continue
+		}
+		if problem := h.app.Sessions.RemoveRun(run.ID); problem != "" {
+			return h.problem(problem)
+		}
+		h.app.forgetWorkflowRun(run.ID)
+	}
 	return h.problem(h.app.Workflows.Remove(message.WorkflowID))
 }
 

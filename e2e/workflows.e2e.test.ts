@@ -3,7 +3,7 @@ import { basename, join } from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { DESKTOP, settle, start, stopRigs } from './support.js';
+import { DESKTOP, navItem, settle, start, stopRigs } from './support.js';
 
 import type { Page } from 'playwright-core';
 import type { E2eRig } from './types/e2e.types.js';
@@ -187,5 +187,21 @@ describe('a workflow that loops', () => {
       .join('\n');
     expect(reports).toContain('Fix the null check');
     expect(reports).toContain('Validated: all tickets are done.');
+
+    // The project lists only the run session; its step sessions are under it, not rows of their own.
+    await navItem(page, basename(rig.workspace)).click();
+    await settle(page);
+    const rows = page.locator('project-page sc-session-row');
+    const runRow = rows.filter({ hasText: 'Workflow · Team loop' });
+    await runRow.waitFor();
+    expect(await rows.filter({ hasText: 'QA' }).count()).toBe(0);
+
+    // Removing the run removes its step sessions and their handoff files.
+    await runRow.getByRole('button', { name: 'Delete this session' }).click();
+    await settle(page);
+    await page.locator('jl-confirm').getByRole('button', { name: 'Delete' }).click();
+    await settle(page);
+    await expect.poll(() => rows.filter({ hasText: 'Workflow · Team loop' }).count()).toBe(0);
+    expect(readdirSync(join(rig.workspace, '.swcode', 'workflows'))).toHaveLength(0);
   });
 });

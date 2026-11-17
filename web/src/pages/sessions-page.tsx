@@ -59,7 +59,7 @@ export class SessionsPage extends ScElement {
   }
 
   private render(): void {
-    const sessions = allSessions();
+    const sessions = allSessions().filter((session) => session.workflowStepId === undefined);
     const statuses = [...SESSION_STATUSES].sort((first, second) => GROUP_ORDER[first] - GROUP_ORDER[second]);
     this._refs.groups.replaceChildren(
       ...statuses.flatMap((status) =>
