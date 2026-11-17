@@ -18,6 +18,17 @@
   height: 100%;
 }
 
+/* The header and the run above the conversation: one row of the column, so the conversation keeps its own. */
+.top {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.top sc-workflow-run {
+  margin: var(--jl-space-4) 32px 0;
+}
+
 /* One row at any width: the path gives way first, then the title; the buttons keep their size. */
 header {
   display: flex;

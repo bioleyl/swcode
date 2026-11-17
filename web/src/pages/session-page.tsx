@@ -22,6 +22,7 @@ import { ScPlan } from '../organisms/sc-plan';
 import { ScReview } from '../organisms/sc-review';
 import { ScSidePanel } from '../organisms/sc-side-panel';
 import { ScTerminal } from '../organisms/sc-terminal';
+import { ScWorkflowRun } from '../organisms/sc-workflow-run';
 import { daemon, daemonBus } from '../services/daemon';
 import { daemonState, daemonStatusBus } from '../services/daemon-status';
 import { navigate, newPathOf } from '../services/navigation';
@@ -243,23 +244,27 @@ export class SessionPage extends ScElement {
     terminal: ref(ScTerminal),
     title: ref(ScTitle),
     todos: ref(ScSessionTodos),
+    workflowRun: ref(ScWorkflowRun),
   }));
 
   templateHtml(): Node {
     return (
       <>
         <div class="column">
-          <header>
-            <ScTitle />
-            <JlBadge class="status" />
-            <span class="chip">
-              <JlIcon name="laptop" size={14} />
-              <span class="path" />
-            </span>
-            <JlButton class="review" icon="file-diff" variant="ghost" size="sm" hint={REVIEW_HINT} hidden />
-            <JlButton class="delete" icon="trash" variant="ghost" size="sm" hidden />
-            <JlButton class="panel-toggle" variant="ghost" size="sm" />
-          </header>
+          <div class="top">
+            <header>
+              <ScTitle />
+              <JlBadge class="status" />
+              <span class="chip">
+                <JlIcon name="laptop" size={14} />
+                <span class="path" />
+              </span>
+              <JlButton class="review" icon="file-diff" variant="ghost" size="sm" hint={REVIEW_HINT} hidden />
+              <JlButton class="delete" icon="trash" variant="ghost" size="sm" hidden />
+              <JlButton class="panel-toggle" variant="ghost" size="sm" />
+            </header>
+            <ScWorkflowRun />
+          </div>
           <ScConversation />
           <ScTerminal />
           <JlAlert tone="danger" hidden />
@@ -758,6 +763,11 @@ export class SessionPage extends ScElement {
     this._refs.composer.thinking.set(session?.thinking ?? 'full');
     this._refs.composer.preset.set(session?.preset ?? '');
     this._refs.composer.concise.set(session?.concise ?? false);
+    // A run's own session works on no role: the graph says what its steps do, and a message would start a turn of
+    // its own. A step's session keeps its composer.
+    const runController = session?.workflowRunId !== undefined && session.workflowStepId === undefined;
+    this._refs.composer.hidden = runController;
+    this._refs.workflowRun.runId.set(runController ? (session?.workflowRunId ?? '') : '');
     this.renderDaemon();
     const live = session ? liveStatus(session) : 'idle';
     this._refs.composer.working.set(live !== 'idle');

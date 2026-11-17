@@ -68,10 +68,10 @@ func TestTheRepositorysNotesComeBeforeTheFoldersOwn(t *testing.T) {
 
 func TestTheNotesAreReadAgainAfterACompaction(t *testing.T) {
 	test := Start(t, Options{
-		// The system prompt, the tools and the notes take about 5,700 tokens, and the read adds about 6,100 more:
+		// The system prompt, the tools and the notes take about 8,000 tokens, and the read adds about 12,200 more:
 		// the window sits between the two, so the turn compacts after the read, not before it.
-		ContextTokens: 8000,
-		Files:         map[string]string{"AGENTS.md": buildNotes, "big.txt": strings.Repeat(strings.Repeat("x", 60)+"\n", 300)},
+		ContextTokens: 14_000,
+		Files:         map[string]string{"AGENTS.md": buildNotes, "big.txt": strings.Repeat(strings.Repeat("x", 60)+"\n", 600)},
 		Replies:       []fakellama.Reply{call("read", map[string]any{"path": "big.txt"}), text("Lines of x.")},
 		Scripts:       map[string][]fakellama.Reply{summaryRequest: {text("The user asked what big.txt holds.")}},
 	})

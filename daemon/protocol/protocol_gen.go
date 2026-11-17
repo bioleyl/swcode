@@ -37,6 +37,28 @@ const MaxSchedulePrompt = 2000
 
 const MaxTodoText = 500
 
+const MaxWorkflows = 100
+
+const MaxWorkflowBrief = 20000
+
+const MaxWorkflowDescription = 2000
+
+const MaxWorkflowEdges = 100
+
+const MaxWorkflowExits = 10
+
+const MaxWorkflowName = 80
+
+const MaxWorkflowPrompt = 8000
+
+const MaxWorkflowRole = 8000
+
+const MaxWorkflowRuns = 50
+
+const MaxWorkflowSteps = 50
+
+const MaxWorkflowStepName = 60
+
 var SkillOrigins = []SkillOrigin{SkillOriginPersonal, SkillOriginProject}
 
 var DiffLineKinds = []DiffLineKind{DiffLineKindAdd, DiffLineKindRemove, DiffLineKindContext, DiffLineKindGap}
@@ -51,7 +73,7 @@ var SessionKinds = []SessionKind{SessionKindCode, SessionKindChat}
 
 var SessionStatuses = []SessionStatus{SessionStatusIdle, SessionStatusWorking, SessionStatusWaiting}
 
-var ToolNames = []ToolName{ToolNameRead, ToolNameWrite, ToolNameEdit, ToolNameBash, ToolNameGrep, ToolNameGlob, ToolNameAgent, ToolNamePlan, ToolNameQuestion, ToolNameWebsearch, ToolNameWebfetch, ToolNameImage, ToolNameDraw, ToolNameOutput, ToolNameKill, ToolNameTerminal, ToolNameReadterminal, ToolNameSkill, ToolNameNotes, ToolNameTodo, ToolNameClosetodo, ToolNameSaveskill, ToolNameScreenshot, ToolNameMcp}
+var ToolNames = []ToolName{ToolNameRead, ToolNameWrite, ToolNameEdit, ToolNameBash, ToolNameGrep, ToolNameGlob, ToolNameAgent, ToolNamePlan, ToolNameQuestion, ToolNameWebsearch, ToolNameWebfetch, ToolNameImage, ToolNameDraw, ToolNameOutput, ToolNameKill, ToolNameTerminal, ToolNameReadterminal, ToolNameSkill, ToolNameNotes, ToolNameTodo, ToolNameClosetodo, ToolNameWorkflow, ToolNameHandoff, ToolNameSaveskill, ToolNameScreenshot, ToolNameMcp}
 
 var TurnOutcomes = []TurnOutcome{TurnOutcomeDone, TurnOutcomeStopped, TurnOutcomeFailed, TurnOutcomeLimit}
 
@@ -119,9 +141,11 @@ var pattern1 = regexp.MustCompile("^[A-Za-z0-9+/]+={0,2}$")
 
 var pattern2 = regexp.MustCompile("^([01]\\d|2[0-3]):[0-5]\\d$")
 
-var pattern3 = regexp.MustCompile("^[^/\\\\]+$")
+var pattern3 = regexp.MustCompile("^[A-Za-z0-9_-]+$")
 
-var pattern4 = regexp.MustCompile("^\\d{6}$")
+var pattern4 = regexp.MustCompile("^[^/\\\\]+$")
+
+var pattern5 = regexp.MustCompile("^\\d{6}$")
 
 type PermissionMode string
 
@@ -203,6 +227,45 @@ const (
 func (v ScheduleEvery) Valid() bool {
 	switch v {
 	case ScheduleEveryHour, ScheduleEveryDay, ScheduleEveryWeek:
+		return true
+	}
+	return false
+}
+
+type WorkflowRunStatus string
+
+const (
+	WorkflowRunStatusRunning WorkflowRunStatus = "running"
+	WorkflowRunStatusWaiting WorkflowRunStatus = "waiting"
+	WorkflowRunStatusDone    WorkflowRunStatus = "done"
+	WorkflowRunStatusFailed  WorkflowRunStatus = "failed"
+	WorkflowRunStatusStopped WorkflowRunStatus = "stopped"
+)
+
+// Valid tells whether v is one of the WorkflowRunStatus values.
+func (v WorkflowRunStatus) Valid() bool {
+	switch v {
+	case WorkflowRunStatusRunning, WorkflowRunStatusWaiting, WorkflowRunStatusDone, WorkflowRunStatusFailed, WorkflowRunStatusStopped:
+		return true
+	}
+	return false
+}
+
+type WorkflowStepStatus string
+
+const (
+	WorkflowStepStatusPending WorkflowStepStatus = "pending"
+	WorkflowStepStatusRunning WorkflowStepStatus = "running"
+	WorkflowStepStatusWaiting WorkflowStepStatus = "waiting"
+	WorkflowStepStatusDone    WorkflowStepStatus = "done"
+	WorkflowStepStatusFailed  WorkflowStepStatus = "failed"
+	WorkflowStepStatusStopped WorkflowStepStatus = "stopped"
+)
+
+// Valid tells whether v is one of the WorkflowStepStatus values.
+func (v WorkflowStepStatus) Valid() bool {
+	switch v {
+	case WorkflowStepStatusPending, WorkflowStepStatusRunning, WorkflowStepStatusWaiting, WorkflowStepStatusDone, WorkflowStepStatusFailed, WorkflowStepStatusStopped:
 		return true
 	}
 	return false
@@ -299,6 +362,8 @@ const (
 	ToolNameNotes        ToolName = "notes"
 	ToolNameTodo         ToolName = "todo"
 	ToolNameClosetodo    ToolName = "closetodo"
+	ToolNameWorkflow     ToolName = "workflow"
+	ToolNameHandoff      ToolName = "handoff"
 	ToolNameSaveskill    ToolName = "saveskill"
 	ToolNameScreenshot   ToolName = "screenshot"
 	ToolNameMcp          ToolName = "mcp"
@@ -307,7 +372,7 @@ const (
 // Valid tells whether v is one of the ToolName values.
 func (v ToolName) Valid() bool {
 	switch v {
-	case ToolNameRead, ToolNameWrite, ToolNameEdit, ToolNameBash, ToolNameGrep, ToolNameGlob, ToolNameAgent, ToolNamePlan, ToolNameQuestion, ToolNameWebsearch, ToolNameWebfetch, ToolNameImage, ToolNameDraw, ToolNameOutput, ToolNameKill, ToolNameTerminal, ToolNameReadterminal, ToolNameSkill, ToolNameNotes, ToolNameTodo, ToolNameClosetodo, ToolNameSaveskill, ToolNameScreenshot, ToolNameMcp:
+	case ToolNameRead, ToolNameWrite, ToolNameEdit, ToolNameBash, ToolNameGrep, ToolNameGlob, ToolNameAgent, ToolNamePlan, ToolNameQuestion, ToolNameWebsearch, ToolNameWebfetch, ToolNameImage, ToolNameDraw, ToolNameOutput, ToolNameKill, ToolNameTerminal, ToolNameReadterminal, ToolNameSkill, ToolNameNotes, ToolNameTodo, ToolNameClosetodo, ToolNameWorkflow, ToolNameHandoff, ToolNameSaveskill, ToolNameScreenshot, ToolNameMcp:
 		return true
 	}
 	return false
@@ -925,6 +990,309 @@ func (v *ProjectTodo) Normalize() error {
 type SandboxView struct {
 	Available bool   `json:"available"`
 	Problem   string `json:"problem,omitempty"`
+}
+
+type WorkflowDraft struct {
+	Description string         `json:"description"`
+	Draft       bool           `json:"draft"`
+	Edges       []WorkflowEdge `json:"edges"`
+	Name        string         `json:"name"`
+	ProjectID   string         `json:"projectId,omitempty"`
+	Steps       []WorkflowStep `json:"steps"`
+}
+
+func (v WorkflowDraft) MarshalJSON() ([]byte, error) {
+	type plain WorkflowDraft
+	p := plain(v)
+	if p.Edges == nil {
+		p.Edges = []WorkflowEdge{}
+	}
+	if p.Steps == nil {
+		p.Steps = []WorkflowStep{}
+	}
+	return json.Marshal(p)
+}
+
+func (v *WorkflowDraft) UnmarshalJSON(data []byte) error {
+	type plain WorkflowDraft
+	p := plain{Description: "", Draft: false, Edges: []WorkflowEdge{}, Steps: []WorkflowStep{}}
+	if err := json.Unmarshal(data, &p); err != nil {
+		return err
+	}
+	*v = WorkflowDraft(p)
+	return v.Normalize()
+}
+
+// Normalize trims and checks what the app sent, as its schema does.
+func (v *WorkflowDraft) Normalize() error {
+	v.Description = strings.TrimSpace(v.Description)
+	if utf8.RuneCountInString(v.Description) > 2000 {
+		return fmt.Errorf("%s: at most 2000 characters", "description")
+	}
+	if len(v.Edges) > 100 {
+		return fmt.Errorf("%s: at most 100", "edges")
+	}
+	v.Name = strings.TrimSpace(v.Name)
+	if utf8.RuneCountInString(v.Name) < 1 {
+		return fmt.Errorf("%s: must not be empty", "name")
+	}
+	if utf8.RuneCountInString(v.Name) > 80 {
+		return fmt.Errorf("%s: at most 80 characters", "name")
+	}
+	if len(v.Steps) > 50 {
+		return fmt.Errorf("%s: at most 50", "steps")
+	}
+	return nil
+}
+
+type WorkflowEdge struct {
+	From string `json:"from"`
+	ID   string `json:"id"`
+	Port string `json:"port,omitempty"`
+	To   string `json:"to"`
+}
+
+type WorkflowStep struct {
+	Exits    []WorkflowExit `json:"exits"`
+	ID       string         `json:"id"`
+	Name     string         `json:"name"`
+	Position WorkflowPoint  `json:"position"`
+	Preset   string         `json:"preset,omitempty"`
+	Prompt   string         `json:"prompt"`
+	Role     string         `json:"role"`
+}
+
+func (v WorkflowStep) MarshalJSON() ([]byte, error) {
+	type plain WorkflowStep
+	p := plain(v)
+	if p.Exits == nil {
+		p.Exits = []WorkflowExit{}
+	}
+	return json.Marshal(p)
+}
+
+func (v *WorkflowStep) UnmarshalJSON(data []byte) error {
+	type plain WorkflowStep
+	p := plain{Exits: []WorkflowExit{}}
+	if err := json.Unmarshal(data, &p); err != nil {
+		return err
+	}
+	*v = WorkflowStep(p)
+	return v.Normalize()
+}
+
+// Normalize trims and checks what the app sent, as its schema does.
+func (v *WorkflowStep) Normalize() error {
+	if len(v.Exits) > 10 {
+		return fmt.Errorf("%s: at most 10", "exits")
+	}
+	v.ID = strings.TrimSpace(v.ID)
+	if utf8.RuneCountInString(v.ID) < 1 {
+		return fmt.Errorf("%s: must not be empty", "id")
+	}
+	if utf8.RuneCountInString(v.ID) > 80 {
+		return fmt.Errorf("%s: at most 80 characters", "id")
+	}
+	if !pattern3.MatchString(v.ID) {
+		return fmt.Errorf("%s: %s", "id", "letters, digits, - and _")
+	}
+	v.Name = strings.TrimSpace(v.Name)
+	if utf8.RuneCountInString(v.Name) < 1 {
+		return fmt.Errorf("%s: must not be empty", "name")
+	}
+	if utf8.RuneCountInString(v.Name) > 60 {
+		return fmt.Errorf("%s: at most 60 characters", "name")
+	}
+	v.Prompt = strings.TrimSpace(v.Prompt)
+	if utf8.RuneCountInString(v.Prompt) < 1 {
+		return fmt.Errorf("%s: must not be empty", "prompt")
+	}
+	if utf8.RuneCountInString(v.Prompt) > 8000 {
+		return fmt.Errorf("%s: at most 8000 characters", "prompt")
+	}
+	v.Role = strings.TrimSpace(v.Role)
+	if utf8.RuneCountInString(v.Role) > 8000 {
+		return fmt.Errorf("%s: at most 8000 characters", "role")
+	}
+	return nil
+}
+
+type WorkflowExit struct {
+	ID    string `json:"id"`
+	Label string `json:"label"`
+	When  string `json:"when"`
+}
+
+func (v *WorkflowExit) UnmarshalJSON(data []byte) error {
+	type plain WorkflowExit
+	p := plain{}
+	if err := json.Unmarshal(data, &p); err != nil {
+		return err
+	}
+	*v = WorkflowExit(p)
+	return v.Normalize()
+}
+
+// Normalize trims and checks what the app sent, as its schema does.
+func (v *WorkflowExit) Normalize() error {
+	v.ID = strings.TrimSpace(v.ID)
+	if utf8.RuneCountInString(v.ID) < 1 {
+		return fmt.Errorf("%s: must not be empty", "id")
+	}
+	if utf8.RuneCountInString(v.ID) > 80 {
+		return fmt.Errorf("%s: at most 80 characters", "id")
+	}
+	if !pattern3.MatchString(v.ID) {
+		return fmt.Errorf("%s: %s", "id", "letters, digits, - and _")
+	}
+	v.Label = strings.TrimSpace(v.Label)
+	if utf8.RuneCountInString(v.Label) < 1 {
+		return fmt.Errorf("%s: must not be empty", "label")
+	}
+	if utf8.RuneCountInString(v.Label) > 60 {
+		return fmt.Errorf("%s: at most 60 characters", "label")
+	}
+	v.When = strings.TrimSpace(v.When)
+	if utf8.RuneCountInString(v.When) < 1 {
+		return fmt.Errorf("%s: must not be empty", "when")
+	}
+	if utf8.RuneCountInString(v.When) > 8000 {
+		return fmt.Errorf("%s: at most 8000 characters", "when")
+	}
+	return nil
+}
+
+type WorkflowPoint struct {
+	X float64 `json:"x"`
+	Y float64 `json:"y"`
+}
+
+type WorkflowRun struct {
+	Brief        string            `json:"brief"`
+	CreatedAt    string            `json:"createdAt"`
+	ID           string            `json:"id"`
+	Problem      string            `json:"problem,omitempty"`
+	ProjectID    string            `json:"projectId"`
+	SessionID    string            `json:"sessionId"`
+	Status       WorkflowRunStatus `json:"status"`
+	Steps        []WorkflowRunStep `json:"steps"`
+	UpdatedAt    string            `json:"updatedAt"`
+	WorkflowID   string            `json:"workflowId"`
+	WorkflowName string            `json:"workflowName"`
+}
+
+func (v WorkflowRun) MarshalJSON() ([]byte, error) {
+	type plain WorkflowRun
+	p := plain(v)
+	if p.Steps == nil {
+		p.Steps = []WorkflowRunStep{}
+	}
+	return json.Marshal(p)
+}
+
+func (v *WorkflowRun) UnmarshalJSON(data []byte) error {
+	type plain WorkflowRun
+	p := plain{Status: "running"}
+	if err := json.Unmarshal(data, &p); err != nil {
+		return err
+	}
+	*v = WorkflowRun(p)
+	return v.Normalize()
+}
+
+// Normalize trims and checks what the app sent, as its schema does.
+func (v *WorkflowRun) Normalize() error {
+	if utf8.RuneCountInString(v.Brief) > 20000 {
+		return fmt.Errorf("%s: at most 20000 characters", "brief")
+	}
+	if !v.Status.Valid() {
+		return fmt.Errorf("%s: unknown value %q", "status", v.Status)
+	}
+	return nil
+}
+
+type WorkflowRunStep struct {
+	FinishedAt string             `json:"finishedAt,omitempty"`
+	Handoff    string             `json:"handoff,omitempty"`
+	Name       string             `json:"name"`
+	SessionID  string             `json:"sessionId,omitempty"`
+	StartedAt  string             `json:"startedAt,omitempty"`
+	Status     WorkflowStepStatus `json:"status"`
+	StepID     string             `json:"stepId"`
+}
+
+func (v *WorkflowRunStep) UnmarshalJSON(data []byte) error {
+	type plain WorkflowRunStep
+	p := plain{Status: "pending"}
+	if err := json.Unmarshal(data, &p); err != nil {
+		return err
+	}
+	*v = WorkflowRunStep(p)
+	return v.Normalize()
+}
+
+// Normalize trims and checks what the app sent, as its schema does.
+func (v *WorkflowRunStep) Normalize() error {
+	if !v.Status.Valid() {
+		return fmt.Errorf("%s: unknown value %q", "status", v.Status)
+	}
+	return nil
+}
+
+type Workflow struct {
+	CreatedAt   string         `json:"createdAt"`
+	Description string         `json:"description"`
+	Draft       bool           `json:"draft"`
+	Edges       []WorkflowEdge `json:"edges"`
+	ID          string         `json:"id"`
+	Name        string         `json:"name"`
+	ProjectID   string         `json:"projectId,omitempty"`
+	Steps       []WorkflowStep `json:"steps"`
+	UpdatedAt   string         `json:"updatedAt"`
+}
+
+func (v Workflow) MarshalJSON() ([]byte, error) {
+	type plain Workflow
+	p := plain(v)
+	if p.Edges == nil {
+		p.Edges = []WorkflowEdge{}
+	}
+	if p.Steps == nil {
+		p.Steps = []WorkflowStep{}
+	}
+	return json.Marshal(p)
+}
+
+func (v *Workflow) UnmarshalJSON(data []byte) error {
+	type plain Workflow
+	p := plain{Description: "", Draft: false, Edges: []WorkflowEdge{}, Steps: []WorkflowStep{}}
+	if err := json.Unmarshal(data, &p); err != nil {
+		return err
+	}
+	*v = Workflow(p)
+	return v.Normalize()
+}
+
+// Normalize trims and checks what the app sent, as its schema does.
+func (v *Workflow) Normalize() error {
+	v.Description = strings.TrimSpace(v.Description)
+	if utf8.RuneCountInString(v.Description) > 2000 {
+		return fmt.Errorf("%s: at most 2000 characters", "description")
+	}
+	if len(v.Edges) > 100 {
+		return fmt.Errorf("%s: at most 100", "edges")
+	}
+	v.Name = strings.TrimSpace(v.Name)
+	if utf8.RuneCountInString(v.Name) < 1 {
+		return fmt.Errorf("%s: must not be empty", "name")
+	}
+	if utf8.RuneCountInString(v.Name) > 80 {
+		return fmt.Errorf("%s: at most 80 characters", "name")
+	}
+	if len(v.Steps) > 50 {
+		return fmt.Errorf("%s: at most 50", "steps")
+	}
+	return nil
 }
 
 type ProjectSkill struct {
@@ -2128,25 +2496,27 @@ type SessionPin struct {
 }
 
 type SessionSummary struct {
-	Branch     string              `json:"branch,omitempty"`
-	Concise    bool                `json:"concise"`
-	Host       HostRef             `json:"host"`
-	ID         string              `json:"id"`
-	Jobs       []SessionSummaryJob `json:"jobs"`
-	Kind       SessionKind         `json:"kind"`
-	Mode       PermissionMode      `json:"mode"`
-	Pins       []SessionPin        `json:"pins"`
-	Preset     string              `json:"preset,omitempty"`
-	Queued     []string            `json:"queued"`
-	QueuedNow  bool                `json:"queuedNow"`
-	SeenAt     string              `json:"seenAt,omitempty"`
-	Status     SessionStatus       `json:"status"`
-	Subagents  int                 `json:"subagents"`
-	Thinking   ThinkingMode        `json:"thinking"`
-	Title      string              `json:"title"`
-	UpdatedAt  string              `json:"updatedAt"`
-	Workspace  string              `json:"workspace"`
-	WorktreeOf string              `json:"worktreeOf,omitempty"`
+	Branch         string              `json:"branch,omitempty"`
+	Concise        bool                `json:"concise"`
+	Host           HostRef             `json:"host"`
+	ID             string              `json:"id"`
+	Jobs           []SessionSummaryJob `json:"jobs"`
+	Kind           SessionKind         `json:"kind"`
+	Mode           PermissionMode      `json:"mode"`
+	Pins           []SessionPin        `json:"pins"`
+	Preset         string              `json:"preset,omitempty"`
+	Queued         []string            `json:"queued"`
+	QueuedNow      bool                `json:"queuedNow"`
+	SeenAt         string              `json:"seenAt,omitempty"`
+	Status         SessionStatus       `json:"status"`
+	Subagents      int                 `json:"subagents"`
+	Thinking       ThinkingMode        `json:"thinking"`
+	Title          string              `json:"title"`
+	UpdatedAt      string              `json:"updatedAt"`
+	WorkflowRunID  string              `json:"workflowRunId,omitempty"`
+	WorkflowStepID string              `json:"workflowStepId,omitempty"`
+	Workspace      string              `json:"workspace"`
+	WorktreeOf     string              `json:"worktreeOf,omitempty"`
 }
 
 func (v SessionSummary) MarshalJSON() ([]byte, error) {
@@ -2299,6 +2669,14 @@ func (ClientMessageAddProjectSchedule) isClientMessage() {}
 func (ClientMessageSetProjectScheduleOn) isClientMessage() {}
 
 func (ClientMessageRemoveProjectSchedule) isClientMessage() {}
+
+func (ClientMessageSaveWorkflow) isClientMessage() {}
+
+func (ClientMessageConfirmWorkflow) isClientMessage() {}
+
+func (ClientMessageRemoveWorkflow) isClientMessage() {}
+
+func (ClientMessageStopWorkflowRun) isClientMessage() {}
 
 func (ClientMessageAddProjectTodo) isClientMessage() {}
 
@@ -2605,6 +2983,30 @@ func (u *ClientMessage) UnmarshalJSON(data []byte) error {
 			return err
 		}
 		u.Value = value
+	case "\"saveWorkflow\"":
+		var value ClientMessageSaveWorkflow
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
+	case "\"confirmWorkflow\"":
+		var value ClientMessageConfirmWorkflow
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
+	case "\"removeWorkflow\"":
+		var value ClientMessageRemoveWorkflow
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
+	case "\"stopWorkflowRun\"":
+		var value ClientMessageStopWorkflowRun
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
 	case "\"addProjectTodo\"":
 		var value ClientMessageAddProjectTodo
 		if err := json.Unmarshal(data, &value); err != nil {
@@ -2701,6 +3103,10 @@ type ClientMessageMapper[R any] interface {
 	AddProjectSchedule(ClientMessageAddProjectSchedule) R
 	SetProjectScheduleOn(ClientMessageSetProjectScheduleOn) R
 	RemoveProjectSchedule(ClientMessageRemoveProjectSchedule) R
+	SaveWorkflow(ClientMessageSaveWorkflow) R
+	ConfirmWorkflow(ClientMessageConfirmWorkflow) R
+	RemoveWorkflow(ClientMessageRemoveWorkflow) R
+	StopWorkflowRun(ClientMessageStopWorkflowRun) R
 	AddProjectTodo(ClientMessageAddProjectTodo) R
 	SetProjectTodoDone(ClientMessageSetProjectTodoDone) R
 	SetProjectTodoText(ClientMessageSetProjectTodoText) R
@@ -2805,6 +3211,14 @@ func MapClientMessage[R any](u ClientMessage, m ClientMessageMapper[R]) R {
 		return m.SetProjectScheduleOn(value)
 	case ClientMessageRemoveProjectSchedule:
 		return m.RemoveProjectSchedule(value)
+	case ClientMessageSaveWorkflow:
+		return m.SaveWorkflow(value)
+	case ClientMessageConfirmWorkflow:
+		return m.ConfirmWorkflow(value)
+	case ClientMessageRemoveWorkflow:
+		return m.RemoveWorkflow(value)
+	case ClientMessageStopWorkflowRun:
+		return m.StopWorkflowRun(value)
 	case ClientMessageAddProjectTodo:
 		return m.AddProjectTodo(value)
 	case ClientMessageSetProjectTodoDone:
@@ -2834,6 +3248,7 @@ type ClientMessageCreateSession struct {
 	Preset        string          `json:"preset,omitempty"`
 	Prompt        string          `json:"prompt,omitempty"`
 	Thinking      ThinkingMode    `json:"thinking,omitempty"`
+	WorkflowID    string          `json:"workflowId,omitempty"`
 	Workspace     string          `json:"workspace,omitempty"`
 	Worktree      bool            `json:"worktree,omitempty"`
 }
@@ -3805,7 +4220,7 @@ func (v *ClientMessageCreateProject) Normalize() error {
 	if utf8.RuneCountInString(v.NewFolder) > 255 {
 		return fmt.Errorf("%s: at most 255 characters", "newFolder")
 	}
-	if v.NewFolder != "" && !pattern3.MatchString(v.NewFolder) {
+	if v.NewFolder != "" && !pattern4.MatchString(v.NewFolder) {
 		return fmt.Errorf("%s: %s", "newFolder", "a folder name, without / or \\")
 	}
 	return nil
@@ -4048,6 +4463,59 @@ func (v ClientMessageRemoveProjectSchedule) MarshalJSON() ([]byte, error) {
 	}{"removeProjectSchedule", p})
 }
 
+type ClientMessageSaveWorkflow struct {
+	ID       string        `json:"id,omitempty"`
+	Workflow WorkflowDraft `json:"workflow"`
+}
+
+func (v ClientMessageSaveWorkflow) MarshalJSON() ([]byte, error) {
+	type plain ClientMessageSaveWorkflow
+	p := plain(v)
+	return json.Marshal(struct {
+		Key string `json:"type"`
+		plain
+	}{"saveWorkflow", p})
+}
+
+type ClientMessageConfirmWorkflow struct {
+	WorkflowID string `json:"workflowId"`
+}
+
+func (v ClientMessageConfirmWorkflow) MarshalJSON() ([]byte, error) {
+	type plain ClientMessageConfirmWorkflow
+	p := plain(v)
+	return json.Marshal(struct {
+		Key string `json:"type"`
+		plain
+	}{"confirmWorkflow", p})
+}
+
+type ClientMessageRemoveWorkflow struct {
+	WorkflowID string `json:"workflowId"`
+}
+
+func (v ClientMessageRemoveWorkflow) MarshalJSON() ([]byte, error) {
+	type plain ClientMessageRemoveWorkflow
+	p := plain(v)
+	return json.Marshal(struct {
+		Key string `json:"type"`
+		plain
+	}{"removeWorkflow", p})
+}
+
+type ClientMessageStopWorkflowRun struct {
+	RunID string `json:"runId"`
+}
+
+func (v ClientMessageStopWorkflowRun) MarshalJSON() ([]byte, error) {
+	type plain ClientMessageStopWorkflowRun
+	p := plain(v)
+	return json.Marshal(struct {
+		Key string `json:"type"`
+		plain
+	}{"stopWorkflowRun", p})
+}
+
 type ClientMessageAddProjectTodo struct {
 	ProjectID string `json:"projectId"`
 	Text      string `json:"text"`
@@ -4244,6 +4712,8 @@ func (ServerMessagePeekDelta) isServerMessage() {}
 
 func (ServerMessageProjects) isServerMessage() {}
 
+func (ServerMessageWorkflows) isServerMessage() {}
+
 func (ServerMessageTerminals) isServerMessage() {}
 
 func (ServerMessageTerminalOpened) isServerMessage() {}
@@ -4365,6 +4835,12 @@ func (u *ServerMessage) UnmarshalJSON(data []byte) error {
 			return err
 		}
 		u.Value = value
+	case "\"workflows\"":
+		var value ServerMessageWorkflows
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
 	case "\"terminals\"":
 		var value ServerMessageTerminals
 		if err := json.Unmarshal(data, &value); err != nil {
@@ -4453,6 +4929,7 @@ type ServerMessageMapper[R any] interface {
 	PeekState(ServerMessagePeekState) R
 	PeekDelta(ServerMessagePeekDelta) R
 	Projects(ServerMessageProjects) R
+	Workflows(ServerMessageWorkflows) R
 	Terminals(ServerMessageTerminals) R
 	TerminalOpened(ServerMessageTerminalOpened) R
 	TerminalOutput(ServerMessageTerminalOutput) R
@@ -4497,6 +4974,8 @@ func MapServerMessage[R any](u ServerMessage, m ServerMessageMapper[R]) R {
 		return m.PeekDelta(value)
 	case ServerMessageProjects:
 		return m.Projects(value)
+	case ServerMessageWorkflows:
+		return m.Workflows(value)
 	case ServerMessageTerminals:
 		return m.Terminals(value)
 	case ServerMessageTerminalOpened:
@@ -4801,6 +5280,26 @@ func (v ServerMessageProjects) MarshalJSON() ([]byte, error) {
 		Key string `json:"type"`
 		plain
 	}{"projects", p})
+}
+
+type ServerMessageWorkflows struct {
+	Runs      []WorkflowRun `json:"runs"`
+	Workflows []Workflow    `json:"workflows"`
+}
+
+func (v ServerMessageWorkflows) MarshalJSON() ([]byte, error) {
+	type plain ServerMessageWorkflows
+	p := plain(v)
+	if p.Runs == nil {
+		p.Runs = []WorkflowRun{}
+	}
+	if p.Workflows == nil {
+		p.Workflows = []Workflow{}
+	}
+	return json.Marshal(struct {
+		Key string `json:"type"`
+		plain
+	}{"workflows", p})
 }
 
 type ServerMessageTerminals struct {
@@ -6094,7 +6593,7 @@ func (v *PairPendingRequest) UnmarshalJSON(data []byte) error {
 
 // Normalize trims and checks what the app sent, as its schema does.
 func (v *PairPendingRequest) Normalize() error {
-	if !pattern4.MatchString(v.Number) {
+	if !pattern5.MatchString(v.Number) {
 		return fmt.Errorf("%s: %s", "number", "is 6 digits")
 	}
 	return nil
@@ -6144,7 +6643,7 @@ func (v *PairRequest) Normalize() error {
 	if utf8.RuneCountInString(v.Name) > 60 {
 		return fmt.Errorf("%s: at most 60 characters", "name")
 	}
-	if !pattern4.MatchString(v.Number) {
+	if !pattern5.MatchString(v.Number) {
 		return fmt.Errorf("%s: %s", "number", "is 6 digits")
 	}
 	return nil
