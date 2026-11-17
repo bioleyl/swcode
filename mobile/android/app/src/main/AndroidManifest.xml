@@ -44,4 +44,6 @@
     <!-- Capacitor asks for this when a page reads a QR code with the camera; without it declared, Android denies
          the ask at once, and the scanner's page never gets the camera. -->
     <uses-permission android:name="android.permission.CAMERA" />
+    <!-- The app tells the person through Android itself (NotifierPlugin): on Android 13+ this is what Android asks. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 </manifest>
