@@ -15,7 +15,6 @@ const NO_SERVICE = 'Android did not take the app to its front: the phone is not 
 
 /** The Android app's own plugin (mobile/android/app/src/main/java/com/bioleyl/swcode/NotifierPlugin.java). */
 const Notifier = registerPlugin<{
-  requestPermissions(): Promise<unknown>;
   start(): Promise<unknown>;
   status(): Promise<{ running?: boolean }>;
   stop(): Promise<unknown>;

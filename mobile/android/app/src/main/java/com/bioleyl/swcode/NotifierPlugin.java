@@ -15,6 +15,7 @@ import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import com.getcapacitor.annotation.Permission;
+import com.getcapacitor.annotation.PermissionCallback;
 
 /**
  * The phone's own notifications, for the app whose WebView has no push service: the page tells it what a session
@@ -23,13 +24,14 @@ import com.getcapacitor.annotation.Permission;
  */
 @CapacitorPlugin(
     name = "Notifier",
-    permissions = { @Permission(alias = "notifications", string = "android.permission.POST_NOTIFICATIONS") }
+    permissions = { @Permission(alias = "notifications", strings = { "android.permission.POST_NOTIFICATIONS" }) }
 )
 public class NotifierPlugin extends Plugin {
     /** The session a tapped notification opens, on the intent that brings the app back to the front. */
     public static final String SESSION = "swcode.session";
 
     private static final String CHANNEL = "swcode";
+    private static final String PERMISSIONS_ASKED = "permissionsAsked";
     private static final int NO_SESSION = 0;
 
     @PluginMethod
@@ -62,7 +64,8 @@ public class NotifierPlugin extends Plugin {
 
     /** What a tap left behind: the session to open, empty once the page took it. */
     @PluginMethod
-    public void takeSession(PluginCall call) {        Intent intent = getActivity().getIntent();
+    public void takeSession(PluginCall call) {
+        Intent intent = getActivity().getIntent();
         String sessionId = intent == null ? "" : intent.getStringExtra(SESSION);
         JSObject answer = new JSObject();
         answer.put("sessionId", sessionId == null ? "" : sessionId);
@@ -76,13 +79,18 @@ public class NotifierPlugin extends Plugin {
     @PluginMethod
     public void start(PluginCall call) {
         Context context = getActivity();
-        requestPermissions();
         Intent intent = new Intent(context, NotifierService.class);
         if (Build.VERSION.SDK_INT >= 26) {
             context.startForegroundService(intent);
         } else {
             context.startService(intent);
         }
+        requestAllPermissions(call, PERMISSIONS_ASKED);
+    }
+
+    /** The person answered Android's ask for notifications; the service was already started with it. */
+    @PermissionCallback
+    private void permissionsAsked(PluginCall call) {
         call.resolve();
     }
 
