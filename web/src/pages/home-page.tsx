@@ -18,6 +18,7 @@ import { presetChoices, presetsBus } from '../services/presets';
 import { allProjects, askForProject, findProject, projectListBus } from '../services/project-list';
 import { foundSkills, projectSkillsBus, readProjectSkills } from '../services/project-skills';
 import { allSessions, sessionListBus } from '../services/session-list';
+import { workflowsBus, workflowsFor } from '../services/workflows';
 import { BASE_STYLES } from '../styles/shared';
 import styles from './home-page.css?inline';
 
@@ -47,6 +48,8 @@ export class HomePage extends ScElement {
 
   // What the person picked here, for this session alone: the project's defaults, then the app's, give the rest.
   private _picks: Partial<SessionDefaults> = {};
+  // The workflow the session starts, if one: '' for none.
+  private _workflow = '';
   // The project in the address (/new/<id>), then the one the person picks.
   private _chosen: string | undefined;
   // The project whose skills this page read for the composer: they are read again for another one.
@@ -104,6 +107,11 @@ export class HomePage extends ScElement {
     composer.events.register('thinking', (thinking) => this.pick({ thinking }));
     composer.events.register('concise', (concise) => this.pick({ concise }));
     composer.events.register('preset', (preset) => this.pick({ preset }));
+    composer.events.register('workflow', (workflow) => {
+      this._workflow = workflow;
+      // A workflow's steps work in the project's folder: a worktree would leave them apart.
+      composer.worktree.set(false);
+    });
     this._refs.newProject.events.register('press', () => askForProject());
     this._refs.project.events.register('change', (value) => {
       this._chosen = value;
@@ -113,6 +121,7 @@ export class HomePage extends ScElement {
     this.onBus(projectListBus, 'changed', () => this.renderProjects());
     this.onBus(sessionListBus, 'changed', () => this.renderProjects());
     this.onBus(presetsBus, 'changed', () => this.renderProjects());
+    this.onBus(workflowsBus, 'changed', () => this.renderChoices());
     this.onBus(projectSkillsBus, 'changed', () => this.renderSkills());
     this.onBus(daemonBus, 'message', (message) => {
       if (message.type !== 'problem') {
@@ -143,6 +152,7 @@ export class HomePage extends ScElement {
         : { pinnedTodoIds: pinned.map((todo) => todo.id), pinnedTodos: pinned.map((todo) => todo.text) }),
       ...(project === undefined ? {} : { host: project.host, workspace: project.path }),
       ...(this._refs.composer.worktree.get() ? { worktree: true } : {}),
+      ...(this._workflow === '' ? {} : { workflowId: this._workflow }),
     });
   }
 
@@ -181,7 +191,8 @@ export class HomePage extends ScElement {
   /** The composer's choices, as the session would start with them in the project chosen. */
   private renderChoices(): void {
     const state = daemonState();
-    const choices = this.choicesFor(findProject(this._refs.project.value.get()));
+    const project = findProject(this._refs.project.value.get());
+    const choices = this.choicesFor(project);
     const main = presetStatusOf(
       state.kind === 'ready' ? state.status : undefined,
       presetOf(presetChoices(), choices.preset)
@@ -192,6 +203,13 @@ export class HomePage extends ScElement {
     composer.mode.set(choices.mode);
     composer.thinking.set(choices.thinking);
     composer.concise.set(choices.concise);
+    const offered = project === undefined ? [] : workflowsFor(project.id);
+    if (this._workflow !== '' && !offered.some((workflow) => workflow.id === this._workflow)) {
+      this._workflow = '';
+    }
+    composer.workflows.set(offered);
+    composer.workflowOffered.set(project !== undefined);
+    composer.workflow.set(this._workflow);
     this.renderSkills();
     this.renderTodos();
   }

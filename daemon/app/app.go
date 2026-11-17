@@ -37,6 +37,7 @@ import (
 	"swcode/daemon/update"
 	"swcode/daemon/version"
 	"swcode/daemon/web"
+	"swcode/daemon/workflows"
 )
 
 const (
@@ -51,6 +52,8 @@ const (
 	// devicesFile is the paired phones, their tokens kept as hashes.
 	devicesFile  = config.DevicesFile
 	projectsFile = "projects.json"
+	// workflowsFile keeps the workflows and their runs.
+	workflowsFile = "workflows.json"
 	// updatesFile keeps whether to look for a newer version every 10 minutes.
 	updatesFile   = "updates.json"
 	defaultWebDir = "dist/web"
@@ -112,6 +115,8 @@ type App struct {
 	SwcodeBase *swcodebase.Service
 	// Terminals are the shells people type in from the app, in their projects' folders.
 	Terminals *terminals.Service
+	// Workflows are the teams of sessions a run starts, global or a project's.
+	Workflows *workflows.Service
 	Token     string
 	LanURLs   []string
 
@@ -133,6 +138,7 @@ type App struct {
 	sandboxes *hosts.Sandboxes
 	// hub sends what the services say to the open sockets.
 	hub          *hub
+	workflowRuns *workflowRunner
 	logger       *slog.Logger
 	stopWatching context.CancelFunc
 }
@@ -241,6 +247,11 @@ func New(settings config.Config, options Options) (*App, error) {
 		Store: projects.NewStore(filepath.Join(settings.DataDir, projectsFile)),
 	})
 	app.Projects.Load()
+	app.Workflows = workflows.NewService(workflows.Deps{
+		LogError: logError, NewID: options.NewID, Now: options.Now,
+		Store: workflows.NewStore(filepath.Join(settings.DataDir, workflowsFile)),
+	})
+	app.Workflows.Load()
 	maxSteps := settings.MaxSteps
 	if options.MaxSteps != 0 {
 		maxSteps = options.MaxSteps
@@ -289,9 +300,12 @@ func New(settings config.Config, options Options) (*App, error) {
 		ChatTools:   chatTools, SubagentTools: exploreTools, Thinking: sessions.Thinking{Session: settings.Thinking, Subagents: settings.SubagentThinking},
 		ServerTools: app.serverTools,
 		Terminals:   terminalService, Todos: app.Projects, Tools: mainTools, Workspace: workspace,
+		ProposeWorkflow: app.proposeWorkflow,
 	})
 	app.Sessions = service
 	service.Load()
+	app.workflowRuns = newWorkflowRunner(app)
+	service.Subscribe(app.workflowRuns.observe)
 	app.startPush(logError)
 	// Sessions from before projects, or whose project was lost, get one; a chat works in no folder.
 	for _, session := range service.List() {
@@ -306,6 +320,7 @@ func New(settings config.Config, options Options) (*App, error) {
 	app.hub = newHub()
 	app.Sessions.Subscribe(app.hub.broadcast)
 	app.Projects.Subscribe(app.hub.broadcast)
+	app.Workflows.Subscribe(app.hub.broadcast)
 	app.Models.Subscribe(app.hub.broadcast)
 	app.Terminals.Subscribe(app.hub.broadcast)
 	app.watchUpdates(settings, logError)

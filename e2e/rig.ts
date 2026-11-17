@@ -28,6 +28,10 @@ const SESSIONS_FOLDER = 'sessions';
 const EVENTS_SUFFIX = '.jsonl';
 const START_TIMEOUT_MS = 20_000;
 const POLL_MS = 50;
+// What the daemon prints once it listens: the rig waits for it rather than only asking the port.
+const READY_LINE = 'swcode is ready:';
+// A health check that hangs says nothing: a socket that accepts and never answers fails in this time.
+const HEALTH_TIMEOUT_MS = 2_000;
 // The latest release when the test sets none: the one the daemon is, which then has nothing newer to offer.
 const SAME_RELEASE = { notes: '', version: E2E_RELEASE };
 // Where a daemon that may install a newer version runs from, in its home: the person's command line is there.
@@ -80,17 +84,37 @@ async function freePort(): Promise<number> {
 }
 
 const isHealthy = (address: string): Promise<boolean> =>
-  fetch(`${address}${ENDPOINTS.health}`).then(
+  fetch(`${address}${ENDPOINTS.health}`, { signal: AbortSignal.timeout(HEALTH_TIMEOUT_MS) }).then(
     (response) => response.ok,
     () => false
   );
 
-/** Waits until the daemon answers, and fails with what it said when it ends first or takes too long. */
-async function untilReady(daemon: ChildProcess, address: string, said: () => string): Promise<void> {
+/**
+ * Waits for the daemon's own word that it listens, then for one health answer; fails with what it said when it ends
+ * first or takes too long.
+ */
+async function untilReady(
+  daemon: ChildProcess,
+  address: string,
+  said: () => string,
+  announced: Promise<void>
+): Promise<void> {
   const deadline = Date.now() + START_TIMEOUT_MS;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const tooLate = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`The daemon did not say it was ready:\n${said()}`)),
+      START_TIMEOUT_MS
+    );
+  });
+  try {
+    await Promise.race([announced, tooLate]);
+  } finally {
+    clearTimeout(timer);
+  }
   while (!(await isHealthy(address))) {
     if (daemon.exitCode !== null || Date.now() > deadline) {
-      throw new Error(`The daemon did not start:\n${said()}`);
+      throw new Error(`The daemon did not answer:\n${said()}`);
     }
     await sleep(POLL_MS);
   }
@@ -172,10 +196,21 @@ export async function startRig(options: E2eOptions): Promise<E2eRig> {
     },
   });
   const output: string[] = [];
-  daemon.stdout.on('data', (chunk: Buffer) => output.push(chunk.toString('utf8')));
-  daemon.stderr.on('data', (chunk: Buffer) => output.push(chunk.toString('utf8')));
+  let ready: () => void = () => undefined;
+  const announced = new Promise<void>((resolve) => {
+    ready = resolve;
+  });
+  const collect = (chunk: Buffer): void => {
+    const text = chunk.toString('utf8');
+    output.push(text);
+    if (text.includes(READY_LINE)) {
+      ready();
+    }
+  };
+  daemon.stdout.on('data', collect);
+  daemon.stderr.on('data', collect);
   const address = `http://${HOST}:${port}`;
-  await untilReady(daemon, address, () => output.join(''));
+  await untilReady(daemon, address, () => output.join(''), announced);
   const browser = await chromium.launch(chromiumPath === undefined ? {} : { executablePath: chromiumPath });
   return {
     browser,

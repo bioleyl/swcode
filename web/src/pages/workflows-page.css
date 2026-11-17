@@ -1,0 +1,139 @@
+:host {
+  display: block;
+}
+
+jl-alert {
+  margin-bottom: var(--jl-space-4);
+}
+
+.list-view,
+.editor-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--jl-space-6);
+}
+
+.list-view {
+  max-width: var(--jl-page-standard);
+}
+
+section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--jl-space-3);
+}
+
+h2 {
+  font-size: var(--jl-font-lg);
+  font-weight: 700;
+}
+
+.workflows,
+.runs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--jl-space-1);
+}
+
+.about {
+  display: grid;
+  grid-template-columns: 1fr 1fr 220px;
+  gap: var(--jl-space-4);
+  max-width: var(--jl-page-standard);
+}
+
+.editor-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: var(--jl-space-4);
+  align-items: start;
+}
+
+.flow {
+  height: 540px;
+  border: 1px solid var(--jl-line);
+  border-radius: var(--jl-radius);
+  overflow: hidden;
+}
+
+.flow jl-flow {
+  display: block;
+  height: 100%;
+}
+
+.add-step {
+  margin-top: var(--jl-space-3);
+}
+
+.row {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--jl-space-2);
+}
+
+.step-empty {
+  padding: var(--jl-space-4);
+  border: 1px dashed var(--jl-line);
+  border-radius: var(--jl-radius);
+  font-size: var(--jl-font-sm);
+  color: var(--jl-muted);
+}
+
+@media (max-width: 900px) {
+  .about,
+  .editor-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .flow {
+    height: 420px;
+  }
+}
+
+[hidden] {
+  display: none;
+}
+
+/* The step's outputs: each a named way on, with when it is taken. */
+.outputs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--jl-space-2);
+  padding-top: var(--jl-space-3);
+  border-top: 1px solid var(--jl-line);
+}
+
+.outputs-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--jl-space-2);
+}
+
+.outputs-title {
+  font-weight: 600;
+}
+
+.outputs-hint {
+  font-size: var(--jl-font-sm);
+  color: var(--jl-muted);
+}
+
+.exits {
+  display: flex;
+  flex-direction: column;
+  gap: var(--jl-space-3);
+}
+
+.exit-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--jl-space-2);
+  padding: var(--jl-space-3);
+  border: 1px solid var(--jl-line);
+  border-radius: var(--jl-radius);
+}
+
+.exit-remove {
+  align-self: flex-end;
+}

@@ -53,6 +53,13 @@ const TOOL_LABELS: Readonly<Record<ToolName, ToolLabel>> = {
     question: 'Search these files?',
     writing: 'Searching the files',
   },
+  handoff: {
+    doing: 'Handing off',
+    icon: 'workflow',
+    name: 'Handoff',
+    question: 'Hand off this step?',
+    writing: 'Writing the handoff',
+  },
   image: {
     doing: 'Making',
     icon: 'image',
@@ -165,6 +172,13 @@ const TOOL_LABELS: Readonly<Record<ToolName, ToolLabel>> = {
     question: 'Search the web?',
     writing: 'Searching the web',
   },
+  workflow: {
+    doing: 'Proposing',
+    icon: 'workflow',
+    name: 'Workflow',
+    question: 'Propose this workflow?',
+    writing: 'Proposing a workflow',
+  },
   write: {
     doing: 'Writing',
     icon: 'file-plus',
@@ -231,6 +245,7 @@ const GRANTS: Readonly<Record<ToolName, (summary: string, outside: boolean) => G
   edit: edits,
   glob: never,
   grep: never,
+  handoff: never,
   image: edits,
   kill: never,
   mcp: serverGrant,
@@ -247,6 +262,7 @@ const GRANTS: Readonly<Record<ToolName, (summary: string, outside: boolean) => G
   todo: never,
   webfetch: never,
   websearch: never,
+  workflow: never,
   write: edits,
 };
 

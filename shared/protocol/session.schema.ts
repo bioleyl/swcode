@@ -33,6 +33,10 @@ export const TOOL_NAMES = [
   // Opens a todo on the project, and closes one of them: the project's Todo tab shows them.
   'todo',
   'closetodo',
+  // Proposes a workflow of role-playing sessions for the project, as a draft the person confirms.
+  'workflow',
+  // Ends a step of a workflow: the step it goes on to, and the report the next step reads.
+  'handoff',
   // Offered no longer: the calls older sessions hold keep their name.
   'saveskill',
   'screenshot',
@@ -382,6 +386,9 @@ export const SessionSummarySchema = z.object({
   thinking: ThinkingModeSchema,
   title: z.string(),
   updatedAt: at,
+  // The workflow run this session belongs to: the run's own session, or one of its steps'. A step names itself too.
+  workflowRunId: z.string().optional(),
+  workflowStepId: z.string().optional(),
   workspace: z.string(),
   // The project's folder a session's git worktree was made from: its workspace is then the worktree, and it is
   // still a session of that project.

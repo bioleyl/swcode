@@ -121,9 +121,11 @@ type Deps struct {
 	// SandboxHidden are folders of this computer no sandboxed command sees: the daemon's own data.
 	SandboxHidden []string
 	// Todos are the projects' todos, which the agent opens and closes.
-	Todos     tools.ProjectTodos
-	Workspace string
-	Thinking  Thinking
+	Todos tools.ProjectTodos
+	// ProposeWorkflow keeps a workflow the agent proposed as a draft of its project.
+	ProposeWorkflow tools.WorkflowProposer
+	Workspace       string
+	Thinking        Thinking
 	// OnWorkspace is told the folder of each new session, and its host: every folder sessions work in has a project.
 	OnWorkspace      func(path string, host protocol.HostRef)
 	Hosts            *hosts.Registry
@@ -153,6 +155,10 @@ type Request struct {
 	PinnedTodos []string
 	// Concise: token economy from the first message on.
 	Concise bool
+	// WorkflowRunID is the run of a workflow the session belongs to: the run's own session, or one of its steps'.
+	WorkflowRunID string
+	// WorkflowStepID is the step of that run the session works on; empty for the run's own session.
+	WorkflowStepID string
 	// Worktree: the session works in a git worktree of its own, made from its folder's repository.
 	Worktree bool
 }
@@ -347,6 +353,7 @@ func (s *Service) Create(ctx context.Context, request Request) (protocol.Session
 		CreatedAt: createdAt, Host: hostRef, ID: s.deps.NewID(), Kind: kind, Mode: orMode(request.Mode),
 		Concise: request.Concise, Preset: request.Preset, SeenAt: createdAt,
 		Thinking: orThinking(request.Thinking, s.deps.Thinking.Session), Title: Untitled, Workspace: workspace,
+		WorkflowRunID: request.WorkflowRunID, WorkflowStepID: request.WorkflowStepID,
 	}
 	if request.Worktree && kind != protocol.SessionKindChat {
 		made, problem := makeWorktree(ctx, s.deps.Hosts.HostOf(hostRef), workspace, meta.ID)
@@ -1037,6 +1044,7 @@ func summaryOf(session *live) protocol.SessionSummary {
 		Subagents: subagentsLeft(session),
 		Thinking:  session.meta.Thinking, Title: session.meta.Title, UpdatedAt: session.updatedAt,
 		Workspace: session.meta.Workspace, WorktreeOf: session.meta.WorktreeOf, Branch: session.meta.Branch,
+		WorkflowRunID: session.meta.WorkflowRunID, WorkflowStepID: session.meta.WorkflowStepID,
 	}
 }
 

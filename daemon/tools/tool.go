@@ -64,6 +64,9 @@ type ProjectTodos interface {
 	CloseTodo(folder string, host protocol.HostRef, text string) ([]protocol.ProjectTodo, string)
 }
 
+// WorkflowProposer keeps a workflow an agent proposed as a draft of a folder's project, for its person to confirm.
+type WorkflowProposer func(folder string, host protocol.HostRef, draft protocol.WorkflowDraft) (protocol.Workflow, string)
+
 // Jobs is a session's background commands, on its host, in its workspace.
 type Jobs interface {
 	// Start starts a command: shown is how people know it, command what runs (the same, in a sandbox or not).
@@ -116,6 +119,13 @@ type Context struct {
 	Skills catalog.Port
 	// Todos are the project's todos, which the agent opens and closes; nil in a chat, which works in no project.
 	Todos ProjectTodos
+	// ProposeWorkflow keeps a workflow the agent proposed as a draft of its project; nil where there is no project.
+	ProposeWorkflow WorkflowProposer
+	// ProjectFolder is the folder of the session's project: the worktree's folder when it works in one.
+	ProjectFolder string
+	// WorkflowRunID and WorkflowStepID say the session is a step of a workflow; empty otherwise.
+	WorkflowRunID  string
+	WorkflowStepID string
 	// Sandbox is where the session's commands run, on a host that can make one; nil where they run as the person.
 	Sandbox *hosts.Sandbox
 }

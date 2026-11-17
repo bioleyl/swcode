@@ -210,7 +210,7 @@ func onStore(t *testing.T, store *memory, model llm.Model) (*Service, *memory, *
 	service := NewService(Deps{
 		ChatTools: tools.Main, Hosts: hosts.NewRegistry(hosts.NewLocalHost(hosts.LocalOptions{ScratchRoot: t.TempDir()}), nil),
 		ImagesFolder: t.TempDir(), LogError: func(error) {}, MaxSteps: 4, Model: model,
-		Models: presets{main: llm.Choice{ContextTokens: 8192, Model: "tester"}}, NewID: ids(),
+		Models: presets{main: llm.Choice{ContextTokens: 16_384, Model: "tester"}}, NewID: ids(),
 		Now: func() time.Time { return time.Date(2026, 10, 23, 10, 0, 0, 0, time.UTC) }, Store: store,
 		Thinking: Thinking{Session: protocol.ThinkingModeOff, Subagents: protocol.ThinkingModeOff}, Workspace: folder,
 	})

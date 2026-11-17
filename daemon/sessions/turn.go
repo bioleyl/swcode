@@ -191,8 +191,11 @@ func (s *Service) failTurn(session *live, message *agent.PromptMessage, err erro
 
 // toolsFor is the main agent's tools: without agent when the preset allows no subagents, and with the tools of the
 // MCP servers ready now.
-func (s *Service) toolsFor(limit *protocol.SubagentLimit) tools.Box {
+func (s *Service) toolsFor(limit *protocol.SubagentLimit, meta Meta) tools.Box {
 	box := s.deps.Tools
+	if meta.WorkflowStepID != "" {
+		box = box.WithTool(tools.Handoff)
+	}
 	if limit != nil && limit.AtOnce == 0 {
 		box = box.Without(protocol.ToolNameAgent)
 	}
@@ -223,7 +226,7 @@ func (s *Service) setupFor(session *live, meta Meta, main llm.Choice, where plac
 		SystemPrompt: agent.SystemPrompt(meta.Workspace, where.scratch, where.platform, agent.Servers{
 			Browser: s.deps.Browser != nil && sees, Images: s.deps.ImageURL != "", Sandbox: where.sandbox != nil,
 		}, limit),
-		Tools: s.toolsFor(limit),
+		Tools: s.toolsFor(limit, meta),
 	}
 }
 
@@ -275,18 +278,20 @@ func (s *Service) hostFor(session *live, turn *runningTurn, ready prepared, sees
 			defer s.mu.Unlock()
 			s.publish(protocol.ServerMessage{Value: protocol.ServerMessageToolOutput{CallID: callID, SessionID: session.meta.ID, Text: text}})
 		},
-		Images:      s.imagesFor(session),
-		Jobs:        &sessionJobs{host: where.host, service: s, session: session},
-		ReadFiles:   session.readFiles,
-		Sandbox:     where.sandbox,
-		Scratch:     where.scratch,
-		Screenshots: s.screenshotsFor(session, main, sees),
-		Skills:      where.skills,
-		Subagents:   subagents{limit: ready.subagents, service: s, session: session, subagent: subagent, where: where},
-		Terminals:   s.deps.Terminals,
-		Todos:       s.todosOf(session),
-		Web:         s.webFor(subagent),
-		Workspace:   session.meta.Workspace,
+		Images:          s.imagesFor(session),
+		Jobs:            &sessionJobs{host: where.host, service: s, session: session},
+		ProjectFolder:   session.meta.projectFolder(),
+		ProposeWorkflow: s.deps.ProposeWorkflow,
+		ReadFiles:       session.readFiles,
+		Sandbox:         where.sandbox,
+		Scratch:         where.scratch,
+		Screenshots:     s.screenshotsFor(session, main, sees),
+		Skills:          where.skills,
+		Subagents:       subagents{limit: ready.subagents, service: s, session: session, subagent: subagent, where: where},
+		Terminals:       s.deps.Terminals,
+		Todos:           s.todosOf(session),
+		Web:             s.webFor(subagent),
+		Workspace:       session.meta.Workspace,
 	}
 	return host
 }
