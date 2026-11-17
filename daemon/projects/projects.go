@@ -291,6 +291,21 @@ func (s *Service) SetSandbox(projectID string, on bool) string {
 	return ""
 }
 
+// SetNotifications says whether the project's sessions tell the person on the device that shows them: they do, and
+// the device's own setting decides for the project.
+func (s *Service) SetNotifications(projectID string, on bool) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	index := slices.IndexFunc(s.projects, func(project protocol.Project) bool { return project.ID == projectID })
+	if index < 0 {
+		return unknownProject
+	}
+	projects := append([]protocol.Project{}, s.projects...)
+	projects[index].NotificationsOff = !on
+	s.change(projects)
+	return ""
+}
+
 // SetSkill turns one of the skills the project's sessions find on or off for them: they read it from their next turn.
 func (s *Service) SetSkill(projectID, name string, on bool) string {
 	s.mu.Lock()

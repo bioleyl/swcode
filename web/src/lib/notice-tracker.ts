@@ -35,28 +35,46 @@ export class NoticeTracker {
   private _replies = new Map<string, string>();
   private _calls = new Map<string, Map<string, string>>();
   private _subagents = new Map<string, number>();
+  // What each project chose about telling, and where each session works: its host and folder.
+  private _offByKey = new Map<string, boolean>();
+  private _keyBy = new Map<string, string>();
 
   /** One message of the socket: a notice, when it is one. */
   take(message: ServerMessage): Notice | undefined {
     if (message.type === 'sessions') {
       for (const session of message.sessions) {
-        this.keep(session.id, session.subagents, session.title);
+        this.keep(session.id, session.subagents, session.title, placeOf(session.host, session.workspace));
       }
       return undefined;
     }
     if (message.type === 'sessionCreated') {
-      this.keep(message.session.id, message.session.subagents, message.session.title);
+      this.keep(
+        message.session.id,
+        message.session.subagents,
+        message.session.title,
+        placeOf(message.session.host, message.session.workspace)
+      );
+      return undefined;
+    }
+    if (message.type === 'projects') {
+      this._offByKey = offByProject(message.projects);
       return undefined;
     }
     if (message.type === 'sessionEvent') {
-      return this.event(message.sessionId, message.event);
+      return this.off(message.sessionId) ? undefined : this.event(message.sessionId, message.event);
     }
     return undefined;
   }
 
-  private keep(sessionId: string, subagents: number, title: string): void {
+  private keep(sessionId: string, subagents: number, title: string, place: string): void {
     this._titles.set(sessionId, title);
     this._subagents.set(sessionId, subagents);
+    this._keyBy.set(sessionId, place);
+  }
+
+  /** A project's answer for the session, the device's when it belongs to no project the daemon knows. */
+  private off(sessionId: string): boolean {
+    return this._offByKey.get(this._keyBy.get(sessionId) ?? '') === true;
   }
 
   private event(sessionId: string, event: SessionEvent): Notice | undefined {
@@ -116,6 +134,25 @@ export class NoticeTracker {
     }
     return { ...notice, kind, text: clipped(endingText(kind, reply, message)) };
   }
+}
+
+/** A project's host and folder, the pair a session belongs to. */
+function placeOf(host: unknown, path: string): string {
+  return `${JSON.stringify(host)}|${path}`;
+}
+
+/** What each project chose about telling, by its host and folder (a worktree counts as its project's folder). */
+function offByProject(
+  projects: readonly { host: unknown; notificationsOff?: boolean; path: string; worktreeOf?: string }[]
+): Map<string, boolean> {
+  const off = new Map<string, boolean>();
+  for (const project of projects) {
+    off.set(placeOf(project.host, project.path), project.notificationsOff === true);
+    if (project.worktreeOf) {
+      off.set(placeOf(project.host, project.worktreeOf), project.notificationsOff === true);
+    }
+  }
+  return off;
 }
 
 function endingText(kind: NoticeKind, reply: string | undefined, problem: string | undefined): string {

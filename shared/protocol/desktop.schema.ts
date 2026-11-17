@@ -51,17 +51,21 @@ export const DesktopRequestSchema = z.discriminatedUnion('type', [
     type: z.literal('editComputer'),
   }),
   z.object({ id: z.string(), type: z.literal('forgetComputer') }),
+  // The app tells the person through Windows, or stays quiet: the tray's notifications, on every computer it follows.
+  z.object({ type: z.literal('notifications') }),
+  z.object({ on: z.boolean(), type: z.literal('setNotifications') }),
   z.object({ type: z.literal('openOutside'), url: z.string() }),
 ]);
 export type DesktopRequest = z.infer<typeof DesktopRequestSchema>;
 
 /**
- * What the app answers: the computers after any change, why one could not be added, or that the one asked for
- * did not answer, so the window stays where it was.
+ * What the app answers: the computers after any change, why one could not be added, that the one asked for
+ * did not answer, so the window stays where it was, and where the tray's notifications stand.
  */
 export const DesktopAnswerSchema = z.discriminatedUnion('type', [
   z.object({ computers: z.array(ComputerSchema), current: z.string(), type: z.literal('computers') }),
   z.object({ message: z.string(), type: z.literal('computerRefused') }),
   z.object({ id: z.string(), name: z.string(), type: z.literal('computerUnreachable') }),
+  z.object({ on: z.boolean(), type: z.literal('notifications') }),
 ]);
 export type DesktopAnswer = z.infer<typeof DesktopAnswerSchema>;

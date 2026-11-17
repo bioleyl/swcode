@@ -168,6 +168,8 @@ export class ScComputers extends ScElement {
       // The switch says that computer did not answer; the list says which ones are not reachable.
       askComputers({ type: 'listComputers' });
     },
+    // The app kept the answer: the section reads what it says, not what the press asked for.
+    notifications: () => void this.renderPush(),
   };
 
   private readonly _refs = this.useRefs((ref) => ({

@@ -172,6 +172,9 @@ const ANSWERS: {
   forgetComputer: (request) => forget(request.id),
   listComputers: () => list(),
   openComputer: (request) => open(request.id),
+  // A browser keeps where its notifications stand in its own push subscription, which the page reads itself.
+  notifications: () => list(),
+  setNotifications: () => list(),
 };
 
 const answerTo = <Type extends ComputerRequest['type']>(

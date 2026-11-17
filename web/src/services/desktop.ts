@@ -38,3 +38,32 @@ export function onDesktopAnswer(listener: (answer: DesktopAnswer) => void, signa
   webview.addEventListener('message', hear);
   signal.addEventListener('abort', () => webview.removeEventListener('message', hear), { once: true });
 }
+
+// An app that does not answer leaves notifications on, which is where its tray starts.
+const ANSWER_MS = 2000;
+const ON = true;
+
+/**
+ * Asks the app where its notifications stand, or sets them and hears what it kept: the answer comes back as the
+ * page's own message, so one listener waits for it and stops.
+ */
+export function askNotifications(on?: boolean): Promise<boolean> {
+  const asking = new AbortController();
+  return new Promise((resolve) => {
+    const hear = (answer: DesktopAnswer): void => {
+      if (answer.type !== 'notifications') {
+        return;
+      }
+      asking.abort();
+      resolve(answer.on);
+    };
+    onDesktopAnswer(hear, asking.signal);
+    askDesktop(on === undefined ? { type: 'notifications' } : { on, type: 'setNotifications' });
+    setTimeout(() => {
+      if (!asking.signal.aborted) {
+        asking.abort();
+        resolve(ON);
+      }
+    }, ANSWER_MS);
+  });
+}

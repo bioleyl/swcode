@@ -69,6 +69,19 @@ func (b bridge) OpenOutside(request protocol.DesktopRequestOpenOutside) struct{}
 	return struct{}{}
 }
 
+// Notifications answers where the tray's notifications stand; SetNotifications turns them on or off for every
+// computer the app follows, and answers the same.
+func (b bridge) Notifications(protocol.DesktopRequestNotifications) struct{} {
+	b.w.answerNotifications()
+	return struct{}{}
+}
+
+func (b bridge) SetNotifications(request protocol.DesktopRequestSetNotifications) struct{} {
+	b.w.notices.setNotifications(request.On)
+	b.w.answerNotifications()
+	return struct{}{}
+}
+
 // add reaches another computer's swcode with the token its pairing gave the page, away from the window's thread: it
 // takes a few seconds when it does not answer.
 func (w *window) add(address, name, token string) {
@@ -135,6 +148,10 @@ func (w *window) computerViews() []protocol.Computer {
 
 func (w *window) answerComputers() {
 	w.answer(protocol.DesktopAnswer{Value: protocol.DesktopAnswerComputers{Computers: w.computerViews(), Current: w.shown}})
+}
+
+func (w *window) answerNotifications() {
+	w.answer(protocol.DesktopAnswer{Value: protocol.DesktopAnswerNotifications{On: w.notices.notifications()}})
 }
 
 // answer sends the page an answer: none before it asked anything.

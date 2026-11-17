@@ -96,6 +96,9 @@ export const ProjectSchema = z.object({
   host: HostRefSchema.default(LOCAL_HOST),
   id: z.string(),
   name: z.string(),
+  // Its sessions tell the person on the device that shows them, unless turned off here: the device's own setting
+  // decides for it.
+  notificationsOff: z.boolean().optional(),
   path: z.string(),
   // Its sessions' commands run in a sandbox where its host can make one, unless turned off here.
   sandboxOff: z.boolean().optional(),

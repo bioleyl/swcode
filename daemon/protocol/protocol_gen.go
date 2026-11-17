@@ -847,19 +847,20 @@ func (v *ProjectSchedule) Normalize() error {
 }
 
 type Project struct {
-	AfterEdit  string            `json:"afterEdit,omitempty"`
-	Allowed    *ProjectAllowed   `json:"allowed,omitempty"`
-	CreatedAt  string            `json:"createdAt"`
-	Defaults   *SessionDefaults  `json:"defaults,omitempty"`
-	Host       HostRef           `json:"host"`
-	ID         string            `json:"id"`
-	Name       string            `json:"name"`
-	Path       string            `json:"path"`
-	SandboxOff bool              `json:"sandboxOff,omitempty"`
-	Schedules  []ProjectSchedule `json:"schedules,omitempty"`
-	SkillsOff  []string          `json:"skillsOff"`
-	Todos      []ProjectTodo     `json:"todos"`
-	Untrusted  bool              `json:"untrusted,omitempty"`
+	AfterEdit        string            `json:"afterEdit,omitempty"`
+	Allowed          *ProjectAllowed   `json:"allowed,omitempty"`
+	CreatedAt        string            `json:"createdAt"`
+	Defaults         *SessionDefaults  `json:"defaults,omitempty"`
+	Host             HostRef           `json:"host"`
+	ID               string            `json:"id"`
+	Name             string            `json:"name"`
+	NotificationsOff bool              `json:"notificationsOff,omitempty"`
+	Path             string            `json:"path"`
+	SandboxOff       bool              `json:"sandboxOff,omitempty"`
+	Schedules        []ProjectSchedule `json:"schedules,omitempty"`
+	SkillsOff        []string          `json:"skillsOff"`
+	Todos            []ProjectTodo     `json:"todos"`
+	Untrusted        bool              `json:"untrusted,omitempty"`
 }
 
 func (v Project) MarshalJSON() ([]byte, error) {
@@ -2292,6 +2293,8 @@ func (ClientMessageSetProjectTrust) isClientMessage() {}
 
 func (ClientMessageSetProjectSandbox) isClientMessage() {}
 
+func (ClientMessageSetProjectNotifications) isClientMessage() {}
+
 func (ClientMessageSetProjectSkill) isClientMessage() {}
 
 func (ClientMessageAddProjectSchedule) isClientMessage() {}
@@ -2581,6 +2584,12 @@ func (u *ClientMessage) UnmarshalJSON(data []byte) error {
 			return err
 		}
 		u.Value = value
+	case "\"setProjectNotifications\"":
+		var value ClientMessageSetProjectNotifications
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
 	case "\"setProjectSkill\"":
 		var value ClientMessageSetProjectSkill
 		if err := json.Unmarshal(data, &value); err != nil {
@@ -2697,6 +2706,7 @@ type ClientMessageMapper[R any] interface {
 	RemoveProjectAllowed(ClientMessageRemoveProjectAllowed) R
 	SetProjectTrust(ClientMessageSetProjectTrust) R
 	SetProjectSandbox(ClientMessageSetProjectSandbox) R
+	SetProjectNotifications(ClientMessageSetProjectNotifications) R
 	SetProjectSkill(ClientMessageSetProjectSkill) R
 	AddProjectSchedule(ClientMessageAddProjectSchedule) R
 	SetProjectScheduleOn(ClientMessageSetProjectScheduleOn) R
@@ -2797,6 +2807,8 @@ func MapClientMessage[R any](u ClientMessage, m ClientMessageMapper[R]) R {
 		return m.SetProjectTrust(value)
 	case ClientMessageSetProjectSandbox:
 		return m.SetProjectSandbox(value)
+	case ClientMessageSetProjectNotifications:
+		return m.SetProjectNotifications(value)
 	case ClientMessageSetProjectSkill:
 		return m.SetProjectSkill(value)
 	case ClientMessageAddProjectSchedule:
@@ -3933,6 +3945,20 @@ func (v ClientMessageSetProjectSandbox) MarshalJSON() ([]byte, error) {
 		Key string `json:"type"`
 		plain
 	}{"setProjectSandbox", p})
+}
+
+type ClientMessageSetProjectNotifications struct {
+	On        bool   `json:"on"`
+	ProjectID string `json:"projectId"`
+}
+
+func (v ClientMessageSetProjectNotifications) MarshalJSON() ([]byte, error) {
+	type plain ClientMessageSetProjectNotifications
+	p := plain(v)
+	return json.Marshal(struct {
+		Key string `json:"type"`
+		plain
+	}{"setProjectNotifications", p})
 }
 
 type ClientMessageSetProjectSkill struct {
@@ -6324,6 +6350,8 @@ func (DesktopAnswerComputerRefused) isDesktopAnswer() {}
 
 func (DesktopAnswerComputerUnreachable) isDesktopAnswer() {}
 
+func (DesktopAnswerNotifications) isDesktopAnswer() {}
+
 func (u DesktopAnswer) MarshalJSON() ([]byte, error) {
 	if u.Value == nil {
 		return nil, errors.New("protocol: an empty DesktopAnswer")
@@ -6357,6 +6385,12 @@ func (u *DesktopAnswer) UnmarshalJSON(data []byte) error {
 			return err
 		}
 		u.Value = value
+	case "\"notifications\"":
+		var value DesktopAnswerNotifications
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
 	default:
 		return fmt.Errorf("protocol: no DesktopAnswer with type %s", head.Key)
 	}
@@ -6368,6 +6402,7 @@ type DesktopAnswerMapper[R any] interface {
 	Computers(DesktopAnswerComputers) R
 	ComputerRefused(DesktopAnswerComputerRefused) R
 	ComputerUnreachable(DesktopAnswerComputerUnreachable) R
+	Notifications(DesktopAnswerNotifications) R
 }
 
 // MapDesktopAnswer calls the mapper's method for the variant u holds.
@@ -6379,6 +6414,8 @@ func MapDesktopAnswer[R any](u DesktopAnswer, m DesktopAnswerMapper[R]) R {
 		return m.ComputerRefused(value)
 	case DesktopAnswerComputerUnreachable:
 		return m.ComputerUnreachable(value)
+	case DesktopAnswerNotifications:
+		return m.Notifications(value)
 	}
 	panic(fmt.Sprintf("protocol: an empty or unknown DesktopAnswer %T", u.Value))
 }
@@ -6427,6 +6464,19 @@ func (v DesktopAnswerComputerUnreachable) MarshalJSON() ([]byte, error) {
 	}{"computerUnreachable", p})
 }
 
+type DesktopAnswerNotifications struct {
+	On bool `json:"on"`
+}
+
+func (v DesktopAnswerNotifications) MarshalJSON() ([]byte, error) {
+	type plain DesktopAnswerNotifications
+	p := plain(v)
+	return json.Marshal(struct {
+		Key string `json:"type"`
+		plain
+	}{"notifications", p})
+}
+
 // DesktopRequest holds one of its variants, told apart by "type".
 type DesktopRequest struct {
 	Value DesktopRequestVariant
@@ -6445,6 +6495,10 @@ func (DesktopRequestOpenComputer) isDesktopRequest() {}
 func (DesktopRequestEditComputer) isDesktopRequest() {}
 
 func (DesktopRequestForgetComputer) isDesktopRequest() {}
+
+func (DesktopRequestNotifications) isDesktopRequest() {}
+
+func (DesktopRequestSetNotifications) isDesktopRequest() {}
 
 func (DesktopRequestOpenOutside) isDesktopRequest() {}
 
@@ -6493,6 +6547,18 @@ func (u *DesktopRequest) UnmarshalJSON(data []byte) error {
 			return err
 		}
 		u.Value = value
+	case "\"notifications\"":
+		var value DesktopRequestNotifications
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
+	case "\"setNotifications\"":
+		var value DesktopRequestSetNotifications
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
 	case "\"openOutside\"":
 		var value DesktopRequestOpenOutside
 		if err := json.Unmarshal(data, &value); err != nil {
@@ -6512,6 +6578,8 @@ type DesktopRequestMapper[R any] interface {
 	OpenComputer(DesktopRequestOpenComputer) R
 	EditComputer(DesktopRequestEditComputer) R
 	ForgetComputer(DesktopRequestForgetComputer) R
+	Notifications(DesktopRequestNotifications) R
+	SetNotifications(DesktopRequestSetNotifications) R
 	OpenOutside(DesktopRequestOpenOutside) R
 }
 
@@ -6528,6 +6596,10 @@ func MapDesktopRequest[R any](u DesktopRequest, m DesktopRequestMapper[R]) R {
 		return m.EditComputer(value)
 	case DesktopRequestForgetComputer:
 		return m.ForgetComputer(value)
+	case DesktopRequestNotifications:
+		return m.Notifications(value)
+	case DesktopRequestSetNotifications:
+		return m.SetNotifications(value)
 	case DesktopRequestOpenOutside:
 		return m.OpenOutside(value)
 	}
@@ -6660,6 +6732,31 @@ func (v DesktopRequestForgetComputer) MarshalJSON() ([]byte, error) {
 		Key string `json:"type"`
 		plain
 	}{"forgetComputer", p})
+}
+
+type DesktopRequestNotifications struct {
+}
+
+func (v DesktopRequestNotifications) MarshalJSON() ([]byte, error) {
+	type plain DesktopRequestNotifications
+	p := plain(v)
+	return json.Marshal(struct {
+		Key string `json:"type"`
+		plain
+	}{"notifications", p})
+}
+
+type DesktopRequestSetNotifications struct {
+	On bool `json:"on"`
+}
+
+func (v DesktopRequestSetNotifications) MarshalJSON() ([]byte, error) {
+	type plain DesktopRequestSetNotifications
+	p := plain(v)
+	return json.Marshal(struct {
+		Key string `json:"type"`
+		plain
+	}{"setNotifications", p})
 }
 
 type DesktopRequestOpenOutside struct {

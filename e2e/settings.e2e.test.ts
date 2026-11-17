@@ -38,6 +38,7 @@ const fakeDesktopApp = (current = 'local', others: readonly object[] = []): stri
   const send = (text) => setTimeout(() => listeners.forEach((listener) => listener({ data: text })), 10);
   const answer = (message) => send(JSON.stringify(message));
   window.desktopAsked = [];
+  let notifications = true;
   window.chrome = window.chrome || {};
   window.chrome.webview = {
     addEventListener: (type, listener) => listeners.push(listener),
@@ -52,6 +53,14 @@ const fakeDesktopApp = (current = 'local', others: readonly object[] = []): stri
       }
       if (request.type === 'addComputer') {
         computers.push(${JSON.stringify(GMKTEC)});
+      }
+      // The tray's notifications are the app's own answer, kept between the pages it shows.
+      if (request.type === 'setNotifications') {
+        notifications = request.on;
+      }
+      if (request.type === 'notifications' || request.type === 'setNotifications') {
+        answer({ on: notifications, type: 'notifications' });
+        return;
       }
       const opened = request.type === 'openComputer' ? computers.find((computer) => computer.id === request.id) : undefined;
       if (opened && !opened.reachable) {

@@ -23,5 +23,5 @@ export type DesktopAnswerHandlers = {
   [Type in keyof DesktopAnswerMap]: (answer: DesktopAnswerMap[Type]) => void;
 };
 
-/** The answers a page that shows the computers hears: theirs, and that the one chosen did not answer. */
-export type ComputerAnswers = Pick<DesktopAnswerHandlers, 'computerUnreachable' | 'computers'>;
+/** The answers a page that shows the computers hears: theirs, that the one chosen did not answer, and the app's. */
+export type ComputerAnswers = Pick<DesktopAnswerHandlers, 'computerUnreachable' | 'computers' | 'notifications'>;
