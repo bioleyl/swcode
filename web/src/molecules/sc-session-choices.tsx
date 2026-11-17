@@ -1,5 +1,5 @@
 import { css } from '@jadis/core';
-import { JlField, JlLink, JlRadioGroup, JlSegmented, JlSwitch } from '@syware/jlib';
+import { JlField, JlLink, JlRadioGroup, JlSegmented, JlSelect, JlSwitch } from '@syware/jlib';
 
 import { PERMISSION_MODES, THINKING_MODES } from '../../../shared/protocol/choices.schema';
 import { ScElement } from '../base/sc-element';
@@ -12,6 +12,7 @@ import styles from './sc-session-choices.css?inline';
 import type { RadioOption, SegmentedOption } from '@syware/jlib';
 import type { PresetChoices } from '../../../shared/protocol/models.schema';
 import type { PermissionMode, ThinkingMode } from '../../../shared/protocol/session.schema';
+import type { Workflow } from '../../../shared/protocol/workflow.schema';
 
 const MODE_OPTIONS: RadioOption<PermissionMode>[] = PERMISSION_MODES.map((mode) => ({
   label: MODE_LABELS[mode],
@@ -47,6 +48,7 @@ export class ScSessionChoices extends ScElement {
     thinking: ThinkingMode;
     concise: boolean;
     worktree: boolean;
+    workflow: string;
   }>();
 
   readonly choices = this.useChange<PresetChoices>(NO_PRESETS, (choices) => {
@@ -72,12 +74,27 @@ export class ScSessionChoices extends ScElement {
     this._refs.worktree.hidden = !offered;
   });
   readonly worktree = this.useChange(false, (value) => this._refs.worktree.checked.set(value));
+  /** The workflows a new session may pick: its own project’s, and the global ones. */
+  readonly workflows = this.useChange<readonly Workflow[]>([], (workflows) => {
+    this._refs.workflow.options.set([
+      { label: 'No workflow', value: '' },
+      ...workflows.map((workflow) => ({ label: workflow.name, value: workflow.id })),
+    ]);
+    this._refs.workflow.value.set(this.workflow.get());
+  });
+  /** Whether a workflow can be chosen: for a new coding session in a project, the page says. */
+  readonly workflowOffered = this.useChange(false, (offered) => {
+    this._refs.workflowField.hidden = !offered;
+  });
+  readonly workflow = this.useChange('', (value) => this._refs.workflow.value.set(value));
 
   private readonly _refs = this.useRefs((ref) => ({
     concise: ref<JlSwitch>('.concise'),
     mode: ref<JlRadioGroup<PermissionMode>>('.mode'),
     presets: ref<JlRadioGroup>('.presets'),
     thinking: ref<JlSegmented<ThinkingMode>>('.thinking'),
+    workflow: ref<JlSelect>('.workflow'),
+    workflowField: ref<JlField>('.workflow-field'),
     worktree: ref<JlSwitch>('.worktree'),
   }));
 
@@ -97,6 +114,13 @@ export class ScSessionChoices extends ScElement {
           />
         </JlField>
         <JlSwitch class="concise" label="Token economy" />
+        <JlField
+          class="workflow-field"
+          label="Workflow"
+          hint="A team of sessions: each step runs in a session of its own, starting from this message as the brief."
+          hidden>
+          <JlSelect class="workflow" />
+        </JlField>
         <JlSwitch class="worktree" label="Work in a git worktree" description={WORKTREE_NOTE} hidden />
       </div>
     );
@@ -126,6 +150,10 @@ export class ScSessionChoices extends ScElement {
     this._refs.worktree.events.register('change', (worktree) => {
       this.worktree.set(worktree);
       this.events.emit('worktree', worktree);
+    });
+    this._refs.workflow.events.register('change', (workflow) => {
+      this.workflow.set(workflow);
+      this.events.emit('workflow', workflow);
     });
   }
 }

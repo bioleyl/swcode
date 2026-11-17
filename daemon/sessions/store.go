@@ -40,6 +40,9 @@ type Meta struct {
 	// branch: Workspace is then the worktree. Empty for a session that works in its project's own folder.
 	WorktreeOf string `json:"worktreeOf,omitempty"`
 	Branch     string `json:"branch,omitempty"`
+	// WorkflowRunID is the run of a workflow the session belongs to; WorkflowStepID the step it works on.
+	WorkflowRunID  string `json:"workflowRunId,omitempty"`
+	WorkflowStepID string `json:"workflowStepId,omitempty"`
 }
 
 // projectFolder is the folder of the session's project: the one its worktree was made from, or the one it works in.

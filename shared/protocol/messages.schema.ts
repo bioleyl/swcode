@@ -27,6 +27,7 @@ import {
   ToolDisplaySchema,
   ToolNameSchema,
 } from './session.schema.js';
+import { WorkflowDraftSchema, WorkflowRunSchema, WorkflowSchema } from './workflow.schema.js';
 
 /** The most a commit's message holds, as the review's field takes it. */
 export const MAX_COMMIT_MESSAGE = 5000;
@@ -101,6 +102,9 @@ export const ClientMessageSchema = z.discriminatedUnion('type', [
     prompt: z.string().trim().optional(),
     thinking: ThinkingModeSchema.optional(),
     type: z.literal('createSession'),
+    // The workflow the session starts: the daemon opens a run session that starts one session per step. The prompt is
+    // the brief the run works from, and this session's kind and workspace are the run's.
+    workflowId: z.string().optional(),
     workspace: z.string().trim().min(1).optional(),
     // The session works in a git worktree of its own, on a branch of its own, made from the folder's repository.
     worktree: z.boolean().optional(),
@@ -299,6 +303,13 @@ export const ClientMessageSchema = z.discriminatedUnion('type', [
     type: z.literal('setProjectScheduleOn'),
   }),
   z.object({ projectId: z.string(), scheduleId: z.string(), type: z.literal('removeProjectSchedule') }),
+  // A workflow as the editor holds it, saved: a new one when it names no id, a change of that one when it does. The
+  // daemon gives it its id and dates, and every app hears the list again. A draft waits for confirmWorkflow.
+  z.object({ id: z.string().optional(), type: z.literal('saveWorkflow'), workflow: WorkflowDraftSchema }),
+  z.object({ type: z.literal('confirmWorkflow'), workflowId: z.string() }),
+  z.object({ type: z.literal('removeWorkflow'), workflowId: z.string() }),
+  // Stops a run: its running step's session is stopped too, and no further step starts.
+  z.object({ runId: z.string(), type: z.literal('stopWorkflowRun') }),
   // Adds a todo to the project.
   z.object({
     projectId: z.string(),
@@ -392,6 +403,12 @@ export const ServerMessageSchema = z.discriminatedUnion('type', [
   }),
   z.object({ peekId: z.string(), sessionId: z.string(), text: z.string(), type: z.literal('peekDelta') }),
   z.object({ projects: z.array(ProjectSchema), type: z.literal('projects') }),
+  // Every workflow and every run: at connection, and again when one changes.
+  z.object({
+    runs: z.array(WorkflowRunSchema),
+    type: z.literal('workflows'),
+    workflows: z.array(WorkflowSchema),
+  }),
   // Every terminal the daemon runs: at connection, and again when one opens, ends or closes.
   z.object({ terminals: z.array(TerminalSchema), type: z.literal('terminals') }),
   // The answer to openTerminal and attachTerminal: the terminal, and what it printed so far, as base64.

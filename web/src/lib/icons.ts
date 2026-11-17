@@ -60,6 +60,7 @@ import {
   Sun,
   Terminal,
   Trash2,
+  Workflow,
   X,
 } from 'lucide';
 
@@ -155,6 +156,7 @@ const ICONS = {
   sun: Sun,
   terminal: Terminal,
   trash: Trash2,
+  workflow: Workflow,
   x: X,
 } satisfies Record<string, IconNode>;
 

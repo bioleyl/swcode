@@ -19,6 +19,7 @@ import * as settings from '../shared/protocol/settings.schema.js';
 import * as skill from '../shared/protocol/skill.schema.js';
 import * as startup from '../shared/protocol/startup.schema.js';
 import * as update from '../shared/protocol/update.schema.js';
+import * as workflow from '../shared/protocol/workflow.schema.js';
 
 const OUTPUT = resolve(import.meta.dirname, '../daemon/protocol/protocol_gen.go');
 const CHECK_FLAG = '--check';
@@ -27,6 +28,7 @@ const MODULES: readonly Record<string, unknown>[] = [
   choices,
   picture,
   project,
+  workflow,
   skill,
   session,
   messages,

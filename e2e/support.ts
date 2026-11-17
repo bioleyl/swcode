@@ -89,7 +89,7 @@ export const tab = (page: Page, label: string) => page.locator('jl-tab-bar').get
 // Two frames: the router has the next page, and the outlet decided when it shows.
 const NEXT_FRAMES = 'new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)))';
 // The pages the router shows.
-const PAGES = 'home-page, session-page, sessions-page, project-page, settings-page';
+const PAGES = 'home-page, session-page, sessions-page, project-page, settings-page, workflows-page';
 
 /**
  * A click is delivered on the next command in headless Chromium; a page it opens shows once it has its data, the

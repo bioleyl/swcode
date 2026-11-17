@@ -29,6 +29,7 @@ import styles from './sc-composer.css?inline';
 import type { PictureUpload } from '../../../shared/protocol/picture.schema';
 import type { PermissionMode, SessionKind, ThinkingMode } from '../../../shared/protocol/session.schema';
 import type { SkillSummary } from '../../../shared/protocol/skill.schema';
+import type { Workflow } from '../../../shared/protocol/workflow.schema';
 import type { CommandName } from '../lib/commands';
 import type { CommandLine, MenuEntry } from '../types/commands.types';
 import type { PromptDraft } from '../types/composer.types';
@@ -94,12 +95,18 @@ export class ScComposer extends ScElement {
     mode: PermissionMode;
     thinking: ThinkingMode;
     concise: boolean;
+    workflow: string;
   }>();
 
   /** Whether the session to come can work in a git worktree of its own: where a new coding session starts. */
   readonly worktreeOffered = this.useChange(false, () => this.renderChoices(), { immediate: true });
   /** The session to come works in a git worktree of its own. */
   readonly worktree = this.useChange(false, () => this.renderChoices(), { immediate: true });
+  /** The workflows a new session may pick: its project’s and the global ones, as its page gives them. */
+  readonly workflows = this.useChange<readonly Workflow[]>([], () => this.renderChoices(), { immediate: true });
+  /** Whether a workflow can be chosen here: where a new coding session in a project starts. */
+  readonly workflowOffered = this.useChange(false, () => this.renderChoices(), { immediate: true });
+  readonly workflow = this.useChange('', () => this.renderChoices(), { immediate: true });
 
   // While a turn runs, a message waits for the next one: send stays, stop comes beside it, and a game to pass the
   // time. `working` counts the subagents at work too, the way the session's own status does.
@@ -280,6 +287,10 @@ export class ScComposer extends ScElement {
       this.events.emit('concise', concise);
     });
     this._refs.choices.events.register('worktree', (worktree) => this.worktree.set(worktree));
+    this._refs.choices.events.register('workflow', (workflow) => {
+      this.workflow.set(workflow);
+      this.events.emit('workflow', workflow);
+    });
     this.onBus(presetsBus, 'changed', () => this.renderChoices());
     this.renderChoices();
   }
@@ -662,7 +673,8 @@ export class ScComposer extends ScElement {
       code ? MODE_LABELS[this.mode.get()] : undefined,
       THINKING_LABELS[this.thinking.get()],
       this.concise.get() ? CONCISE_LABEL : undefined,
-      this.worktreeOffered.get() && this.worktree.get() ? WORKTREE_LABEL : undefined,
+      this.worktreeOffered.get() && this.workflow.get() === '' && this.worktree.get() ? WORKTREE_LABEL : undefined,
+      this.workflows.get().find((workflow) => workflow.id === this.workflow.get())?.name,
     ]
       .filter((part) => part !== undefined)
       .join(SUMMARY_SEPARATOR);
@@ -676,8 +688,11 @@ export class ScComposer extends ScElement {
     panel.mode.set(this.mode.get());
     panel.thinking.set(this.thinking.get());
     panel.concise.set(this.concise.get());
-    panel.worktreeOffered.set(code && this.worktreeOffered.get());
+    panel.worktreeOffered.set(code && this.worktreeOffered.get() && this.workflow.get() === '');
     panel.worktree.set(this.worktree.get());
+    panel.workflows.set(this.workflows.get());
+    panel.workflowOffered.set(code && this.workflowOffered.get());
+    panel.workflow.set(this.workflow.get());
   }
 }
 

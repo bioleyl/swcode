@@ -6,6 +6,7 @@ import { ProjectPage } from './pages/project-page';
 import { SessionPage } from './pages/session-page';
 import { SessionsPage } from './pages/sessions-page';
 import { SettingsPage } from './pages/settings-page';
+import { WorkflowsPage } from './pages/workflows-page';
 
 /** The pages, most specific path first: the router takes the first that matches, so the catch-all comes last. */
 // biome-ignore assist/source/useSortedKeys: the order of the routes is the order they are matched in
@@ -20,6 +21,8 @@ export const ROUTES = defineRoutes({
   newChat: { page: NewChatPage, path: '/chat' },
   settingsTopic: { page: SettingsPage, path: '/settings/:topic' },
   settings: { page: SettingsPage, path: '/settings' },
+  workflow: { page: WorkflowsPage, path: '/workflows/:id' },
+  workflows: { page: WorkflowsPage, path: '/workflows' },
   home: { page: HomePage, path: '/' },
   notFound: { page: HomePage, path: '/:rest' },
 });

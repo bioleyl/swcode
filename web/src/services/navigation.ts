@@ -40,6 +40,11 @@ export const SETTINGS_PATH = '/settings';
 /** A topic of the settings page: the models, the SSH hosts, the phones… */
 export const settingsPath = (topic: string): string => `${SETTINGS_PATH}/${encodeURIComponent(topic)}`;
 
+/** The workflows of the daemon, global or a project's: the list, and one of them in its editor. */
+export const WORKFLOWS_PATH = '/workflows';
+export const NEW_WORKFLOW = 'new';
+export const workflowPath = (id: string): string => `${WORKFLOWS_PATH}/${encodeURIComponent(id)}`;
+
 /** The form for a new session, its project chosen. */
 export const newSessionPath = (projectId: string): string =>
   `${NEW_SESSION_PATH}/${encodeURIComponent(projectId)}`;

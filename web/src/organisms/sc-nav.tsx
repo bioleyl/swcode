@@ -1,6 +1,6 @@
 import { css } from '@jadis/core';
 import { JlButton, JlIcon, JlSearchButton, JlSegmented, JlSideNav, jlText, registerIcons } from '@syware/jlib';
-import { Laptop, PanelLeftClose, PanelLeftOpen, Server } from 'lucide';
+import { Laptop, PanelLeftClose, PanelLeftOpen, Server, Workflow } from 'lucide';
 
 import { ScBrand } from '../atoms/sc-brand';
 import { ScElement } from '../base/sc-element';
@@ -20,6 +20,7 @@ import {
   projectPath,
   SETTINGS_PATH,
   sessionPath,
+  WORKFLOWS_PATH,
 } from '../services/navigation';
 import { currentTheme, toggleTheme } from '../services/theme';
 import { BASE_STYLES } from '../styles/shared';
@@ -38,11 +39,12 @@ registerIcons({
   'panel-left-close': PanelLeftClose,
   'panel-left-open': PanelLeftOpen,
   server: Server,
+  workflow: Workflow,
   ...LIT_ICONS,
 });
 
 /** The navigation's own items; a project's and a session's ids carry theirs (`project:…`, `session:…`). */
-export const NAV_ID = { newChat: 'new-chat', newSession: 'new' } as const;
+export const NAV_ID = { newChat: 'new-chat', newSession: 'new', workflows: 'workflows' } as const;
 const PROJECT_PREFIX = 'project:';
 const SESSION_PREFIX = 'session:';
 // What jlib's side nav says on itself while it is a rail.
@@ -120,6 +122,10 @@ const SECTIONS: Readonly<Record<SessionKind, (lists: NavLists) => SideNavSection
   ],
   code: ({ projects, sessions, seen }) => [
     { items: [{ href: hrefOf(NEW_SESSION_PATH), icon: 'plus', id: NAV_ID.newSession, label: 'New session' }] },
+    {
+      items: [{ href: hrefOf(WORKFLOWS_PATH), icon: 'workflow', id: NAV_ID.workflows, label: 'Workflows' }],
+      label: 'Teams',
+    },
     {
       items: groupByProject(projects, sessionsOf('code', sessions)).map((group) => projectItem(group, seen)),
       label: 'Projects',

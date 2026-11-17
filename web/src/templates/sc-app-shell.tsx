@@ -116,6 +116,8 @@ const PLACES: Readonly<Record<RouteName, (params: Record<string, string>) => Pla
   sessions: () => ({ nav: '', tab: TAB.sessions }),
   settings: () => ({ nav: '', tab: TAB.settings }),
   settingsTopic: () => ({ nav: '', tab: TAB.settings }),
+  workflow: () => ({ mode: 'code', nav: NAV_ID.workflows, tab: '' }),
+  workflows: () => ({ mode: 'code', nav: NAV_ID.workflows, tab: '' }),
 };
 
 const isRouteName = (name: string): name is RouteName => Object.hasOwn(PLACES, name);

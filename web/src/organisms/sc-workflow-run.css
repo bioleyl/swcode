@@ -1,0 +1,54 @@
+:host {
+  display: block;
+}
+
+:host([hidden]) {
+  display: none;
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--jl-space-4);
+}
+
+.brief {
+  font-size: var(--jl-font-md);
+  color: var(--jl-text-2);
+  overflow-wrap: anywhere;
+}
+
+.run-status {
+  font-size: var(--jl-font-sm);
+  color: var(--jl-muted);
+}
+
+.flow {
+  height: 360px;
+  border: 1px solid var(--jl-line);
+  border-radius: var(--jl-radius);
+  overflow: hidden;
+}
+
+jl-flow {
+  display: block;
+  height: 100%;
+}
+
+.steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--jl-space-1);
+}
+
+.problem {
+  padding: 10px 12px;
+  border-radius: var(--jl-radius);
+  background: var(--jl-danger-soft);
+  font-size: 13px;
+  color: var(--jl-danger);
+}
+
+[hidden] {
+  display: none;
+}

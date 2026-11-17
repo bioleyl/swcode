@@ -16,6 +16,7 @@ var all = map[protocol.ToolName]Tool{
 	protocol.ToolNameScreenshot: screenshotTool, protocol.ToolNameSkill: skillTool, protocol.ToolNameTerminal: terminalTool,
 	protocol.ToolNameReadterminal: terminalOutputTool, protocol.ToolNameTodo: todoTool, protocol.ToolNameClosetodo: closeTodoTool,
 	protocol.ToolNameWebfetch: webfetchTool, protocol.ToolNameWebsearch: websearchTool, protocol.ToolNameWrite: writeTool,
+	protocol.ToolNameWorkflow: workflowTool, protocol.ToolNameHandoff: Handoff,
 }
 
 var (
@@ -33,6 +34,8 @@ var (
 	browserTools = []protocol.ToolName{protocol.ToolNameScreenshot}
 	// retiredTools are offered no longer: their names stay for the calls older sessions hold.
 	retiredTools = []protocol.ToolName{protocol.ToolNameSaveskill}
+	// workflowOnlyTools are a workflow step's alone: a session that runs no step would have nothing to hand off.
+	workflowOnlyTools = []protocol.ToolName{protocol.ToolNameHandoff}
 	// serverTools are no tool of swcode's own: `mcp` names every tool of an MCP server, which a box is given beside
 	// its own (With).
 	serverTools = []protocol.ToolName{protocol.ToolNameMcp}
@@ -75,6 +78,11 @@ func (b Box) Without(name protocol.ToolName) Box {
 // With is the box with the tools of MCP servers beside its own.
 func (b Box) With(more []Tool) Box {
 	return Box{more: slices.Concat(b.more, more), names: b.names}
+}
+
+// WithTool is the box with one tool of its own beside the others: a workflow step's handoff.
+func (b Box) WithTool(tool Tool) Box {
+	return Box{more: slices.Concat(b.more, []Tool{tool}), names: b.names}
 }
 
 // Find is the tool the model calls by that name, when the agent has it.
@@ -123,7 +131,7 @@ func Boxes(servers Servers) (Box, Box, Box) {
 
 // mainTools is every tool but a chat's own and those retired.
 var mainTools = slices.DeleteFunc(slices.Clone(protocol.ToolNames), func(name protocol.ToolName) bool {
-	return slices.Contains(chatOnlyTools, name) || slices.Contains(retiredTools, name) || slices.Contains(serverTools, name)
+	return slices.Contains(chatOnlyTools, name) || slices.Contains(retiredTools, name) || slices.Contains(serverTools, name) || slices.Contains(workflowOnlyTools, name)
 })
 
 // definableTools are the tools an agent the person defines may work with, in the order it is offered them: those

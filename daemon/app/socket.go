@@ -172,6 +172,15 @@ func (h handlers) CreateProject(message protocol.ClientMessageCreateProject) str
 
 func (h handlers) CreateSession(message protocol.ClientMessageCreateSession) struct{} {
 	go func() {
+		if message.WorkflowID != "" {
+			session, refused := h.app.startWorkflowRun(h.ctx, message)
+			if refused != "" {
+				h.reply(problem(refused))
+				return
+			}
+			h.reply(protocol.ServerMessage{Value: protocol.ServerMessageSessionCreated{Session: session}})
+			return
+		}
 		session, refused := h.app.Sessions.Create(h.ctx, sessions.Request{
 			Concise: message.Concise, Host: message.Host, Kind: message.Kind, Mode: message.Mode, Pictures: message.Pictures, PinnedTodos: message.PinnedTodos, Preset: message.Preset,
 			Prompt: message.Prompt, Thinking: message.Thinking, Workspace: message.Workspace, Worktree: message.Worktree,
@@ -250,7 +259,11 @@ func (h handlers) OlderEvents(message protocol.ClientMessageOlderEvents) struct{
 }
 
 func (h handlers) RemoveProject(message protocol.ClientMessageRemoveProject) struct{} {
-	return h.problem(h.app.Projects.Remove(message.ProjectID))
+	problem := h.app.Projects.Remove(message.ProjectID)
+	if problem == "" {
+		h.app.Workflows.ForgetProject(message.ProjectID)
+	}
+	return h.problem(problem)
 }
 
 func (h handlers) SetProjectDefaults(message protocol.ClientMessageSetProjectDefaults) struct{} {
@@ -291,6 +304,27 @@ func (h handlers) SetProjectScheduleOn(message protocol.ClientMessageSetProjectS
 
 func (h handlers) RemoveProjectSchedule(message protocol.ClientMessageRemoveProjectSchedule) struct{} {
 	return h.problem(h.app.Projects.RemoveSchedule(message.ProjectID, message.ScheduleID))
+}
+
+func (h handlers) SaveWorkflow(message protocol.ClientMessageSaveWorkflow) struct{} {
+	_, problem := h.app.Workflows.Save(message.ID, message.Workflow)
+	return h.problem(problem)
+}
+
+func (h handlers) ConfirmWorkflow(message protocol.ClientMessageConfirmWorkflow) struct{} {
+	return h.problem(h.app.Workflows.Confirm(message.WorkflowID))
+}
+
+func (h handlers) RemoveWorkflow(message protocol.ClientMessageRemoveWorkflow) struct{} {
+	return h.problem(h.app.Workflows.Remove(message.WorkflowID))
+}
+
+func (h handlers) StopWorkflowRun(message protocol.ClientMessageStopWorkflowRun) struct{} {
+	if problem := h.app.Workflows.StopRun(message.RunID); problem != "" {
+		return h.problem(problem)
+	}
+	h.app.stopWorkflowRun(message.RunID)
+	return struct{}{}
 }
 
 func (h handlers) AddProjectTodo(message protocol.ClientMessageAddProjectTodo) struct{} {
@@ -520,6 +554,8 @@ func (a *App) socket(response http.ResponseWriter, request *http.Request) {
 	box.push(protocol.ServerMessage{Value: protocol.ServerMessagePresets{Choices: a.Models.Choices()}})
 	box.push(protocol.ServerMessage{Value: protocol.ServerMessageSessions{Sessions: a.Sessions.List()}})
 	box.push(protocol.ServerMessage{Value: protocol.ServerMessageTerminals{Terminals: a.Terminals.List()}})
+	workflows, runs := a.Workflows.List()
+	box.push(protocol.ServerMessage{Value: protocol.ServerMessageWorkflows{Runs: runs, Workflows: workflows}})
 	go a.send(ctx, cancel, connection, box)
 	go keepAlive(ctx, cancel, connection)
 	watchers := newTerminalWatchers()
