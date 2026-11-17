@@ -19,10 +19,10 @@ func TestDraftOfLaysTheStepsOut(t *testing.T) {
 	if problem != "" {
 		t.Fatalf("draftOf: %s", problem)
 	}
-	if !draft.Draft || len(draft.Steps) != 2 || len(draft.Edges) != 1 {
+	if !draft.Draft || len(draft.Steps) != 4 || len(draft.Edges) != 3 {
 		t.Fatalf("draft = %+v", draft)
 	}
-	if draft.Steps[1].Position.Y <= draft.Steps[0].Position.Y {
+	if draft.Steps[2].Position.Y <= draft.Steps[1].Position.Y {
 		t.Fatalf("steps are not laid out: %+v", draft.Steps)
 	}
 	if draft.Edges[0].ID == "" || draft.Edges[0].To != "dev" {
@@ -35,7 +35,7 @@ func TestDraftOfRefusesAGraphWithoutOnePath(t *testing.T) {
 		Name:  "Team",
 		Steps: []workflowStepInput{{ID: "po", Name: "PO", Prompt: "Write."}, {ID: "dev", Name: "Dev", Prompt: "Build."}},
 	})
-	if !strings.Contains(problem, "starts at one step") {
+	if !strings.Contains(problem, "Start leads to one step") {
 		t.Fatalf("problem = %q", problem)
 	}
 }

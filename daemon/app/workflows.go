@@ -213,6 +213,20 @@ func (r *workflowRunner) startStep(state *workflowState, step protocol.WorkflowS
 	if state.stopped {
 		return
 	}
+	if step.Kind == protocol.WorkflowStepKindStart {
+		next := outgoingSteps(state.workflow, step.ID)
+		if len(next) == 0 {
+			r.fail(state, "The Start leads to no step.")
+			return
+		}
+		r.startStep(state, next[0], handoff)
+		return
+	}
+	if step.Kind == protocol.WorkflowStepKindEnd {
+		state.run.Status = protocol.WorkflowRunStatusDone
+		r.save(state)
+		return
+	}
 	if len(state.run.Steps) >= maxWorkflowRunSteps {
 		r.fail(state, fmt.Sprintf("The workflow ran %d steps: it may loop for good.", maxWorkflowRunSteps))
 		return
@@ -313,14 +327,21 @@ func (r *workflowRunner) nextOf(state *workflowState, step protocol.WorkflowStep
 		if said.exit == "" {
 			return protocol.WorkflowStep{}, false, ""
 		}
+		chosen := exitIDOf(step, said.exit)
+		if chosen == "" {
+			return protocol.WorkflowStep{}, false, fmt.Sprintf("%s chose %q, which is not one of its outputs.", step.Name, said.exit)
+		}
 		for _, edge := range state.workflow.Edges {
-			if edge.From == step.ID && edge.Port == said.exit {
+			if edge.From == step.ID && edge.Port == chosen {
 				if next, ok := stepByID(state.workflow, edge.To); ok {
+					if next.Kind == protocol.WorkflowStepKindEnd {
+						return protocol.WorkflowStep{}, false, ""
+					}
 					return next, true, ""
 				}
 			}
 		}
-		return protocol.WorkflowStep{}, false, fmt.Sprintf("%s chose the output %s, which goes nowhere.", step.Name, said.exit)
+		return protocol.WorkflowStep{}, false, fmt.Sprintf("%s chose the output %s, which goes nowhere.", step.Name, chosen)
 	}
 	outgoing := outgoingSteps(state.workflow, step.ID)
 	if said != nil && said.chose && said.exit != "" {
@@ -330,6 +351,9 @@ func (r *workflowRunner) nextOf(state *workflowState, step protocol.WorkflowStep
 	case 0:
 		return protocol.WorkflowStep{}, false, ""
 	case 1:
+		if outgoing[0].Kind == protocol.WorkflowStepKindEnd {
+			return protocol.WorkflowStep{}, false, ""
+		}
 		return outgoing[0], true, ""
 	default:
 		return protocol.WorkflowStep{}, false, fmt.Sprintf("%s did not choose where to go next.", step.Name)
@@ -510,7 +534,7 @@ func stepPrompt(workflow protocol.Workflow, step protocol.WorkflowStep, brief, h
 					}
 				}
 			}
-			fmt.Fprintf(&text, "- %q (%s): take it when %s.%s\n", exit.Label, exit.ID, exit.When, target)
+			fmt.Fprintf(&text, "- %s — %q: take it when %s.%s\n", exit.ID, exit.Label, exit.When, target)
 		}
 		text.WriteString("- `exit` empty: the workflow is finished.\n")
 	} else {
@@ -529,12 +553,17 @@ func stepPrompt(workflow protocol.Workflow, step protocol.WorkflowStep, brief, h
 }
 
 func firstStep(workflow protocol.Workflow) (protocol.WorkflowStep, bool) {
+	for _, step := range workflow.Steps {
+		if step.Kind == protocol.WorkflowStepKindStart {
+			return step, true
+		}
+	}
 	incoming := map[string]int{}
 	for _, edge := range workflow.Edges {
 		incoming[edge.To]++
 	}
 	for _, step := range workflow.Steps {
-		if incoming[step.ID] == 0 {
+		if step.Kind == protocol.WorkflowStepKindStep && incoming[step.ID] == 0 {
 			return step, true
 		}
 	}
@@ -552,6 +581,16 @@ func outgoingSteps(workflow protocol.Workflow, stepID string) []protocol.Workflo
 		}
 	}
 	return next
+}
+
+// exitIDOf is the output an agent named, by its id or by the label it reads; empty when it names neither.
+func exitIDOf(step protocol.WorkflowStep, name string) string {
+	for _, exit := range step.Exits {
+		if exit.ID == name || strings.EqualFold(exit.Label, name) {
+			return exit.ID
+		}
+	}
+	return ""
 }
 
 func stepByID(workflow protocol.Workflow, stepID string) (protocol.WorkflowStep, bool) {

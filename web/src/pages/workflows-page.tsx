@@ -63,7 +63,7 @@ const NO_RUNS = 'No run yet. Choose a workflow in the composer when you start a 
 const NEW_HINT =
   'Teams of sessions, global or a project’s. A session picks one with its first message; each step runs in a session of its own, handed the previous step’s report.';
 const STEPS_HINT =
-  'Drag a step to move it. The + under a step adds the next one. A step’s outputs let it go several ways, each with when it is taken; draw an edge from an output to its next step. One start.';
+  'Start feeds the brief to the step after it; End finishes the run. Drag a step to move it; the + under a step adds the next one. A step’s outputs let it go several ways, each with when it is taken; draw an edge from an output to its next step.';
 const REMOVED = 'The workflow is removed. Its runs stay as history.';
 // How long a page waits for the workflow its address names to come with the list.
 const PENDING_WORKFLOW_MS = 1500;
@@ -114,11 +114,14 @@ export class WorkflowsPage extends ScElement {
     stepApply: ref<JlButton>('.step-apply'),
     stepCard: ref<JlCard>('.step-card'),
     stepEmpty: ref('.step-empty'),
+    stepFields: ref('.step-fields'),
+    stepFooter: ref('.step-footer'),
     stepName: ref<JlInput>('.step-name'),
     stepPreset: ref<JlSelect>('.step-preset'),
     stepPrompt: ref<JlTextarea>('.step-prompt'),
     stepRemove: ref<JlButton>('.step-remove'),
     stepRole: ref<JlTextarea>('.step-role'),
+    stepSpecial: ref('.step-special'),
     workflows: ref('.workflows'),
   }));
 
@@ -175,34 +178,39 @@ export class WorkflowsPage extends ScElement {
               <JlButton class="add-step" icon="plus" label="New step" size="sm" />
             </JlCard>
             <JlCard class="step-card" heading="Step" hidden>
-              <JlField label="Name">
-                <JlInput class="step-name" autocomplete="off" maxlength={String(MAX_WORKFLOW_STEP_NAME)} />
-              </JlField>
-              <JlField
-                label="Role"
-                hint="Who this step is, and how it works. Given to its session before its task.">
-                <JlTextarea class="step-role" rows={4} maxlength={String(MAX_WORKFLOW_ROLE)} />
-              </JlField>
-              <JlField
-                label="Task"
-                hint="What it has to do. The person’s brief and the previous step’s handoff come with it; the outputs say when it takes each way on.">
-                <JlTextarea class="step-prompt" rows={4} maxlength={String(MAX_WORKFLOW_PROMPT)} />
-              </JlField>
-              <JlField label="Preset" hint="The models its session works with; the project’s when left as it is.">
-                <JlSelect class="step-preset" />
-              </JlField>
-              <div class="outputs">
-                <div class="outputs-head">
-                  <span class="outputs-title">Outputs</span>
-                  <JlButton class="add-exit" icon="plus" label="Add output" size="sm" />
+              <div class="step-fields">
+                <JlField label="Name">
+                  <JlInput class="step-name" autocomplete="off" maxlength={String(MAX_WORKFLOW_STEP_NAME)} />
+                </JlField>
+                <JlField
+                  label="Role"
+                  hint="Who this step is, and how it works. Given to its session before its task.">
+                  <JlTextarea class="step-role" rows={4} maxlength={String(MAX_WORKFLOW_ROLE)} />
+                </JlField>
+                <JlField
+                  label="Task"
+                  hint="What it has to do. The person’s brief and the previous step’s handoff come with it; the outputs say when it takes each way on.">
+                  <JlTextarea class="step-prompt" rows={4} maxlength={String(MAX_WORKFLOW_PROMPT)} />
+                </JlField>
+                <JlField
+                  label="Preset"
+                  hint="The models its session works with; the project’s when left as it is.">
+                  <JlSelect class="step-preset" />
+                </JlField>
+                <div class="outputs">
+                  <div class="outputs-head">
+                    <span class="outputs-title">Outputs</span>
+                    <JlButton class="add-exit" icon="plus" label="Add output" size="sm" />
+                  </div>
+                  <p class="outputs-hint">
+                    Each output is a way this step can go on, and when it takes it. Draw an edge from the output to
+                    the step it goes to.
+                  </p>
+                  <div class="exits" />
                 </div>
-                <p class="outputs-hint">
-                  Each output is a way this step can go on, and when it takes it. Draw an edge from the output to
-                  the step it goes to.
-                </p>
-                <div class="exits" />
               </div>
-              <div class="row">
+              <p class="step-special" hidden />
+              <div class="row step-footer">
                 <JlButton class="step-remove" variant="ghost" icon="trash" label="Remove the step" />
                 <JlButton class="step-apply" variant="primary" label="Save the step" />
               </div>
@@ -392,7 +400,8 @@ export class WorkflowsPage extends ScElement {
     const project =
       draft.projectId === undefined ? undefined : allProjects().find((each) => each.id === draft.projectId);
     const scope = project?.name ?? 'Every project';
-    return `${scope} · ${draft.steps.length} step${draft.steps.length === 1 ? '' : 's'}`;
+    const steps = draft.steps.filter((step) => step.kind === 'step').length;
+    return `${scope} · ${steps} step${steps === 1 ? '' : 's'}`;
   }
 
   private setGraph(): void {
@@ -415,7 +424,7 @@ export class WorkflowsPage extends ScElement {
   private workflowNode(workflow: Workflow): Node {
     const row = createElement(JlListItem, {
       props: {
-        description: `${this.workflowScope(workflow)} · ${workflow.steps.length} steps`,
+        description: `${this.workflowScope(workflow)} · ${workflow.steps.filter((step) => step.kind === 'step').length} steps`,
         heading: workflow.name,
         href: hrefOf(workflowPath(workflow.id)),
         icon: 'workflow',
@@ -502,6 +511,19 @@ export class WorkflowsPage extends ScElement {
     if (!step) {
       return;
     }
+    const special = step.kind !== 'step';
+    this._refs.stepFields.hidden = special;
+    this._refs.stepSpecial.hidden = !special;
+    this._refs.stepFooter.hidden = special;
+    this._refs.stepCard.heading.set(step.kind === 'start' ? 'Start' : step.kind === 'end' ? 'End' : 'Step');
+    if (special) {
+      this._refs.stepSpecial.textContent =
+        step.kind === 'start'
+          ? 'The brief you send starts here and goes to the step this leads to.'
+          : 'When a step’s output leads here, the run is finished.';
+      return;
+    }
+    this._refs.stepSpecial.textContent = '';
     this._refs.stepName.value.set(step.name);
     this._refs.stepRole.value.set(step.role);
     this._refs.stepPrompt.value.set(step.prompt);
@@ -535,7 +557,7 @@ export class WorkflowsPage extends ScElement {
   /** A new output of the step selected; the edge it had with no output, if one, leaves by it. */
   private addExit(): void {
     const step = this._draft.steps.find((each) => each.id === this._selected);
-    if (!step) {
+    if (!step || step.kind !== 'step') {
       return;
     }
     const exit: WorkflowExit = {
@@ -575,7 +597,7 @@ export class WorkflowsPage extends ScElement {
   /** Takes the step form into the draft; the problem when it cannot, empty when it did. */
   private applySelectedStep(): string {
     const step = this._draft.steps.find((each) => each.id === this._selected);
-    if (!step) {
+    if (!step || step.kind !== 'step') {
       return '';
     }
     const name = this._refs.stepName.value.get().trim();
@@ -633,38 +655,59 @@ export class WorkflowsPage extends ScElement {
     this.renderDraftState();
   }
 
-  /** A step after the one selected, or in the middle of the canvas when none is: the next link of the chain. */
+  /** A step after the one selected, or in the middle of the canvas when none is: Start and End stay in place. */
   private addStep(): void {
     const selected = this._draft.steps.find((step) => step.id === this._selected);
-    if (!selected) {
-      this.addStepAt(this._refs.flow.centerPosition());
-      return;
+    const position =
+      selected === undefined
+        ? this._refs.flow.centerPosition()
+        : this._refs.flow.positionAfter(selected.id, selected.exits[0]?.id ?? '');
+    const step = this.addStepAt(position);
+    const end = this._draft.steps.find((each) => each.kind === 'end');
+    if (selected?.kind === 'start') {
+      if (!this._draft.edges.some((edge) => edge.from === selected.id)) {
+        this.link(selected.id, step.id);
+      }
+    } else if (selected?.kind === 'step') {
+      if (selected.exits.length > 0) {
+        this.link(selected.id, step.id, selected.exits[0]?.id);
+      } else {
+        this._draft.edges = this._draft.edges.filter(
+          (edge) => !(edge.from === selected.id && edge.to === end?.id)
+        );
+        this.link(selected.id, step.id);
+      }
+    } else if (selected === undefined) {
+      const start = this._draft.steps.find((each) => each.kind === 'start');
+      if (start !== undefined && !this._draft.edges.some((edge) => edge.from === start.id)) {
+        this.link(start.id, step.id);
+      }
     }
-    const step = this.addStepAt(this._refs.flow.positionAfter(selected.id, selected.exits[0]?.id ?? ''));
-    this._draft.edges = [
-      ...this._draft.edges,
-      {
-        from: selected.id,
-        id: `edge-${crypto.randomUUID()}`,
-        to: step.id,
-        ...(selected.exits[0] === undefined ? {} : { port: selected.exits[0].id }),
-      },
-    ];
+    this.connectEnd(step);
     this.setGraph();
   }
 
   private addAfter(request: FlowAddRequest): void {
     const step = this.addStepAt(request.position);
+    this.link(request.from, step.id, request.port === '' ? undefined : request.port);
+    this.connectEnd(step);
+    this.setGraph();
+  }
+
+  private link(from: string, to: string, port?: string): void {
     this._draft.edges = [
       ...this._draft.edges,
-      {
-        from: request.from,
-        id: `edge-${crypto.randomUUID()}`,
-        to: step.id,
-        ...(request.port === '' ? {} : { port: request.port }),
-      },
+      { from, id: `edge-${crypto.randomUUID()}`, to, ...(port === undefined || port === '' ? {} : { port }) },
     ];
-    this.setGraph();
+  }
+
+  /** A step with one way and nothing after it goes to the End, so a new step is part of a runnable chain. */
+  private connectEnd(step: WorkflowStep): void {
+    const end = this._draft.steps.find((each) => each.kind === 'end');
+    if (end === undefined || step.exits.length > 0 || this._draft.edges.some((edge) => edge.from === step.id)) {
+      return;
+    }
+    this.link(step.id, end.id);
   }
 
   private addStepAt(position: { x: number; y: number }): WorkflowStep {
@@ -672,6 +715,7 @@ export class WorkflowsPage extends ScElement {
     const step: WorkflowStep = {
       exits: [],
       id,
+      kind: 'step',
       name: `${STEP_NAME} ${this._draft.steps.length + 1}`,
       position,
       prompt: NEW_STEP_PROMPT,
@@ -689,7 +733,7 @@ export class WorkflowsPage extends ScElement {
 
   private removeStep(): void {
     const step = this._draft.steps.find((each) => each.id === this._selected);
-    if (!step) {
+    if (!step || step.kind !== 'step') {
       return;
     }
     this._draft.steps = this._draft.steps.filter((each) => each.id !== step.id);

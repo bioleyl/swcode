@@ -251,6 +251,23 @@ func (v WorkflowRunStatus) Valid() bool {
 	return false
 }
 
+type WorkflowStepKind string
+
+const (
+	WorkflowStepKindStep  WorkflowStepKind = "step"
+	WorkflowStepKindStart WorkflowStepKind = "start"
+	WorkflowStepKindEnd   WorkflowStepKind = "end"
+)
+
+// Valid tells whether v is one of the WorkflowStepKind values.
+func (v WorkflowStepKind) Valid() bool {
+	switch v {
+	case WorkflowStepKindStep, WorkflowStepKindStart, WorkflowStepKindEnd:
+		return true
+	}
+	return false
+}
+
 type WorkflowStepStatus string
 
 const (
@@ -1054,13 +1071,14 @@ type WorkflowEdge struct {
 }
 
 type WorkflowStep struct {
-	Exits    []WorkflowExit `json:"exits"`
-	ID       string         `json:"id"`
-	Name     string         `json:"name"`
-	Position WorkflowPoint  `json:"position"`
-	Preset   string         `json:"preset,omitempty"`
-	Prompt   string         `json:"prompt"`
-	Role     string         `json:"role"`
+	Exits    []WorkflowExit   `json:"exits"`
+	ID       string           `json:"id"`
+	Kind     WorkflowStepKind `json:"kind"`
+	Name     string           `json:"name"`
+	Position WorkflowPoint    `json:"position"`
+	Preset   string           `json:"preset,omitempty"`
+	Prompt   string           `json:"prompt"`
+	Role     string           `json:"role"`
 }
 
 func (v WorkflowStep) MarshalJSON() ([]byte, error) {
@@ -1074,7 +1092,7 @@ func (v WorkflowStep) MarshalJSON() ([]byte, error) {
 
 func (v *WorkflowStep) UnmarshalJSON(data []byte) error {
 	type plain WorkflowStep
-	p := plain{Exits: []WorkflowExit{}}
+	p := plain{Exits: []WorkflowExit{}, Kind: "step", Prompt: ""}
 	if err := json.Unmarshal(data, &p); err != nil {
 		return err
 	}
@@ -1097,6 +1115,9 @@ func (v *WorkflowStep) Normalize() error {
 	if !pattern3.MatchString(v.ID) {
 		return fmt.Errorf("%s: %s", "id", "letters, digits, - and _")
 	}
+	if !v.Kind.Valid() {
+		return fmt.Errorf("%s: unknown value %q", "kind", v.Kind)
+	}
 	v.Name = strings.TrimSpace(v.Name)
 	if utf8.RuneCountInString(v.Name) < 1 {
 		return fmt.Errorf("%s: must not be empty", "name")
@@ -1105,9 +1126,6 @@ func (v *WorkflowStep) Normalize() error {
 		return fmt.Errorf("%s: at most 60 characters", "name")
 	}
 	v.Prompt = strings.TrimSpace(v.Prompt)
-	if utf8.RuneCountInString(v.Prompt) < 1 {
-		return fmt.Errorf("%s: must not be empty", "prompt")
-	}
 	if utf8.RuneCountInString(v.Prompt) > 8000 {
 		return fmt.Errorf("%s: at most 8000 characters", "prompt")
 	}

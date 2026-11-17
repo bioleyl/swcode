@@ -8,6 +8,10 @@ export const MAX_WORKFLOW_ROLE = 8000;
 export const MAX_WORKFLOW_PROMPT = 8000;
 export const MAX_WORKFLOW_STEPS = 50;
 export const MAX_WORKFLOW_EXITS = 10;
+
+/** A workflow step is a role; Start and End only anchor the graph, and run no session. */
+export const WorkflowStepKindSchema = z.enum(['step', 'start', 'end']);
+export type WorkflowStepKind = z.infer<typeof WorkflowStepKindSchema>;
 export const MAX_WORKFLOW_EDGES = 100;
 export const MAX_WORKFLOWS = 100;
 export const MAX_WORKFLOW_RUNS = 50;
@@ -42,13 +46,15 @@ export const WorkflowStepSchema = z.object({
     .min(1)
     .max(80)
     .regex(/^[A-Za-z0-9_-]+$/, 'letters, digits, - and _'),
+  // A role, or the Start or End of the graph.
+  kind: WorkflowStepKindSchema.default('step'),
   // What the step is called: PO, Dev, QA.
   name: z.string().trim().min(1).max(MAX_WORKFLOW_STEP_NAME),
   position: WorkflowPointSchema,
   // The preset its session works with; the project's when left out.
   preset: z.string().optional(),
-  // What the step has to do. The run adds the brief and the previous step's handoff to it.
-  prompt: z.string().trim().min(1).max(MAX_WORKFLOW_PROMPT),
+  // What the step has to do. The run adds the brief and the previous step's handoff to it. Empty on Start and End.
+  prompt: z.string().trim().max(MAX_WORKFLOW_PROMPT).default(''),
   // The role the step's session works under: given before its task, as its instructions.
   role: z.string().trim().max(MAX_WORKFLOW_ROLE),
 });

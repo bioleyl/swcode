@@ -26,7 +26,9 @@ func testService(t *testing.T) *Service {
 }
 
 func step(id, name string) protocol.WorkflowStep {
-	return protocol.WorkflowStep{ID: id, Name: name, Prompt: "Do the work.", Position: protocol.WorkflowPoint{}}
+	return protocol.WorkflowStep{
+		ID: id, Kind: protocol.WorkflowStepKindStep, Name: name, Prompt: "Do the work.", Position: protocol.WorkflowPoint{},
+	}
 }
 
 func withExits(step protocol.WorkflowStep, exits ...protocol.WorkflowExit) protocol.WorkflowStep {
@@ -37,8 +39,15 @@ func withExits(step protocol.WorkflowStep, exits ...protocol.WorkflowExit) proto
 func TestSaveConfirmAndRemove(t *testing.T) {
 	service := testService(t)
 	draft := protocol.WorkflowDraft{
-		Draft: true, Edges: []protocol.WorkflowEdge{{From: "po", ID: "e1", To: "dev"}}, Name: "Team",
-		Steps: []protocol.WorkflowStep{step("po", "PO"), step("dev", "Dev")},
+		Draft: true,
+		Edges: []protocol.WorkflowEdge{
+			{From: "start", ID: "s", To: "po"}, {From: "po", ID: "e1", To: "dev"}, {From: "dev", ID: "f", To: "end"},
+		},
+		Name: "Team",
+		Steps: []protocol.WorkflowStep{
+			anchor("start", "Start", protocol.WorkflowStepKindStart), step("po", "PO"), step("dev", "Dev"),
+			anchor("end", "End", protocol.WorkflowStepKindEnd),
+		},
 	}
 	saved, problem := service.Save("", draft)
 	if problem != "" {
@@ -77,9 +86,20 @@ func TestSaveCreatesWithTheEditorsID(t *testing.T) {
 	}
 }
 
+func anchor(id, name string, kind protocol.WorkflowStepKind) protocol.WorkflowStep {
+	return protocol.WorkflowStep{ID: id, Kind: kind, Name: name, Prompt: "", Position: protocol.WorkflowPoint{}}
+}
+
 func TestGraphProblem(t *testing.T) {
-	linear := []protocol.WorkflowStep{step("a", "A"), step("b", "B")}
-	edge := protocol.WorkflowEdge{From: "a", ID: "e", To: "b"}
+	begin, finish := anchor("start", "Start", protocol.WorkflowStepKindStart), anchor("end", "End", protocol.WorkflowStepKindEnd)
+	linear := []protocol.WorkflowStep{begin, step("a", "A"), step("b", "B"), finish}
+	linearEdges := []protocol.WorkflowEdge{
+		{From: "start", ID: "s", To: "a"}, {From: "a", ID: "e", To: "b"}, {From: "b", ID: "f", To: "end"},
+	}
+	twoExits := func(step protocol.WorkflowStep) protocol.WorkflowStep {
+		step.Exits = []protocol.WorkflowExit{{ID: "x", Label: "X", When: "it is x"}, {ID: "y", Label: "Y", When: "it is y"}}
+		return step
+	}
 	cases := []struct {
 		name  string
 		steps []protocol.WorkflowStep
@@ -87,13 +107,29 @@ func TestGraphProblem(t *testing.T) {
 		want  string
 	}{
 		{name: "empty", want: "at least one step"},
-		{name: "linear", steps: linear, edges: []protocol.WorkflowEdge{edge}},
-		{name: "two starts", steps: linear, want: "starts at one step"},
-		{name: "two outputs", steps: []protocol.WorkflowStep{withExits(step("a", "A"), protocol.WorkflowExit{ID: "x", Label: "X", When: "it is x"}, protocol.WorkflowExit{ID: "y", Label: "Y", When: "it is y"}), step("b", "B"), step("c", "C")}, edges: []protocol.WorkflowEdge{{From: "a", ID: "e1", Port: "x", To: "b"}, {From: "a", ID: "e2", Port: "y", To: "c"}}},
-		{name: "several ways without outputs", steps: []protocol.WorkflowStep{step("a", "A"), step("b", "B"), step("c", "C")}, edges: []protocol.WorkflowEdge{{From: "a", ID: "e1", To: "b"}, {From: "a", ID: "e2", To: "c"}}, want: "give it outputs"},
-		{name: "a loop from a start", steps: []protocol.WorkflowStep{step("a", "A"), step("b", "B"), step("c", "C")}, edges: []protocol.WorkflowEdge{{From: "a", ID: "e1", To: "b"}, {From: "b", ID: "e2", To: "c"}, {From: "c", ID: "e3", To: "b"}}},
-		{name: "a loop without a start", steps: linear, edges: []protocol.WorkflowEdge{edge, {From: "b", ID: "e2", To: "a"}}, want: "starts at one step"},
-		{name: "unknown step", steps: linear, edges: []protocol.WorkflowEdge{{From: "a", ID: "e", To: "x"}}, want: "not in the workflow"},
+		{name: "no anchors", steps: []protocol.WorkflowStep{step("a", "A"), step("b", "B")}, edges: []protocol.WorkflowEdge{{From: "a", ID: "e", To: "b"}}, want: "needs one Start and one End"},
+		{name: "linear", steps: linear, edges: linearEdges},
+		{name: "two starts", steps: append(linear, anchor("start2", "Start 2", protocol.WorkflowStepKindStart)), edges: linearEdges, want: "one Start"},
+		{name: "two outputs", steps: []protocol.WorkflowStep{begin, twoExits(step("a", "A")), step("b", "B"), step("c", "C"), finish}, edges: []protocol.WorkflowEdge{
+			{From: "start", ID: "s", To: "a"}, {From: "a", ID: "e1", Port: "x", To: "b"}, {From: "a", ID: "e2", Port: "y", To: "c"},
+			{From: "b", ID: "f1", To: "end"}, {From: "c", ID: "f2", To: "end"},
+		}},
+		{name: "several ways without outputs", steps: []protocol.WorkflowStep{begin, step("a", "A"), step("b", "B"), step("c", "C"), finish}, edges: []protocol.WorkflowEdge{
+			{From: "start", ID: "s", To: "a"}, {From: "a", ID: "e1", To: "b"}, {From: "a", ID: "e2", To: "c"},
+			{From: "b", ID: "f1", To: "end"}, {From: "c", ID: "f2", To: "end"},
+		}, want: "give it outputs"},
+		{name: "a loop with a start and an end", steps: []protocol.WorkflowStep{begin, step("a", "A"), step("b", "B"), twoExits(step("c", "C")), finish}, edges: []protocol.WorkflowEdge{
+			{From: "start", ID: "s", To: "a"}, {From: "a", ID: "e1", To: "b"}, {From: "b", ID: "e2", To: "c"},
+			{From: "c", ID: "e3", Port: "x", To: "a"}, {From: "c", ID: "e4", Port: "y", To: "end"},
+		}},
+		{name: "an end off the path", steps: []protocol.WorkflowStep{begin, step("a", "A"), step("b", "B"), finish}, edges: []protocol.WorkflowEdge{
+			{From: "start", ID: "s", To: "a"}, {From: "a", ID: "e", To: "b"}, {From: "b", ID: "f", To: "a"},
+		}, want: "End is not reached"},
+		{name: "a step that goes nowhere", steps: []protocol.WorkflowStep{begin, step("a", "A"), finish}, edges: []protocol.WorkflowEdge{{From: "start", ID: "s", To: "a"}}, want: "goes nowhere"},
+		{name: "an output with no edge", steps: []protocol.WorkflowStep{begin, twoExits(step("a", "A")), step("b", "B"), finish}, edges: []protocol.WorkflowEdge{
+			{From: "start", ID: "s", To: "a"}, {From: "a", ID: "e", Port: "x", To: "b"}, {From: "b", ID: "f", To: "end"},
+		}, want: "has no edge"},
+		{name: "unknown step", steps: linear, edges: []protocol.WorkflowEdge{{From: "start", ID: "s", To: "a"}, {From: "a", ID: "e", To: "x"}}, want: "not in the workflow"},
 	}
 	for _, test := range cases {
 		t.Run(test.name, func(t *testing.T) {

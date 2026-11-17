@@ -101,6 +101,7 @@ describe('a workflow that loops', () => {
         { from: 'qa', port: 'fix', to: 'dev' },
         { from: 'qa', port: 'pass', to: 'check' },
         { from: 'check', port: 'more', to: 'dev' },
+        { from: 'check', port: 'done', to: 'end' },
       ],
       name: 'Team loop',
       steps: [
@@ -122,7 +123,10 @@ describe('a workflow that loops', () => {
           role: 'You test.',
         },
         {
-          exits: [{ id: 'more', label: 'Another ticket', when: 'another ticket is left' }],
+          exits: [
+            { id: 'more', label: 'Another ticket', when: 'another ticket is left' },
+            { id: 'done', label: 'Done', when: 'all tickets are validated' },
+          ],
           id: 'check',
           name: 'PO check',
           prompt: 'Validate the work. Hand another ticket to Dev, or finish.',
@@ -136,10 +140,10 @@ describe('a workflow that loops', () => {
         answer('I proposed it.'),
         ...handoff('', 'Ticket 1: build the thing.'),
         ...handoff('', 'Built the thing.'),
-        ...handoff('fix', 'Fix the null check.'),
+        ...handoff('Fix needed', 'Fix the null check.'),
         ...handoff('', 'Fixed the null check.'),
-        ...handoff('pass', 'The work passes.'),
-        ...handoff('', 'Validated: all tickets are done.'),
+        ...handoff('Passed', 'The work passes.'),
+        ...handoff('Done', 'Validated: all tickets are done.'),
       ],
     });
     const page = await rig.browser.newPage({ viewport: DESKTOP });

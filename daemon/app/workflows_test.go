@@ -32,7 +32,7 @@ func TestAWorkflowProposedByTheAgentIsADraft(t *testing.T) {
 		t.Fatalf("workflows = %+v", workflows)
 	}
 	workflow := workflows[0]
-	if !workflow.Draft || workflow.Name != "Team" || len(workflow.Steps) != 2 || len(workflow.Edges) != 1 {
+	if !workflow.Draft || workflow.Name != "Team" || len(workflow.Steps) != 4 || len(workflow.Edges) != 3 {
 		t.Fatalf("workflow = %+v", workflow)
 	}
 	if workflow.ProjectID == "" {

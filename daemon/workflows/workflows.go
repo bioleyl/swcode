@@ -278,100 +278,136 @@ func (s *Service) ForgetProject(projectID string) {
 	s.change()
 }
 
-// GraphProblem says why a workflow cannot run, or nothing when it can: one start, every step reached from it, and no step handing its work to itself. A step may have several steps after it, and a loop may come back: each step chooses where it goes on.
+// GraphProblem says why a workflow cannot run, or nothing when it can: one Start, one End, every step reached from
+// Start, and a way for every role to go on. A role may lead to several steps, and a loop may come back; a step chooses
+// its output. Start and End run no session: Start hands the brief to its one step, End finishes the run.
 func GraphProblem(steps []protocol.WorkflowStep, edges []protocol.WorkflowEdge) string {
 	if len(steps) == 0 {
 		return "A workflow needs at least one step."
 	}
-	ids := map[string]bool{}
 	stepOf := map[string]protocol.WorkflowStep{}
-	for _, step := range steps {
-		stepOf[step.ID] = step
-		if step.ID == "" || ids[step.ID] {
+	var start, finish *protocol.WorkflowStep
+	for index := range steps {
+		step := steps[index]
+		if step.ID == "" || stepOf[step.ID].ID != "" {
 			return "Each step needs an id of its own."
 		}
-		ids[step.ID] = true
-		if step.Name == "" {
-			return "Each step needs a name."
+		stepOf[step.ID] = step
+		switch step.Kind {
+		case protocol.WorkflowStepKindStart:
+			if start != nil {
+				return "A workflow has one Start."
+			}
+			start = &steps[index]
+		case protocol.WorkflowStepKindEnd:
+			if finish != nil {
+				return "A workflow has one End."
+			}
+			finish = &steps[index]
+		case protocol.WorkflowStepKindStep:
+			if step.Name == "" {
+				return "Each step needs a name."
+			}
+			if step.Prompt == "" {
+				return fmt.Sprintf("The step %s needs what it has to do.", step.Name)
+			}
+		default:
+			return "Each step is a role, the Start or the End."
 		}
-		if step.Prompt == "" {
-			return fmt.Sprintf("The step %s needs what it has to do.", step.Name)
+		if step.Kind != protocol.WorkflowStepKindStep && len(step.Exits) > 0 {
+			return "The Start and the End have no outputs."
 		}
 	}
+	if start == nil || finish == nil {
+		return "A workflow needs one Start and one End."
+	}
+	startEdges := 0
+	outgoing := map[string]int{}
+	exits := map[string]map[string]bool{}
 	for _, step := range steps {
-		if len(step.Exits) == 0 {
-			continue
-		}
-		exits := map[string]bool{}
+		ids := map[string]bool{}
 		for _, exit := range step.Exits {
-			if exit.ID == "" || exits[exit.ID] {
+			if exit.ID == "" || ids[exit.ID] {
 				return fmt.Sprintf("The step %s has two outputs with one id.", step.Name)
 			}
-			exits[exit.ID] = true
+			ids[exit.ID] = true
 			if exit.Label == "" || exit.When == "" {
 				return fmt.Sprintf("The output %s of %s needs a name and when it is taken.", exit.ID, step.Name)
 			}
 		}
-		for _, edge := range edges {
-			if edge.From != step.ID {
-				continue
-			}
-			if !exits[edge.Port] {
-				return fmt.Sprintf("The step %s has no output %s.", step.Name, edge.Port)
-			}
-		}
-		for id := range exits {
-			used := 0
-			for _, edge := range edges {
-				if edge.From == step.ID && edge.Port == id {
-					used++
-				}
-			}
-			if used != 1 {
-				return fmt.Sprintf("The output %s of %s goes to one step only.", id, step.Name)
-			}
-		}
+		exits[step.ID] = ids
 	}
-	for _, step := range steps {
-		if len(step.Exits) == 0 && outgoingCount(edges, step.ID) > 1 {
-			return fmt.Sprintf("The step %s goes several ways: give it outputs.", step.Name)
-		}
-	}
-	incoming := map[string]int{}
-	after := map[string][]string{}
 	for _, edge := range edges {
-		if !ids[edge.From] || !ids[edge.To] {
+		from, fromOK := stepOf[edge.From]
+		to, toOK := stepOf[edge.To]
+		if !fromOK || !toOK {
 			return "An edge joins a step that is not in the workflow."
-		}
-		if edge.Port != "" {
-			source := stepOf[edge.From]
-			known := false
-			for _, exit := range source.Exits {
-				if exit.ID == edge.Port {
-					known = true
-				}
-			}
-			if !known {
-				return fmt.Sprintf("The step %s has no output %s.", source.Name, edge.Port)
-			}
 		}
 		if edge.From == edge.To {
 			return "A step cannot hand its work to itself."
 		}
-		incoming[edge.To]++
-		after[edge.From] = append(after[edge.From], edge.To)
-	}
-	starts := []string{}
-	for _, step := range steps {
-		if incoming[step.ID] == 0 {
-			starts = append(starts, step.ID)
+		if to.Kind == protocol.WorkflowStepKindStart {
+			return "The Start takes no edge leading to it."
+		}
+		if from.Kind == protocol.WorkflowStepKindEnd {
+			return "The End goes nowhere."
+		}
+		outgoing[from.ID]++
+		if from.Kind == protocol.WorkflowStepKindStart {
+			startEdges++
+			if edge.Port != "" {
+				return "The Start has no outputs."
+			}
+			if to.Kind == protocol.WorkflowStepKindEnd {
+				return "The Start leads to a step, not to the End."
+			}
+			continue
+		}
+		if len(from.Exits) > 0 {
+			if edge.Port == "" {
+				return fmt.Sprintf("The edge from %s leaves by no output: choose one of its outputs.", from.Name)
+			}
+			if !exits[from.ID][edge.Port] {
+				return fmt.Sprintf("The step %s has no output %s.", from.Name, edge.Port)
+			}
+		} else if edge.Port != "" {
+			return fmt.Sprintf("The step %s has no output %s.", from.Name, edge.Port)
 		}
 	}
-	if len(starts) != 1 {
-		return "A workflow starts at one step: it has " + fmt.Sprint(len(starts)) + "."
+	if startEdges != 1 {
+		return "The Start leads to one step."
 	}
-	seen := map[string]bool{starts[0]: true}
-	queue := []string{starts[0]}
+	if outgoing[finish.ID] > 0 {
+		return "The End goes nowhere."
+	}
+	for _, step := range steps {
+		if step.Kind == protocol.WorkflowStepKindStep && outgoing[step.ID] == 0 {
+			return fmt.Sprintf("The step %s goes nowhere: give it an output, or an edge to the End.", step.Name)
+		}
+		if step.Kind == protocol.WorkflowStepKindStep && len(step.Exits) == 0 && outgoing[step.ID] > 1 {
+			return fmt.Sprintf("The step %s goes several ways: give it outputs.", step.Name)
+		}
+		for exitID := range exits[step.ID] {
+			used := 0
+			for _, edge := range edges {
+				if edge.From == step.ID && edge.Port == exitID {
+					used++
+				}
+			}
+			if used == 0 {
+				return fmt.Sprintf("The output %s of %s has no edge: it goes to one step.", exitID, step.Name)
+			}
+			if used > 1 {
+				return fmt.Sprintf("The output %s of %s has %d edges: it goes to one step only.", exitID, step.Name, used)
+			}
+		}
+	}
+	after := map[string][]string{}
+	for _, edge := range edges {
+		after[edge.From] = append(after[edge.From], edge.To)
+	}
+	seen := map[string]bool{start.ID: true}
+	queue := []string{start.ID}
 	for len(queue) > 0 {
 		at := queue[0]
 		queue = queue[1:]
@@ -382,8 +418,11 @@ func GraphProblem(steps []protocol.WorkflowStep, edges []protocol.WorkflowEdge) 
 			}
 		}
 	}
+	if !seen[finish.ID] {
+		return "The End is not reached: give a step an output that leads to the End."
+	}
 	if len(seen) != len(steps) {
-		return "Every step is reached from the start: one of them is off the path."
+		return "Every step is reached from the Start: one of them is off the path."
 	}
 	return ""
 }

@@ -27,9 +27,9 @@ var Handoff = Define(Spec[handoffInput]{
 			return Outcome{Meta: "handoff", OK: true, Output: "The workflow goes on from your report."}
 		}, nil)
 	},
-	Description: "Ends a step of a workflow: says which output it takes, and the report the next step reads. Call it when the step is done. `exit` is the id of one of the step's outputs, or empty when the workflow is finished.",
+	Description: "Ends a step of a workflow: says which output it takes, and the report the next step reads. Call it when the step is done. `exit` is the id (or the label) of one of the step's outputs, or empty when the workflow is finished.",
 	Input: Object(
-		Optional("exit", String().Trimmed().Describe("The id of the step's output to take; empty when the workflow is finished.")),
+		Optional("exit", String().Trimmed().Describe("The id or label of the step's output to take; empty when the workflow is finished.")),
 		Required("report", String().Trimmed().Min(1).Max(maxHandoffReport).Describe("What the next step needs to know: the report it reads.")),
 	),
 	Name:      protocol.ToolNameHandoff,
