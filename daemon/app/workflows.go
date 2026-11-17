@@ -325,7 +325,7 @@ func (r *workflowRunner) nextOf(state *workflowState, step protocol.WorkflowStep
 			return protocol.WorkflowStep{}, false, fmt.Sprintf("%s did not choose one of its outputs.", step.Name)
 		}
 		if said.exit == "" {
-			return protocol.WorkflowStep{}, false, ""
+			return protocol.WorkflowStep{}, false, fmt.Sprintf("%s did not choose one of its outputs.", step.Name)
 		}
 		chosen := exitIDOf(step, said.exit)
 		if chosen == "" {
@@ -536,7 +536,7 @@ func stepPrompt(workflow protocol.Workflow, step protocol.WorkflowStep, brief, h
 			}
 			fmt.Fprintf(&text, "- %s — %q: take it when %s.%s\n", exit.ID, exit.Label, exit.When, target)
 		}
-		text.WriteString("- `exit` empty: the workflow is finished.\n")
+		text.WriteString("\nChoose one of these outputs; the one that leads to End finishes the run.\n")
 	} else {
 		outgoing := outgoingSteps(workflow, step.ID)
 		if len(outgoing) == 0 {
