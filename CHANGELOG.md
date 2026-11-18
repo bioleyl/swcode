@@ -2,6 +2,15 @@
 
 All notable changes to swcode are documented here.
 
+## [0.15.3] - 2026-11-18
+
+### Fixed
+
+- Dictation works again in the desktop app: from Edge 153, WebView2 sends speech recognition to Edge's Ceto service, which refuses the app; the window now turns that service off (WebView2 issue 5724).
+- The desktop app's first start on a fresh computer no longer fails with “The system cannot find the path specified”: the listen marker's folder is made before it is written.
+- A phone's pairing number stays on screen while it waits; a status answer no longer puts the form back.
+- A hosted model's vision is read from the flat `input_modalities` some APIs list, so the screenshot tool no longer refuses a seeing model as text-only.
+
 ## [0.15.2] - 2026-11-17
 
 ### Fixed
