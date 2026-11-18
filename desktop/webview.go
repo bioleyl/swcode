@@ -18,12 +18,17 @@ var outsideLinks string
 // The pages a link may open in the person's browser.
 var outsideSchemes = map[string]bool{"http": true, "https": true}
 
+// speechWithoutCeto turns off Edge's Ceto speech service, which refuses WebView2's requests from version 153 on (a
+// WebView2 regression, its issue 5724): the page's speech recognition then works as it did before.
+const speechWithoutCeto = "--disable-features=msSpeechRecognitionServiceUseCetoService"
+
 // Windows' own opener of a link in the default browser: the link goes to it as it is, commas included.
 var linkOpener = []string{"rundll32.exe", "url.dll,FileProtocolHandler"}
 
 // embedWebview puts Edge's WebView2 in the window, on its own profile, in the page's colours.
 func embedWebview(hwnd uintptr, folder string, look theme) (*edge.Chromium, error) {
 	chromium := edge.NewChromium()
+	chromium.AdditionalBrowserArgs = []string{speechWithoutCeto}
 	chromium.DataPath = folder
 	chromium.SetErrorCallback(func(err error) { showError(err.Error()) })
 	chromium.MessageCallback = func(message string, sender *edge.ICoreWebView2, _ *edge.ICoreWebView2WebMessageReceivedEventArgs) {
