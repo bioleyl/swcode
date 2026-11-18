@@ -105,12 +105,15 @@ export class ScConnect extends ScElement {
   }
 
   private start(): void {
+    // The shell sets `active` at every status answer, and a set fires even with the value it had: a number already
+    // waiting stays, or it would change on the phone every fifteen seconds.
+    if (this._waiting !== undefined) {
+      return;
+    }
     this._refs.form.hidden = this.served();
     this._refs.served.hidden = !this.served();
     this.refuse('');
-    // The shell sets `active` at every status answer, and a set fires even with the value it had: a number already
-    // waiting stays, or it would change on the phone every fifteen seconds.
-    if (this.served() && this._waiting === undefined) {
+    if (this.served()) {
       this.begin(location.origin, '');
     }
   }

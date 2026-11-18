@@ -38,6 +38,23 @@ describe('on a phone', () => {
     await page.locator('home-page textarea').waitFor();
   });
 
+  it('keeps the number it shows while its status is asked again', async () => {
+    const rig = await start({ replies: [] });
+    const page = await rig.browser.newPage({ viewport: PHONE });
+    // No computer knows this page: its status reads as a refusal, as the app's first launch does.
+    await page.route('**/api/status', (route) => route.fulfill({ body: 'No daemon here.', status: 503 }));
+    await page.goto(rig.link);
+    await page.locator('#connect-name input').fill('home');
+    await page.locator('#connect-address input').fill(new URL(rig.link).origin);
+    await page.locator('sc-connect .connect-submit').click();
+    const number = await shownPairNumber(page);
+
+    // The status answer fifteen seconds on leaves the wait and its number where they are.
+    await page.waitForTimeout(16_000);
+    expect(await page.locator('sc-connect .connect-command').textContent()).toBe(`swcode pair ${number}`);
+    expect(await page.locator('sc-connect form').isHidden()).toBe(true);
+  });
+
   it('the settings say how to install it where the browser has no button for it', async () => {
     const rig = await start({ replies: [] });
     const page = await rig.browser.newPage({ viewport: PHONE });
