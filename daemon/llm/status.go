@@ -33,7 +33,10 @@ type servedModels struct {
 		Status           *struct {
 			Value string `json:"value"`
 		} `json:"status"`
-		Architecture *struct {
+		// InputModalities is what a hosted API lists, as DeepSeek's does; vLLM and OpenRouter put theirs under
+		// architecture.
+		InputModalities []string `json:"input_modalities"`
+		Architecture    *struct {
 			InputModalities []string `json:"input_modalities"`
 		} `json:"architecture"`
 	} `json:"data"`
@@ -50,13 +53,18 @@ func (m servedModels) lengthOf(model string) int {
 	return 0
 }
 
-// visionOf tells whether a router's model takes pictures; known is false when the list does not say, as a
-// single-model llm-server's, whose /props does.
+// visionOf tells whether a model takes pictures; known is false when the list does not say, as a single-model
+// llm-server's, whose /props does.
 func (m servedModels) visionOf(model string) (sees, known bool) {
 	for _, served := range m.Data {
-		if served.ID == model && served.Architecture != nil {
-			return slices.Contains(served.Architecture.InputModalities, imageModality), true
+		if served.ID != model {
+			continue
 		}
+		modalities := served.InputModalities
+		if len(modalities) == 0 && served.Architecture != nil {
+			modalities = served.Architecture.InputModalities
+		}
+		return slices.Contains(modalities, imageModality), len(modalities) > 0
 	}
 	return false, false
 }

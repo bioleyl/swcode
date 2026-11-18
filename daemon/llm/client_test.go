@@ -221,6 +221,25 @@ func TestTheContextOfAServerWithoutPropsIsReadFromItsModelsList(t *testing.T) {
 	}
 }
 
+func TestTheVisionOfAHostedAPIIsReadFromItsFlatModalities(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != "/v1/models" {
+			http.NotFound(response, request)
+			return
+		}
+		_, _ = response.Write([]byte(`{"data":[
+			{"id":"sees","input_modalities":["text","image"]},
+			{"id":"text","input_modalities":["text"]}
+		]}`))
+	}))
+	defer server.Close()
+	status := NewStatusReader(Options{URL: server.URL})
+	ctx := context.Background()
+	if !status.VisionOf(ctx, "sees") || status.VisionOf(ctx, "text") {
+		t.Fatal("vision")
+	}
+}
+
 func TestTheContextIsReadAsHostedAPIsListIt(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		if request.URL.Path != "/v1/models" {
