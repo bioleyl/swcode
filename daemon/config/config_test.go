@@ -144,4 +144,13 @@ func TestAnInstallDevicesArePairedWithKeepsListeningOnTheNetworkOnce(t *testing.
 	if err := ListenAsBefore(map[string]string{envHost: "127.0.0.1"}, fromEnvironment); err != nil || listens(fromEnvironment) != "" {
 		t.Fatalf("chosen by the environment: listens on %q, error %v", listens(fromEnvironment), err)
 	}
+
+	// A fresh computer has no data folder yet: the look makes it and writes the marker there.
+	fresh := t.TempDir()
+	if err := ListenAsBefore(map[string]string{}, fresh); err != nil || listens(fresh) != "" {
+		t.Fatalf("fresh computer: listens on %q, error %v", listens(fresh), err)
+	}
+	if _, err := os.Stat(filepath.Join(fresh, DataFolder, listenMarker)); err != nil {
+		t.Fatalf("the marker of a fresh computer was not written: %v", err)
+	}
 }

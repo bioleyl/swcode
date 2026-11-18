@@ -184,14 +184,21 @@ func hasDevices(dataDir string) bool {
 	return err == nil && json.Unmarshal(data, &devices) == nil && len(devices) > 0
 }
 
+// markChecked writes the marker, the data folder made first: a fresh computer has none yet.
+func markChecked(dataDir string) error {
+	if err := os.MkdirAll(dataDir, settingsFolderMode); err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(dataDir, listenMarker), nil, settingsFileMode)
+}
+
 // ListenAsBefore keeps an install from before swcode listened on its own computer alone reachable by what was
 // paired with it. Looked at once, at its first start since: with phones or computers paired and no address chosen,
 // its settings now choose every interface, which was the default; a choice of this computer says what the default
 // now says, and its line goes. An install nobody paired with becomes this computer's alone.
 func ListenAsBefore(environment map[string]string, home string) error {
 	dataDir := DataDirOf(environment, home)
-	marker := filepath.Join(dataDir, listenMarker)
-	if _, err := os.Stat(marker); err == nil {
+	if _, err := os.Stat(filepath.Join(dataDir, listenMarker)); err == nil {
 		return nil
 	}
 	path := SettingsPathOf(environment, home)
@@ -203,10 +210,10 @@ func ListenAsBefore(environment map[string]string, home string) error {
 	case !set && environment[envHost] == "" && hasDevices(dataDir):
 		values[envHost] = everyInterface
 	default:
-		return os.WriteFile(marker, nil, settingsFileMode)
+		return markChecked(dataDir)
 	}
 	if err := WriteSettings(path, values); err != nil {
 		return err
 	}
-	return os.WriteFile(marker, nil, settingsFileMode)
+	return markChecked(dataDir)
 }
