@@ -111,6 +111,14 @@ export const ClientMessageSchema = z.discriminatedUnion('type', [
   }),
   z.object({ sessionId: z.string(), title: z.string().trim().min(1).max(120), type: z.literal('renameSession') }),
   z.object({ sessionId: z.string(), type: z.literal('deleteSession') }),
+  // Branches a session at a decision: a new session of its own holding the source's first `keep` events, then a
+  // turn with `text` as its first message. The source stays as it was.
+  z.object({
+    keep: z.number().int().min(0),
+    sessionId: z.string(),
+    text: z.string().trim().min(1),
+    type: z.literal('forkSession'),
+  }),
   // Pins a message of the session, to jump back to it from the side panel: the daemon keeps its first words as the
   // label, and answers with the sessions' list. A pin that is already there is left as it is.
   z.object({ eventId: z.string().min(1), sessionId: z.string(), type: z.literal('pinEvent') }),

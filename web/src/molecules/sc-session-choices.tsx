@@ -1,16 +1,17 @@
 import { css } from '@jadis/core';
 import { JlField, JlLink, JlRadioGroup, JlSegmented, JlSelect, JlSwitch } from '@syware/jlib';
 
-import { PERMISSION_MODES, THINKING_MODES } from '../../../shared/protocol/choices.schema';
+import { PERMISSION_MODES } from '../../../shared/protocol/choices.schema';
 import { ScElement } from '../base/sc-element';
 import { MODE_LABELS } from '../lib/mode-labels';
-import { NO_PRESETS, presetDescription } from '../lib/presets';
+import { NO_PRESETS, presetDescription, presetOf } from '../lib/presets';
+import { thinkingModesOf, thinkingOffered } from '../lib/thinking-levels';
 import { hrefOf, settingsPath } from '../services/navigation';
 import { BASE_STYLES } from '../styles/shared';
 import styles from './sc-session-choices.css?inline';
 
 import type { RadioOption, SegmentedOption } from '@syware/jlib';
-import type { PresetChoices } from '../../../shared/protocol/models.schema';
+import type { ModelThinking, PresetChoices } from '../../../shared/protocol/models.schema';
 import type { PermissionMode, ThinkingMode } from '../../../shared/protocol/session.schema';
 import type { Workflow } from '../../../shared/protocol/workflow.schema';
 
@@ -27,10 +28,12 @@ const THINKING_SHORT: Readonly<Record<ThinkingMode, string>> = {
   off: 'Off',
 };
 const MODELS_TOPIC = 'models';
-const THINKING_OPTIONS: SegmentedOption<ThinkingMode>[] = THINKING_MODES.map((thinking) => ({
+const THINKING_OPTION = (thinking: ThinkingMode): SegmentedOption<ThinkingMode> => ({
   label: THINKING_SHORT[thinking],
   value: thinking,
-}));
+});
+/** Before a preset says its model's modes: a model that names none offers these, as llama.cpp's template does. */
+const ALL_THINKING_OPTIONS = thinkingModesOf(undefined).map(THINKING_OPTION);
 
 const WORKTREE_NOTE =
   'A copy of the repository beside it, on a branch of its own: the project’s folder stays as it is.';
@@ -60,14 +63,18 @@ export class ScSessionChoices extends ScElement {
       }))
     );
     this._refs.presets.value.set(this.preset.get());
+    this.showThinkingModes();
   });
-  readonly preset = this.useChange('', (value) => this._refs.presets.value.set(value));
+  readonly preset = this.useChange('', (value) => {
+    this._refs.presets.value.set(value);
+    this.showThinkingModes();
+  });
   /** Whether the session has permissions to choose: a chat runs nothing, so it asks for nothing. */
   readonly permissions = this.useChange(true, (shown) => {
     this._refs.mode.hidden = !shown;
   });
   readonly mode = this.useChange<PermissionMode>('auto', (value) => this._refs.mode.value.set(value));
-  readonly thinking = this.useChange<ThinkingMode>('full', (value) => this._refs.thinking.value.set(value));
+  readonly thinking = this.useChange<ThinkingMode>('full', (value) => this.showOfferedThinking(value));
   readonly concise = this.useChange(false, (value) => this._refs.concise.checked.set(value));
   /** Whether a git worktree can be chosen: for a new coding session only, the composer says. */
   readonly worktreeOffered = this.useChange(false, (offered) => {
@@ -93,6 +100,7 @@ export class ScSessionChoices extends ScElement {
     mode: ref<JlRadioGroup<PermissionMode>>('.mode'),
     presets: ref<JlRadioGroup>('.presets'),
     thinking: ref<JlSegmented<ThinkingMode>>('.thinking'),
+    thinkingField: ref<JlField>('.thinking-field'),
     workflow: ref<JlSelect>('.workflow'),
     workflowField: ref<JlField>('.workflow-field'),
     worktree: ref<JlSwitch>('.worktree'),
@@ -104,13 +112,13 @@ export class ScSessionChoices extends ScElement {
         <JlRadioGroup class="presets" label="Preset" legend />
         <JlLink class="edit" href={hrefOf(settingsPath(MODELS_TOPIC))} label="Edit the presets" />
         <JlRadioGroup<PermissionMode> class="mode" label="Permissions" legend options={MODE_OPTIONS} />
-        <JlField label="Thinking">
+        <JlField class="thinking-field" label="Thinking">
           <JlSegmented<ThinkingMode>
             class="thinking"
             label="Thinking"
             block
             size="sm"
-            options={THINKING_OPTIONS}
+            options={ALL_THINKING_OPTIONS}
           />
         </JlField>
         <JlSwitch class="concise" label="Token economy" />
@@ -155,6 +163,29 @@ export class ScSessionChoices extends ScElement {
       this.workflow.set(workflow);
       this.events.emit('workflow', workflow);
     });
+  }
+
+  private mainThinking(): ModelThinking | undefined {
+    return presetOf(this.choices.get(), this.preset.get())?.main.thinking;
+  }
+
+  /** The modes the chosen preset's model offers: a model without levels offers none, and the field goes. */
+  private showThinkingModes(): void {
+    const modes = thinkingModesOf(this.mainThinking());
+    this._refs.thinkingField.hidden = modes.length === 0;
+    this._refs.thinking.options.set(modes.map(THINKING_OPTION));
+    this.showOfferedThinking(this.thinking.get());
+  }
+
+  /** Shows the mode the model offers in place of one it does not, and says it. */
+  private showOfferedThinking(chosen: ThinkingMode): void {
+    const offered = thinkingOffered(this.mainThinking(), chosen);
+    this._refs.thinking.value.set(offered);
+    if (offered === chosen) {
+      return;
+    }
+    this.thinking.set(offered);
+    this.events.emit('thinking', offered);
   }
 }
 

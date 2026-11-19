@@ -73,7 +73,7 @@ var SessionKinds = []SessionKind{SessionKindCode, SessionKindChat}
 
 var SessionStatuses = []SessionStatus{SessionStatusIdle, SessionStatusWorking, SessionStatusWaiting}
 
-var ToolNames = []ToolName{ToolNameRead, ToolNameWrite, ToolNameEdit, ToolNameBash, ToolNameGrep, ToolNameGlob, ToolNameAgent, ToolNamePlan, ToolNameQuestion, ToolNameWebsearch, ToolNameWebfetch, ToolNameImage, ToolNameDraw, ToolNameOutput, ToolNameKill, ToolNameTerminal, ToolNameReadterminal, ToolNameSkill, ToolNameNotes, ToolNameTodo, ToolNameClosetodo, ToolNameWorkflow, ToolNameHandoff, ToolNameSaveskill, ToolNameScreenshot, ToolNameMcp}
+var ToolNames = []ToolName{ToolNameRead, ToolNameWrite, ToolNameEdit, ToolNameBash, ToolNameGrep, ToolNameGlob, ToolNameAgent, ToolNamePlan, ToolNameQuestion, ToolNameDecision, ToolNameWebsearch, ToolNameWebfetch, ToolNameImage, ToolNameDraw, ToolNameOutput, ToolNameKill, ToolNameTerminal, ToolNameReadterminal, ToolNameSkill, ToolNameNotes, ToolNameTodo, ToolNameClosetodo, ToolNameWorkflow, ToolNameHandoff, ToolNameSaveskill, ToolNameScreenshot, ToolNameMcp}
 
 var TurnOutcomes = []TurnOutcome{TurnOutcomeDone, TurnOutcomeStopped, TurnOutcomeFailed, TurnOutcomeLimit}
 
@@ -367,6 +367,7 @@ const (
 	ToolNameAgent        ToolName = "agent"
 	ToolNamePlan         ToolName = "plan"
 	ToolNameQuestion     ToolName = "question"
+	ToolNameDecision     ToolName = "decision"
 	ToolNameWebsearch    ToolName = "websearch"
 	ToolNameWebfetch     ToolName = "webfetch"
 	ToolNameImage        ToolName = "image"
@@ -389,7 +390,7 @@ const (
 // Valid tells whether v is one of the ToolName values.
 func (v ToolName) Valid() bool {
 	switch v {
-	case ToolNameRead, ToolNameWrite, ToolNameEdit, ToolNameBash, ToolNameGrep, ToolNameGlob, ToolNameAgent, ToolNamePlan, ToolNameQuestion, ToolNameWebsearch, ToolNameWebfetch, ToolNameImage, ToolNameDraw, ToolNameOutput, ToolNameKill, ToolNameTerminal, ToolNameReadterminal, ToolNameSkill, ToolNameNotes, ToolNameTodo, ToolNameClosetodo, ToolNameWorkflow, ToolNameHandoff, ToolNameSaveskill, ToolNameScreenshot, ToolNameMcp:
+	case ToolNameRead, ToolNameWrite, ToolNameEdit, ToolNameBash, ToolNameGrep, ToolNameGlob, ToolNameAgent, ToolNamePlan, ToolNameQuestion, ToolNameDecision, ToolNameWebsearch, ToolNameWebfetch, ToolNameImage, ToolNameDraw, ToolNameOutput, ToolNameKill, ToolNameTerminal, ToolNameReadterminal, ToolNameSkill, ToolNameNotes, ToolNameTodo, ToolNameClosetodo, ToolNameWorkflow, ToolNameHandoff, ToolNameSaveskill, ToolNameScreenshot, ToolNameMcp:
 		return true
 	}
 	return false
@@ -2037,6 +2038,8 @@ func (ToolDisplayPlan) isToolDisplay() {}
 
 func (ToolDisplayImage) isToolDisplay() {}
 
+func (ToolDisplayDecision) isToolDisplay() {}
+
 func (u ToolDisplay) MarshalJSON() ([]byte, error) {
 	if u.Value == nil {
 		return nil, errors.New("protocol: an empty ToolDisplay")
@@ -2076,6 +2079,12 @@ func (u *ToolDisplay) UnmarshalJSON(data []byte) error {
 			return err
 		}
 		u.Value = value
+	case "\"decision\"":
+		var value ToolDisplayDecision
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
 	default:
 		return fmt.Errorf("protocol: no ToolDisplay with kind %s", head.Key)
 	}
@@ -2088,6 +2097,7 @@ type ToolDisplayMapper[R any] interface {
 	Text(ToolDisplayText) R
 	Plan(ToolDisplayPlan) R
 	Image(ToolDisplayImage) R
+	Decision(ToolDisplayDecision) R
 }
 
 // MapToolDisplay calls the mapper's method for the variant u holds.
@@ -2101,6 +2111,8 @@ func MapToolDisplay[R any](u ToolDisplay, m ToolDisplayMapper[R]) R {
 		return m.Plan(value)
 	case ToolDisplayImage:
 		return m.Image(value)
+	case ToolDisplayDecision:
+		return m.Decision(value)
 	}
 	panic(fmt.Sprintf("protocol: an empty or unknown ToolDisplay %T", u.Value))
 }
@@ -2165,6 +2177,25 @@ func (v ToolDisplayImage) MarshalJSON() ([]byte, error) {
 		Key string `json:"kind"`
 		plain
 	}{"image", p})
+}
+
+type ToolDisplayDecision struct {
+	Chosen   string   `json:"chosen"`
+	Options  []string `json:"options"`
+	Question string   `json:"question"`
+	Why      string   `json:"why,omitempty"`
+}
+
+func (v ToolDisplayDecision) MarshalJSON() ([]byte, error) {
+	type plain ToolDisplayDecision
+	p := plain(v)
+	if p.Options == nil {
+		p.Options = []string{}
+	}
+	return json.Marshal(struct {
+		Key string `json:"kind"`
+		plain
+	}{"decision", p})
 }
 
 type SessionEventPermissionAnswered struct {
@@ -2519,6 +2550,7 @@ type SessionSummary struct {
 	Concise        bool                `json:"concise"`
 	Host           HostRef             `json:"host"`
 	ID             string              `json:"id"`
+	ForkOf         string              `json:"forkOf,omitempty"`
 	Jobs           []SessionSummaryJob `json:"jobs"`
 	Kind           SessionKind         `json:"kind"`
 	Mode           PermissionMode      `json:"mode"`
@@ -2602,6 +2634,8 @@ func (ClientMessageCreateSession) isClientMessage() {}
 func (ClientMessageRenameSession) isClientMessage() {}
 
 func (ClientMessageDeleteSession) isClientMessage() {}
+
+func (ClientMessageForkSession) isClientMessage() {}
 
 func (ClientMessagePinEvent) isClientMessage() {}
 
@@ -2742,6 +2776,12 @@ func (u *ClientMessage) UnmarshalJSON(data []byte) error {
 		u.Value = value
 	case "\"deleteSession\"":
 		var value ClientMessageDeleteSession
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
+	case "\"forkSession\"":
+		var value ClientMessageForkSession
 		if err := json.Unmarshal(data, &value); err != nil {
 			return err
 		}
@@ -3087,6 +3127,7 @@ type ClientMessageMapper[R any] interface {
 	CreateSession(ClientMessageCreateSession) R
 	RenameSession(ClientMessageRenameSession) R
 	DeleteSession(ClientMessageDeleteSession) R
+	ForkSession(ClientMessageForkSession) R
 	PinEvent(ClientMessagePinEvent) R
 	UnpinEvent(ClientMessageUnpinEvent) R
 	ClearQueue(ClientMessageClearQueue) R
@@ -3153,6 +3194,8 @@ func MapClientMessage[R any](u ClientMessage, m ClientMessageMapper[R]) R {
 		return m.RenameSession(value)
 	case ClientMessageDeleteSession:
 		return m.DeleteSession(value)
+	case ClientMessageForkSession:
+		return m.ForkSession(value)
 	case ClientMessagePinEvent:
 		return m.PinEvent(value)
 	case ClientMessageUnpinEvent:
@@ -3386,6 +3429,43 @@ func (v ClientMessageDeleteSession) MarshalJSON() ([]byte, error) {
 		Key string `json:"type"`
 		plain
 	}{"deleteSession", p})
+}
+
+type ClientMessageForkSession struct {
+	Keep      int    `json:"keep"`
+	SessionID string `json:"sessionId"`
+	Text      string `json:"text"`
+}
+
+func (v ClientMessageForkSession) MarshalJSON() ([]byte, error) {
+	type plain ClientMessageForkSession
+	p := plain(v)
+	return json.Marshal(struct {
+		Key string `json:"type"`
+		plain
+	}{"forkSession", p})
+}
+
+func (v *ClientMessageForkSession) UnmarshalJSON(data []byte) error {
+	type plain ClientMessageForkSession
+	p := plain{}
+	if err := json.Unmarshal(data, &p); err != nil {
+		return err
+	}
+	*v = ClientMessageForkSession(p)
+	return v.Normalize()
+}
+
+// Normalize trims and checks what the app sent, as its schema does.
+func (v *ClientMessageForkSession) Normalize() error {
+	if v.Keep < 0 {
+		return fmt.Errorf("%s: at least 0", "keep")
+	}
+	v.Text = strings.TrimSpace(v.Text)
+	if utf8.RuneCountInString(v.Text) < 1 {
+		return fmt.Errorf("%s: must not be empty", "text")
+	}
+	return nil
 }
 
 type ClientMessagePinEvent struct {
@@ -5626,10 +5706,11 @@ func (v *Preset) Normalize() error {
 }
 
 type ModelRef struct {
-	ContextTokens int    `json:"contextTokens,omitempty"`
-	Model         string `json:"model"`
-	Source        string `json:"source"`
-	Vision        bool   `json:"vision,omitempty"`
+	ContextTokens int            `json:"contextTokens,omitempty"`
+	Model         string         `json:"model"`
+	Source        string         `json:"source"`
+	Thinking      *ModelThinking `json:"thinking,omitempty"`
+	Vision        bool           `json:"vision,omitempty"`
 }
 
 func (v *ModelRef) UnmarshalJSON(data []byte) error {
@@ -5655,6 +5736,13 @@ func (v *ModelRef) Normalize() error {
 		return fmt.Errorf("%s: must not be empty", "source")
 	}
 	return nil
+}
+
+type ModelThinking struct {
+	Full   map[string]string `json:"full,omitempty"`
+	Low    map[string]string `json:"low,omitempty"`
+	Medium map[string]string `json:"medium,omitempty"`
+	Off    map[string]string `json:"off,omitempty"`
 }
 
 type SubagentLimit struct {

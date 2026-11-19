@@ -16,6 +16,8 @@ export const TOOL_NAMES = [
   'agent',
   'plan',
   'question',
+  // Records a choice that shapes the work, so the session's decision map shows it and the person can revisit it.
+  'decision',
   'websearch',
   'webfetch',
   'image',
@@ -107,7 +109,8 @@ export type PlanStepStatus = PlanStep['status'];
 
 /**
  * What the app shows for a tool call besides its one-line summary: the change to a file, some text, the
- * agent's plan as it stands, or a picture it made (the daemon keeps a copy to show, at `url`).
+ * agent's plan as it stands, a picture it made (the daemon keeps a copy to show, at `url`), or the choice it
+ * recorded with the decision tool.
  */
 export const ToolDisplaySchema = z.discriminatedUnion('kind', [
   z.object({
@@ -120,9 +123,17 @@ export const ToolDisplaySchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('text'), text: z.string() }),
   z.object({ kind: z.literal('plan'), steps: z.array(PlanStepSchema) }),
   z.object({ kind: z.literal('image'), path: z.string(), url: z.string() }),
+  z.object({
+    chosen: z.string(),
+    kind: z.literal('decision'),
+    options: z.array(z.string()),
+    question: z.string(),
+    why: z.string().optional(),
+  }),
 ]);
 export type ToolDisplay = z.infer<typeof ToolDisplaySchema>;
 export type DiffDisplay = Extract<ToolDisplay, { kind: 'diff' }>;
+export type DecisionDisplay = Extract<ToolDisplay, { kind: 'decision' }>;
 
 /** A tool call as the model wrote it: its arguments are the model's JSON text, valid or not. */
 export const ToolCallSchema = z.object({ arguments: z.string(), id: z.string(), name: z.string() });
@@ -364,6 +375,8 @@ export const SessionSummarySchema = z.object({
   concise: z.boolean().default(false),
   host: HostRefSchema.default(LOCAL_HOST),
   id: z.string(),
+  // The session this one forked from, when the person changed a decision and replayed from there.
+  forkOf: z.string().optional(),
   // Commands the agent left running in the background (servers, watchers), until they end or are stopped.
   jobs: z.array(z.object({ command: z.string(), id: z.string() })).default([]),
   // A chat works in no folder: its workspace is empty, its host this computer.

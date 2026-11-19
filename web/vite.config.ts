@@ -33,7 +33,7 @@ const compressedCopies = (): Plugin => ({
 
 // npm run dev:web: the app with hot reload; its API calls and its socket go to the daemon from npm run dev:server.
 export default defineConfig({
-  build: { emptyOutDir: true, outDir: OUT_DIR },
+  build: { chunkSizeWarningLimit: 800, emptyOutDir: true, outDir: OUT_DIR },
   oxc: { jsx: { importSource: '@jadis/core', runtime: 'automatic' } },
   plugins: [compressedCopies()],
   root: import.meta.dirname,

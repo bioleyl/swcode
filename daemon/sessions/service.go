@@ -534,6 +534,55 @@ func (s *Service) Remove(sessionID string) string {
 	})
 }
 
+// Fork makes a new session with the events a source session holds before `keep`, and starts its first turn with the
+// text: the person changed a decision, and the conversation replays from there. The source stays as it was.
+func (s *Service) Fork(ctx context.Context, sourceID string, keep int, text string) (protocol.SessionSummary, string) {
+	s.mu.Lock()
+	source, ok := s.sessions[sourceID]
+	if !ok {
+		s.mu.Unlock()
+		return protocol.SessionSummary{}, unknownSession
+	}
+	if working(source) {
+		s.mu.Unlock()
+		return protocol.SessionSummary{}, stillWorking
+	}
+	meta := source.meta
+	keep = max(0, min(keep, len(source.events)))
+	kept := append([]protocol.SessionEvent{}, source.events[:keep]...)
+	s.mu.Unlock()
+
+	host := meta.Host
+	created, problem := s.Create(ctx, Request{
+		Concise: meta.Concise, Host: &host, Kind: meta.Kind, Mode: meta.Mode,
+		Preset: meta.Preset, Thinking: meta.Thinking, Workspace: meta.projectFolder(),
+	})
+	if problem != "" {
+		return protocol.SessionSummary{}, problem
+	}
+
+	s.mu.Lock()
+	target, ok := s.sessions[created.ID]
+	if !ok {
+		s.mu.Unlock()
+		return protocol.SessionSummary{}, unknownSession
+	}
+	target.meta.ForkOf = sourceID
+	for _, event := range kept {
+		target.events = append(target.events, event)
+		if err := s.deps.Store.Append(created.ID, event); err != nil {
+			s.deps.LogError(err)
+		}
+	}
+	s.saveMeta(target.meta)
+	summary := summaryOf(target)
+	s.publishSessions()
+	s.mu.Unlock()
+
+	s.SendPrompt(created.ID, text, nil)
+	return summary, ""
+}
+
 // RemoveRun removes a workflow's run session and every step session of it, when none works: its record and handoff
 // files are the app's.
 func (s *Service) RemoveRun(runID string) string {
@@ -601,11 +650,17 @@ func (s *Service) ClearQueue(sessionID string) string {
 	})
 }
 
-// SendQueueNow sends the queued messages to the model at the running turn's next step: the person steers it as it
-// works.
+// SendQueueNow sends the queued messages to the model at once: the running turn's step ends, and the next one starts
+// on them, so the person steers the agent as it works.
 func (s *Service) SendQueueNow(sessionID string) string {
 	return s.withSession(sessionID, func(session *live) string {
-		session.queueNow = session.turn != nil && len(session.queue) > 0
+		if len(session.queue) == 0 {
+			return ""
+		}
+		if session.turn != nil {
+			session.queueNow = true
+			session.turn.cancel()
+		}
 		s.publishSessions()
 		return ""
 	})
@@ -1058,7 +1113,7 @@ func summaryOf(session *live) protocol.SessionSummary {
 		}
 	}
 	return protocol.SessionSummary{
-		Host: session.meta.Host, ID: session.meta.ID, Jobs: append([]protocol.SessionSummaryJob{}, session.jobs...), Kind: session.meta.Kind,
+		Host: session.meta.Host, ID: session.meta.ID, ForkOf: session.meta.ForkOf, Jobs: append([]protocol.SessionSummaryJob{}, session.jobs...), Kind: session.meta.Kind,
 		Concise: session.meta.Concise, Mode: session.meta.Mode, Pins: append([]protocol.SessionPin{}, session.meta.Pins...),
 		Preset: session.meta.Preset, Queued: queued, QueuedNow: session.queueNow,
 		SeenAt: session.meta.SeenAt, Status: status,

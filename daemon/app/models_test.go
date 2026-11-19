@@ -37,6 +37,21 @@ func TestThinkingAsksTheTemplateForTheSessionsModeAndNothingForTheModelsOwn(t *t
 	}
 }
 
+func TestAPresetsThinkingMappingReachesTheModel(t *testing.T) {
+	test := Start(t, Options{Replies: []fakellama.Reply{text("Yes.")}})
+	settings := test.App.Models.Settings()
+	settings.Presets[0].Main.Thinking = &protocol.ModelThinking{Low: map[string]string{"reasoning_effort": "max"}}
+	if status, body := test.Call("PUT", protocol.EndpointModels, settings); status != 200 {
+		t.Fatalf("status %d: %v", status, body)
+	}
+	session := test.NewSession(sessions.Request{Prompt: "One", Thinking: protocol.ThinkingModeLow})
+	test.UntilIdle(session.ID)
+	request := test.Requests()[0]
+	if request["reasoning_effort"] != "max" || request["chat_template_kwargs"] != nil {
+		t.Fatalf("request %v", request)
+	}
+}
+
 func TestThinkingChangesFromTheNextRequestOn(t *testing.T) {
 	test := Start(t, Options{Replies: []fakellama.Reply{text("Yes."), text("Sure.")}})
 	session := test.NewSession(sessions.Request{Prompt: "One"})

@@ -17,6 +17,26 @@ export const LlmSourceSchema = z.object({
 export type LlmSource = z.infer<typeof LlmSourceSchema>;
 
 /**
+ * What a thinking mode asks a model: the request fields it takes, by dotted path (`thinking.type`,
+ * `chat_template_kwargs.reasoning_effort`). A value that reads as JSON keeps its type (`false`, `0.6`); other text
+ * stays text (`max`, `disabled`).
+ */
+export const ThinkingFieldsSchema = z.record(z.string(), z.string());
+export type ThinkingFields = z.infer<typeof ThinkingFieldsSchema>;
+
+/**
+ * A model's thinking, as its API defines it: for each of the app's modes, the fields it takes when asked for it. A
+ * mode left out is not offered; `{}` asks for the model's own.
+ */
+export const ModelThinkingSchema = z.object({
+  full: ThinkingFieldsSchema.optional(),
+  low: ThinkingFieldsSchema.optional(),
+  medium: ThinkingFieldsSchema.optional(),
+  off: ThinkingFieldsSchema.optional(),
+});
+export type ModelThinking = z.infer<typeof ModelThinkingSchema>;
+
+/**
  * A model of a source, by the name the source serves it as. Empty for a single-model llm-server's, or, on a
  * router, its first loaded model.
  */
@@ -26,6 +46,9 @@ export const ModelRefSchema = z.object({
   contextTokens: z.number().int().positive().max(MAX_CONTEXT_TOKENS).optional(),
   model: z.string().trim(),
   source: z.string().min(1),
+  // What each thinking mode asks this model, when its API does not speak the llm-server template's words. Left out,
+  // what the client knows (llama.cpp's `chat_template_kwargs`).
+  thinking: ModelThinkingSchema.optional(),
   // Whether it sees pictures when its server does not say, as a hosted API: the preset then sends it them. Left
   // out, what the server says decides.
   vision: z.boolean().optional(),

@@ -9,7 +9,7 @@ import (
 
 // all is every tool, by name: a new tool name does not get offered until it is here.
 var all = map[protocol.ToolName]Tool{
-	protocol.ToolNameAgent: agentTool, protocol.ToolNameBash: bashTool, protocol.ToolNameDraw: drawTool, protocol.ToolNameEdit: editTool,
+	protocol.ToolNameAgent: agentTool, protocol.ToolNameBash: bashTool, protocol.ToolNameDecision: decisionTool, protocol.ToolNameDraw: drawTool, protocol.ToolNameEdit: editTool,
 	protocol.ToolNameGlob: globTool, protocol.ToolNameGrep: grepTool, protocol.ToolNameImage: imageTool,
 	protocol.ToolNameKill: killTool, protocol.ToolNameNotes: notesTool, protocol.ToolNameOutput: outputTool, protocol.ToolNamePlan: planTool,
 	protocol.ToolNameQuestion: questionTool, protocol.ToolNameRead: readTool,

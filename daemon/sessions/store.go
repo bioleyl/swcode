@@ -43,6 +43,8 @@ type Meta struct {
 	// WorkflowRunID is the run of a workflow the session belongs to; WorkflowStepID the step it works on.
 	WorkflowRunID  string `json:"workflowRunId,omitempty"`
 	WorkflowStepID string `json:"workflowStepId,omitempty"`
+	// ForkOf is the session this one branched from, when the person changed a decision and replayed from there.
+	ForkOf string `json:"forkOf,omitempty"`
 }
 
 // projectFolder is the folder of the session's project: the one its worktree was made from, or the one it works in.

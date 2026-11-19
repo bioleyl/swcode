@@ -519,7 +519,7 @@ func TestAMessageSentWhileATurnRunsStartsTheNextTurn(t *testing.T) {
 	Expect(t, test.App.Sessions.List()[0], `{"queued":[]}`)
 }
 
-func TestWhatWasQueuedSentNowJoinsTheRunningTurnAtItsNextStep(t *testing.T) {
+func TestWhatWasQueuedSentNowEndsTheRunningTurnAndStartsTheNextOne(t *testing.T) {
 	test := Start(t, Options{Replies: []fakellama.Reply{call("bash", map[string]any{"command": "ls"}), text("Listed, and sure.")}})
 	sessionID := prompt(t, test, "List")
 	test.WaitForEvent("permissionRequested", 1)
@@ -539,7 +539,7 @@ func TestWhatWasQueuedSentNowJoinsTheRunningTurnAtItsNextStep(t *testing.T) {
 			steps = append(steps, protocol.Kind(event))
 		}
 	}
-	want := []string{"turnStarted", "List", "assistantMessage", "toolFinished", "Then say sure", "assistantMessage"}
+	want := []string{"turnStarted", "List", "assistantMessage", "toolFinished", "turnStarted", "Then say sure", "assistantMessage"}
 	if !reflect.DeepEqual(steps, want) {
 		t.Fatalf("steps %v", steps)
 	}

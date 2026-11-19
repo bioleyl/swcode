@@ -33,9 +33,9 @@ const (
 	subagentThinking = protocol.ThinkingModeLow
 	// maxSteps is enough for a long task (a local model takes 20 to 40 s a step); past it, the model reports what it
 	// did. The settings page changes it (SWCODE_MAX_STEPS).
-	defaultMaxSteps = 150
+	defaultMaxSteps = 300
 	// A subagent answers one question, so it needs fewer, and the main agent waits for it (SWCODE_SUBAGENT_MAX_STEPS).
-	defaultSubagentMaxSteps = 30
+	defaultSubagentMaxSteps = 150
 	minMaxSteps             = 1
 	maxMaxSteps             = 1000
 

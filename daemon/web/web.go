@@ -66,5 +66,7 @@ type Reader struct {
 	Source    string
 	ModelName string
 	Thinking  protocol.ThinkingMode
-	NewID     func() string
+	// ThinkingSpec is the model's own words for each thinking mode, when its preset says them.
+	ThinkingSpec *protocol.ModelThinking
+	NewID        func() string
 }

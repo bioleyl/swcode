@@ -34,7 +34,7 @@ export const SETTING_FIELDS: Readonly<Record<SettingName, SettingField>> = {
     label: 'Picture server',
   },
   SWCODE_MAX_STEPS: {
-    control: { kind: 'text', placeholder: '150' },
+    control: { kind: 'text', placeholder: '300' },
     hint: 'How many times the main agent may act in one turn before it stops and reports what it did: 1 to 1000. A local model takes 20 to 40 s a step, so a long task needs many.',
     label: 'Max steps per turn',
   },
@@ -49,7 +49,7 @@ export const SETTING_FIELDS: Readonly<Record<SettingName, SettingField>> = {
     label: 'SSH endpoints',
   },
   SWCODE_SUBAGENT_MAX_STEPS: {
-    control: { kind: 'text', placeholder: '30' },
+    control: { kind: 'text', placeholder: '150' },
     hint: 'How many times a subagent may act before it stops and reports what it found: 1 to 1000. The main agent waits for its report.',
     label: 'Max steps per subagent',
   },
