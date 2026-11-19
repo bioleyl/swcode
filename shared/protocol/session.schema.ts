@@ -373,10 +373,10 @@ export const SessionSummarySchema = z.object({
   branch: z.string().optional(),
   // Token economy: each message sent asks the model to be concise.
   concise: z.boolean().default(false),
-  host: HostRefSchema.default(LOCAL_HOST),
-  id: z.string(),
   // The session this one forked from, when the person changed a decision and replayed from there.
   forkOf: z.string().optional(),
+  host: HostRefSchema.default(LOCAL_HOST),
+  id: z.string(),
   // Commands the agent left running in the background (servers, watchers), until they end or are stopped.
   jobs: z.array(z.object({ command: z.string(), id: z.string() })).default([]),
   // A chat works in no folder: its workspace is empty, its host this computer.

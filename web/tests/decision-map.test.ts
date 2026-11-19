@@ -6,7 +6,13 @@ import type { SessionEvent } from '../../shared/protocol/session.schema';
 
 const AT = '2026-11-18T14:32:00.000Z';
 
-const reply = (id: string, text: string): SessionEvent => ({ at: AT, id, kind: 'assistantMessage', text, toolCalls: [] });
+const reply = (id: string, text: string): SessionEvent => ({
+  at: AT,
+  id,
+  kind: 'assistantMessage',
+  text,
+  toolCalls: [],
+});
 
 const decided = (callId: string, chosen: string, options: string[], why: string): SessionEvent[] => [
   { at: AT, callId, kind: 'toolCall', summary: `${chosen}`, tool: 'decision' },

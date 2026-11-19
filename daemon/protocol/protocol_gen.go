@@ -2548,9 +2548,9 @@ type SessionPin struct {
 type SessionSummary struct {
 	Branch         string              `json:"branch,omitempty"`
 	Concise        bool                `json:"concise"`
+	ForkOf         string              `json:"forkOf,omitempty"`
 	Host           HostRef             `json:"host"`
 	ID             string              `json:"id"`
-	ForkOf         string              `json:"forkOf,omitempty"`
 	Jobs           []SessionSummaryJob `json:"jobs"`
 	Kind           SessionKind         `json:"kind"`
 	Mode           PermissionMode      `json:"mode"`

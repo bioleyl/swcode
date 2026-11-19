@@ -68,7 +68,8 @@ function lookupsOf(events: readonly SessionEvent[]): Lookups {
     if (recorded !== undefined) {
       records.set(recorded.callId, recorded.record);
     }
-  }  return { callMessages, records };
+  }
+  return { callMessages, records };
 }
 /** The node of a `decision` tool call, from the choice its result recorded. */
 function decisionOf(event: SessionEvent, index: number, lookups: Lookups): Decision | undefined {

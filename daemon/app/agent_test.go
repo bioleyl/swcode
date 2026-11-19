@@ -523,12 +523,12 @@ func TestWhatWasQueuedSentNowEndsTheRunningTurnAndStartsTheNextOne(t *testing.T)
 	test := Start(t, Options{Replies: []fakellama.Reply{call("bash", map[string]any{"command": "ls"}), text("Listed, and sure.")}})
 	sessionID := prompt(t, test, "List")
 	test.WaitForEvent("permissionRequested", 1)
+	answerNext(t, test, sessionID, protocol.PermissionDecisionAllowOnce, 1)
 	test.App.Sessions.SendPrompt(sessionID, "Then say sure", nil)
 	if problem := test.App.Sessions.SendQueueNow(sessionID); problem != "" {
 		t.Fatal(problem)
 	}
 	Expect(t, test.App.Sessions.List()[0], `{"queued":["Then say sure"],"queuedNow":true}`)
-	answerNext(t, test, sessionID, protocol.PermissionDecisionAllowOnce, 1)
 	test.UntilIdle(sessionID)
 	steps := []string{}
 	for _, event := range test.Events(sessionID) {

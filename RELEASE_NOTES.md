@@ -1,5 +1,7 @@
-# swcode 0.15.3
+# swcode 0.15.4
 
-Released 2026-11-18.
+Released 2026-11-19.
 
-Dictation works again in the desktop app (Edge's WebView2 sent it to a speech service that refused the app), a fresh computer's first start no longer fails on the listen marker's missing folder, a phone's pairing number stays while it waits, and a hosted model's vision is read from the flat `input_modalities` some APIs list.
+A session now records the choices that shape the work with the `decision` tool, and the session page's map shows them as a graph: select one to read what was decided and why, and **Change…** replays the session from there with another option. A preset's model also names the thinking modes its API takes, so the composer offers only the modes that model has.
+
+A turn takes 300 steps by default and a subagent 150, the composer's **Send now** sends the waiting messages at once, the agent gets a bot icon, and the composer's panel of choices scrolls in a short window so its last group stays reachable.
