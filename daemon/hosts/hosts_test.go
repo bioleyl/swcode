@@ -319,3 +319,24 @@ func waitUntil(t *testing.T, done func() bool) {
 		time.Sleep(50 * time.Millisecond)
 	}
 }
+
+func TestOnlyTheNewestEndedBackgroundJobsAreKept(t *testing.T) {
+	jobs := NewJobs(Bash)
+	t.Cleanup(jobs.StopAll)
+	folder := t.TempDir()
+	ids := []string{}
+	for range maxEndedJobs + 1 {
+		ids = append(ids, jobs.Start("exit 0", folder))
+	}
+	oldest, newest := ids[0], ids[len(ids)-1]
+	waitUntil(t, func() bool {
+		state := jobs.Read(newest, false)
+		return state != nil && !state.Running
+	})
+	if state := jobs.Read(newest, false); state == nil {
+		t.Fatal("the newest ended job was forgotten")
+	}
+	if state := jobs.Read(oldest, false); state != nil {
+		t.Fatalf("the oldest ended job is still kept: %+v", state)
+	}
+}

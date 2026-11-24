@@ -23,12 +23,13 @@ var quietEnvironment = []string{"FORCE_COLOR=0", "GIT_PAGER=cat", "NO_COLOR=1", 
 
 // commandOf is a shell command in a folder, in a process group (a tree on Windows) of its own, so it is stopped
 // with all it started.
-func commandOf(shell Shell, command, cwd string) *exec.Cmd {
+func commandOf(shell Shell, command, cwd string) (*exec.Cmd, *commandGroup) {
 	cmd := exec.Command(shell.Program, shell.Args(command)...)
 	cmd.Dir = cwd
 	cmd.Env = append(os.Environ(), quietEnvironment...)
-	ownGroup(cmd)
-	return cmd
+	attr, group := ownGroup()
+	cmd.SysProcAttr = attr
+	return cmd, group
 }
 
 // RunCommand runs a shell command in a folder, with its output, stopped when it takes too long or ctx is done. The
@@ -49,7 +50,7 @@ func RunCommandAsks(ctx context.Context, command string, options CommandOptions,
 // one, and ended when its time is up, ctx is done, or it came back.
 func runCommand(ctx context.Context, command string, options CommandOptions, shell Shell, askpass string) CommandResult {
 	output := NewOutputBuffer(headChars, tailChars)
-	cmd := commandOf(shell, command, options.Cwd)
+	cmd, group := commandOf(shell, command, options.Cwd)
 	cmd.Stdout = heard(output, options.Live)
 	cmd.Stderr = cmd.Stdout
 	cmd.WaitDelay = exitGrace
@@ -61,6 +62,7 @@ func runCommand(ctx context.Context, command string, options CommandOptions, she
 		output.Write([]byte(err.Error()))
 		return CommandResult{Output: withoutNotes(output.Text())}
 	}
+	group.started(cmd.Process)
 	// What the command asked is asked no longer once it is over: the person's card goes with it.
 	asking, stopAsking := context.WithCancel(ctx)
 	defer stopAsking()
@@ -71,13 +73,14 @@ func runCommand(ctx context.Context, command string, options CommandOptions, she
 	for {
 		select {
 		case err := <-done:
+			group.close()
 			return CommandResult{ExitCode: exitCodeOf(err), Output: withoutNotes(output.Text())}
 		case <-ctx.Done():
-			killGroup(cmd.Process)
+			group.stop(cmd.Process)
 			<-done
 			return CommandResult{Output: withoutNotes(output.Text()), Stopped: true}
 		case <-timer.C:
-			killGroup(cmd.Process)
+			group.stop(cmd.Process)
 			<-done
 			return CommandResult{Output: withoutNotes(output.Text()), TimedOut: true}
 		case <-askedAbout.looks():

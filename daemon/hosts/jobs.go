@@ -8,7 +8,12 @@ import (
 // The newest output a job keeps until it is read: a dev server's log can grow for hours.
 const maxUnreadBytes = 50_000
 
+// maxEndedJobs is how many jobs that ended are kept for a read that comes late: the oldest record goes first, so a
+// daemon running for months holds no more.
+const maxEndedJobs = 32
+
 type job struct {
+	id       string
 	command  string
 	unread   []byte
 	dropped  int
@@ -28,13 +33,16 @@ type jobOutput struct {
 	job  *job
 }
 
+// Write keeps the newest output only: a job that prints faster than it is read drops the oldest of it, in one copy
+// rather than one per write.
 func (o jobOutput) Write(data []byte) (int, error) {
 	o.jobs.mu.Lock()
 	defer o.jobs.mu.Unlock()
-	unread := append(o.job.unread, data...)
-	overflow := max(0, len(unread)-maxUnreadBytes)
-	o.job.dropped += overflow
-	o.job.unread = append([]byte(nil), unread[overflow:]...)
+	o.job.unread = append(o.job.unread, data...)
+	if over := len(o.job.unread) - maxUnreadBytes; over > 0 {
+		o.job.dropped += over
+		o.job.unread = append([]byte(nil), o.job.unread[over:]...)
+	}
 	return len(data), nil
 }
 
@@ -44,7 +52,9 @@ type Jobs struct {
 	mu    sync.Mutex
 	shell Shell
 	jobs  map[string]*job
-	count int
+	// finished are the ids of the jobs that ended, oldest first: their records go at maxEndedJobs.
+	finished []string
+	count    int
 }
 
 func NewJobs(shell Shell) *Jobs {
@@ -56,10 +66,10 @@ func (j *Jobs) Start(command, cwd string) string {
 	j.mu.Lock()
 	j.count++
 	id := strconv.Itoa(j.count)
-	started := &job{command: command, running: true}
+	started := &job{id: id, command: command, running: true}
 	j.jobs[id] = started
 	j.mu.Unlock()
-	cmd := commandOf(j.shell, command, cwd)
+	cmd, group := commandOf(j.shell, command, cwd)
 	cmd.Stdout = jobOutput{jobs: j, job: started}
 	cmd.Stderr = cmd.Stdout
 	if err := cmd.Start(); err != nil {
@@ -67,16 +77,28 @@ func (j *Jobs) Start(command, cwd string) string {
 		j.ended(started, nil)
 		return id
 	}
-	started.process = &jobProcess{stop: func() { killGroup(cmd.Process) }}
-	go func() { j.ended(started, exitCodeOf(cmd.Wait())) }()
+	group.started(cmd.Process)
+	started.process = &jobProcess{stop: func() { group.stop(cmd.Process) }}
+	go func() {
+		j.ended(started, exitCodeOf(cmd.Wait()))
+		group.close()
+	}()
 	return id
 }
 
-func (j *Jobs) ended(ended *job, code *int) {
+func (j *Jobs) ended(done *job, code *int) {
 	j.mu.Lock()
 	defer j.mu.Unlock()
-	ended.running = false
-	ended.exitCode = code
+	done.running = false
+	done.exitCode = code
+	if _, kept := j.jobs[done.id]; !kept {
+		return
+	}
+	j.finished = append(j.finished, done.id)
+	for len(j.finished) > maxEndedJobs {
+		delete(j.jobs, j.finished[0])
+		j.finished = j.finished[1:]
+	}
 }
 
 // Read is a job's state; consume takes the output read, so the next read gives what came after.

@@ -52,6 +52,8 @@ func terminalEnvironment(environment []string) []string {
 type Terminal struct {
 	terminal pty.Pty
 	command  *pty.Cmd
+	// group is the shell and what it started: closing the terminal ends them, a shell that ended leaves them.
+	group *commandGroup
 	// close is once: the person closing the terminal and its shell ending both let it go, and go-pty keeps no lock.
 	close sync.Once
 	// shell is the shell that runs in it: how a command typed there says it ended.
@@ -91,16 +93,19 @@ func StartTerminal(command *exec.Cmd, options TerminalOptions, shell Shell) (*Te
 	started := terminal.Command(command.Path, command.Args[1:]...)
 	started.Dir = command.Dir
 	started.Env = terminalEnvironment(environment)
+	attr, group := ownGroup()
+	started.SysProcAttr = attr
 	if err := started.Start(); err != nil {
 		_ = terminal.Close()
 		return nil, err
 	}
+	group.started(started.Process)
 	columns, rows := terminalSize(options)
 	if err := terminal.Resize(columns, rows); err != nil {
 		_ = terminal.Close()
 		return nil, err
 	}
-	return &Terminal{command: started, shell: shell, terminal: terminal}, nil
+	return &Terminal{command: started, group: group, shell: shell, terminal: terminal}, nil
 }
 
 func (t *Terminal) Read(data []byte) (int, error) {
@@ -126,8 +131,21 @@ func (t *Terminal) Wait() (code int, exited bool) {
 	return code, code >= 0
 }
 
-// Close lets go of the terminal: its shell is hung up, and what it holds freed. It may come from either side, the
-// person closing the terminal or its shell ending, so only the first one does it.
+// Close ends the shell and everything it started: a terminal closed by a person or the app leaves no process
+// behind. It may come from either side, the person closing the terminal or its shell ending, so only the first one
+// does it.
 func (t *Terminal) Close() {
-	t.close.Do(func() { _ = t.terminal.Close() })
+	t.close.Do(func() {
+		t.group.stop(t.command.Process)
+		_ = t.terminal.Close()
+	})
+}
+
+// Release lets go of a terminal whose shell ended: what the shell left running with `&` keeps running, as it would
+// for a person leaving their shell. Only the first of Close and Release acts.
+func (t *Terminal) Release() {
+	t.close.Do(func() {
+		t.group.close()
+		_ = t.terminal.Close()
+	})
 }
