@@ -1,29 +1,106 @@
 {
-  "version": 1,
+  "version": 2,
   "skills": {
+    "golang-benchmark": {
+      "source": "samber/cc-skills-golang",
+      "commit": "d68d80aec298e1b74b37c2a472c002b5217248b3",
+      "sourceType": "github",
+      "skillPath": "skills/golang-benchmark/SKILL.md",
+      "computedHash": "fbe3a79a9459ab233c8cac5a815cf7b3ad560bda28e842c1bb0ea4fa7a988c97"
+    },
+    "golang-cli": {
+      "source": "samber/cc-skills-golang",
+      "commit": "d68d80aec298e1b74b37c2a472c002b5217248b3",
+      "sourceType": "github",
+      "skillPath": "skills/golang-cli/SKILL.md",
+      "computedHash": "7a706a3cd9dd80261dd5c39119a951b0aaffea4a647788524aa24f822e435cc3"
+    },
+    "golang-code-style": {
+      "source": "samber/cc-skills-golang",
+      "commit": "d68d80aec298e1b74b37c2a472c002b5217248b3",
+      "sourceType": "github",
+      "skillPath": "skills/golang-code-style/SKILL.md",
+      "computedHash": "8013e3aeeb53e66e8dd52a1dd2d2f622ed59cde7426fad7f42c77de7fca424f8"
+    },
+    "golang-concurrency": {
+      "source": "samber/cc-skills-golang",
+      "commit": "d68d80aec298e1b74b37c2a472c002b5217248b3",
+      "sourceType": "github",
+      "skillPath": "skills/golang-concurrency/SKILL.md",
+      "computedHash": "c6c1829be72bba6eb7b2346561bb895605c65eacf35a2535bfca9828006a69e0"
+    },
+    "golang-design-patterns": {
+      "source": "samber/cc-skills-golang",
+      "commit": "d68d80aec298e1b74b37c2a472c002b5217248b3",
+      "sourceType": "github",
+      "skillPath": "skills/golang-design-patterns/SKILL.md",
+      "computedHash": "d3e4f4be5506709261b6fa43eee3d52f968c37ca5d83f4408c43a1d1f9c0da86"
+    },
+    "golang-documentation": {
+      "source": "samber/cc-skills-golang",
+      "commit": "d68d80aec298e1b74b37c2a472c002b5217248b3",
+      "sourceType": "github",
+      "skillPath": "skills/golang-documentation/SKILL.md",
+      "computedHash": "5cbd30122d143c70c06ef2f903db21d12586cc532ad285da9bce9c647c6ba03a"
+    },
+    "golang-error-handling": {
+      "source": "samber/cc-skills-golang",
+      "commit": "d68d80aec298e1b74b37c2a472c002b5217248b3",
+      "sourceType": "github",
+      "skillPath": "skills/golang-error-handling/SKILL.md",
+      "computedHash": "81f5c3fcd0324c4ed9b8ee50d3375b0f3074b0308ee9b5c0778d6cbf32bedf9c"
+    },
+    "golang-lint": {
+      "source": "samber/cc-skills-golang",
+      "commit": "d68d80aec298e1b74b37c2a472c002b5217248b3",
+      "sourceType": "github",
+      "skillPath": "skills/golang-lint/SKILL.md",
+      "computedHash": "a1aec81b2c6b8441dd8e5bba762ea1b679bd01cd88879730edc2404af0601503"
+    },
+    "golang-naming": {
+      "source": "samber/cc-skills-golang",
+      "commit": "d68d80aec298e1b74b37c2a472c002b5217248b3",
+      "sourceType": "github",
+      "skillPath": "skills/golang-naming/SKILL.md",
+      "computedHash": "81ff21a879a65ded0f26cd2f71edf913f07bcd4f4c4521b260875fd15df8fc94"
+    },
+    "golang-observability": {
+      "source": "samber/cc-skills-golang",
+      "commit": "d68d80aec298e1b74b37c2a472c002b5217248b3",
+      "sourceType": "github",
+      "skillPath": "skills/golang-observability/SKILL.md",
+      "computedHash": "380d7e4e3dc126ad3b3154e8a6c13928f8a78f30dca94c58f6faa4d89edc8bdc"
+    },
+    "golang-performance": {
+      "source": "samber/cc-skills-golang",
+      "commit": "d68d80aec298e1b74b37c2a472c002b5217248b3",
+      "sourceType": "github",
+      "skillPath": "skills/golang-performance/SKILL.md",
+      "computedHash": "d27f7392a17e63117abd26def53f53bf1b8e3e551fa9f89e8b46303f5813847c"
+    },
     "jadis-official": {
       "source": "bioleyl/jadis",
       "sourceType": "github",
       "skillPath": "plugins/jadis-official/skills/jadis-official/SKILL.md",
-      "computedHash": "acd51e7ba5e362a755cd34c54b8ec2a2c1259573304676e6f0bba3fae2c18982"
+      "computedHash": "86280b80a51ce3f5542d3fd8766a5f2812c7aeb42e97fe400d89fac773969d0e"
     },
     "jlib-official": {
       "source": "bioleyl/jlib",
       "sourceType": "github",
       "skillPath": "plugins/jlib-official/skills/jlib-official/SKILL.md",
-      "computedHash": "1d24e02b22b8534930e16137588411db16e254af8d6f6db89a5a9af6a2126b57"
+      "computedHash": "dd0c7a9b8a1ef9edefa3fa7be58ea83d5bc91e316a213308e21d0d0011bc4d53"
     },
     "swcode-base": {
       "source": "bioleyl/swcode",
       "sourceType": "github",
       "skillPath": "plugins/swcode-base/skills/swcode-base/SKILL.md",
-      "computedHash": "db5f93b6cba8849c2e2d9ebd68cf7b5a9137649866719547d53c61a6f1139af0"
+      "computedHash": "c064f15537a5a16bcadd98456aaf62830f51eff2811e6990829ca737d5f57234"
     },
     "syware-ux": {
       "source": "bioleyl/jlib",
       "sourceType": "github",
       "skillPath": "plugins/syware-ux/skills/syware-ux/SKILL.md",
-      "computedHash": "a085159b495c60ce9bf37442c3fe1b10449116a5a1d357745789c1105c9ced19"
+      "computedHash": "0c80c3d6e971d0104950124f1547a887d700ba450d4c34cb5c2d82b9c5915613"
     }
   }
 }
