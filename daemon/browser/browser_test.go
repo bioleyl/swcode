@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -81,9 +82,11 @@ document.getElementById('mail').addEventListener('input', (event) => {
 });
 </script></body></html>`
 
-// pageBrowser is the browser to act on pages with, or a skip where there is none.
+// pageBrowser is the browser to act on pages with, or a skip where there is none: headless, so a test opens no
+// window on the machine that runs it.
 func pageBrowser(t *testing.T) *Pages {
 	t.Helper()
+	t.Setenv("SWCODE_BROWSER_HEADLESS", "1")
 	home, _ := os.UserHomeDir()
 	found := Find(home)
 	if found == nil {
@@ -147,6 +150,29 @@ func TestAPageStaysOpenWhileItsElementsAreClickedAndFilledByNumber(t *testing.T)
 	frame, open, err := session.Frame(ctx)
 	if err != nil || !open || len(frame) < 2 || frame[0] != 0xff || frame[1] != 0xd8 {
 		t.Fatalf("frame %d bytes, open %v, %v", len(frame), open, err)
+	}
+}
+
+func TestTheManagedBrowserShowsAWindowUnlessAskedForNoneOrWithNoScreen(t *testing.T) {
+	t.Setenv(headlessEnv, "1")
+	if !headlessBrowser() {
+		t.Fatal("asked for headless, but a window would open")
+	}
+	t.Setenv(headlessEnv, "0")
+	if runtime.GOOS != "linux" {
+		if headlessBrowser() {
+			t.Fatal("a desktop without the setting must show the window")
+		}
+		return
+	}
+	t.Setenv("DISPLAY", "")
+	t.Setenv("WAYLAND_DISPLAY", "")
+	if !headlessBrowser() {
+		t.Fatal("a computer with no screen must not open a window")
+	}
+	t.Setenv("DISPLAY", ":0")
+	if headlessBrowser() {
+		t.Fatal("a computer with a screen shows the window")
 	}
 }
 

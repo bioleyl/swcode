@@ -120,30 +120,74 @@ func playwrightShell(home string) string {
 	return ""
 }
 
+// playwrightChromium is the newest full Chromium Playwright installed, which can open a window people use; none
+// when Playwright installed only its headless shell.
+func playwrightChromium(home string) string {
+	candidates := [][]string{{"chrome-linux64", "chrome"}, {"chrome-linux", "chrome"}}
+	switch runtime.GOOS {
+	case "darwin":
+		candidates = [][]string{{"chrome-mac", "Chromium.app", "Contents", "MacOS", "Chromium"}}
+	case "windows":
+		candidates = [][]string{{"chrome-win64", "chrome.exe"}, {"chrome-win", "chrome.exe"}}
+	}
+	for _, folder := range playwrightFolders(home) {
+		installs, _ := filepath.Glob(filepath.Join(folder, "chromium-*"))
+		sort.Sort(sort.Reverse(sort.StringSlice(installs)))
+		for _, install := range installs {
+			for _, pieces := range candidates {
+				chrome := filepath.Join(append([]string{install}, pieces...)...)
+				if info, err := os.Stat(chrome); err == nil && !info.IsDir() {
+					return chrome
+				}
+			}
+		}
+	}
+	return ""
+}
+
 // Find is the browser to draw pages with: SWCODE_CHROMIUM, Playwright's, or the system's; none when there is none.
 func Find(home string) Browser {
 	if bin := os.Getenv(chromiumEnv); bin != "" {
-		return &Chromium{bin: bin}
+		visible := bin
+		if strings.Contains(filepath.Base(bin), "headless") {
+			visible = ""
+		}
+		return &Chromium{bin: bin, visibleBin: visible}
 	}
 	if shell := playwrightShell(home); shell != "" {
-		return &Chromium{bin: shell}
+		return &Chromium{bin: shell, visibleBin: playwrightChromium(home)}
 	}
 	if system, found := launcher.LookPath(); found {
-		return &Chromium{bin: system}
+		return &Chromium{bin: system, visibleBin: system}
 	}
 	return nil
 }
 
 // Chromium is a Chromium program, started for each picture and closed once it is taken, or when the turn stops.
 type Chromium struct {
+	// bin draws pages headless: Playwright's shell, which needs no window.
 	bin string
+	// visibleBin opens a window a person can use, when one lets it; none for a shell alone.
+	visibleBin string
 }
 
 // NewChromium draws with the browser at this path.
-func NewChromium(bin string) *Chromium { return &Chromium{bin: bin} }
+func NewChromium(bin string) *Chromium { return &Chromium{bin: bin, visibleBin: bin} }
 
-// Pages are the live pages this browser keeps, one per session.
-func (c *Chromium) Pages() *Pages { return NewPages(c.bin) }
+// Pages are the live pages this browser keeps, one per session: a window people can use where there is one, a
+// headless browser elsewhere or when asked for none.
+func (c *Chromium) Pages() *Pages {
+	pages := NewPages(c.bin)
+	if pages.headless {
+		return pages
+	}
+	if c.visibleBin == "" {
+		pages.headless = true
+		return pages
+	}
+	pages.bin = c.visibleBin
+	return pages
+}
 
 func (c *Chromium) Capture(ctx context.Context, request ShotRequest) ShotOutcome {
 	control, err := launcher.New().Bin(c.bin).Headless(true).Leakless(false).Context(ctx).Launch()

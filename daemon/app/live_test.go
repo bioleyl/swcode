@@ -63,6 +63,7 @@ func (keptBrowser) Capture(context.Context, browser.ShotRequest) browser.ShotOut
 func (k keptBrowser) Pages() *browser.Pages { return k.pages }
 
 func TestTheLiveFramesFollowThePageASessionOpened(t *testing.T) {
+	t.Setenv("SWCODE_BROWSER_HEADLESS", "1")
 	home, _ := os.UserHomeDir()
 	found := browser.Find(home)
 	if found == nil {

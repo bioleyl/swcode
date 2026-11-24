@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -30,6 +33,12 @@ const (
 	frameQuality = 60
 	// readyStateComplete is a document that finished loading.
 	readyStateComplete = "complete"
+	// headlessEnv asks for a browser with no window: set to 1 on a computer whose screen should stay free, or where
+	// there is none.
+	headlessEnv = "SWCODE_BROWSER_HEADLESS"
+	// windowSize is the window a browser visible to its person opens at: a little taller than the page's 1440 × 900
+	// viewport, for the browser's own bars.
+	windowSize = "1440,1000"
 	// fillOK, fillMissing and fillOption are what the page answers a fill with.
 	fillOK      = "ok"
 	fillMissing = "missing"
@@ -148,10 +157,11 @@ type PageState struct {
 // Pages keeps one page per session, open between the agent's calls and turns, drawn by a browser started on the
 // first page and closed with the daemon.
 type Pages struct {
-	bin     string
-	mu      sync.Mutex
-	browser *rod.Browser
-	pages   map[string]*keptPage
+	bin      string
+	headless bool
+	mu       sync.Mutex
+	browser  *rod.Browser
+	pages    map[string]*keptPage
 }
 
 // keptPage is a session's page.
@@ -160,7 +170,18 @@ type keptPage struct {
 }
 
 // NewPages keeps pages drawn by the browser at this path.
-func NewPages(bin string) *Pages { return &Pages{bin: bin, pages: map[string]*keptPage{}} }
+func NewPages(bin string) *Pages {
+	return &Pages{bin: bin, headless: headlessBrowser(), pages: map[string]*keptPage{}}
+}
+
+// headlessBrowser tells whether the managed browser runs without a window: a computer with a screen shows it, so a
+// person can use the very page the agent acts on, unless SWCODE_BROWSER_HEADLESS asks otherwise.
+func headlessBrowser() bool {
+	if forced, err := strconv.ParseBool(os.Getenv(headlessEnv)); err == nil && forced {
+		return true
+	}
+	return runtime.GOOS == "linux" && os.Getenv("DISPLAY") == "" && os.Getenv("WAYLAND_DISPLAY") == ""
+}
 
 // Session is one session's page, by its id.
 func (p *Pages) Session(id string) *Session { return &Session{id: id, pages: p} }
@@ -390,7 +411,11 @@ func (p *Pages) browserOrStart() (*rod.Browser, error) {
 	if p.browser != nil {
 		return p.browser, nil
 	}
-	control, err := launcher.New().Bin(p.bin).Headless(true).Leakless(false).Launch()
+	launch := launcher.New().Bin(p.bin).Headless(p.headless).Leakless(false)
+	if !p.headless {
+		launch = launch.Set("window-size", windowSize)
+	}
+	control, err := launch.Launch()
 	if err != nil {
 		return nil, fmt.Errorf("the browser could not start: %w", err)
 	}
