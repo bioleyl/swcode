@@ -9,7 +9,7 @@ import (
 
 // all is every tool, by name: a new tool name does not get offered until it is here.
 var all = map[protocol.ToolName]Tool{
-	protocol.ToolNameAgent: agentTool, protocol.ToolNameBash: bashTool, protocol.ToolNameDecision: decisionTool, protocol.ToolNameDraw: drawTool, protocol.ToolNameEdit: editTool,
+	protocol.ToolNameAgent: agentTool, protocol.ToolNameBash: bashTool, protocol.ToolNameBrowse: browseTool, protocol.ToolNameDecision: decisionTool, protocol.ToolNameDraw: drawTool, protocol.ToolNameEdit: editTool,
 	protocol.ToolNameGlob: globTool, protocol.ToolNameGrep: grepTool, protocol.ToolNameImage: imageTool,
 	protocol.ToolNameKill: killTool, protocol.ToolNameNotes: notesTool, protocol.ToolNameOutput: outputTool, protocol.ToolNamePlan: planTool,
 	protocol.ToolNameQuestion: questionTool, protocol.ToolNameRead: readTool,
@@ -31,7 +31,7 @@ var (
 	// imageTools need a picture server of the settings.
 	imageTools = []protocol.ToolName{protocol.ToolNameImage, protocol.ToolNameDraw}
 	// browserTools need a browser.
-	browserTools = []protocol.ToolName{protocol.ToolNameScreenshot}
+	browserTools = []protocol.ToolName{protocol.ToolNameBrowse, protocol.ToolNameScreenshot}
 	// retiredTools are offered no longer: their names stay for the calls older sessions hold.
 	retiredTools = []protocol.ToolName{protocol.ToolNameSaveskill}
 	// workflowOnlyTools are a workflow step's alone: a session that runs no step would have nothing to hand off.

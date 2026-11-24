@@ -286,6 +286,7 @@ func (s *Service) hostFor(session *live, turn *runningTurn, ready prepared, sees
 		Sandbox:         where.sandbox,
 		Scratch:         where.scratch,
 		Screenshots:     s.screenshotsFor(session, main, sees),
+		Pages:           s.pagesFor(session),
 		Skills:          where.skills,
 		Subagents:       subagents{limit: ready.subagents, service: s, session: session, subagent: subagent, where: where},
 		Terminals:       s.deps.Terminals,
@@ -677,6 +678,14 @@ func (s *Service) screenshotsFor(session *live, main llm.Choice, sees bool) tool
 		NewID: s.deps.NewID, Sees: sees, SessionID: session.meta.ID, Source: main.Source, Thinking: s.deps.Thinking.Subagents,
 		ThinkingSpec: main.Thinking,
 	}
+}
+
+// pagesFor is the page a session's agent acts on with a browser, when the daemon keeps one; subagents get none.
+func (s *Service) pagesFor(session *live) tools.BrowserPages {
+	if s.deps.BrowserPages == nil {
+		return nil
+	}
+	return s.deps.BrowserPages.Session(session.meta.ID)
 }
 
 // imagesFor is a session's pictures, when there is a picture server.

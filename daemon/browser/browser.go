@@ -72,9 +72,11 @@ type ShotOutcome struct {
 	Problem string
 }
 
-// Browser draws pages.
+// Browser draws pages and keeps the ones an agent acts on.
 type Browser interface {
 	Capture(ctx context.Context, request ShotRequest) ShotOutcome
+	// Pages are the pages an agent acts on, one per session; none for a browser that cannot keep one.
+	Pages() *Pages
 }
 
 // PNGSize is a PNG's size in pixels, from its header.
@@ -139,6 +141,9 @@ type Chromium struct {
 
 // NewChromium draws with the browser at this path.
 func NewChromium(bin string) *Chromium { return &Chromium{bin: bin} }
+
+// Pages are the live pages this browser keeps, one per session.
+func (c *Chromium) Pages() *Pages { return NewPages(c.bin) }
 
 func (c *Chromium) Capture(ctx context.Context, request ShotRequest) ShotOutcome {
 	control, err := launcher.New().Bin(c.bin).Headless(true).Leakless(false).Context(ctx).Launch()

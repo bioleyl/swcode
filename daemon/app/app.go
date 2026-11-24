@@ -222,6 +222,10 @@ func New(settings config.Config, options Options) (*App, error) {
 	registry := hosts.NewRegistry(local, options.ConnectHost)
 	terminalService := terminals.NewService(terminals.Deps{Hosts: registry, NewID: options.NewID})
 	found := options.browser()
+	var browserPages *browser.Pages
+	if found != nil {
+		browserPages = found.Pages()
+	}
 	mainTools, exploreTools, chatTools := tools.Boxes(tools.Servers{Browser: found != nil, Images: settings.ImageURL != ""})
 	app := &App{
 		LanURLs: LANURLs(settings.Host, settings.Port, options.Interfaces()), Token: token,
@@ -259,7 +263,7 @@ func New(settings config.Config, options Options) (*App, error) {
 	// The web tools reach the public web only: the model writes the addresses they read.
 	pages := web.PublicClient()
 	service = sessions.NewService(sessions.Deps{
-		Browser: found, HTTP: options.HTTP, Hosts: registry, ImageURL: settings.ImageURL,
+		Browser: found, BrowserPages: browserPages, HTTP: options.HTTP, Hosts: registry, ImageURL: settings.ImageURL,
 		ImagesFolder: app.imagesFolder, LogError: logError, MaxSteps: maxSteps, MaxSubagentSteps: settings.SubagentMaxSteps,
 		Model: servers, Models: modelService, NewID: options.NewID, Now: options.Now,
 		OnWorkspace: func(path string, host protocol.HostRef) { app.Projects.Ensure(path, host) },

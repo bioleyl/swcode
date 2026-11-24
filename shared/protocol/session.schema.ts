@@ -42,6 +42,8 @@ export const TOOL_NAMES = [
   // Offered no longer: the calls older sessions hold keep their name.
   'saveskill',
   'screenshot',
+  // Acts on a web page in a browser, kept between calls: opens it, then clicks, fills or presses by number.
+  'browse',
   // A tool of an MCP server the person listed: the call's few words say which server and which tool.
   'mcp',
 ] as const;

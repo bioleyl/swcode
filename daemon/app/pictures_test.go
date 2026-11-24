@@ -129,6 +129,8 @@ func (fakeBrowser) Capture(context.Context, browser.ShotRequest) browser.ShotOut
 	return browser.ShotOutcome{OK: true, Shot: browser.Shot{Height: 1, PNG: data, Title: "Docs", Width: 1}}
 }
 
+func (fakeBrowser) Pages() *browser.Pages { return nil }
+
 func screenshotCall(input map[string]any) fakellama.Reply {
 	input["url"] = "http://localhost:5173/"
 	return call("screenshot", input)

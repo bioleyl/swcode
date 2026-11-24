@@ -69,3 +69,90 @@ func TestTheBrowserSaysWhatWentWrongWithAPageThatDoesNotAnswer(t *testing.T) {
 		t.Fatalf("drawn %+v", drawn)
 	}
 }
+
+const orderPage = `<!doctype html><html><head><title>Order</title></head><body>
+<button id="menu" onclick="document.getElementById('items').hidden = false">Menu</button>
+<ul id="items" hidden><li><button>Item</button></li></ul>
+<label for="mail">Email</label><input id="mail">
+<button id="send" disabled>Envoyer</button>
+<script>
+document.getElementById('mail').addEventListener('input', (event) => {
+	document.getElementById('send').disabled = event.target.value === '';
+});
+</script></body></html>`
+
+// pageBrowser is the browser to act on pages with, or a skip where there is none.
+func pageBrowser(t *testing.T) *Pages {
+	t.Helper()
+	home, _ := os.UserHomeDir()
+	found := Find(home)
+	if found == nil {
+		t.Skip("no browser here: npm run e2e:install")
+	}
+	pages := found.Pages()
+	t.Cleanup(pages.CloseAll)
+	return pages
+}
+
+// numbered is the number a snapshot gave the element with that name.
+func numbered(t *testing.T, state PageState, name string) int {
+	t.Helper()
+	for index, element := range state.Elements {
+		if element.Name == name {
+			return index + 1
+		}
+	}
+	t.Fatalf("no element %q in %+v", name, state.Elements)
+	return 0
+}
+
+func TestAPageStaysOpenWhileItsElementsAreClickedAndFilledByNumber(t *testing.T) {
+	pages := pageBrowser(t)
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, _ *http.Request) {
+		response.Header().Set("content-type", "text/html")
+		_, _ = response.Write([]byte(orderPage))
+	}))
+	t.Cleanup(server.Close)
+	session := pages.Session("s1")
+	ctx := context.Background()
+	state, err := session.Open(ctx, server.URL+"/", Viewport{Height: 900, Width: 1440}, "Menu")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.Title != "Order" || numbered(t, state, "Menu") == 0 || numbered(t, state, "Email") == 0 {
+		t.Fatalf("state %+v", state)
+	}
+	if state.Elements[numbered(t, state, "Envoyer")-1].Disabled != true {
+		t.Fatalf("Envoyer is enabled: %+v", state.Elements)
+	}
+	opened, err := session.Click(ctx, numbered(t, state, "Menu"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if numbered(t, opened, "Item") == 0 {
+		t.Fatalf("the menu did not open: %+v", opened.Elements)
+	}
+	filled, err := session.Fill(ctx, numbered(t, opened, "Email"), "a@b.c")
+	if err != nil {
+		t.Fatal(err)
+	}
+	send := filled.Elements[numbered(t, filled, "Envoyer")-1]
+	if send.Disabled || filled.Elements[numbered(t, filled, "Email")-1].Value != "a@b.c" {
+		t.Fatalf("filled %+v", filled.Elements)
+	}
+	markup, err := session.HTML(ctx)
+	if err != nil || !strings.Contains(markup, `id="mail"`) {
+		t.Fatalf("html %q, %v", markup, err)
+	}
+}
+
+func TestAPageSaysWhenNothingIsOpenYet(t *testing.T) {
+	pages := NewPages("")
+	session := pages.Session("s1")
+	if _, err := session.Snapshot(context.Background()); err == nil || !strings.Contains(err.Error(), "No page is open") {
+		t.Fatalf("snapshot %v", err)
+	}
+	if _, err := session.Click(context.Background(), 1); err == nil || !strings.Contains(err.Error(), "No page is open") {
+		t.Fatalf("click %v", err)
+	}
+}

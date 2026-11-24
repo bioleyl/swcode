@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"sync"
 
+	"swcode/daemon/browser"
 	"swcode/daemon/catalog"
 	"swcode/daemon/hosts"
 	"swcode/daemon/images"
@@ -77,6 +78,16 @@ type Jobs interface {
 	Stop(ctx context.Context, id string) (*hosts.JobState, error)
 }
 
+// BrowserPages is the page an agent acts on: opened, listed, clicked, filled and pressed, kept between its calls.
+type BrowserPages interface {
+	Open(ctx context.Context, url string, viewport browser.Viewport, waitFor string) (browser.PageState, error)
+	Snapshot(ctx context.Context) (browser.PageState, error)
+	Click(ctx context.Context, index int) (browser.PageState, error)
+	Fill(ctx context.Context, index int, value string) (browser.PageState, error)
+	Press(ctx context.Context, key string) (browser.PageState, error)
+	HTML(ctx context.Context) (string, error)
+}
+
 // Context is what a tool call works with: where the project is, what the agent read, and the session's ports.
 type Context struct {
 	Host hosts.Host
@@ -113,6 +124,8 @@ type Context struct {
 	Jobs Jobs
 	// Screenshots is pages drawn by a browser, when the daemon has one; subagents get none.
 	Screenshots Screenshots
+	// Pages is the page the agent acts on, when the daemon's browser keeps one; subagents get none.
+	Pages BrowserPages
 	// Terminals are the shells of the app, where the agent runs what people watch; subagents get none.
 	Terminals terminals.Port
 	// Skills is the session's skills; subagents get none.

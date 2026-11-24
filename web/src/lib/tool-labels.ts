@@ -18,6 +18,13 @@ const TOOL_LABELS: Readonly<Record<ToolName, ToolLabel>> = {
     question: 'Run this command?',
     writing: 'Writing a command',
   },
+  browse: {
+    doing: 'Browsing:',
+    icon: 'globe',
+    name: 'Browse',
+    question: 'Act on this page?',
+    writing: 'Opening a page',
+  },
   closetodo: {
     doing: 'Closing',
     icon: 'check',
@@ -226,6 +233,10 @@ const serverGrant = (summary: string): Grant | undefined => {
   return end > 0 ? { kind: 'named', what: `${summary.slice(0, end)}’s tools` } : undefined;
 };
 
+// A browse call acts on a page: allowing one allows every browse call of the session, as the daemon's program
+// grant does.
+const browseGrant = (): Grant => ({ kind: 'named', what: 'browse' });
+
 const programsGrant = (command: string, outside: boolean): Grant | undefined => {
   const programs = commandPrograms(command);
   if (!programs) {
@@ -247,6 +258,7 @@ const terminalGrant = (summary: string, outside: boolean): Grant | undefined => 
 const GRANTS: Readonly<Record<ToolName, (summary: string, outside: boolean) => Grant | undefined>> = {
   agent: never,
   bash: programsGrant,
+  browse: browseGrant,
   closetodo: never,
   decision: never,
   draw: never,
