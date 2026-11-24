@@ -113,6 +113,8 @@ type Context struct {
 	Jobs Jobs
 	// Screenshots is pages drawn by a browser, when the daemon has one; subagents get none.
 	Screenshots Screenshots
+	// Browser is the session's browser page, which stays open across calls; nil where the daemon has no browser.
+	Browser BrowserPage
 	// Terminals are the shells of the app, where the agent runs what people watch; subagents get none.
 	Terminals terminals.Port
 	// Skills is the session's skills; subagents get none.
@@ -165,10 +167,20 @@ type Check struct {
 	Preview *protocol.ToolDisplay
 	Run     func(ctx context.Context) Outcome
 	Problem string
+	// Subject, when set, says what the call touches instead of the tool's own Subject: a browser call knows what
+	// its element is only once it has looked at the page.
+	Subject *permissions.Subject
 }
 
 func Ready(run func(ctx context.Context) Outcome, preview *protocol.ToolDisplay) Check {
 	return Check{OK: true, Preview: preview, Run: run}
+}
+
+// ReadyAs is a call ready to run that touches what subject says, whatever the tool's usual subject is.
+func ReadyAs(subject permissions.Subject, run func(ctx context.Context) Outcome, preview *protocol.ToolDisplay) Check {
+	ready := Ready(run, preview)
+	ready.Subject = &subject
+	return ready
 }
 
 func Refuse(problem string) Check { return Check{Problem: problem} }
@@ -227,6 +239,9 @@ type Spec[Input any] struct {
 	Subject     func(input Input, tc *Context) permissions.Subject
 	// Check checks the call before anyone is asked about it: a call bound to fail goes back to the model at once.
 	Check func(ctx context.Context, input Input, tc *Context) Check
+	// Function is the name the model calls the tool by, when it is not the tool's own: the browser tools keep the
+	// protocol's one-word names and take the names the request gave them.
+	Function string
 }
 
 func rawSummary(raw any) string {
@@ -239,6 +254,7 @@ func rawSummary(raw any) string {
 func Define[Input any](spec Spec[Input]) Tool {
 	return Tool{
 		Description: spec.Description,
+		Function:    spec.Function,
 		Input:       spec.Input,
 		Name:        spec.Name,
 		Prepare: func(ctx context.Context, raw any, tc *Context) Preparation {
@@ -256,8 +272,12 @@ func Define[Input any](spec Spec[Input]) Tool {
 			if !check.OK {
 				return Preparation{Problem: check.Problem, Summary: summary}
 			}
+			subject := spec.Subject(input, tc)
+			if check.Subject != nil {
+				subject = *check.Subject
+			}
 			return Preparation{OK: true, Call: PreparedCall{
-				Preview: check.Preview, Run: check.Run, Subject: spec.Subject(input, tc), Summary: summary,
+				Preview: check.Preview, Run: check.Run, Subject: subject, Summary: summary,
 			}, Summary: summary}
 		},
 	}

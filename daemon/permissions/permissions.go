@@ -21,6 +21,8 @@ const (
 	// AccessServer is a tool of an MCP server: what it does is the server's own, so it is asked about as a command
 	// is, and allowed for a session by its server.
 	AccessServer Access = "server"
+	// AccessBrowser is a call that drives the daemon's browser: clicking, typing, or opening a private page.
+	AccessBrowser Access = "browser"
 )
 
 // Subject is what a call touches: a file it edits, a command it runs, an MCP server it calls.
@@ -31,6 +33,18 @@ type Subject struct {
 	Server  string
 	// Outside: the command runs outside the sandbox the session's commands run in, with all the person can do.
 	Outside bool
+	// Browser is what a browser call does.
+	Browser BrowserAction
+}
+
+// BrowserAction is what a browser call touches: the page it acts on, and whether it needs a person whatever the
+// session's mode.
+type BrowserAction struct {
+	Action string
+	URL    string
+	// Approval: the call asks whatever the session's mode, as a password field, a form that leaves the page's
+	// origin, or a private network address does.
+	Approval bool
 }
 
 // Read is a call that only reads.
@@ -90,6 +104,8 @@ func NeedsPermission(subject Subject, grants Grants) bool {
 		return !modeAllows[grants.Mode].edits && !grants.Edits
 	case AccessServer:
 		return !modeAllows[grants.Mode].commands && !grants.Servers[subject.Server]
+	case AccessBrowser:
+		return subject.Browser.Approval || !modeAllows[grants.Mode].commands
 	}
 	return !commandAllowed(subject, grants)
 }
@@ -154,7 +170,8 @@ func (g Grants) With(allowed Allowed) Grants {
 
 // AllowedBy is what allowing a call "in this project" adds to the project: the programs of a command, in the
 // sandbox or outside it, or the server of an MCP tool. Nothing for an edit (a project's sessions start in the mode
-// that accepts edits when it says so), nor for a command whose programs cannot be told.
+// that accepts edits when it says so), nor for a command whose programs cannot be told, nor for a browser call,
+// which a project keeps no rule about.
 func AllowedBy(subject Subject) Allowed {
 	switch subject.Access {
 	case AccessServer:

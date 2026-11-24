@@ -47,6 +47,8 @@ const MODELS_TOPIC: SettingsTopic = 'models';
 const NETWORK_TOPIC: SettingsTopic = 'network';
 const PROJECTS_TOPIC: SettingsTopic = 'projects';
 const PROJECTS_PANE: SettingsPane = 'projects';
+const BROWSER_TOPIC: SettingsTopic = 'browser';
+const BROWSER_PANE: SettingsPane = 'browser';
 const PORT_SETTING: SettingName = 'SWCODE_PORT';
 const DEFAULT_PORT = '4500';
 // A setting left empty takes its default; jlib's select takes an empty value for nothing chosen, so that choice has
@@ -123,11 +125,13 @@ export class SettingsPage extends ScElement {
   private readonly _paneOf: Readonly<Partial<Record<SettingsTopic, () => string>>> = {
     [MODELS_TOPIC]: () => this._refs.modelTabs.value.get(),
     [NETWORK_TOPIC]: () => this._refs.networkTabs.value.get(),
+    [BROWSER_TOPIC]: () => BROWSER_PANE,
     [PROJECTS_TOPIC]: () => PROJECTS_PANE,
   };
 
   /** What each topic shows: its settings, or the tabs of the models and the network. */
   private readonly _topicNodes: Readonly<Record<SettingsTopic, () => Node>> = {
+    browser: () => this.filePaneNode(BROWSER_PANE),
     computers: () => <ScComputers />,
     models: () => this.modelsNode(),
     network: () => this.networkNode(),

@@ -17,6 +17,17 @@ const thinkingOptions = (defaultMode: keyof typeof THINKING_LABELS): SettingOpti
 
 /** Every setting the page changes, as it shows it: a new setting does not compile until it is here. */
 export const SETTING_FIELDS: Readonly<Record<SettingName, SettingField>> = {
+  SWCODE_BROWSER_HEADFUL: {
+    control: {
+      kind: 'choice',
+      options: [
+        { label: 'Headless (the default)', value: DEFAULT },
+        { label: 'Visible window', value: 'on' },
+      ],
+    },
+    hint: 'Shows a Chromium window per session, on the computer running swcode, so you can watch the agent. It needs a desktop session.',
+    label: 'Agent browser',
+  },
   SWCODE_HOST: {
     control: {
       kind: 'choice',
@@ -78,5 +89,6 @@ export const SETTING_SECTIONS: readonly SettingSection[] = [
   },
   { names: ['SWCODE_WORKSPACE'], pane: 'projects', title: 'Projects' },
   { names: ['SWCODE_IMAGE_URL'], pane: 'image-server', title: 'Image server' },
+  { names: ['SWCODE_BROWSER_HEADFUL'], pane: 'browser', title: 'Browser' },
   { names: ['SWCODE_HOST', 'SWCODE_PORT'], pane: 'network', title: 'Network' },
 ];

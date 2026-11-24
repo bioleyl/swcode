@@ -17,6 +17,9 @@ var all = map[protocol.ToolName]Tool{
 	protocol.ToolNameReadterminal: terminalOutputTool, protocol.ToolNameTodo: todoTool, protocol.ToolNameClosetodo: closeTodoTool,
 	protocol.ToolNameWebfetch: webfetchTool, protocol.ToolNameWebsearch: websearchTool, protocol.ToolNameWrite: writeTool,
 	protocol.ToolNameWorkflow: workflowTool, protocol.ToolNameHandoff: Handoff,
+	protocol.ToolNameBrowseropen: browserOpenTool, protocol.ToolNameBrowsersnapshot: browserSnapshotTool,
+	protocol.ToolNameBrowserclick: browserClickTool, protocol.ToolNameBrowsertype: browserTypeTool,
+	protocol.ToolNameBrowserscreenshot: browserScreenshotTool, protocol.ToolNameBrowserdiagnostics: browserDiagnosticsTool,
 }
 
 var (
@@ -31,7 +34,11 @@ var (
 	// imageTools need a picture server of the settings.
 	imageTools = []protocol.ToolName{protocol.ToolNameImage, protocol.ToolNameDraw}
 	// browserTools need a browser.
-	browserTools = []protocol.ToolName{protocol.ToolNameScreenshot}
+	browserTools = []protocol.ToolName{
+		protocol.ToolNameScreenshot, protocol.ToolNameBrowseropen, protocol.ToolNameBrowsersnapshot,
+		protocol.ToolNameBrowserclick, protocol.ToolNameBrowsertype, protocol.ToolNameBrowserscreenshot,
+		protocol.ToolNameBrowserdiagnostics,
+	}
 	// retiredTools are offered no longer: their names stay for the calls older sessions hold.
 	retiredTools = []protocol.ToolName{protocol.ToolNameSaveskill}
 	// workflowOnlyTools are a workflow step's alone: a session that runs no step would have nothing to hand off.

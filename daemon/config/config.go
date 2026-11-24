@@ -45,6 +45,7 @@ const (
 
 // The environment's names of the settings.
 const (
+	envBrowserHeadful   = "SWCODE_BROWSER_HEADFUL"
 	envDataDir          = "SWCODE_DATA_DIR"
 	envHost             = "SWCODE_HOST"
 	envImageURL         = "SWCODE_IMAGE_URL"
@@ -94,6 +95,8 @@ type Config struct {
 	Host string
 	// A stable-diffusion.cpp sd-server (its OpenAI routes): the agent makes pictures with it.
 	ImageURL string
+	// BrowserHeadful shows the agent's browser window instead of running it headless.
+	BrowserHeadful bool
 	// Only when llm-server was started with --api-key.
 	LlamaAPIKey string
 	// The model to ask for: needed when llm-server runs in router mode with several models.
@@ -230,6 +233,7 @@ func slicesWithout(items []string, unwanted string) []string {
 func Load(environment map[string]string, defaults Defaults) (Config, error) {
 	r := &reader{environment: environment}
 	config := Config{
+		BrowserHeadful:     r.switched(envBrowserHeadful, false),
 		DataDir:            r.or(envDataDir, filepath.Join(defaults.Home, DataFolder)),
 		Env:                r.env(),
 		Host:               r.or(envHost, defaultHost),

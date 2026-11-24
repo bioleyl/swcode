@@ -285,6 +285,7 @@ func (s *Service) hostFor(session *live, turn *runningTurn, ready prepared, sees
 		ReadFiles:       session.readFiles,
 		Sandbox:         where.sandbox,
 		Scratch:         where.scratch,
+		Browser:         s.browserFor(session),
 		Screenshots:     s.screenshotsFor(session, main, sees),
 		Skills:          where.skills,
 		Subagents:       subagents{limit: ready.subagents, service: s, session: session, subagent: subagent, where: where},
@@ -664,6 +665,15 @@ func (s *Service) StopJob(sessionID, jobID string) string {
 		}
 	}()
 	return ""
+}
+
+// browserFor is the session's browser page, when the daemon has a browser: one Chromium per session, kept across
+// its turns.
+func (s *Service) browserFor(session *live) tools.BrowserPage {
+	if s.deps.Browsers == nil {
+		return nil
+	}
+	return s.deps.Browsers.For(session.meta.ID)
 }
 
 // screenshotsFor is a session's screenshots, when the daemon has a browser: looked at by the main model, which may

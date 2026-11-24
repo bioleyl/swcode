@@ -63,6 +63,7 @@ type Shot struct {
 	Width  int
 	Height int
 	Title  string
+	URL    string
 	Errors []string
 }
 
@@ -118,18 +119,64 @@ func playwrightShell(home string) string {
 	return ""
 }
 
-// Find is the browser to draw pages with: SWCODE_CHROMIUM, Playwright's, or the system's; none when there is none.
-func Find(home string) Browser {
+// FindPath is the Chromium program to draw pages with: SWCODE_CHROMIUM, Playwright's, or the system's; empty when
+// there is none.
+func FindPath(home string) string {
 	if bin := os.Getenv(chromiumEnv); bin != "" {
-		return &Chromium{bin: bin}
+		return bin
 	}
 	if shell := playwrightShell(home); shell != "" {
-		return &Chromium{bin: shell}
+		return shell
 	}
 	if system, found := launcher.LookPath(); found {
-		return &Chromium{bin: system}
+		return system
+	}
+	return ""
+}
+
+// Find is the browser to draw pages with; nil when there is none.
+func Find(home string) Browser {
+	if bin := FindPath(home); bin != "" {
+		return &Chromium{bin: bin}
 	}
 	return nil
+}
+
+// FindHeadfulPath is a browser that can show a window: SWCODE_CHROMIUM, Playwright's full Chromium, or the system's.
+// The headless shell Playwright also installs cannot show one, so it is never chosen for this.
+func FindHeadfulPath(home string) string {
+	if bin := os.Getenv(chromiumEnv); bin != "" {
+		return bin
+	}
+	if chromium := playwrightChromium(home); chromium != "" {
+		return chromium
+	}
+	if system, found := launcher.LookPath(); found {
+		return system
+	}
+	return ""
+}
+
+// playwrightChromium is the newest full Chromium Playwright installed, which can show a window.
+func playwrightChromium(home string) string {
+	for _, folder := range playwrightFolders(home) {
+		installs, _ := filepath.Glob(filepath.Join(folder, "chromium-*"))
+		sort.Sort(sort.Reverse(sort.StringSlice(installs)))
+		for _, install := range installs {
+			binaries := []string{
+				filepath.Join(install, "chrome-linux64", "chrome"),
+				filepath.Join(install, "chrome-linux", "chrome"),
+				filepath.Join(install, "chrome-win", "chrome.exe"),
+				filepath.Join(install, "chrome-win64", "chrome.exe"),
+			}
+			for _, binary := range binaries {
+				if info, err := os.Stat(binary); err == nil && !info.IsDir() {
+					return binary
+				}
+			}
+		}
+	}
+	return ""
 }
 
 // Chromium is a Chromium program, started for each picture and closed once it is taken, or when the turn stops.

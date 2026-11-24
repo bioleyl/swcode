@@ -154,3 +154,15 @@ func TestAnInstallDevicesArePairedWithKeepsListeningOnTheNetworkOnce(t *testing.
 		t.Fatalf("the marker of a fresh computer was not written: %v", err)
 	}
 }
+
+func TestTheBrowserWindowIsShownOnlyWhenAskedFor(t *testing.T) {
+	home := t.TempDir()
+	headful, err := Load(map[string]string{"SWCODE_BROWSER_HEADFUL": "on"}, Defaults{Cwd: home, Home: home})
+	if err != nil || !headful.BrowserHeadful {
+		t.Fatalf("headful: %+v %v", headful.BrowserHeadful, err)
+	}
+	headless, err := Load(map[string]string{}, Defaults{Cwd: home, Home: home})
+	if err != nil || headless.BrowserHeadful {
+		t.Fatalf("headless: %+v %v", headless.BrowserHeadful, err)
+	}
+}

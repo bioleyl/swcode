@@ -11,6 +11,9 @@ var ask = Grants{Mode: protocol.PermissionModeAsk, Programs: map[string]bool{}}
 
 func edit(path string) Subject    { return Subject{Access: AccessEdit, Path: path} }
 func command(text string) Subject { return Subject{Access: AccessCommand, Command: text} }
+func browsing(approval bool) Subject {
+	return Subject{Access: AccessBrowser, Browser: BrowserAction{Action: "click", URL: "http://localhost:5173/", Approval: approval}}
+}
 func withMode(mode protocol.PermissionMode) Grants {
 	return Grants{Mode: mode, Programs: map[string]bool{}}
 }
@@ -155,5 +158,23 @@ func TestAProjectsRulesLetItsProgramsAndServersThroughInEverySession(t *testing.
 	}
 	if got := AllowedBy(command("echo $(date)")); len(got.Programs) != 0 {
 		t.Fatalf("a command no rule can vouch for added %+v", got)
+	}
+}
+
+func TestBrowserCallsFollowTheModeButSensitiveOnesAlwaysAsk(t *testing.T) {
+	if !NeedsPermission(browsing(false), withMode(protocol.PermissionModeAsk)) {
+		t.Fatal("a click passed in ask")
+	}
+	if NeedsPermission(browsing(false), withMode(protocol.PermissionModeAuto)) {
+		t.Fatal("a click asked in auto")
+	}
+	if !NeedsPermission(browsing(false), withMode(protocol.PermissionModeAcceptEdits)) {
+		t.Fatal("a click passed in acceptEdits")
+	}
+	if !NeedsPermission(browsing(true), withMode(protocol.PermissionModeAuto)) {
+		t.Fatal("a password field passed in auto")
+	}
+	if got := AllowedBy(browsing(false)); !reflect.DeepEqual(got, Allowed{}) {
+		t.Fatalf("a browser call added %+v to a project", got)
 	}
 }

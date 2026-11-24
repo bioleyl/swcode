@@ -40,6 +40,13 @@ export const TOOL_NAMES = [
   // Offered no longer: the calls older sessions hold keep their name.
   'saveskill',
   'screenshot',
+  // The agent's browser: a page it opens, inspects, clicks, types into, captures and reads the errors of.
+  'browseropen',
+  'browsersnapshot',
+  'browserclick',
+  'browsertype',
+  'browserscreenshot',
+  'browserdiagnostics',
   // A tool of an MCP server the person listed: the call's few words say which server and which tool.
   'mcp',
 ] as const;

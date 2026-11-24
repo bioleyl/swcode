@@ -1,7 +1,15 @@
 import type { IconName } from './icons';
 
 /** The settings page's topics, in the order its menu lists them. */
-export const SETTINGS_TOPICS = ['models', 'projects', 'network', 'startup', 'computers', 'updates'] as const;
+export const SETTINGS_TOPICS = [
+  'models',
+  'projects',
+  'browser',
+  'network',
+  'startup',
+  'computers',
+  'updates',
+] as const;
 export type SettingsTopic = (typeof SETTINGS_TOPICS)[number];
 
 export const DEFAULT_SETTINGS_TOPIC: SettingsTopic = 'models';
@@ -11,6 +19,7 @@ export const COMPUTERS_TOPIC: SettingsTopic = 'computers';
 
 /** How each topic shows in the menu: a new topic does not compile until it is here. */
 export const SETTINGS_TOPIC_LABELS: Readonly<Record<SettingsTopic, { label: string; icon: IconName }>> = {
+  browser: { icon: 'globe', label: 'Browser' },
   computers: { icon: 'laptop', label: 'Computers' },
   models: { icon: 'cpu', label: 'Models' },
   network: { icon: 'network', label: 'Network' },
@@ -49,7 +58,7 @@ export const SOURCES_SETTINGS_TAB: ModelSettingsTab = 'llm-servers';
 export const PRESETS_SETTINGS_TAB: ModelSettingsTab = 'presets';
 
 /** Where the settings file's sections show: a topic of its own, or a tab of Models or Network. */
-export type SettingsPane = 'projects' | 'image-server' | 'thinking' | 'network';
+export type SettingsPane = 'projects' | 'image-server' | 'thinking' | 'browser' | 'network';
 
 export const isSettingsTopic = (value: string | null | undefined): value is SettingsTopic =>
   SETTINGS_TOPICS.some((topic) => topic === value);

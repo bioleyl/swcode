@@ -125,6 +125,7 @@ Settings are stored in `~/.swcode/settings.env` (key=value lines). The settings 
 | `SWCODE_MAX_STEPS` | `150` | Maximum tool calls per turn before the main agent stops |
 | `SWCODE_SUBAGENT_MAX_STEPS` | `30` | Maximum tool calls of a subagent before it stops and reports |
 | `SWCODE_IMAGE_URL` | — | Address of a stable-diffusion.cpp server for image generation |
+| `SWCODE_BROWSER_HEADFUL` | off | `on` shows the agent's browser window instead of running it headless |
 | `SWCODE_SSH_ENDPOINTS` | — | Comma-separated SSH hosts for remote projects |
 | `SWCODE_SANDBOX` | `on` | `off` runs every project's commands without a sandbox |
 

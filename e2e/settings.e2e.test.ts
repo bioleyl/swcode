@@ -111,6 +111,21 @@ describe('settings', () => {
     expect(await page.locator('#setting-SWCODE_IMAGE_URL input').inputValue()).toBe('http://garfield:8090');
   });
 
+  it('show how the agent’s browser opens, under a Browser topic', async () => {
+    const rig = await start({ replies: [] });
+    const page = await rig.browser.newPage({ viewport: DESKTOP });
+    await page.goto(rig.link);
+    await settingsLink(page).click();
+    await settle(page);
+    await topicTab(page, 'Browser').click();
+    await settle(page);
+    const control = page.locator('#setting-SWCODE_BROWSER_HEADFUL select');
+    await control.waitFor();
+    await control.selectOption({ label: 'Visible window' });
+    expect(await control.inputValue()).toBe('on');
+    expect(await saveButton(page).isVisible()).toBe(true);
+  });
+
   it('list the SSH hosts, one added by name, changed and removed from its dialog', async () => {
     const rig = await start({ replies: [] });
     const page = await rig.browser.newPage({ viewport: DESKTOP });

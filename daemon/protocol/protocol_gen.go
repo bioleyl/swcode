@@ -73,7 +73,7 @@ var SessionKinds = []SessionKind{SessionKindCode, SessionKindChat}
 
 var SessionStatuses = []SessionStatus{SessionStatusIdle, SessionStatusWorking, SessionStatusWaiting}
 
-var ToolNames = []ToolName{ToolNameRead, ToolNameWrite, ToolNameEdit, ToolNameBash, ToolNameGrep, ToolNameGlob, ToolNameAgent, ToolNamePlan, ToolNameQuestion, ToolNameWebsearch, ToolNameWebfetch, ToolNameImage, ToolNameDraw, ToolNameOutput, ToolNameKill, ToolNameTerminal, ToolNameReadterminal, ToolNameSkill, ToolNameNotes, ToolNameTodo, ToolNameClosetodo, ToolNameWorkflow, ToolNameHandoff, ToolNameSaveskill, ToolNameScreenshot, ToolNameMcp}
+var ToolNames = []ToolName{ToolNameRead, ToolNameWrite, ToolNameEdit, ToolNameBash, ToolNameGrep, ToolNameGlob, ToolNameAgent, ToolNamePlan, ToolNameQuestion, ToolNameWebsearch, ToolNameWebfetch, ToolNameImage, ToolNameDraw, ToolNameOutput, ToolNameKill, ToolNameTerminal, ToolNameReadterminal, ToolNameSkill, ToolNameNotes, ToolNameTodo, ToolNameClosetodo, ToolNameWorkflow, ToolNameHandoff, ToolNameSaveskill, ToolNameScreenshot, ToolNameBrowseropen, ToolNameBrowsersnapshot, ToolNameBrowserclick, ToolNameBrowsertype, ToolNameBrowserscreenshot, ToolNameBrowserdiagnostics, ToolNameMcp}
 
 var TurnOutcomes = []TurnOutcome{TurnOutcomeDone, TurnOutcomeStopped, TurnOutcomeFailed, TurnOutcomeLimit}
 
@@ -91,7 +91,7 @@ const MaxContextTokens = 10000000
 
 const MaxSubagentsAtOnce = 20
 
-var EditableSettings = []SettingName{SettingNameSwcodeThinking, SettingNameSwcodeSubagentThinking, SettingNameSwcodeWorkspace, SettingNameSwcodeSSHEndpoints, SettingNameSwcodeImageURL, SettingNameSwcodeHost, SettingNameSwcodePort, SettingNameSwcodeMaxSteps, SettingNameSwcodeSubagentMaxSteps}
+var EditableSettings = []SettingName{SettingNameSwcodeThinking, SettingNameSwcodeSubagentThinking, SettingNameSwcodeBrowserHeadful, SettingNameSwcodeWorkspace, SettingNameSwcodeSSHEndpoints, SettingNameSwcodeImageURL, SettingNameSwcodeHost, SettingNameSwcodePort, SettingNameSwcodeMaxSteps, SettingNameSwcodeSubagentMaxSteps}
 
 var Restarts = []Restart{RestartSelf, RestartPerson}
 
@@ -358,38 +358,44 @@ func (v SessionStatus) Valid() bool {
 type ToolName string
 
 const (
-	ToolNameRead         ToolName = "read"
-	ToolNameWrite        ToolName = "write"
-	ToolNameEdit         ToolName = "edit"
-	ToolNameBash         ToolName = "bash"
-	ToolNameGrep         ToolName = "grep"
-	ToolNameGlob         ToolName = "glob"
-	ToolNameAgent        ToolName = "agent"
-	ToolNamePlan         ToolName = "plan"
-	ToolNameQuestion     ToolName = "question"
-	ToolNameWebsearch    ToolName = "websearch"
-	ToolNameWebfetch     ToolName = "webfetch"
-	ToolNameImage        ToolName = "image"
-	ToolNameDraw         ToolName = "draw"
-	ToolNameOutput       ToolName = "output"
-	ToolNameKill         ToolName = "kill"
-	ToolNameTerminal     ToolName = "terminal"
-	ToolNameReadterminal ToolName = "readterminal"
-	ToolNameSkill        ToolName = "skill"
-	ToolNameNotes        ToolName = "notes"
-	ToolNameTodo         ToolName = "todo"
-	ToolNameClosetodo    ToolName = "closetodo"
-	ToolNameWorkflow     ToolName = "workflow"
-	ToolNameHandoff      ToolName = "handoff"
-	ToolNameSaveskill    ToolName = "saveskill"
-	ToolNameScreenshot   ToolName = "screenshot"
-	ToolNameMcp          ToolName = "mcp"
+	ToolNameRead               ToolName = "read"
+	ToolNameWrite              ToolName = "write"
+	ToolNameEdit               ToolName = "edit"
+	ToolNameBash               ToolName = "bash"
+	ToolNameGrep               ToolName = "grep"
+	ToolNameGlob               ToolName = "glob"
+	ToolNameAgent              ToolName = "agent"
+	ToolNamePlan               ToolName = "plan"
+	ToolNameQuestion           ToolName = "question"
+	ToolNameWebsearch          ToolName = "websearch"
+	ToolNameWebfetch           ToolName = "webfetch"
+	ToolNameImage              ToolName = "image"
+	ToolNameDraw               ToolName = "draw"
+	ToolNameOutput             ToolName = "output"
+	ToolNameKill               ToolName = "kill"
+	ToolNameTerminal           ToolName = "terminal"
+	ToolNameReadterminal       ToolName = "readterminal"
+	ToolNameSkill              ToolName = "skill"
+	ToolNameNotes              ToolName = "notes"
+	ToolNameTodo               ToolName = "todo"
+	ToolNameClosetodo          ToolName = "closetodo"
+	ToolNameWorkflow           ToolName = "workflow"
+	ToolNameHandoff            ToolName = "handoff"
+	ToolNameSaveskill          ToolName = "saveskill"
+	ToolNameScreenshot         ToolName = "screenshot"
+	ToolNameBrowseropen        ToolName = "browseropen"
+	ToolNameBrowsersnapshot    ToolName = "browsersnapshot"
+	ToolNameBrowserclick       ToolName = "browserclick"
+	ToolNameBrowsertype        ToolName = "browsertype"
+	ToolNameBrowserscreenshot  ToolName = "browserscreenshot"
+	ToolNameBrowserdiagnostics ToolName = "browserdiagnostics"
+	ToolNameMcp                ToolName = "mcp"
 )
 
 // Valid tells whether v is one of the ToolName values.
 func (v ToolName) Valid() bool {
 	switch v {
-	case ToolNameRead, ToolNameWrite, ToolNameEdit, ToolNameBash, ToolNameGrep, ToolNameGlob, ToolNameAgent, ToolNamePlan, ToolNameQuestion, ToolNameWebsearch, ToolNameWebfetch, ToolNameImage, ToolNameDraw, ToolNameOutput, ToolNameKill, ToolNameTerminal, ToolNameReadterminal, ToolNameSkill, ToolNameNotes, ToolNameTodo, ToolNameClosetodo, ToolNameWorkflow, ToolNameHandoff, ToolNameSaveskill, ToolNameScreenshot, ToolNameMcp:
+	case ToolNameRead, ToolNameWrite, ToolNameEdit, ToolNameBash, ToolNameGrep, ToolNameGlob, ToolNameAgent, ToolNamePlan, ToolNameQuestion, ToolNameWebsearch, ToolNameWebfetch, ToolNameImage, ToolNameDraw, ToolNameOutput, ToolNameKill, ToolNameTerminal, ToolNameReadterminal, ToolNameSkill, ToolNameNotes, ToolNameTodo, ToolNameClosetodo, ToolNameWorkflow, ToolNameHandoff, ToolNameSaveskill, ToolNameScreenshot, ToolNameBrowseropen, ToolNameBrowsersnapshot, ToolNameBrowserclick, ToolNameBrowsertype, ToolNameBrowserscreenshot, ToolNameBrowserdiagnostics, ToolNameMcp:
 		return true
 	}
 	return false
@@ -470,6 +476,7 @@ type SettingName string
 const (
 	SettingNameSwcodeThinking         SettingName = "SWCODE_THINKING"
 	SettingNameSwcodeSubagentThinking SettingName = "SWCODE_SUBAGENT_THINKING"
+	SettingNameSwcodeBrowserHeadful   SettingName = "SWCODE_BROWSER_HEADFUL"
 	SettingNameSwcodeWorkspace        SettingName = "SWCODE_WORKSPACE"
 	SettingNameSwcodeSSHEndpoints     SettingName = "SWCODE_SSH_ENDPOINTS"
 	SettingNameSwcodeImageURL         SettingName = "SWCODE_IMAGE_URL"
@@ -482,7 +489,7 @@ const (
 // Valid tells whether v is one of the SettingName values.
 func (v SettingName) Valid() bool {
 	switch v {
-	case SettingNameSwcodeThinking, SettingNameSwcodeSubagentThinking, SettingNameSwcodeWorkspace, SettingNameSwcodeSSHEndpoints, SettingNameSwcodeImageURL, SettingNameSwcodeHost, SettingNameSwcodePort, SettingNameSwcodeMaxSteps, SettingNameSwcodeSubagentMaxSteps:
+	case SettingNameSwcodeThinking, SettingNameSwcodeSubagentThinking, SettingNameSwcodeBrowserHeadful, SettingNameSwcodeWorkspace, SettingNameSwcodeSSHEndpoints, SettingNameSwcodeImageURL, SettingNameSwcodeHost, SettingNameSwcodePort, SettingNameSwcodeMaxSteps, SettingNameSwcodeSubagentMaxSteps:
 		return true
 	}
 	return false

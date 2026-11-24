@@ -623,6 +623,12 @@ func TestTheToolSchemasAreWhatTheModelReads(t *testing.T) {
 	if got := names(main); slices.Contains(got, "draw") || !slices.Contains(got, "image") {
 		t.Fatalf("main with pictures %v", got)
 	}
+	main, _, _ = Boxes(Servers{Browser: true})
+	for _, name := range []string{browserOpenName, browserSnapshotName, browserClickName, browserTypeName, browserScreenshotName, browserDiagnosticsName} {
+		if !slices.Contains(names(main), name) {
+			t.Fatalf("main with a browser lacks %s: %v", name, names(main))
+		}
+	}
 }
 
 func TestDrawShowsThePictureInTheChatAndChangesOneItDrewByItsName(t *testing.T) {

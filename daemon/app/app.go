@@ -47,6 +47,8 @@ const (
 	checkpointsFolder = "checkpoints"
 	// imagesFolder is the pictures the agents made, as the app shows them: a folder per session.
 	imagesFolder = "images"
+	// browserFolder is each session's browser profile, removed with its browser.
+	browserFolder = "browser"
 	// helpersFolder is the programs the daemon's commands run: the password prompt sudo -A and ssh ask with.
 	helpersFolder = "helpers"
 	// devicesFile is the paired phones, their tokens kept as hashes.
@@ -194,6 +196,22 @@ func (o Options) browser() browser.Browser {
 	return o.FindBrowser(o.Home)
 }
 
+// browserSessions keeps the agents' browsers, for a real Chromium: a browser a test stands in for has no program to
+// start, and keeps no session.
+func browserSessions(options Options, found browser.Browser, settings config.Config) *browser.Sessions {
+	if options.Browser != nil || found == nil {
+		return nil
+	}
+	program := browser.FindPath(options.Home)
+	if settings.BrowserHeadful {
+		program = browser.FindHeadfulPath(options.Home)
+	}
+	if program == "" {
+		return nil
+	}
+	return browser.NewSessions(program, filepath.Join(settings.DataDir, browserFolder), settings.BrowserHeadful)
+}
+
 // New puts a daemon together on its settings.
 func New(settings config.Config, options Options) (*App, error) {
 	options.fill()
@@ -222,6 +240,7 @@ func New(settings config.Config, options Options) (*App, error) {
 	registry := hosts.NewRegistry(local, options.ConnectHost)
 	terminalService := terminals.NewService(terminals.Deps{Hosts: registry, NewID: options.NewID})
 	found := options.browser()
+	browsers := browserSessions(options, found, settings)
 	mainTools, exploreTools, chatTools := tools.Boxes(tools.Servers{Browser: found != nil, Images: settings.ImageURL != ""})
 	app := &App{
 		LanURLs: LANURLs(settings.Host, settings.Port, options.Interfaces()), Token: token,
@@ -259,7 +278,7 @@ func New(settings config.Config, options Options) (*App, error) {
 	// The web tools reach the public web only: the model writes the addresses they read.
 	pages := web.PublicClient()
 	service = sessions.NewService(sessions.Deps{
-		Browser: found, HTTP: options.HTTP, Hosts: registry, ImageURL: settings.ImageURL,
+		Browser: found, Browsers: browsers, HTTP: options.HTTP, Hosts: registry, ImageURL: settings.ImageURL,
 		ImagesFolder: app.imagesFolder, LogError: logError, MaxSteps: maxSteps, MaxSubagentSteps: settings.SubagentMaxSteps,
 		Model: servers, Models: modelService, NewID: options.NewID, Now: options.Now,
 		OnWorkspace: func(path string, host protocol.HostRef) { app.Projects.Ensure(path, host) },

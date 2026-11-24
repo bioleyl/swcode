@@ -102,7 +102,9 @@ type Deps struct {
 	ImagesFolder string
 	// Browser draws screenshots, when the daemon has one.
 	Browser browser.Browser
-	Skills  *catalog.Catalog
+	// Browsers keeps one Chromium per agent session, for the browser tools; nil where the daemon has no browser.
+	Browsers *browser.Sessions
+	Skills   *catalog.Catalog
 	// SkillsOff is the skills a folder's project turned off, by name: its sessions are neither told of them nor run them.
 	SkillsOff func(path string, host protocol.HostRef) []string
 	// AfterEdit is the command a folder's project runs after each file its agent writes or edits; none when empty.
@@ -558,6 +560,9 @@ func (s *Service) RemoveRun(runID string) string {
 // forget deletes a session: its files, its pictures, and its scratch folder on its host when the host answers.
 func (s *Service) forget(session *live) {
 	delete(s.sessions, session.meta.ID)
+	if s.deps.Browsers != nil {
+		s.deps.Browsers.Close(session.meta.ID)
+	}
 	s.deps.Store.Remove(session.meta.ID)
 	if s.deps.Checkpoints != nil {
 		s.deps.Checkpoints.Remove(session.meta.ID)
@@ -925,6 +930,9 @@ func (s *Service) StopAll() {
 	}
 	s.mu.Unlock()
 	s.turns.Wait()
+	if s.deps.Browsers != nil {
+		s.deps.Browsers.CloseAll()
+	}
 }
 
 // Compact summarizes the session's conversation now, at the person's word, in a turn of its own: the next request
