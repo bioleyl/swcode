@@ -29,7 +29,7 @@ async function editStep(page: Page, name: string, role: string, prompt: string):
 describe('workflows', () => {
   it('are written in the editor, confirmed, and run as one session per step with handoff files', async () => {
     const rig = await start({
-      replies: [{ text: 'Ready.' }, { text: 'Tickets: build it.' }, { text: 'Implemented.' }],
+      replies: [{ text: 'Ready.' }, { delayMs: 3000, text: 'Tickets: build it.' }, { text: 'Implemented.' }],
     });
     const page = await rig.browser.newPage({ viewport: DESKTOP });
     await projectSession(page, rig);
@@ -67,10 +67,29 @@ describe('workflows', () => {
     // The run session shows the graph and the steps, and the run ends with both done.
     const run = page.locator('session-page sc-workflow-run');
     await run.getByRole('heading', { name: 'Workflow · Team' }).waitFor();
+
+    // The run's row in the side nav shows its step working, though the run session runs no turn itself.
+    const runSessionId = page.url().split('/sessions/')[1]?.split(/[?#]/)[0] ?? '';
+    const runNavIcon = page.locator(`jl-side-nav .item[data-id="session:${runSessionId}"] jl-icon.item-icon`);
+    await expect
+      .poll(
+        async () =>
+          await runNavIcon.evaluate((icon) => (icon as unknown as { name: { get(): string } }).name.get()),
+        { timeout: 10_000 }
+      )
+      .toBe('message-working');
+
+    // The run's page shows the run, not the empty conversation's invitation.
+    const invitation = page.locator('sc-conversation .empty');
+    await expect.poll(async () => await invitation.evaluate((node) => node.hasAttribute('hidden'))).toBe(true);
+
     await expect
       .poll(async () => (await run.locator('.run-status').textContent()) ?? '', { timeout: 30_000 })
       .toContain('2 of 2 steps done');
     expect(await run.locator('.steps jl-list-item').count()).toBe(2);
+    // Each row says what that step did, so the steps of a long run differ by more than their names.
+    await run.getByText('Tickets: build it.').waitFor();
+    await run.getByText('Implemented.').waitFor();
 
     // Each step left its report in the run's folder, in the project.
     const folders = readdirSync(join(rig.workspace, '.swcode', 'workflows'));
@@ -179,6 +198,18 @@ describe('a workflow that loops', () => {
       .poll(async () => (await run.locator('.run-status').textContent()) ?? '', { timeout: 30_000 })
       .toContain('6 of 6 steps done');
     expect(await run.locator('.steps jl-list-item').count()).toBe(6);
+
+    // The loop folds into rounds: the first Dev after the PO's ticket starts Round 2, which stays open.
+    const rounds = run.locator('.steps jl-accordion-item');
+    await expect.poll(async () => await rounds.count()).toBe(2);
+    await expect
+      .poll(
+        async () =>
+          await rounds.evaluateAll((items) =>
+            items.map((item) => (item as unknown as { open: { get(): boolean } }).open.get())
+          )
+      )
+      .toEqual([false, true]);
 
     const folders = readdirSync(join(rig.workspace, '.swcode', 'workflows'));
     const folder = join(rig.workspace, '.swcode', 'workflows', folders[0] ?? '');

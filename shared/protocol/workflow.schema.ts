@@ -16,6 +16,8 @@ export const MAX_WORKFLOW_EDGES = 100;
 export const MAX_WORKFLOWS = 100;
 export const MAX_WORKFLOW_RUNS = 50;
 export const MAX_WORKFLOW_BRIEF = 20_000;
+/** The longest the run's list says of what a step reported. */
+export const MAX_WORKFLOW_STEP_SUMMARY = 200;
 
 /** Where a node sits on the editor's canvas: its top left corner. */
 export const WorkflowPointSchema = z.object({ x: z.number(), y: z.number() });
@@ -110,6 +112,8 @@ export const WorkflowRunStepSchema = z.object({
   startedAt: z.iso.datetime().optional(),
   status: WorkflowStepStatusSchema.default('pending'),
   stepId: z.string(),
+  // The first line of its report, for the run's list: what this step did, when its name repeats.
+  summary: z.string().max(MAX_WORKFLOW_STEP_SUMMARY).optional(),
 });
 export type WorkflowRunStep = z.infer<typeof WorkflowRunStepSchema>;
 

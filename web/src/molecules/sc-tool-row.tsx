@@ -3,9 +3,11 @@ import { JlIcon } from '@syware/jlib';
 
 import { ScElement } from '../base/sc-element';
 import { lastLines } from '../lib/format';
+import { absolutePath, pathOfCall } from '../lib/ide-open';
 import { toolLabel } from '../lib/tool-labels';
 import { toolMeta } from '../lib/tool-meta';
 import { authorizedUrl } from '../services/access';
+import { requestOpenInHost } from '../services/host-messages';
 import { BASE_STYLES } from '../styles/shared';
 import { ScDiff } from './sc-diff';
 import { ScPlanSteps } from './sc-plan-steps';
@@ -16,6 +18,8 @@ import type { SubagentLine, ToolResult, ToolRowState } from '../types/conversati
 
 const OPEN = 'open';
 const CALL_ICON_SIZE = 14;
+const OPEN_ICON = 'open';
+const OPEN_HINT = 'Open the file in the editor';
 // What a running command shows of what it printed: its last lines, from the end of what came.
 const LIVE_LINES = 8;
 
@@ -59,11 +63,15 @@ export class ScToolRow extends ScElement {
     this._refs.icon.name.set(label.icon);
     this._refs.name.textContent = label.name;
     this.reflect('tool', tool ?? false);
+    this.renderOpen();
   });
   readonly summary = this.useChange('', (value) => {
     this._refs.summary.textContent = value;
     this._refs.summary.title = value;
+    this.renderOpen();
   });
+  /** The session's project folder: a tool's path is relative to it, so the host is given a whole one. */
+  readonly projectPath = this.useChange('', () => this.renderOpen());
   readonly state = this.useChange<ToolRowState>('pending', () => this.renderState());
   readonly result = this.useChange<ToolResult | undefined>(undefined, (result) => {
     this.renderState();
@@ -85,6 +93,7 @@ export class ScToolRow extends ScElement {
     live: ref('.live'),
     meta: ref('.meta-text'),
     name: ref('.name'),
+    open: ref<JlIcon>('.open'),
     output: ref('.details pre'),
     picture: ref('a'),
     plan: ref<ScPlanSteps>('sc-plan-steps'),
@@ -118,6 +127,7 @@ export class ScToolRow extends ScElement {
             <JlIcon class="state-icon" size={14} />
             <span class="meta-text" />
           </span>
+          <JlIcon class="open" name={OPEN_ICON} size={14} label={OPEN_HINT} />
           <JlIcon class="chevron" name="chevron-down" size={14} />
         </button>
         <pre class="live" aria-live="off" hidden />
@@ -140,6 +150,32 @@ export class ScToolRow extends ScElement {
 
   onConnect(): void {
     this.on(this._refs.head, 'click', () => this.toggle(!this.hasAttribute(OPEN)));
+    this.on(this._refs.open, 'click', (event) => this.openFromHead(event));
+    this._refs.diff.events.register('open', (place) => this.openAt(place.line));
+  }
+
+  /** The Open icon asks the host for the file; the head's own click opens and closes the row. */
+  private openFromHead(event: MouseEvent): void {
+    event.stopPropagation();
+    this.openAt();
+  }
+
+  /** The Open icon shows for the calls that concern a file: a change to one, or a read of one. */
+  private renderOpen(): void {
+    this.reflect('file', this.openPath() !== '');
+  }
+
+  /** The file the call concerns: the change's path, else the path a file tool's summary names. */
+  private openPath(): string {
+    return pathOfCall(this.tool.get(), this.summary.get(), this.result.get()?.display);
+  }
+
+  /** Asks the host to open the file the call concerns, at a line when one is given. */
+  private openAt(line?: number): void {
+    const path = this.openPath();
+    if (path !== '') {
+      requestOpenInHost(absolutePath(this.projectPath.get(), path), line, line);
+    }
   }
 
   private toggle(open: boolean): void {
@@ -172,6 +208,7 @@ export class ScToolRow extends ScElement {
     this._refs.plan.steps.set(display?.kind === 'plan' ? [...display.steps] : []);
     this._refs.output.textContent = text;
     this.renderPicture(display?.kind === 'image' ? display : undefined);
+    this.renderOpen();
     this.refreshHead();
     this.toggle(display?.kind === 'diff' || display?.kind === 'image');
   }

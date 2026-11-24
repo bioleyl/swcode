@@ -1,0 +1,31 @@
+/* The host's page: the app's page styles, with the host's own colours in front of jlib's tokens. */
+@import "./styles/global.css";
+
+/*
+ * A host (the VS Code extension) puts its theme's colours on the root as `--vscode-*` custom properties. Each token
+ * of jlib takes the host's colour when it gives one, and its own otherwise, so the same bundle reads well in the
+ * IDE's side bar, in a panel, and in a plain browser. The rules are unlayered, so they win over jlib's `@layer jlib`
+ * tokens.
+ */
+:root {
+  --jl-bg: var(--vscode-sideBar-background, var(--jl-bg));
+  --jl-surface: var(--vscode-sideBar-background, var(--jl-surface));
+  --jl-surface-2: var(--vscode-sideBarSectionHeader-background, var(--jl-surface-2));
+  --jl-surface-3: var(--vscode-input-background, var(--jl-surface-3));
+  --jl-code-bg: var(--vscode-textCodeBlock-background, var(--jl-code-bg));
+  --jl-line: var(--vscode-panel-border, var(--jl-line));
+  --jl-line-strong: var(--vscode-panel-border, var(--jl-line-strong));
+  --jl-text: var(--vscode-foreground, var(--jl-text));
+  --jl-text-2: var(--vscode-foreground, var(--jl-text-2));
+  --jl-muted: var(--vscode-descriptionForeground, var(--jl-muted));
+  --jl-accent: var(--vscode-button-background, var(--jl-accent));
+  --jl-on-accent: var(--vscode-button-foreground, var(--jl-on-accent));
+  --jl-font-sans: var(--vscode-font-family, var(--jl-font-sans));
+  --jl-font-mono: var(--vscode-editor-font-family, var(--jl-font-mono));
+}
+
+/* The host's webview has no safe-area insets to keep, and its own scrollbars: the frame fills the window it is in. */
+html,
+body {
+  height: 100%;
+}

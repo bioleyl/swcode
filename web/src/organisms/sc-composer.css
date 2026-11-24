@@ -118,6 +118,13 @@ jl-popover::part(base) {
   flex: none;
 }
 
+/* The host's problems ride with the message: a plain word with its icon, not a pill like the session's chip. */
+.problems {
+  flex: none;
+  font-size: 12px;
+  color: var(--jl-text-2);
+}
+
 /* The composer's own width, not the screen's: on a phone the context count goes before the chip's words are cut. */
 @container composer (max-width: 480px) {
   .bar {

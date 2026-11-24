@@ -1,6 +1,7 @@
 import { THIS_COMPUTER } from '../../../shared/protocol/desktop.schema';
 import { BEARER_PREFIX, ENDPOINTS, TOKEN_PARAM } from '../../../shared/protocol/endpoints';
 import { keepComputers, shownComputer, storedComputers } from './computer-store';
+import { hostConfig } from './host';
 
 const STORAGE_KEY = 'swcode.token';
 const SECURE_PAGE = 'https:';
@@ -23,10 +24,14 @@ const store = (token: string): void => {
   }
 };
 
-// The daemon the page talks to: the one that served it, or another computer's this browser paired with, at its own
-// address and with the token that pairing gave.
+// The daemon the page talks to: the one that served it — a host that ships the bundle names its own in the address —
+// or another computer's this browser paired with, at its own address and with the token that pairing gave.
 const shown = shownComputer();
-const session = { base: shown?.address ?? '', token: shown?.token ?? stored() };
+const host = hostConfig();
+const session = {
+  base: shown?.address ?? host.daemon,
+  token: shown?.token ?? (host.token === '' ? stored() : host.token),
+};
 
 /** Takes the token from the link the daemon printed, keeps it, and takes it out of the address bar. */
 export function adoptToken(): void {

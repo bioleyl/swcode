@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { flowOf, graphProblem } from '../src/lib/workflow-view';
+import { flowOf, graphProblem, roundsOf } from '../src/lib/workflow-view';
 
-import type { WorkflowEdge, WorkflowStep } from '../../shared/protocol/workflow.schema';
+import type { WorkflowEdge, WorkflowRunStep, WorkflowStep } from '../../shared/protocol/workflow.schema';
 
 const step = (id: string, name: string, exits: WorkflowStep['exits']): WorkflowStep => ({
   exits,
@@ -96,5 +96,36 @@ describe('validating a workflow', () => {
 
   it('needs a Start and an End', () => {
     expect(graphProblem([step('a', 'A', [])], [])).toBe('A workflow needs one Start and one End.');
+  });
+});
+
+describe('the rounds of a run', () => {
+  const ran = (stepId: string): WorkflowRunStep => ({ name: stepId, status: 'done', stepId });
+
+  it('starts a round each time the run returns to the first step it visits twice', () => {
+    const rounds = roundsOf(['po', 'dev', 'qa', 'po', 'dev', 'qa', 'dev', 'qa', 'po'].map(ran));
+
+    expect(rounds.map((round) => round.map((step) => step.stepId))).toEqual([
+      ['po', 'dev', 'qa'],
+      ['po', 'dev', 'qa', 'dev', 'qa'],
+      ['po'],
+    ]);
+  });
+
+  it('starts the loop where the run first visits a step again, not at its first step', () => {
+    const rounds = roundsOf(['po', 'dev', 'qa', 'check', 'dev', 'qa', 'check'].map(ran));
+
+    expect(rounds.map((round) => round.map((step) => step.stepId))).toEqual([
+      ['po', 'dev', 'qa', 'check'],
+      ['dev', 'qa', 'check'],
+    ]);
+  });
+
+  it('keeps a run that visits each step once in one round', () => {
+    expect(roundsOf(['po', 'dev', 'qa'].map(ran))).toHaveLength(1);
+  });
+
+  it('has no round before a step', () => {
+    expect(roundsOf([])).toEqual([]);
   });
 });

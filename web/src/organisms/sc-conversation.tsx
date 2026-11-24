@@ -129,15 +129,23 @@ export class ScConversation extends ScElement {
   /** The messages the person pinned: each one's pin button says it. */
   readonly pinned = this.useChange<string[]>([], (ids) => this.renderPinned(ids), { immediate: true });
 
-  /** Where the agent works, for the empty conversation's invitation. */
+  /** Where the agent works: the invitation says it, and every tool's path is relative to it. */
   readonly workspace = this.useChange('', (value) => {
     this._refs.where.textContent = value;
+    // The rows the session already has keep their call's path, so they take the folder from here too.
+    for (const row of this._rows.values()) {
+      row.projectPath.set(value);
+    }
   });
   /** The session's id: the pictures pasted in it are its own. */
   readonly session = this.useChange('', () => undefined);
+  /** Whether an empty conversation invites a first message; a workflow run's page shows its run instead. */
+  readonly invitation = this.useChange(true, () => this.renderEmpty());
 
   // The events the session holds before the ones shown, told by the daemon: none means the conversation is whole.
   private _older = 0;
+  // Whether the conversation has events, which keeps the empty invitation away.
+  private _hasEvents = false;
   // What the top says about the older events: waiting for them, or not waiting.
   private _topState: 'loading' | 'none' = 'none';
   // The rows an older page makes while its events are handled: they then go above what is shown.
@@ -267,7 +275,9 @@ export class ScConversation extends ScElement {
     },
     terminalWaiting: (event) => this.showTerminalWait(event),
     toolCall: (event) => {
-      const row: ScToolRow = <ScToolRow tool={event.tool} summary={event.summary} />;
+      const row: ScToolRow = (
+        <ScToolRow projectPath={this.workspace.get()} summary={event.summary} tool={event.tool} />
+      );
       row.dataset.event = event.callId;
       this._rows.set(event.callId, row);
       this.add(row);
@@ -381,7 +391,8 @@ export class ScConversation extends ScElement {
     this._subagents.clear();
     this._working.clear();
     this._refs.items.replaceChildren();
-    this._refs.empty.hidden = events.length > 0;
+    this._hasEvents = events.length > 0;
+    this.renderEmpty();
     this.working(false);
     for (const event of events) {
       this.handle(event.kind, event);
@@ -671,7 +682,13 @@ export class ScConversation extends ScElement {
   private add(row: Element): void {
     this._olderRows?.push(row);
     this._refs.items.append(row);
+    this._hasEvents = true;
     this._refs.empty.hidden = true;
+  }
+
+  /** Shows the invitation only for an empty conversation whose page has nothing else to show. */
+  private renderEmpty(): void {
+    this._refs.empty.hidden = this._hasEvents || !this.invitation.get();
   }
 
   private message(id: string): ScMessage {

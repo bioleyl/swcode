@@ -1,0 +1,12 @@
+# PO review
+
+# PO — ticket 3 (IDE context): almost there, two fixes
+
+**What checks out.** `npm run build`, `npm run build:vscode` and `npm run check` all green (biome, tsc web/e2e/vscode, vitest, go). The context block (`web/src/lib/ide-context.ts`) matches the ticket's shape (File / Selection / Selected code (lang) / Problems, fence grown past backtick runs, 200 lines + 30 diagnostics caps). The webview's forwarding script keeps the CSP as ticket 1 defined it. `sc-composer` gets exactly one host prop (`hostContext` + internal `includeProblems` toggle), hidden when the host gives no context, so the app's entry is unchanged; `vscode.tsx` starts `watchHostMessages()`. `swcode.ask` is contributed in `contributes.commands` + `contributes.menus["editor/context"]`, the view keeps `retainContextWhenHidden` (qa-6 note 1 folded in). Vitest covers the three seams (ide-context 7, host-messages 4, context 7). The report gives ticket 4 what it needs (message shape, block format, files, commands).
+
+**Problems to fix.**
+
+1. **`startContext` is never called** — the main gap. `vscode/src/context.ts:60` defines it and `vscode/tests/context.test.ts` exercises it, but nothing in the extension invokes it: `SessionPanel.resolveWebviewView` (`vscode/src/session-panel.ts:20`) only sets `webview.options` and draws the frame, and `extension.ts` registers only the provider, theme listener, status bar and command. The built `vscode/out/extension.js` confirms it — no call. So in VS Code the context is never pushed on selection/diagnostics changes: the "Include problems" affordance never appears, and the panel shows the context of the last "Ask swcode" instead of the current selection. Fix: call `startContext(view)` in `resolveWebviewView` and push the returned `Disposable` into the extension's `context.subscriptions` (pass it to the provider, or subscribe in `activate`). The headless-browser probe posted a `context` message by hand, which is why the check passed.
+2. **"Ask swcode" duplicates the context block when "Include problems" is on.** `extension.ts` builds the block on the extension side (`promptFromContext`) and posts it as the prompt's text; the composer's `submit()` then prefixes `textWithProblems(text)` again, so the message carries the block twice. Fix: post the prompt's own text and let the composer add the block (the ticket's "via the same context block" is one block).
+
+Nothing here needs a daemon change; both fixes are in `vscode/` (plus no web change expected beyond what exists). Re-run `npm run check` after the fix.

@@ -58,6 +58,7 @@ const PLUS_SIZE = 14;
 // What marks swcode's own nodes in jlib's side nav: its styles, and the + of each project row.
 const ROW_STYLES_CLASS = 'sc-rows';
 const NEW_SESSION_CLASS = 'sc-new-session';
+const TEAMS = 'Teams';
 // A project's row in jlib's side nav, not one of its sessions'.
 const PROJECT_ROWS = `.item[data-depth="0"][data-id^="${PROJECT_PREFIX}"]`;
 const SETTINGS = 'Settings';
@@ -124,7 +125,7 @@ const SECTIONS: Readonly<Record<SessionKind, (lists: NavLists) => SideNavSection
     { items: [{ href: hrefOf(NEW_SESSION_PATH), icon: 'plus', id: NAV_ID.newSession, label: 'New session' }] },
     {
       items: [{ href: hrefOf(WORKFLOWS_PATH), icon: 'workflow', id: NAV_ID.workflows, label: 'Workflows' }],
-      label: 'Teams',
+      label: TEAMS,
     },
     {
       items: groupByProject(projects, sessionsOf('code', sessions)).map((group) => projectItem(group, seen)),
@@ -132,6 +133,10 @@ const SECTIONS: Readonly<Record<SessionKind, (lists: NavLists) => SideNavSection
     },
   ],
 };
+
+/** The mode's sections, the teams' group left out for a host whose pane is narrow. */
+const sectionsFor = (mode: SessionKind, lists: NavLists, compact: boolean): SideNavSection[] =>
+  compact ? SECTIONS[mode](lists).filter((section) => section.label !== TEAMS) : SECTIONS[mode](lists);
 
 /**
  * The side of every page: swcode and where it works; in Code, a new session and the projects with their sessions
@@ -141,6 +146,12 @@ const SECTIONS: Readonly<Record<SessionKind, (lists: NavLists) => SideNavSection
  */
 export class ScNav extends ScElement {
   static readonly selector = 'sc-nav';
+
+  /**
+   * A host with a narrow pane (the VS Code extension's side bar): the sessions alone, so the teams' section and the
+   * settings link, which lead to pages that bundle leaves out, stay out too.
+   */
+  compact = false;
 
   /** `settings`: its link pressed, which a phone's drawer closes for; `mode`: chat or code picked at its foot. */
   readonly events = this.useEvents<{ mode: SessionKind; search: undefined; settings: undefined }>();
@@ -203,6 +214,7 @@ export class ScNav extends ScElement {
             icon="settings"
             hint={SETTINGS}
             href={hrefOf(SETTINGS_PATH)}
+            hidden={this.compact}
           />
           <JlButton class="theme" variant="ghost" size="sm" />
         </div>
@@ -256,7 +268,7 @@ export class ScNav extends ScElement {
 
   private renderSections(): void {
     const lists = { projects: this.projects.get(), seen: this.seen.get(), sessions: this.sessions.get() };
-    const sections = SECTIONS[this.mode.get()](lists);
+    const sections = sectionsFor(this.mode.get(), lists, this.compact);
     this._starts = projectStarts(sections);
     this._refs.nav.sections.set(sections);
   }

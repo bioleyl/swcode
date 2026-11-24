@@ -95,6 +95,21 @@
   transition: transform var(--jl-fast) var(--jl-ease);
 }
 
+/* The head's Open affordance: it asks the host (the IDE) to open the file the call concerns. */
+.open {
+  visibility: hidden;
+  color: var(--jl-faint);
+  cursor: pointer;
+}
+
+.open:hover {
+  color: var(--jl-accent);
+}
+
+:host([file]) .open {
+  visibility: visible;
+}
+
 :host([expandable]) .chevron {
   visibility: visible;
 }

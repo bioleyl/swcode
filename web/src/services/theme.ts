@@ -19,9 +19,11 @@ const storedTheme = (): Theme | undefined => {
 export const currentTheme = (): Theme =>
   storedTheme() ?? (window.matchMedia(DARK_QUERY).matches ? 'dark' : 'light');
 
-/** Puts the picked theme on the page; with none picked, the tokens follow the system. */
-export function applyTheme(): void {
-  const theme = storedTheme();
+/**
+ * Puts the picked theme on the page; with none picked, the tokens follow the system. A host that ships the bundle
+ * (the VS Code extension) names its own, which wins over what this device kept.
+ */
+export function applyTheme(theme: Theme | undefined = storedTheme()): void {
   if (theme === undefined) {
     document.documentElement.removeAttribute(THEME_ATTRIBUTE);
     return;

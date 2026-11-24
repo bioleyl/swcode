@@ -58,6 +58,27 @@ A coding agent for local models. It runs an LLM agent with file, terminal and we
   </picture>
 </p>
 
+## VS Code extension
+
+swcode's session panel in the editor's side bar: a second, smaller UI for the daemon running on this machine, drawn with the web app's own components. The extension ships no UI of its own — it frames the bundle the daemon serves, so it stays in step with the app, and the agent gets the IDE's files with it.
+
+- **What you get**: the session list, the conversation with the agent's tool calls and their diffs, the composer, Stop, and the answers to the agent's questions and permission requests. The app's other pages (projects, settings, workflows, games) stay out of it.
+- **Install**: `npm run package:vscode` builds `dist/swcode-<version>.vsix` (the daemon's web bundle first, then the extension), and you install that file in VS Code with Extensions → `…` → **Install from VSIX**.
+- **Finds the daemon**: its port from `~/.swcode/settings.env` (`SWCODE_PORT`, default 4500), its token from `~/.swcode/token` (`SWCODE_DATA_DIR` wins over `~/.swcode`). The status bar says whether the daemon answers, probed when the extension starts and every 15 seconds; the panel works while the daemon is down and says so in its own alert.
+- **Five commands**, in the command palette and in the editor's context menu, each sending the file and the selection as its context:
+
+  | Command | Prompt it sends |
+  | --- | --- |
+  | **Ask swcode** | (empty: your own question) |
+  | **Refactor** | "Refactor the selected code, keeping its behaviour." |
+  | **Explain** | "Explain what this code does." |
+  | **Fix problems** | "Fix the problems reported for this file." |
+  | **Add tests** | "Add tests for the selected code." |
+
+- **Include problems**: the composer's `.problems` affordance decides whether the file's diagnostics ride along with the prompt, and its label reads "Include problems" or "Problems included". A command that names no preference (all but *Fix problems*) leaves that choice to you, and the composer that shows a prompt the extension sent is the session page's fresh instance, so its toggle is at the default. *Fix problems* sends with the problems included.
+- **Open**: clicking a file in a tool row or in a diff opens it in the editor at the line that changed, so the editor follows the agent's edits.
+- **Theming**: light or dark follows the editor's active colour theme, whose colours the app's tokens take over.
+
 ## Install
 
 swcode needs an LLM server that supports tool calls. Set that up first, then install swcode.

@@ -1,0 +1,95 @@
+{
+  "name": "swcode",
+  "publisher": "syware",
+  "displayName": "swcode",
+  "description": "swcode's session panel in the side bar: the agent of the daemon on this machine, with the IDE's files.",
+  "version": "0.1.0",
+  "license": "MIT",
+  "main": "./out/extension.js",
+  "categories": ["AI", "Chat"],
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "activationEvents": ["onView:swcode.sessionPanel"],
+  "contributes": {
+    "commands": [
+      {
+        "command": "swcode.ask",
+        "title": "Ask swcode",
+        "category": "swcode"
+      },
+      {
+        "command": "swcode.refactor",
+        "title": "Refactor",
+        "category": "swcode"
+      },
+      {
+        "command": "swcode.explain",
+        "title": "Explain",
+        "category": "swcode"
+      },
+      {
+        "command": "swcode.fixProblems",
+        "title": "Fix problems",
+        "category": "swcode"
+      },
+      {
+        "command": "swcode.addTests",
+        "title": "Add tests",
+        "category": "swcode"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "swcode.ask",
+          "group": "swcode@1"
+        },
+        {
+          "command": "swcode.refactor",
+          "group": "swcode@2"
+        },
+        {
+          "command": "swcode.explain",
+          "group": "swcode@3"
+        },
+        {
+          "command": "swcode.fixProblems",
+          "group": "swcode@4"
+        },
+        {
+          "command": "swcode.addTests",
+          "group": "swcode@5"
+        }
+      ]
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "swcode",
+          "title": "swcode",
+          "icon": "assets/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "swcode": [
+        {
+          "id": "swcode.sessionPanel",
+          "name": "Sessions",
+          "type": "webview",
+          "retainContextWhenHidden": true
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "build": "esbuild src/extension.ts --bundle --sourcemap --outfile=out/extension.js --platform=node --format=cjs --external:vscode --log-level=warning",
+    "watch": "npm run build -- --watch",
+    "package": "vsce package --out ../dist/"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.90.0",
+    "@vscode/vsce": "^3.2.1"
+  }
+}

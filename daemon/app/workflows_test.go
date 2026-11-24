@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"swcode/daemon/fakellama"
+	"swcode/daemon/protocol"
 	"swcode/daemon/sessions"
 	. "swcode/daemon/testapp"
 )
@@ -53,5 +54,77 @@ func TestAWorkflowProposedByTheAgentIsADraft(t *testing.T) {
 	}
 	if !proposed {
 		t.Fatal("the agent's result does not say the workflow was proposed")
+	}
+}
+
+// TestAStepWaitingForItsSubagentsStaysRunning: a step's turn ends before its subagents report, which wakes it for the
+// turn that hands off; the run must not take that first end for the step's own.
+func TestAStepWaitingForItsSubagentsStaysRunning(t *testing.T) {
+	test := Start(t, Options{
+		Files: subagentFiles,
+		Replies: []fakellama.Reply{
+			{ToolCalls: []fakellama.ToolCall{agentCall("Find the tools", "TASK-W: where are the tools?")}},
+			call("handoff", map[string]any{"exit": "done", "report": "The tools are in src/tools.ts."}),
+			text("Handed off."),
+		},
+		Scripts: map[string][]fakellama.Reply{"TASK-W": {text("src/tools.ts:1 lists them in TOOLS.")}},
+		Slots:   2,
+	})
+	test.NewSession(sessions.Request{})
+	project, ok := test.App.Projects.Find(test.Workspace, protocol.LocalHost())
+	if !ok {
+		t.Fatal("the session's folder is no project")
+	}
+	workflow, problem := test.App.Workflows.Save("", protocol.WorkflowDraft{
+		Name:      "Team",
+		ProjectID: project.ID,
+		Steps: []protocol.WorkflowStep{
+			{ID: "start", Kind: protocol.WorkflowStepKindStart, Name: "Start"},
+			{
+				Exits:  []protocol.WorkflowExit{{ID: "done", Label: "Done", When: "the tools are found"}},
+				ID:     "work",
+				Kind:   protocol.WorkflowStepKindStep,
+				Name:   "Work",
+				Prompt: "Find the tools.",
+				Role:   "You look.",
+			},
+			{ID: "end", Kind: protocol.WorkflowStepKindEnd, Name: "End"},
+		},
+		Edges: []protocol.WorkflowEdge{
+			{From: "start", ID: "e1", To: "work"},
+			{From: "work", ID: "e2", Port: "done", To: "end"},
+		},
+	})
+	if problem != "" {
+		t.Fatal(problem)
+	}
+	if problem := test.App.Workflows.Confirm(workflow.ID); problem != "" {
+		t.Fatal(problem)
+	}
+
+	socket := connect(t, test)
+	socket.send(map[string]any{"prompt": "Find the tools", "type": "createSession", "workflowId": workflow.ID, "workspace": test.Workspace})
+	runSession := socket.next("sessionCreated")["session"].(map[string]any)
+	runSessionID, _ := runSession["id"].(string)
+
+	var run protocol.WorkflowRun
+	test.Until("the run to end", func() bool {
+		_, runs := test.App.Workflows.List()
+		for _, candidate := range runs {
+			if candidate.SessionID == runSessionID {
+				run = candidate
+				return run.Status != protocol.WorkflowRunStatusRunning && run.Status != protocol.WorkflowRunStatusWaiting
+			}
+		}
+		return false
+	})
+	if run.Status != protocol.WorkflowRunStatusDone {
+		t.Fatalf("run %+v", run)
+	}
+	if len(run.Steps) != 1 || run.Steps[0].Status != protocol.WorkflowStepStatusDone {
+		t.Fatalf("steps %+v", run.Steps)
+	}
+	if run.Steps[0].Summary != "The tools are in src/tools.ts." {
+		t.Fatalf("summary %q", run.Steps[0].Summary)
 	}
 }

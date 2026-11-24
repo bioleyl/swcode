@@ -100,6 +100,33 @@ export function flowOf(
   };
 }
 
+/** The first step a run visits twice: where its loop starts, or nothing when it visits each step once. */
+const loopStepOf = (steps: readonly WorkflowRunStep[]): string | undefined => {
+  const visited = new Set<string>();
+  for (const step of steps) {
+    if (visited.has(step.stepId)) {
+      return step.stepId;
+    }
+    visited.add(step.stepId);
+  }
+  return undefined;
+};
+
+/** A run's steps in rounds: the step its loop starts at begins the first round, and each visit to it another. */
+export function roundsOf(steps: readonly WorkflowRunStep[]): WorkflowRunStep[][] {
+  const loopStep = loopStepOf(steps);
+  const rounds: WorkflowRunStep[][] = [];
+  let inLoop = false;
+  for (const step of steps) {
+    if (rounds.length === 0 || (inLoop && step.stepId === loopStep)) {
+      rounds.push([]);
+    }
+    rounds.at(-1)?.push(step);
+    inLoop ||= step.stepId === loopStep;
+  }
+  return rounds;
+}
+
 /** A workflow as the editor holds it: its dates and id left to the daemon, with Start and End for an older one. */
 export const draftOf = (workflow: Workflow): WorkflowDraft => {
   const draft: WorkflowDraft = {

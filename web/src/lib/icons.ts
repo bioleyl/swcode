@@ -57,6 +57,8 @@ import {
   Smartphone,
   Split,
   Square,
+  // The file a call concerns, opened in the host's editor.
+  SquareArrowOutUpRight,
   SquarePen,
   Sun,
   Terminal,
@@ -135,6 +137,8 @@ const ICONS = {
   mic: Mic,
   moon: Moon,
   network: Network,
+  // Opens the file a call concerns in the host's editor (the VS Code extension).
+  open: SquareArrowOutUpRight,
   'panel-close': PanelRightClose,
   'panel-open': PanelRightOpen,
   pause: Pause,

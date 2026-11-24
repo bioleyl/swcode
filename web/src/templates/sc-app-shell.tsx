@@ -58,7 +58,7 @@ import { setWorkMode, workMode, workModeBus } from '../services/work-mode';
 import { BASE_STYLES } from '../styles/shared';
 import styles from './sc-app-shell.css?inline';
 
-import type { ActiveRoute } from '@jadis/core';
+import type { ActiveRoute, RouteDefinition } from '@jadis/core';
 import type { PaletteCommand, TabBarItem } from '@syware/jlib';
 import type { Project } from '../../../shared/protocol/project.schema';
 import type { SessionKind } from '../../../shared/protocol/session.schema';
@@ -129,6 +129,14 @@ const isRouteName = (name: string): name is RouteName => Object.hasOwn(PLACES, n
 export class ScAppShell extends ScElement {
   static readonly selector = 'sc-app-shell';
 
+  /**
+   * The pages the outlet offers: the app's own, whole. A host that ships the bundle of its own (the VS Code
+   * extension's webview) gives a subset, so its bundle carries the screens it shows and nothing else.
+   */
+  routes: Record<string, RouteDefinition> = ROUTES;
+  /** A host with a narrow pane (the IDE's side bar): the navigation keeps its sessions, the phone's tabs stay out. */
+  compact = false;
+
   // The page shown, to leave it when its project goes.
   private _route: ActiveRoute | undefined;
   // Whether this daemon can start with its computer: the palette offers the Startup topic then.
@@ -169,12 +177,12 @@ export class ScAppShell extends ScElement {
             </a>
             <JlSearchButton label="Search" compact />
           </div>
-          <ScNav slot="nav" />
+          <ScNav slot="nav" compact={this.compact} />
           <div class="main">
             <JlAlert tone="danger" hidden />
             <JlPageOutlet />
           </div>
-          <JlTabBar slot="tabs" more="More" label="swcode" />
+          <JlTabBar slot="tabs" more="More" label="swcode" hidden={this.compact} />
           <JlToaster />
           <JlCommandPalette
             label="Search swcode"
@@ -203,7 +211,7 @@ export class ScAppShell extends ScElement {
   /** The router, and the page its address names. */
   private mountPages(): void {
     const outlet = this._refs.outlet;
-    const router = new Router(ROUTES, { mode: 'hash', signal: this.killSignal });
+    const router = new Router(this.routes, { mode: 'hash', signal: this.killSignal });
     router.mountOn(outlet, { show: (page) => outlet.show(page) });
     window.addEventListener(HASH_CHANGE, () => this.follow(router.currentRoute), { signal: this.killSignal });
     this.follow(router.currentRoute);

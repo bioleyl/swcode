@@ -14,6 +14,7 @@ import {
   stepIn,
 } from '../lib/commands';
 import { textWithSpoken } from '../lib/dictation';
+import { contextBlock } from '../lib/ide-context';
 import { MODE_LABELS } from '../lib/mode-labels';
 import { isPicture, pictureUrl, shrinkPicture } from '../lib/pictures';
 import { presetOf } from '../lib/presets';
@@ -22,6 +23,7 @@ import { ScCommandHelp } from '../molecules/sc-command-help';
 import { ScSessionChoices } from '../molecules/sc-session-choices';
 import { canDictate, dictate } from '../services/dictation';
 import { draftOf, keepDraft } from '../services/drafts';
+import { hostMessageBus } from '../services/host-messages';
 import { presetChoices, presetsBus } from '../services/presets';
 import { BASE_STYLES } from '../styles/shared';
 import styles from './sc-composer.css?inline';
@@ -31,9 +33,11 @@ import type { PermissionMode, SessionKind, ThinkingMode } from '../../../shared/
 import type { SkillSummary } from '../../../shared/protocol/skill.schema';
 import type { Workflow } from '../../../shared/protocol/workflow.schema';
 import type { CommandName } from '../lib/commands';
+import type { HostMessage } from '../services/host-messages';
 import type { CommandLine, MenuEntry } from '../types/commands.types';
 import type { PromptDraft } from '../types/composer.types';
 import type { Dictation, TextAround } from '../types/dictation.types';
+import type { IdeContext } from '../types/ide-context.types';
 
 const ENTER = 'Enter';
 /** What the empty field asks for: a chat's question, or a coding session's change. */
@@ -55,6 +59,10 @@ const CONCISE_LABEL = 'Token economy';
 const WORKTREE_LABEL = 'Worktree';
 const COMMAND_ICON_SIZE = 16;
 const SKILL_ICON = 'book-open';
+const PROBLEMS_ICON = 'warning';
+const PROBLEMS_HINT = 'Send the file, its selection and its problems with the message';
+const PROBLEMS_LABEL = 'Include problems';
+const PROBLEMS_KEPT_LABEL = 'Problems included';
 // The list's id and each option's, for the field to say which one is chosen (`aria-activedescendant`).
 const COMMAND_LIST_ID = 'command-list';
 const OPTION_ID_PREFIX = 'command-';
@@ -150,6 +158,12 @@ export class ScComposer extends ScElement {
   readonly context = this.useChange('', (value) => {
     this._refs.context.textContent = value;
   });
+  /** What the host editor is looking at (the VS Code extension); nothing for a page the browser opens on its own. */
+  readonly hostContext = this.useChange<IdeContext | undefined>(undefined, () => this.renderProblems(), {
+    immediate: true,
+  });
+  /** Whether the message goes with the host's context block. */
+  readonly includeProblems = this.useChange(false, () => this.renderProblems(), { immediate: true });
   /**
    * What the message is written for (a session's id, a new session's page): what is typed there is kept as it is
    * typed, and shows again when the person comes back to it. Empty keeps nothing.
@@ -197,6 +211,7 @@ export class ScComposer extends ScElement {
     pictureNote: ref('.picture-note'),
     pictures: ref('.pictures'),
     play: ref<JlButton>('.play'),
+    problems: ref(JlButton),
     send: ref<JlButton>('.send'),
     stop: ref<JlButton>('.stop'),
     summary: ref('.summary'),
@@ -248,6 +263,7 @@ export class ScComposer extends ScElement {
             <ScSessionChoices />
           </JlPopover>
           <span class="context" />
+          <JlButton class="problems" icon={PROBLEMS_ICON} hint={PROBLEMS_HINT} variant="ghost" hidden />
           <JlButton class="play" icon="gamepad" hint="Play while it works" variant="ghost" hidden />
           <JlButton class="dictate" icon="mic" hint={DICTATE_HINT} variant="ghost" hidden />
           <JlButton class="stop" icon="stop" hint="Stop" hidden />
@@ -266,6 +282,7 @@ export class ScComposer extends ScElement {
     this._refs.send.events.register('press', () => this.submit());
     this._refs.stop.events.register('press', () => this.events.emit('stop'));
     this._refs.play.events.register('press', () => this.events.emit('play'));
+    this._refs.problems.events.register('press', () => this.toggleProblems());
     this._refs.dictate.hidden = !canDictate();
     this._refs.dictate.events.register('press', () => this.toggleDictation());
     this.on(this._refs.text, 'keydown', (event) => this.keyDown(event));
@@ -306,6 +323,7 @@ export class ScComposer extends ScElement {
       this.events.emit('workflow', workflow);
     });
     this.onBus(presetsBus, 'changed', () => this.renderChoices());
+    this.onBus(hostMessageBus, 'message', (message) => this.takeHostMessage(message));
     this._refs.choicesPopover.events.register('open', () => this.sizeChoicesPanel());
     this.renderChoices();
   }
@@ -635,14 +653,49 @@ export class ScComposer extends ScElement {
       this.run(command);
       return;
     }
-    if (text === '' && this._pictures.length === 0) {
+    const draft = { pictures: this._pictures, text: this.textWithProblems(text) };
+    if (draft.text === '' && this._pictures.length === 0) {
       return;
     }
-    const draft = { pictures: this._pictures, text };
     this._pictures = [];
     this.clearText();
     this.renderPictures();
     this.events.emit('send', draft);
+  }
+
+  /** The message, with the host's context block in front of it when the problems ride along with it. */
+  private textWithProblems(text: string): string {
+    const context = this.hostContext.get();
+    if (!this.includeProblems.get() || context === undefined) {
+      return text;
+    }
+    return `${contextBlock(context)}\n${text}`;
+  }
+
+  /** What the host posted: its editor's context, or a prompt to send as it is (the editor's commands). */
+  private takeHostMessage(message: HostMessage): void {
+    if (message.kind === 'context') {
+      this.hostContext.set(message.context);
+      return;
+    }
+    // A command that names the problems (the extension's "Fix problems") decides for this message; the others
+    // leave the toggle as the person set it.
+    if (message.includeProblems !== undefined) {
+      this.includeProblems.set(message.includeProblems);
+    }
+    this._refs.text.value = message.text;
+    this.submit();
+  }
+
+  private toggleProblems(): void {
+    this.includeProblems.set(!this.includeProblems.get());
+  }
+
+  /** The affordance is there when the host has a context to give, and says whether the problems ride along. */
+  private renderProblems(): void {
+    const included = this.includeProblems.get();
+    this._refs.problems.hidden = this.hostContext.get() === undefined;
+    this._refs.problems.label.set(included ? PROBLEMS_KEPT_LABEL : PROBLEMS_LABEL);
   }
 
   /** A question beside the session goes, the pictures waiting stay for the next message. */

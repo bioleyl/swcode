@@ -32,8 +32,19 @@ const compressedCopies = (): Plugin => ({
 });
 
 // npm run dev:web: the app with hot reload; its API calls and its socket go to the daemon from npm run dev:server.
+// The two entries: the app's page, and the bundle a host ships (web/vscode.html, the VS Code extension's webview).
+const ENTRIES = {
+  app: resolve(import.meta.dirname, 'index.html'),
+  vscode: resolve(import.meta.dirname, 'vscode.html'),
+};
+
 export default defineConfig({
-  build: { chunkSizeWarningLimit: 800, emptyOutDir: true, outDir: OUT_DIR },
+  build: {
+    chunkSizeWarningLimit: 800,
+    emptyOutDir: true,
+    outDir: OUT_DIR,
+    rollupOptions: { input: ENTRIES },
+  },
   oxc: { jsx: { importSource: '@jadis/core', runtime: 'automatic' } },
   plugins: [compressedCopies()],
   root: import.meta.dirname,

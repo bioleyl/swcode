@@ -1,0 +1,17 @@
+# Dev
+
+# Dev — ticket 3 fixes (qa-9's two problems)
+
+**1. The context watcher now runs.** `vscode/src/session-panel.ts`: `SessionPanel` takes the extension's `subscriptions` as a second constructor argument and `resolveWebviewView` pushes `startContext(view)` into them after drawing the frame — so the selection/diagnostics listeners are live from the panel's first resolve, the context is pushed at that moment, on every (debounced 150 ms) selection and diagnostics change, and each time the panel is shown; the `Disposable` goes with the extension, so the listeners go away with it. `vscode/src/extension.ts` passes `context.subscriptions` to `new SessionPanel(target, context.subscriptions)`. Confirmed in the built bundle: `vscode/out/extension.js` now contains `this.subscriptions.push(startContext(view))` (it did not before).
+
+**2. One context block per prompt.** `vscode/src/extension.ts`: `swcode.ask` posts the prompt's own text — `ASK_PROMPT`, the empty string, since the command has nothing of the person's own — and the composer adds the block; `promptFromContext` and its `contextBlock` import are gone. `web/src/organisms/sc-composer.tsx` `submit()` builds the draft (`textWithProblems(text)`) *before* the empty check and tests the draft's text, so a prompt with nothing of its own still sends the block (with the old order, the empty prompt returned early and sent nothing). The app's entry is unchanged: with no host context `hostContext` is undefined, `textWithProblems` returns the text, and the guard behaves as before.
+
+**Files changed:** `vscode/src/session-panel.ts`, `vscode/src/extension.ts`, `web/src/organisms/sc-composer.tsx` (2 lines moved), `AGENTS.md` (ticket 3's note now says the panel starts the watcher and the command posts the prompt's own text). No daemon change, no new files, no new dependencies.
+
+**Checks.** `npm run build` ✓ (dist/web/vscode.html + assets), `npm run build:vscode` ✓ (out/extension.js carries the call), `npm run check` ✓ exit 0 — biome, `tsc` web/e2e/vscode, vitest 40 files / 339 tests (vscode: context 7, daemon 7, settings-env 9, webview-html 4), go all packages. The first `npm run check` run had `vscode/tests/daemon.test.ts` "answers unreachable when the port is closed" fail with `connected` — the known TCP-probe race in AGENTS.md; it passes on its own and on a full re-run (that re-run is the exit-0 one). Nothing else flaked.
+
+**Not verified in VS Code itself** (no IDE here): the watcher's wiring is proven by the unit tests (`vscode/tests/context.test.ts` exercises `startContext`: initial push, debounced selection, diagnostics, visibility, dispose) and by the built bundle carrying the call; the headless-browser recipe only proves the bundle side.
+
+**For ticket 4 (IDE feedback):** the message channel is unchanged — extension → webview `window` messages `{type:'context', context}` / `{type:'prompt', text}` (`CONTEXT_MESSAGE`/`PROMPT_MESSAGE` in `vscode/src/swcode.constants.ts`), parsed by `web/src/services/host-messages.ts` onto `hostMessageBus`; the block's format is `web/src/lib/ide-context.ts` `contextBlock` (File / Selection / Selected code (lang) / Problems, 200 lines + 30 diagnostics). The panel still needs no message channel back from the bundle, so ticket 4 adds one (a `postMessage` from the bundle to the host, read by the webview's `window.onmessage` half, which today only forwards inward).
+
+coding-style: clean

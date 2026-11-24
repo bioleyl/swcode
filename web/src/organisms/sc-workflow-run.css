@@ -41,6 +41,16 @@ jl-flow {
   gap: var(--jl-space-1);
 }
 
+.steps jl-accordion {
+  display: block;
+}
+
+.round-steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--jl-space-1);
+}
+
 .problem {
   padding: 10px 12px;
   border-radius: var(--jl-radius);

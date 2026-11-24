@@ -1,0 +1,20 @@
+# Dev
+
+Ticket 4 (IDE feedback) is implemented. The webview now opens the file the agent touched, at the changed lines, and follows later edits.
+
+**How it works (bundle → webview → extension):**
+1. `web/src/lib/ide-open.ts` (new, pure): `absolutePath(path, projectPath)` joins a tool's project-relative path onto the session's project folder (keeps the folder's separator, `/` unix, `\` Windows; a whole path — scratch folder, drive — stays as it is); `pathOfCall(display)` picks the file a call concerns — the `diff` display's `path`, else the summary of the file tools (read/write/edit, `FILE_TOOLS`).
+2. `web/src/services/host-messages.ts` (ticket 3's channel, outbound half): `requestOpenInHost(path, startLine?, endLine?)` posts `{type:'open', path, startLine, endLine}` to `window.parent` (in a plain browser `window.parent === window`, a harmless no-op). Exported `OPEN_MESSAGE = 'open'` shared with the extension.
+3. `web/src/molecules/sc-diff.tsx`: each line row carries `data-line` (`newLine ?? oldLine`) and the component emits `open` with that line on a body click — one affordance, no parallel diff component.
+4. `web/src/molecules/sc-tool-row.tsx`: new `projectPath` prop; an `open` jl-icon (lucide `SquareArrowOutUpRight`, registered in `web/src/lib/icons.ts`) sits in the head before the chevron, shown through the `file` attribute the way the chevron uses `expandable` (jl-icon's `:host` display beats the browser's `[hidden]`). Its click does `stopPropagation()` so it does not toggle the row; the sc-diff's `open` is wired in `onConnect` and takes the path from the row. `web/src/organisms/sc-conversation.tsx` passes `projectPath={this.workspace.get()}` and re-applies it to the rows it holds when the workspace changes.
+5. `vscode/src/lib/webview-html.ts`: `FORWARD_SCRIPT` is two-way now — `acquireVsCodeApi()` once, a `window.addEventListener('message')` that sends a message tagged `open` to `vscode.postMessage(data)` and everything else into the frame (CSP unchanged, `default-src 'none'` + the frame's style).
+6. `vscode/src/open-file.ts` (new): `openRequestFrom(data)` validates the message; `rangeOf` maps the 1-based lines to a 0-based `Range(startLine-1, 0, endLine-1, 0)` (no lines → the whole file); `openInEditor` uses `workspace.openTextDocument` + `window.showTextDocument({preview: true})`, and a path that cannot be opened reports `OPEN_MESSAGE_FAILURE` via `window.setStatusBarMessage` (`OPEN_MESSAGE_TIMEOUT_MS`). `vscode/src/session-panel.ts` registers `onDidReceiveMessage(openInEditor)` in the extension's subscriptions; `vscode/src/swcode.constants.ts` gains the three constants.
+7. Following the agent's edits: VS Code's file watcher refreshes an already-open document when the daemon rewrites the file, so no re-open is needed on `toolFinished` — the click drives it (the preview tab means consecutive opens reuse one tab).
+
+**Verified:**
+- `npx vitest run` → 358 passed (new `web/tests/ide-open.test.ts`, extended `web/tests/host-messages.test.ts`, new `vscode/tests/open-file.test.ts`, rewritten `vscode/tests/webview-html.test.ts` for the two-way script).
+- `npm run typecheck` ok (three projects incl. `vscode/`); `npm run lint` → only the 4 pre-existing warnings; `npm run build:vscode` ok; `go build -o dist/e2e/swcode ./cmd/swcode` ok.
+- Real-browser probe in scratch (e2e rig + generated `frameHtml` page on http-server): the Open icon renders left of the chevron over a diff row (screenshot), and clicking it posted `{type:'open', path:'/tmp/…/src/greet.ts', startLine:1, endLine:1}` on the webview page's window. Note: the probe records the message on the page's window; the inline `FORWARD_SCRIPT`'s `vscode.postMessage` is not reached in a plain browser (its CSP blocks inline scripts) — VS Code's webview applies a CSP that allows it, and `webview-html.test.ts` checks the forwarding from the script's text.
+- AGENTS.md updated with the ticket-4 notes (shared `OPEN_MESSAGE`/path joining/`file` attribute; the watcher + the probe's CSP caveat).
+
+No new daemon calls, no new dependencies, no changes outside `web/`, `vscode/` and AGENTS.md.

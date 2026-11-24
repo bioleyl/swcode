@@ -59,6 +59,8 @@ const MaxWorkflowSteps = 50
 
 const MaxWorkflowStepName = 60
 
+const MaxWorkflowStepSummary = 200
+
 var SkillOrigins = []SkillOrigin{SkillOriginPersonal, SkillOriginProject}
 
 var DiffLineKinds = []DiffLineKind{DiffLineKindAdd, DiffLineKindRemove, DiffLineKindContext, DiffLineKindGap}
@@ -1239,6 +1241,7 @@ type WorkflowRunStep struct {
 	StartedAt  string             `json:"startedAt,omitempty"`
 	Status     WorkflowStepStatus `json:"status"`
 	StepID     string             `json:"stepId"`
+	Summary    string             `json:"summary,omitempty"`
 }
 
 func (v *WorkflowRunStep) UnmarshalJSON(data []byte) error {
@@ -1255,6 +1258,9 @@ func (v *WorkflowRunStep) UnmarshalJSON(data []byte) error {
 func (v *WorkflowRunStep) Normalize() error {
 	if !v.Status.Valid() {
 		return fmt.Errorf("%s: unknown value %q", "status", v.Status)
+	}
+	if utf8.RuneCountInString(v.Summary) > 200 {
+		return fmt.Errorf("%s: at most 200 characters", "summary")
 	}
 	return nil
 }

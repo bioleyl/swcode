@@ -816,6 +816,7 @@ export class SessionPage extends ScElement {
     // its own. A step's session keeps its composer.
     const runController = session?.workflowRunId !== undefined && session.workflowStepId === undefined;
     this._refs.composer.hidden = runController;
+    this._refs.conversation.invitation.set(!runController);
     this._refs.workflowRun.runId.set(runController ? (session?.workflowRunId ?? '') : '');
     this.renderDaemon();
     const live = session ? liveStatus(session) : 'idle';

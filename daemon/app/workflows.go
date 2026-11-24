@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"swcode/daemon/agent"
 	"swcode/daemon/protocol"
 	"swcode/daemon/sessions"
 	"swcode/daemon/workflows"
@@ -176,6 +177,12 @@ func (r *workflowRunner) event(message protocol.ServerMessage) {
 	case protocol.SessionEventAssistantMessage:
 		r.note(state, ref.index, value)
 	case protocol.SessionEventTurnFinished:
+		// A step that ended its turn only to wait for its subagents is still at work: their reports wake it for
+		// the turn that hands off.
+		if value.Outcome == protocol.TurnOutcomeDone && value.Message == agent.WaitingForReports {
+			r.mark(state, ref.index, protocol.WorkflowStepStatusRunning, protocol.WorkflowRunStatusRunning)
+			return
+		}
 		r.finish(state, ref, value)
 	case protocol.SessionEventQuestionAsked, protocol.SessionEventPermissionRequested, protocol.SessionEventPasswordRequested:
 		r.mark(state, ref.index, protocol.WorkflowStepStatusWaiting, protocol.WorkflowRunStatusWaiting)
@@ -263,6 +270,14 @@ func (r *workflowRunner) finish(state *workflowState, ref workflowStepRef, event
 	}
 	now := protocol.Timestamp(r.app.options.Now())
 	state.run.Steps[index].FinishedAt = now
+	answer := ""
+	if said := state.steps[index]; said != nil {
+		answer = said.report
+		if answer == "" {
+			answer = said.answer
+		}
+	}
+	state.run.Steps[index].Summary = handoffSummary(answer)
 	if event.Outcome != protocol.TurnOutcomeDone {
 		status := protocol.WorkflowStepStatusFailed
 		if event.Outcome == protocol.TurnOutcomeStopped {
@@ -285,13 +300,6 @@ func (r *workflowRunner) finish(state *workflowState, ref workflowStepRef, event
 		state.run.Steps[index].Status = protocol.WorkflowStepStatusFailed
 		r.fail(state, fmt.Sprintf("The workflow has no step %s.", ref.stepID))
 		return
-	}
-	answer := ""
-	if said := state.steps[index]; said != nil {
-		answer = said.report
-		if answer == "" {
-			answer = said.answer
-		}
 	}
 	handoff, problem := r.writeHandoff(state, step, index, answer)
 	if problem != "" {
@@ -603,6 +611,23 @@ func exitIDOf(step protocol.WorkflowStep, name string) string {
 		if exit.ID == name || strings.EqualFold(exit.Label, name) {
 			return exit.ID
 		}
+	}
+	return ""
+}
+
+// handoffSummary is a step's report in one line for the run's list: the repeats of a step are told apart by what they
+// said, not by their name alone.
+func handoffSummary(report string) string {
+	for _, line := range strings.Split(report, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+		runes := []rune(trimmed)
+		if len(runes) <= protocol.MaxWorkflowStepSummary {
+			return trimmed
+		}
+		return string(runes[:protocol.MaxWorkflowStepSummary-1]) + "…"
 	}
 	return ""
 }

@@ -1,5 +1,6 @@
 import { Bus } from '@jadis/core';
 
+import { withWorkflowRunStates } from '../lib/session-status';
 import { daemonBus } from './daemon';
 
 import type { SessionSummary } from '../../../shared/protocol/session.schema';
@@ -21,7 +22,7 @@ daemonBus.register(
   'message',
   (message) => {
     if (message.type === 'sessions') {
-      state.sessions = message.sessions;
+      state.sessions = withWorkflowRunStates(message.sessions);
       sessionListBus.emit('changed');
       return;
     }
