@@ -144,6 +144,10 @@ func TestAPageStaysOpenWhileItsElementsAreClickedAndFilledByNumber(t *testing.T)
 	if err != nil || !strings.Contains(markup, `id="mail"`) {
 		t.Fatalf("html %q, %v", markup, err)
 	}
+	frame, open, err := session.Frame(ctx)
+	if err != nil || !open || len(frame) < 2 || frame[0] != 0xff || frame[1] != 0xd8 {
+		t.Fatalf("frame %d bytes, open %v, %v", len(frame), open, err)
+	}
 }
 
 func TestAPageSaysWhenNothingIsOpenYet(t *testing.T) {
@@ -154,5 +158,8 @@ func TestAPageSaysWhenNothingIsOpenYet(t *testing.T) {
 	}
 	if _, err := session.Click(context.Background(), 1); err == nil || !strings.Contains(err.Error(), "No page is open") {
 		t.Fatalf("click %v", err)
+	}
+	if frame, open, err := session.Frame(context.Background()); frame != nil || open || err != nil {
+		t.Fatalf("frame %v, %v, %v", frame, open, err)
 	}
 }

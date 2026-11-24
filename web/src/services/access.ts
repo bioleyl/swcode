@@ -1,16 +1,15 @@
 import { THIS_COMPUTER } from '../../../shared/protocol/desktop.schema';
-import { BEARER_PREFIX, ENDPOINTS, TOKEN_PARAM } from '../../../shared/protocol/endpoints';
+import { BEARER_PREFIX, ENDPOINTS, TOKEN_PARAM, TOKEN_STORAGE_KEY } from '../../../shared/protocol/endpoints';
 import { keepComputers, shownComputer, storedComputers } from './computer-store';
 import { hostConfig } from './host';
 
-const STORAGE_KEY = 'swcode.token';
 const SECURE_PAGE = 'https:';
 const SECURE_SOCKET = 'wss:';
 const PLAIN_SOCKET = 'ws:';
 
 const stored = (): string | undefined => {
   try {
-    return localStorage.getItem(STORAGE_KEY) ?? undefined;
+    return localStorage.getItem(TOKEN_STORAGE_KEY) ?? undefined;
   } catch {
     return undefined;
   }
@@ -18,7 +17,7 @@ const stored = (): string | undefined => {
 
 const store = (token: string): void => {
   try {
-    localStorage.setItem(STORAGE_KEY, token);
+    localStorage.setItem(TOKEN_STORAGE_KEY, token);
   } catch {
     // Without storage, the token lives as long as the page.
   }

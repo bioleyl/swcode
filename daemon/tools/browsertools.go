@@ -22,6 +22,7 @@ const (
 	maxHTML = 20000
 	// browseProgram is the program a person allows: the browse tool, as a session's command.
 	browseProgram = "browse"
+	liveViewLabel = "Live view: "
 	noPageBrowser = "No browser to act on pages with here."
 	urlNeeded     = "action open needs the page's url."
 )
@@ -46,7 +47,7 @@ func (input browseInput) size() string {
 }
 
 // browseActions is what each action does, by the word the model calls it by.
-var browseActions = map[string]func(context.Context, BrowserPages, browseInput) Outcome{
+var browseActions = map[string]func(context.Context, *Context, browseInput) Outcome{
 	actionClick:    clickPage,
 	actionFill:     fillPage,
 	actionHTML:     readPageHTML,
@@ -90,8 +91,7 @@ var browseTool = Define(Spec[browseInput]{
 		if !known {
 			return Refuse(fmt.Sprintf("There is no action %q.", input.Action))
 		}
-		pages := tc.Pages
-		return Ready(func(ctx context.Context) Outcome { return run(ctx, pages, input) }, nil)
+		return Ready(func(ctx context.Context) Outcome { return run(ctx, tc, input) }, nil)
 	},
 	Description: "Acts on a web page in a browser, at a desktop or a phone size: opens it, then clicks, fills or presses on the numbered elements a snapshot lists, reads its HTML, or lists it again. The page stays open between calls and turns, so an opened menu stays open: act by the numbers of the last snapshot, and take a snapshot again after the page changed. Start a dev server first, with bash in the background.",
 	Input: Object(
@@ -109,64 +109,64 @@ var browseTool = Define(Spec[browseInput]{
 })
 
 // openPage goes to a page and lists what it shows.
-func openPage(ctx context.Context, pages BrowserPages, input browseInput) Outcome {
-	state, err := pages.Open(ctx, input.URL, viewports[input.size()], input.WaitFor)
+func openPage(ctx context.Context, tc *Context, input browseInput) Outcome {
+	state, err := tc.Pages.Open(ctx, input.URL, viewports[input.size()], input.WaitFor)
 	if err != nil {
 		return Failure(err.Error(), "failed")
 	}
-	return pageOutcome(state)
+	return pageOutcome(state, tc.LiveView)
 }
 
 // snapshotPage lists the page as the last action left it.
-func snapshotPage(ctx context.Context, pages BrowserPages, _ browseInput) Outcome {
-	state, err := pages.Snapshot(ctx)
+func snapshotPage(ctx context.Context, tc *Context, _ browseInput) Outcome {
+	state, err := tc.Pages.Snapshot(ctx)
 	if err != nil {
 		return Failure(err.Error(), "failed")
 	}
-	return pageOutcome(state)
+	return pageOutcome(state, tc.LiveView)
 }
 
 // clickPage clicks the element a snapshot numbered.
-func clickPage(ctx context.Context, pages BrowserPages, input browseInput) Outcome {
-	state, err := pages.Click(ctx, input.Index)
+func clickPage(ctx context.Context, tc *Context, input browseInput) Outcome {
+	state, err := tc.Pages.Click(ctx, input.Index)
 	if err != nil {
 		return Failure(err.Error(), "failed")
 	}
-	return pageOutcome(state)
+	return pageOutcome(state, "")
 }
 
 // fillPage writes a value into the element a snapshot numbered.
-func fillPage(ctx context.Context, pages BrowserPages, input browseInput) Outcome {
-	state, err := pages.Fill(ctx, input.Index, input.Value)
+func fillPage(ctx context.Context, tc *Context, input browseInput) Outcome {
+	state, err := tc.Pages.Fill(ctx, input.Index, input.Value)
 	if err != nil {
 		return Failure(err.Error(), "failed")
 	}
-	return pageOutcome(state)
+	return pageOutcome(state, "")
 }
 
 // pressPageKey presses a key on the page.
-func pressPageKey(ctx context.Context, pages BrowserPages, input browseInput) Outcome {
-	state, err := pages.Press(ctx, input.Key)
+func pressPageKey(ctx context.Context, tc *Context, input browseInput) Outcome {
+	state, err := tc.Pages.Press(ctx, input.Key)
 	if err != nil {
 		return Failure(err.Error(), "failed")
 	}
-	return pageOutcome(state)
+	return pageOutcome(state, "")
 }
 
 // readPageHTML is the page's own markup, cut where it gets too long for the model.
-func readPageHTML(ctx context.Context, pages BrowserPages, _ browseInput) Outcome {
-	markup, err := pages.HTML(ctx)
+func readPageHTML(ctx context.Context, tc *Context, _ browseInput) Outcome {
+	markup, err := tc.Pages.HTML(ctx)
 	if err != nil {
 		return Failure(err.Error(), "failed")
 	}
-	return Outcome{OK: true, Output: clipped(markup, maxHTML), Meta: "html"}
+	return Outcome{OK: true, Output: strings.Join(append([]string{clipped(markup, maxHTML)}, liveViewNote(tc.LiveView)...), "\n"), Meta: "html"}
 }
 
 // pageOutcome is a page as the model reads it: where it is and the numbered elements it shows.
-func pageOutcome(state browser.PageState) Outcome {
+func pageOutcome(state browser.PageState, liveView string) Outcome {
 	lines := nonEmpty("Page: "+state.Title, "URL: "+state.URL)
 	if len(state.Elements) == 0 {
-		return Outcome{OK: true, Output: strings.Join(append(lines, "It shows no interactive element."), "\n"), Meta: state.Title}
+		return Outcome{OK: true, Output: strings.Join(append(append(lines, "It shows no interactive element."), liveViewNote(liveView)...), "\n"), Meta: state.Title}
 	}
 	lines = append(lines, "Interactive elements:")
 	for index, element := range state.Elements {
@@ -175,7 +175,15 @@ func pageOutcome(state browser.PageState) Outcome {
 	if state.Total > len(state.Elements) {
 		lines = append(lines, fmt.Sprintf("The page shows %d interactive elements: these are the first %d.", state.Total, len(state.Elements)))
 	}
-	return Outcome{OK: true, Output: strings.Join(lines, "\n"), Meta: state.Title}
+	return Outcome{OK: true, Output: strings.Join(append(lines, liveViewNote(liveView)...), "\n"), Meta: state.Title}
+}
+
+// liveViewNote is where a person watches the session's page, when the daemon has a live view.
+func liveViewNote(liveView string) []string {
+	if liveView == "" {
+		return nil
+	}
+	return []string{liveViewLabel + liveView}
 }
 
 // elementLine is one element as a snapshot lists it: its number, role, name, value, and whether it is disabled.

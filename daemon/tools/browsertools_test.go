@@ -108,6 +108,16 @@ func TestBrowseIsRefusedWithoutABrowserAndWithoutAURLToOpen(t *testing.T) {
 	f.refused("browse", `{"action":"open"}`, urlNeeded)
 }
 
+func TestBrowseShowsWhereAPersonCanWatchThePage(t *testing.T) {
+	f := setUp(t)
+	f.tc.Pages = &fakePages{snapshot: orderPageState()}
+	f.tc.LiveView = "http://localhost:4500/live/session-1"
+	got := f.call("browse", `{"action":"snapshot"}`)
+	if !got.OK || !strings.HasSuffix(got.Output, "\nLive view: http://localhost:4500/live/session-1") {
+		t.Fatalf("got %q", got.Output)
+	}
+}
+
 func TestBrowseAsksAboutTheCallsThatChangeThePageAndNotAboutTheOnesThatReadIt(t *testing.T) {
 	f := setUp(t)
 	f.tc.Pages = &fakePages{}

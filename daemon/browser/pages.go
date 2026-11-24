@@ -26,6 +26,8 @@ const (
 	maxNameLength = 80
 	// noPageOpen is the error of an action before a page was opened.
 	noPageOpen = "No page is open: open one first."
+	// frameQuality is how sharp a page is in the live view: small enough to send a few times a second.
+	frameQuality = 60
 	// readyStateComplete is a document that finished loading.
 	readyStateComplete = "complete"
 	// fillOK, fillMissing and fillOption are what the page answers a fill with.
@@ -118,6 +120,9 @@ const fillScript = `(index, value) => {
 	element.dispatchEvent(new Event('change', {bubbles: true}));
 	return 'ok';
 }`
+
+// errNoPage is an action before the session opened a page.
+var errNoPage = errors.New(noPageOpen)
 
 var pressable = map[string]input.Key{
 	"arrowdown": input.ArrowDown, "arrowleft": input.ArrowLeft, "arrowright": input.ArrowRight, "arrowup": input.ArrowUp,
@@ -294,6 +299,23 @@ func (s *Session) HTML(ctx context.Context) (string, error) {
 	return page.Context(ctx).Timeout(actionTimeout).HTML()
 }
 
+// Frame is the session's page as a JPEG picture, for a person watching it: false when no page is open yet.
+func (s *Session) Frame(ctx context.Context) ([]byte, bool, error) {
+	page, err := s.kept()
+	if errors.Is(err, errNoPage) {
+		return nil, false, nil
+	}
+	if err != nil {
+		return nil, false, err
+	}
+	quality := frameQuality
+	shot, err := proto.PageCaptureScreenshot{Format: proto.PageCaptureScreenshotFormatJpeg, Quality: &quality}.Call(page.Context(ctx).Timeout(actionTimeout))
+	if err != nil {
+		return nil, true, err
+	}
+	return shot.Data, true, nil
+}
+
 // fillProblem says why a fill did not happen, or nothing when it did.
 func fillProblem(answer string, index int, value string) string {
 	switch answer {
@@ -387,7 +409,7 @@ func (s *Session) kept() (*rod.Page, error) {
 	kept, ok := p.pages[s.id]
 	p.mu.Unlock()
 	if !ok {
-		return nil, errors.New(noPageOpen)
+		return nil, errNoPage
 	}
 	return kept.page, nil
 }

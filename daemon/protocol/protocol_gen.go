@@ -114,6 +114,8 @@ const (
 	EndpointDevices        = "/api/devices"
 	EndpointHealth         = "/api/health"
 	EndpointImages         = "/api/images"
+	EndpointLive           = "/live"
+	EndpointLiveFrames     = "/api/live"
 	EndpointMcp            = "/api/mcp"
 	EndpointModels         = "/api/models"
 	EndpointPairing        = "/api/pairing"
@@ -138,6 +140,8 @@ const (
 const ProjectParam = "project"
 
 const TokenParam = "token"
+
+const TokenStorageKey = "swcode.token"
 
 var pattern1 = regexp.MustCompile("^[A-Za-z0-9+/]+={0,2}$")
 

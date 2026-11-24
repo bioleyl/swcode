@@ -287,6 +287,7 @@ func (s *Service) hostFor(session *live, turn *runningTurn, ready prepared, sees
 		Scratch:         where.scratch,
 		Screenshots:     s.screenshotsFor(session, main, sees),
 		Pages:           s.pagesFor(session),
+		LiveView:        s.liveViewOf(session),
 		Skills:          where.skills,
 		Subagents:       subagents{limit: ready.subagents, service: s, session: session, subagent: subagent, where: where},
 		Terminals:       s.deps.Terminals,
@@ -686,6 +687,14 @@ func (s *Service) pagesFor(session *live) tools.BrowserPages {
 		return nil
 	}
 	return s.deps.BrowserPages.Session(session.meta.ID)
+}
+
+// liveViewOf is where a person watches the page a session's agent acts on; empty when there is nowhere to watch it.
+func (s *Service) liveViewOf(session *live) string {
+	if s.deps.LiveView == nil {
+		return ""
+	}
+	return s.deps.LiveView(session.meta.ID)
 }
 
 // imagesFor is a session's pictures, when there is a picture server.

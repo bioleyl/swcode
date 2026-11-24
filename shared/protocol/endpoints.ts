@@ -9,6 +9,10 @@ export const ENDPOINTS = {
   health: '/api/health',
   // GET /api/images/<session>/<file>: a picture the agent made, as the daemon keeps it to show.
   images: '/api/images',
+  // GET /live/<session>: a page watching the web page the session's agent acts on, as frames.
+  live: '/live',
+  // GET /api/live/<session>/frames: the frames of that page, as server-sent events, behind the token.
+  liveFrames: '/api/live',
   // GET the MCP servers the daemon reaches and where each stands; POST reads their file again.
   mcp: '/api/mcp',
   // GET the llm-servers and the presets, with their keys; PUT them all, in use at once.
@@ -53,6 +57,9 @@ export const ENDPOINTS = {
 
 /** The access token travels in this query parameter: a browser cannot set headers on a WebSocket. */
 export const TOKEN_PARAM = 'token';
+
+/** Where the app keeps its token: a page of the daemon's own, the live view, reads it there too. */
+export const TOKEN_STORAGE_KEY = 'swcode.token';
 
 /** The project whose skills `GET /api/skills` lists travels in this query parameter. */
 export const PROJECT_PARAM = 'project';

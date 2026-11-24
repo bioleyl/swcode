@@ -126,6 +126,8 @@ type Context struct {
 	Screenshots Screenshots
 	// Pages is the page the agent acts on, when the daemon's browser keeps one; subagents get none.
 	Pages BrowserPages
+	// LiveView is where a person watches that page in a browser; empty when there is nowhere to watch it.
+	LiveView string
 	// Terminals are the shells of the app, where the agent runs what people watch; subagents get none.
 	Terminals terminals.Port
 	// Skills is the session's skills; subagents get none.

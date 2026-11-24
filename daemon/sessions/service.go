@@ -104,7 +104,9 @@ type Deps struct {
 	Browser browser.Browser
 	// BrowserPages keeps a page an agent acts on, per session, when the daemon's browser has one.
 	BrowserPages *browser.Pages
-	Skills       *catalog.Catalog
+	// LiveView is where a person watches a session's page in a browser; none when there is nowhere to watch it.
+	LiveView func(sessionID string) string
+	Skills   *catalog.Catalog
 	// SkillsOff is the skills a folder's project turned off, by name: its sessions are neither told of them nor run them.
 	SkillsOff func(path string, host protocol.HostRef) []string
 	// AfterEdit is the command a folder's project runs after each file its agent writes or edits; none when empty.

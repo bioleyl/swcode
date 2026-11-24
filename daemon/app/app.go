@@ -137,7 +137,9 @@ type App struct {
 	// sandboxes knows which hosts can run the agent's commands in a sandbox; nil when the settings turn it off.
 	sandboxes *hosts.Sandboxes
 	// hub sends what the services say to the open sockets.
-	hub          *hub
+	hub *hub
+	// browserPages are the pages an agent acts on, drawn by the daemon's browser; nil when it has none.
+	browserPages *browser.Pages
 	workflowRuns *workflowRunner
 	logger       *slog.Logger
 	stopWatching context.CancelFunc
@@ -236,6 +238,7 @@ func New(settings config.Config, options Options) (*App, error) {
 		pairing:       pairing.New(filepath.Join(settings.DataDir, devicesFile), options.Now, options.NewID),
 		deviceSockets: newDeviceSockets(),
 		servers:       mcp.NewManager(filepath.Join(settings.DataDir, mcp.File), options.HTTP, options.Version),
+		browserPages:  browserPages,
 	}
 	app.servers.Reload()
 	if settings.Sandbox {
@@ -265,7 +268,8 @@ func New(settings config.Config, options Options) (*App, error) {
 	service = sessions.NewService(sessions.Deps{
 		Browser: found, BrowserPages: browserPages, HTTP: options.HTTP, Hosts: registry, ImageURL: settings.ImageURL,
 		ImagesFolder: app.imagesFolder, LogError: logError, MaxSteps: maxSteps, MaxSubagentSteps: settings.SubagentMaxSteps,
-		Model: servers, Models: modelService, NewID: options.NewID, Now: options.Now,
+		LiveView: app.liveViewURL,
+		Model:    servers, Models: modelService, NewID: options.NewID, Now: options.Now,
 		OnWorkspace: func(path string, host protocol.HostRef) { app.Projects.Ensure(path, host) },
 		Pages:       pages,
 		Search: web.Paced(func(ctx context.Context, query string) web.SearchOutcome {
@@ -383,6 +387,7 @@ func (a *App) routes() http.Handler {
 	a.mcpRoutes(mux)
 	a.pushRoutes(mux)
 	a.sandboxRoutes(mux)
+	a.liveRoutes(mux)
 	mux.HandleFunc("GET "+protocol.EndpointSocket, a.socket)
 	mux.Handle("/", webApp(a.webFiles()))
 	return withCORS(withAuth(mux, a.Token, a.pairing), a.pairing)
