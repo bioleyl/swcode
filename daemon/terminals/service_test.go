@@ -111,6 +111,29 @@ func TestATerminalResizesKeepsWhatItPrintedAndIsClosedForGood(t *testing.T) {
 	}
 }
 
+func TestDeletingASessionClosesTheTerminalsItsAgentOpened(t *testing.T) {
+	service, folder := local(t)
+	mine, refused := service.Open(context.Background(), terminals.Request{
+		Cwd: folder, Host: protocol.LocalHost(), SessionID: "session-1",
+	})
+	if refused != "" {
+		t.Fatal(refused)
+	}
+	other, refused := service.Open(context.Background(), terminals.Request{
+		Cwd: folder, Host: protocol.LocalHost(), SessionID: "session-2",
+	})
+	if refused != "" {
+		t.Fatal(refused)
+	}
+	service.CloseSession("session-1")
+	if _, found := service.Terminal(mine.ID); found {
+		t.Fatal("the deleted session's terminal is still there")
+	}
+	if _, found := service.Terminal(other.ID); !found {
+		t.Fatal("another session's terminal was closed")
+	}
+}
+
 func TestATerminalTakesAnotherName(t *testing.T) {
 	service, folder := local(t)
 	opened, _ := service.Open(context.Background(), terminals.Request{Cwd: folder, Host: protocol.LocalHost()})

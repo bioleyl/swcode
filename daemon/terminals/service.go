@@ -54,6 +54,8 @@ type terminal struct {
 	// agent: the agent opened it; personTyped: a person typed in it, so it is theirs to close.
 	agent       bool
 	personTyped bool
+	// sessionID is the session whose agent opened it, so deleting that session closes it.
+	sessionID string
 	// cut says the start of its output was dropped: a view clears itself before drawing what is left.
 	cut         bool
 	watchers    map[int]func([]byte)
@@ -130,7 +132,10 @@ func (s *Service) remember(request Request, process *hosts.Terminal) (protocol.T
 	info := protocol.Terminal{
 		Cwd: request.Cwd, Host: request.Host, ID: s.deps.NewID(), State: runningState(), Title: title,
 	}
-	started := &terminal{info: info, process: process, running: true, watchers: map[int]func([]byte){}, agent: request.Agent}
+	started := &terminal{
+		info: info, process: process, running: true, watchers: map[int]func([]byte){}, agent: request.Agent,
+		sessionID: request.SessionID,
+	}
 	s.terminals[info.ID] = started
 	s.order = append(s.order, info.ID)
 	return info, started
@@ -189,7 +194,7 @@ func (s *Service) deliver(t *terminal, chunk []byte) {
 func (s *Service) wait(t *terminal, process *hosts.Terminal) {
 	code, exited := process.Wait()
 	time.Sleep(drainDelay)
-	process.Close()
+	process.Release()
 	s.mu.Lock()
 	t.running = false
 	t.info.State = endedState(code, exited)
@@ -349,6 +354,21 @@ func (s *Service) CloseFinished(id string) {
 	finished := ok && t.agent && !t.personTyped
 	s.mu.Unlock()
 	if finished {
+		s.Close(id)
+	}
+}
+
+// CloseSession closes the terminals a session opened: its shells and what they started go with it.
+func (s *Service) CloseSession(sessionID string) {
+	s.mu.Lock()
+	opened := []string{}
+	for _, id := range s.order {
+		if s.terminals[id].sessionID == sessionID {
+			opened = append(opened, id)
+		}
+	}
+	s.mu.Unlock()
+	for _, id := range opened {
 		s.Close(id)
 	}
 }

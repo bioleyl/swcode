@@ -290,6 +290,7 @@ func (s *Service) hostFor(session *live, turn *runningTurn, ready prepared, sees
 		Skills:          where.skills,
 		Subagents:       subagents{limit: ready.subagents, service: s, session: session, subagent: subagent, where: where},
 		Terminals:       s.deps.Terminals,
+		SessionID:       session.meta.ID,
 		Todos:           s.todosOf(session),
 		Web:             s.webFor(subagent),
 		Workspace:       session.meta.Workspace,
@@ -556,6 +557,11 @@ func (j *sessionJobs) Start(ctx context.Context, shown, command string) (string,
 	}
 	j.service.mu.Lock()
 	j.session.startedJobs[id] = true
+	j.session.startedOrder = append(j.session.startedOrder, id)
+	for len(j.session.startedOrder) > maxStartedJobs {
+		delete(j.session.startedJobs, j.session.startedOrder[0])
+		j.session.startedOrder = j.session.startedOrder[1:]
+	}
 	j.session.jobs = append(j.session.jobs, protocol.SessionSummaryJob{Command: shown, ID: id})
 	j.service.publishSessions()
 	j.service.watchJobs(j.session, j.host)

@@ -55,6 +55,9 @@ const (
 	pinLabelRunes = 80
 	// jobWatch is how often the jobs of a session are looked at, for the list to drop the ones that ended.
 	jobWatch = 5 * time.Second
+	// maxStartedJobs is how many background command ids a session keeps to read and stop: the oldest is forgotten,
+	// so a long session's set stays small.
+	maxStartedJobs = 500
 )
 
 // Listener hears every message for the apps. It is called with the service's lock held, so the messages come in
@@ -206,8 +209,10 @@ type live struct {
 	// startedJobs is every background command the session started, running or not: the only ones its agent reads
 	// and stops, a job's id being its host's, the same for every session there.
 	startedJobs map[string]bool
-	grants      permissions.Grants
-	readFiles   *tools.ReadFiles
+	// startedOrder is those ids oldest first, so the set can forget past maxStartedJobs.
+	startedOrder []string
+	grants       permissions.Grants
+	readFiles    *tools.ReadFiles
 	// realPaths is where the session's folders really are, links followed, as its host said once.
 	realPaths map[string]string
 	turn      *runningTurn
@@ -562,6 +567,9 @@ func (s *Service) forget(session *live) {
 	delete(s.sessions, session.meta.ID)
 	if s.deps.Browsers != nil {
 		s.deps.Browsers.Close(session.meta.ID)
+	}
+	if s.deps.Terminals != nil {
+		s.deps.Terminals.CloseSession(session.meta.ID)
 	}
 	s.deps.Store.Remove(session.meta.ID)
 	if s.deps.Checkpoints != nil {

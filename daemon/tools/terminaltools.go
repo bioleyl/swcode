@@ -209,7 +209,7 @@ func terminalLines(port terminals.Port, chosen protocol.Terminal, count, most in
 func startTerminal(ctx context.Context, input terminalInput, tc *Context) Outcome {
 	info, refused := tc.Terminals.Open(ctx, terminals.Request{
 		Agent: true, Columns: terminalColumns, Command: input.Command, Cwd: tc.Workspace, Host: tc.HostRef,
-		Rows: terminalRows, Title: input.Title,
+		Rows: terminalRows, SessionID: tc.SessionID, Title: input.Title,
 	})
 	if refused != "" {
 		return Failure(refused, "failed")
@@ -227,7 +227,8 @@ func waitingTerminal(ctx context.Context, title string, tc *Context) (protocol.T
 		}
 	}
 	return tc.Terminals.Open(ctx, terminals.Request{
-		Agent: true, Columns: terminalColumns, Cwd: tc.Workspace, Host: tc.HostRef, Rows: terminalRows, Title: title,
+		Agent: true, Columns: terminalColumns, Cwd: tc.Workspace, Host: tc.HostRef, Rows: terminalRows, SessionID: tc.SessionID,
+		Title: title,
 	})
 }
 

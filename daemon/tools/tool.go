@@ -117,6 +117,8 @@ type Context struct {
 	Browser BrowserPage
 	// Terminals are the shells of the app, where the agent runs what people watch; subagents get none.
 	Terminals terminals.Port
+	// SessionID is the session the tools work for: the terminals its agent opens are closed with it.
+	SessionID string
 	// Skills is the session's skills; subagents get none.
 	Skills catalog.Port
 	// Todos are the project's todos, which the agent opens and closes; nil in a chat, which works in no project.

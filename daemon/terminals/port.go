@@ -18,6 +18,8 @@ type Request struct {
 	// Agent: the agent opened it, so a command the person never typed in it leaves nothing behind (see
 	// CloseFinished).
 	Agent bool
+	// SessionID is the session whose agent opened it, so deleting that session closes it.
+	SessionID string
 }
 
 // Port is what a session's tools do with terminals: open one in its folder, read what it printed so far, and tell how
@@ -34,6 +36,8 @@ type Port interface {
 	// CloseFinished closes a terminal the agent opened, once the command waited for there ended: a person's terminal,
 	// and one they typed in, stay.
 	CloseFinished(id string)
+	// CloseSession closes the terminals a session opened, when that session is deleted.
+	CloseSession(sessionID string)
 }
 
 // Ran is how a command typed in a terminal went: what the terminal printed from its line on, and whether it ended
