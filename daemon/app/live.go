@@ -14,8 +14,13 @@ const (
 	// liveFrameEvery is how often a watcher gets the page again: often enough to follow a menu, few enough to keep
 	// the daemon light.
 	liveFrameEvery = 500 * time.Millisecond
+	// liveNameLength is how much of a session's id a live view address keeps: short enough for a model to quote it
+	// whole, long enough to tell the sessions of a daemon apart.
+	liveNameLength = 8
 	// noLivePage is what a watcher hears when there is no browser to watch a page with.
 	noLivePage = "No browser to watch a page with here."
+	// noLiveSession is what a watcher hears when the address names no session.
+	noLiveSession = "No session is named in this address."
 	// liveWaiting is the note a watcher reads before the agent opened a page.
 	liveWaiting = "No page is open yet: the agent opens one with browse."
 	// liveProblem is the note a watcher reads when the page cannot be drawn now, as it navigates.
@@ -71,18 +76,37 @@ var livePage = strings.NewReplacer(
 	"{{token}}", protocol.TokenStorageKey, "{{frames}}", protocol.EndpointLiveFrames, "{{param}}", protocol.TokenParam,
 ).Replace(livePageHTML)
 
+// liveMissingHTML is what an address that names no session shows: a page, not the daemon's JSON.
+const liveMissingHTML = `<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>swcode · no live view</title>
+<style>
+html, body { margin: 0; height: 100%; background: #111; color: #ddd; font: 14px system-ui, sans-serif; }
+body { display: grid; place-items: center; }
+p { max-width: 40rem; padding: 1rem 2rem; text-align: center; background: #000a; border-radius: .5rem; }
+</style></head><body>
+<p>This address names no session of this daemon. Open the whole Live view address a browse result shows.</p>
+</body></html>`
+
 // liveViewURL is where a person watches a session's page: this computer's own address, so the browser finds the
-// token the app kept there.
+// token the app kept there. It names the session by the start of its id, short enough to quote whole.
 func (a *App) liveViewURL(sessionID string) string {
-	return LocalURL(a.config.Host, a.config.Port) + protocol.EndpointLive + "/" + sessionID
+	name := sessionID
+	if len(name) > liveNameLength {
+		name = name[:liveNameLength]
+	}
+	return LocalURL(a.config.Host, a.config.Port) + protocol.EndpointLive + "/" + name
 }
 
 // liveRoutes serve the window a person watches a session's browser page in: the page, and its pictures as they
 // come.
 func (a *App) liveRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET "+protocol.EndpointLive+"/{session}", func(response http.ResponseWriter, request *http.Request) {
-		if !sessionName.MatchString(request.PathValue("session")) {
-			fail(response, http.StatusNotFound, noLivePage)
+		if _, ok := a.liveSessionOf(request); !ok {
+			response.Header().Set("content-type", "text/html; charset=utf-8")
+			response.Header().Set("cache-control", "no-store")
+			response.WriteHeader(http.StatusNotFound)
+			_, _ = response.Write([]byte(liveMissingHTML))
 			return
 		}
 		response.Header().Set("content-type", "text/html; charset=utf-8")
@@ -92,11 +116,25 @@ func (a *App) liveRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET "+protocol.EndpointLiveFrames+"/{session}/frames", a.liveFrames)
 }
 
+// liveSessionOf is the session a live view address names: its whole id, or the start of it, when one session
+// starts with it.
+func (a *App) liveSessionOf(request *http.Request) (string, bool) {
+	name := request.PathValue("session")
+	if !sessionName.MatchString(name) {
+		return "", false
+	}
+	return a.Sessions.Resolve(name)
+}
+
 // liveFrames sends a session's page as JPEG pictures, a few times a second, until the watcher leaves: server-sent
 // events, so the page needs no script of its own to keep the stream.
 func (a *App) liveFrames(response http.ResponseWriter, request *http.Request) {
-	sessionID := request.PathValue("session")
-	if !sessionName.MatchString(sessionID) || a.browserPages == nil {
+	sessionID, ok := a.liveSessionOf(request)
+	if !ok {
+		fail(response, http.StatusNotFound, noLiveSession)
+		return
+	}
+	if a.browserPages == nil {
 		fail(response, http.StatusNotFound, noLivePage)
 		return
 	}

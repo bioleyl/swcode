@@ -313,6 +313,27 @@ func (s *Service) List() []protocol.SessionSummary {
 	return s.list()
 }
 
+// Resolve is the id of the one session whose id starts with the name given, as a short live view address may name
+// it: false when none or several do.
+func (s *Service) Resolve(name string) (string, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, exact := s.sessions[name]; exact {
+		return name, true
+	}
+	found := ""
+	for id := range s.sessions {
+		if !strings.HasPrefix(id, name) {
+			continue
+		}
+		if found != "" {
+			return "", false
+		}
+		found = id
+	}
+	return found, found != ""
+}
+
 func (s *Service) list() []protocol.SessionSummary {
 	summaries := []protocol.SessionSummary{}
 	for _, session := range s.sessions {

@@ -12,26 +12,41 @@ import (
 
 	"swcode/daemon/browser"
 	"swcode/daemon/protocol"
+	"swcode/daemon/sessions"
 	. "swcode/daemon/testapp"
 )
 
+// liveSession is a session of the test daemon, as a page names it in a live view address: the start of its id.
+func liveSession(t *testing.T, test *App) string {
+	t.Helper()
+	summary, problem := test.App.Sessions.Create(t.Context(), sessions.Request{})
+	if problem != "" {
+		t.Fatal(problem)
+	}
+	return summary.ID[:8]
+}
+
 func TestTheLivePageNeedsNoTokenButItsFramesDo(t *testing.T) {
 	test := startHello(t)
-	status, body, header := raw(t, test, "GET", protocol.EndpointLive+"/session-1", "", nil)
+	short := liveSession(t, test)
+	status, body, header := raw(t, test, "GET", protocol.EndpointLive+"/"+short, "", nil)
 	if status != 200 || !strings.Contains(string(body), "swcode · live page") {
 		t.Fatalf("status %d, %q", status, body)
 	}
 	if header.Get("content-type") != "text/html; charset=utf-8" || !strings.Contains(string(body), protocol.TokenStorageKey) {
 		t.Fatalf("headers %v, page %q", header, body)
 	}
-	if status, _, _ := raw(t, test, "GET", protocol.EndpointLive+"/bad!name", "", nil); status != 404 {
-		t.Fatalf("status %d outside a session", status)
+	if status, body, _ := raw(t, test, "GET", protocol.EndpointLive+"/bad!name", "", nil); status != 404 || !strings.Contains(string(body), "names no session") {
+		t.Fatalf("status %d, %q outside a session", status, body)
 	}
-	if status, _, _ := raw(t, test, "GET", protocol.EndpointLiveFrames+"/session-1/frames", "", nil); status != 401 {
+	if status, body, _ := raw(t, test, "GET", protocol.EndpointLive+"/"+short+"-again", "", nil); status != 404 || !strings.Contains(string(body), "names no session") {
+		t.Fatalf("status %d, %q for a name no session starts with", status, body)
+	}
+	if status, _, _ := raw(t, test, "GET", protocol.EndpointLiveFrames+"/"+short+"/frames", "", nil); status != 401 {
 		t.Fatalf("status %d without a token", status)
 	}
 	// The test rig has no browser: a watcher that is allowed to look is told so, before the stream starts.
-	if status, _, _ := raw(t, test, "GET", protocol.EndpointLiveFrames+"/session-1/frames?token="+Token, "", nil); status != 404 {
+	if status, _, _ := raw(t, test, "GET", protocol.EndpointLiveFrames+"/"+short+"/frames?token="+Token, "", nil); status != 404 {
 		t.Fatalf("status %d with no browser", status)
 	}
 }
@@ -61,12 +76,17 @@ func TestTheLiveFramesFollowThePageASessionOpened(t *testing.T) {
 	}))
 	t.Cleanup(pageServer.Close)
 	test := Start(t, Options{Browser: keptBrowser{pages: pages}})
+	short := liveSession(t, test)
+	summaryID, ok := test.App.Sessions.Resolve(short)
+	if !ok {
+		t.Fatalf("the short name %q resolves no session", short)
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
-	if _, err := pages.Session("session-1").Open(ctx, pageServer.URL+"/", browser.Viewport{Height: 900, Width: 1440}, "Watched"); err != nil {
+	if _, err := pages.Session(summaryID).Open(ctx, pageServer.URL+"/", browser.Viewport{Height: 900, Width: 1440}, "Watched"); err != nil {
 		t.Fatal(err)
 	}
-	request, _ := http.NewRequestWithContext(ctx, "GET", test.Server.URL+protocol.EndpointLiveFrames+"/session-1/frames?token="+Token, nil)
+	request, _ := http.NewRequestWithContext(ctx, "GET", test.Server.URL+protocol.EndpointLiveFrames+"/"+short+"/frames?token="+Token, nil)
 	response, err := http.DefaultClient.Do(request)
 	if err != nil {
 		t.Fatal(err)
