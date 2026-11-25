@@ -48,9 +48,12 @@ func until(t *testing.T, what string, found func() bool) {
 func TestATerminalRunsItsCommandAndEndsWithItsExitCode(t *testing.T) {
 	service, folder := local(t)
 	opened, refused := service.Open(context.Background(), terminals.Request{
-		Cwd: folder, Command: "echo hello-from-the-terminal; exit 3", Host: protocol.LocalHost(), Title: "test",
+		Cwd: folder, Host: protocol.LocalHost(), Title: "test",
 	})
 	if refused != "" {
+		t.Fatal(refused)
+	}
+	if refused := service.StartInBackground(opened.ID, "echo hello-from-the-terminal; exit 3"); refused != "" {
 		t.Fatal(refused)
 	}
 	until(t, "the command's output", func() bool {
@@ -131,6 +134,59 @@ func TestDeletingASessionClosesTheTerminalsItsAgentOpened(t *testing.T) {
 	}
 	if _, found := service.Terminal(other.ID); !found {
 		t.Fatal("another session's terminal was closed")
+	}
+}
+
+func TestAnAgentTerminalFinishedInATurnLeavesWhenTheTurnEnds(t *testing.T) {
+	service, folder := local(t)
+	opened, refused := service.Open(context.Background(), terminals.Request{
+		Agent: true, Cwd: folder, Host: protocol.LocalHost(), SessionID: "session-1",
+	})
+	if refused != "" {
+		t.Fatal(refused)
+	}
+	service.SessionWorking("session-1")
+	service.MarkFinished(opened.ID)
+	if _, found := service.Terminal(opened.ID); !found {
+		t.Fatal("the terminal left while its session's turn still ran")
+	}
+	service.SessionIdle("session-1")
+	if _, found := service.Terminal(opened.ID); found {
+		t.Fatal("the terminal stayed once its session's turn ended")
+	}
+}
+
+func TestAnAgentTerminalThePersonTypedInStaysWhenItsTurnEnds(t *testing.T) {
+	service, folder := local(t)
+	opened, refused := service.Open(context.Background(), terminals.Request{
+		Agent: true, Cwd: folder, Host: protocol.LocalHost(), SessionID: "session-1",
+	})
+	if refused != "" {
+		t.Fatal(refused)
+	}
+	until(t, "the prompt", func() bool { return len(service.Output(opened.ID)) > 0 })
+	if refusal := service.Write(opened.ID, "echo typed-by-person\n"); refusal != "" {
+		t.Fatal(refusal)
+	}
+	service.SessionWorking("session-1")
+	service.MarkFinished(opened.ID)
+	service.SessionIdle("session-1")
+	if _, found := service.Terminal(opened.ID); !found {
+		t.Fatal("a terminal the person typed in was closed")
+	}
+}
+
+func TestAnAgentTerminalFinishedWithNoTurnRunningLeavesAtOnce(t *testing.T) {
+	service, folder := local(t)
+	opened, refused := service.Open(context.Background(), terminals.Request{
+		Agent: true, Cwd: folder, Host: protocol.LocalHost(), SessionID: "session-1",
+	})
+	if refused != "" {
+		t.Fatal(refused)
+	}
+	service.MarkFinished(opened.ID)
+	if _, found := service.Terminal(opened.ID); found {
+		t.Fatal("the terminal stayed with no turn running")
 	}
 }
 

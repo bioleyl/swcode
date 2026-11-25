@@ -54,6 +54,8 @@ type terminal struct {
 	// agent: the agent opened it; personTyped: a person typed in it, so it is theirs to close.
 	agent       bool
 	personTyped bool
+	// finished: the command typed in it ended, so it closes when its session's turn ends, or has none.
+	finished bool
 	// sessionID is the session whose agent opened it, so deleting that session closes it.
 	sessionID string
 	// cut says the start of its output was dropped: a view clears itself before drawing what is left.
@@ -76,16 +78,21 @@ type Service struct {
 	mu        sync.Mutex
 	terminals map[string]*terminal
 	order     []string
+	// working: the sessions whose turn runs, so a terminal whose command ends waits for that turn to end.
+	working   map[string]bool
 	listeners map[int]func(protocol.ServerMessage)
 	next      int
 }
 
 func NewService(deps Deps) *Service {
-	return &Service{deps: deps, listeners: map[int]func(protocol.ServerMessage){}, terminals: map[string]*terminal{}}
+	return &Service{
+		deps: deps, listeners: map[int]func(protocol.ServerMessage){}, terminals: map[string]*terminal{},
+		working: map[string]bool{},
+	}
 }
 
-// Open starts a shell in the folder, on the host, on a terminal of its own; a title is given it when none is, and
-// the agent's command is typed in it once it starts. A refusal says why.
+// Open starts a shell in the folder, on the host, on a terminal of its own; a title is given it when none is. A
+// refusal says why.
 func (s *Service) Open(ctx context.Context, request Request) (protocol.Terminal, string) {
 	host := s.deps.Hosts.HostOf(request.Host)
 	if refused := s.checkFolder(ctx, host, request); refused != "" {
@@ -98,13 +105,6 @@ func (s *Service) Open(ctx context.Context, request Request) (protocol.Terminal,
 	opened, started := s.remember(request, process)
 	go s.read(started, process)
 	go s.wait(started, process)
-	if request.Command != "" {
-		started.typed = true
-		if _, err := process.Write([]byte(request.Command + "\n")); err != nil {
-			s.Close(opened.ID)
-			return protocol.Terminal{}, "The command could not be typed in the terminal: " + err.Error()
-		}
-	}
 	s.publish()
 	return opened, ""
 }
@@ -200,6 +200,7 @@ func (s *Service) wait(t *terminal, process *hosts.Terminal) {
 	t.info.State = endedState(code, exited)
 	s.mu.Unlock()
 	s.publish()
+	s.MarkFinished(t.info.ID)
 }
 
 func endedState(code int, exited bool) protocol.TerminalState {
@@ -346,14 +347,43 @@ func (s *Service) Close(id string) {
 	s.publish()
 }
 
-// CloseFinished closes a terminal the agent opened once the command waited for there ended, so the side panel does
-// not fill with them; one a person typed in is theirs, and stays, with what a password they typed bought it.
-func (s *Service) CloseFinished(id string) {
+// MarkFinished notes that the command typed in a terminal ended: an agent's terminal then closes when its session's
+// turn ends, or at once when no turn runs; one the person typed in is theirs, and stays.
+func (s *Service) MarkFinished(id string) {
 	s.mu.Lock()
 	t, ok := s.terminals[id]
-	finished := ok && t.agent && !t.personTyped
+	if !ok {
+		s.mu.Unlock()
+		return
+	}
+	t.finished = true
+	closeNow := t.agent && !t.personTyped && !s.working[t.sessionID]
 	s.mu.Unlock()
-	if finished {
+	if closeNow {
+		s.Close(id)
+	}
+}
+
+// SessionWorking notes that a turn of the session works: a terminal whose command ends now stays until that turn ends.
+func (s *Service) SessionWorking(sessionID string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.working[sessionID] = true
+}
+
+// SessionIdle closes the terminals the agent opened for the session whose commands ended, once its turn is over.
+func (s *Service) SessionIdle(sessionID string) {
+	s.mu.Lock()
+	delete(s.working, sessionID)
+	finished := []string{}
+	for _, id := range s.order {
+		t := s.terminals[id]
+		if t.sessionID == sessionID && t.agent && t.finished && !t.personTyped {
+			finished = append(finished, id)
+		}
+	}
+	s.mu.Unlock()
+	for _, id := range finished {
 		s.Close(id)
 	}
 }
@@ -361,6 +391,7 @@ func (s *Service) CloseFinished(id string) {
 // CloseSession closes the terminals a session opened: its shells and what they started go with it.
 func (s *Service) CloseSession(sessionID string) {
 	s.mu.Lock()
+	delete(s.working, sessionID)
 	opened := []string{}
 	for _, id := range s.order {
 		if s.terminals[id].sessionID == sessionID {
@@ -381,6 +412,7 @@ func (s *Service) CloseAll() {
 		all = append(all, s.terminals[id].process)
 	}
 	s.terminals, s.order = map[string]*terminal{}, nil
+	s.working = map[string]bool{}
 	s.mu.Unlock()
 	for _, process := range all {
 		process.Close()

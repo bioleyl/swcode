@@ -32,9 +32,12 @@ func startedChild(t *testing.T, service *terminals.Service, id string) int {
 func TestClosingATerminalEndsWhatItsShellStarted(t *testing.T) {
 	service, folder := local(t)
 	opened, refused := service.Open(context.Background(), terminals.Request{
-		Cwd: folder, Command: "sleep 300 & echo child-$!", Host: protocol.LocalHost(), Title: "test",
+		Cwd: folder, Host: protocol.LocalHost(), Title: "test",
 	})
 	if refused != "" {
+		t.Fatal(refused)
+	}
+	if refused := service.StartInBackground(opened.ID, "sleep 300 & echo child-$!"); refused != "" {
 		t.Fatal(refused)
 	}
 	pid := startedChild(t, service, opened.ID)

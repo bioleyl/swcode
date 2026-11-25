@@ -13,6 +13,8 @@ const (
 	lookEvery = 100 * time.Millisecond
 	// markLength is how long the mark a command's line ends with is: enough to tell its end from any other's.
 	markLength = 8
+	// markWindow is how much of what a background command prints is kept to find its mark: what bridges a chunk.
+	markWindow = 4 << 10
 )
 
 // readFrom is what a terminal printed after a point of all it printed, and whether it still runs; the caller holds
@@ -27,22 +29,72 @@ func (t *terminal) readFrom(after int) ([]byte, int, bool) {
 // after it: a password sudo took there is good for the next commands, as in any terminal. asks hears whether the
 // command waits on a password now, each time that changes. A refusal says why nothing ran.
 func (s *Service) Run(ctx context.Context, id, command string, asks func(waits bool)) (Ran, string) {
-	s.mu.Lock()
-	t, ok := s.terminals[id]
-	if !ok || !t.running {
-		s.mu.Unlock()
-		return Ran{}, endedTerminal
-	}
-	start, announce, wipe := t.printed, !t.announced, !t.typed
-	t.announced, t.typed = true, true
-	s.mu.Unlock()
-	mark := markOf(s.deps.NewID())
-	if err := typeIn(t.process, command, mark, announce, wipe); err != nil {
-		return Ran{}, "The command could not be typed in the terminal: " + err.Error()
+	t, start, mark, refused := s.beginCommand(id, command)
+	if refused != "" {
+		return Ran{}, refused
 	}
 	ran := s.await(ctx, t, start, mark, asks)
 	ran.Output = hosts.AfterEcho(ran.Output, mark)
 	return ran, ""
+}
+
+// StartInBackground types a command in a terminal and lets it run on: once the shell says it ended, the terminal is
+// finished and closes at the end of its session's turn. What it prints is not kept here.
+func (s *Service) StartInBackground(id, command string) string {
+	t, start, mark, refused := s.beginCommand(id, command)
+	if refused != "" {
+		// The command never ran: the terminal has nothing to show, so it leaves now.
+		s.Close(id)
+		return refused
+	}
+	go func() {
+		if s.commandEnding(t, start, mark) {
+			s.MarkFinished(id)
+		}
+	}()
+	return ""
+}
+
+// beginCommand readies a terminal's shell and types the command with a mark it says it ended by: the terminal,
+// where its output starts, and the mark; a refusal says why nothing ran.
+func (s *Service) beginCommand(id, command string) (t *terminal, start int, mark, refused string) {
+	s.mu.Lock()
+	found, ok := s.terminals[id]
+	if !ok || !found.running {
+		s.mu.Unlock()
+		return nil, 0, "", endedTerminal
+	}
+	start, announce, wipe := found.printed, !found.announced, !found.typed
+	found.announced, found.typed, found.finished = true, true, false
+	s.mu.Unlock()
+	mark = markOf(s.deps.NewID())
+	if err := typeIn(found.process, command, mark, announce, wipe); err != nil {
+		return nil, 0, "", "The command could not be typed in the terminal: " + err.Error()
+	}
+	return found, start, mark, ""
+}
+
+// commandEnding watches what a background command prints until the shell says it ended (true), or the terminal does
+// (false): only enough of it to find the mark is kept.
+func (s *Service) commandEnding(t *terminal, start int, mark string) bool {
+	ticker := time.NewTicker(lookEvery)
+	defer ticker.Stop()
+	tail, cursor := []byte{}, start
+	for {
+		s.mu.Lock()
+		chunk, next, running := t.readFrom(cursor)
+		s.mu.Unlock()
+		cursor = next
+		seen := append(tail, chunk...)
+		if _, _, ended := hosts.CommandEnd(seen, mark); ended {
+			return true
+		}
+		if !running {
+			return false
+		}
+		tail = seen[max(0, len(seen)-markWindow):]
+		<-ticker.C
+	}
 }
 
 // markOf is a few characters no other command of the terminal ends with, from an id.

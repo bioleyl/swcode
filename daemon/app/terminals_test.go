@@ -109,6 +109,21 @@ func TestATurnReadsTheLastLinesATerminalPrinted(t *testing.T) {
 	if !strings.Contains(RequestText(test.Requests()[2]), "build-error-here") {
 		t.Fatal("the model did not get the terminal's last lines")
 	}
+	// The command ended, and so did the turn: the agent's terminal leaves the side panel.
+	test.Until("the finished terminal to leave", func() bool { return len(test.App.Terminals.List()) == 0 })
+}
+
+func TestATerminalStartedWithoutWaitLeavesOnceItsCommandEnded(t *testing.T) {
+	test := Start(t, Options{Replies: []fakellama.Reply{
+		call("terminal", map[string]any{"command": "echo done-in-background", "title": "build"}),
+		text("Done."),
+	}})
+	sessionID := prompt(t, test, "Build it in a terminal")
+	answerNext(t, test, sessionID, protocol.PermissionDecisionAllowOnce, 1)
+	test.UntilIdle(sessionID)
+	if list := test.App.Terminals.List(); len(list) != 0 {
+		t.Fatalf("a terminal whose command ended stayed after the turn: %+v", list)
+	}
 }
 
 func TestACommandThePersonAnswersRunsInATerminalAndTheAgentGoesOnOnceItEnds(t *testing.T) {

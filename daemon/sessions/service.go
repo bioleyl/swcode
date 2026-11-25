@@ -1045,12 +1045,18 @@ func (s *Service) inTurn(session *live, work func(ctx context.Context, turn *run
 	ctx, cancel := context.WithCancel(context.Background())
 	turn := &runningTurn{cancel: cancel, id: s.deps.NewID()}
 	session.turn = turn
+	if s.deps.Terminals != nil {
+		s.deps.Terminals.SessionWorking(session.meta.ID)
+	}
 	s.publishSessions()
 	s.turns.Add(1)
 	go func() {
 		defer s.turns.Done()
 		defer cancel()
 		work(ctx, turn)
+		if s.deps.Terminals != nil {
+			s.deps.Terminals.SessionIdle(session.meta.ID)
+		}
 		s.mu.Lock()
 		defer s.mu.Unlock()
 		session.turn = nil
