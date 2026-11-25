@@ -523,10 +523,13 @@ func (h *turnHost) TakeReports() []protocol.SessionEventSubagentReport {
 }
 
 func (h *turnHost) UseModel(use func()) {
-	h.session.model.Lock()
-	defer h.session.model.Unlock()
+	h.session.model <- struct{}{}
+	defer func() { <-h.session.model }()
 	use()
 }
+
+// LogProblem keeps it in the daemon's log.
+func (h *turnHost) LogProblem(err error) { h.service.deps.LogError(err) }
 
 // grantsOf is what the session lets through without asking: its mode, what people allowed for it, and what its
 // project allows every session of it.
@@ -748,8 +751,9 @@ func (a subagents) Start(task tools.SubagentTask) tools.Outcome {
 	s := a.service
 	agentID := s.deps.NewID()
 	deps := agent.SubagentDeps{
-		ContextTokens: a.subagent.ContextTokens, Host: a.where.host, MaxSteps: s.deps.MaxSubagentSteps, Model: s.deps.Model,
-		ModelName: a.subagent.Model, NewID: s.deps.NewID, Now: s.deps.Now, Platform: a.where.platform, Source: a.subagent.Source,
+		ContextTokens: a.subagent.ContextTokens, Host: a.where.host, LogError: s.deps.LogError,
+		MaxSteps: s.deps.MaxSubagentSteps, Model: s.deps.Model, ModelName: a.subagent.Model,
+		NewID: s.deps.NewID, Now: s.deps.Now, Platform: a.where.platform, Source: a.subagent.Source,
 		Record: func(event protocol.SessionEventVariant) {
 			s.mu.Lock()
 			defer s.mu.Unlock()

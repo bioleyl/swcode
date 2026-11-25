@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 
 	"swcode/daemon/protocol"
 	"swcode/daemon/sessions"
@@ -22,8 +23,14 @@ const (
 // workflowRunner runs the workflows: a run session, and one session for each step it takes, each handed the previous
 // step's report in a file. A step says which step it goes on to, so a workflow may loop until a step says it is done.
 type workflowRunner struct {
-	app      *App
-	commands chan workflowCommand
+	app *App
+	// queued is what the runner has left to handle, oldest first: a session's event is added with the sessions'
+	// lock held, so adding never waits, and the one goroutine of work handles them in the order they came.
+	queued struct {
+		sync.Mutex
+		commands []workflowCommand
+	}
+	wake chan struct{}
 	// steps finds the run step a session works on. Only the worker reads and writes it.
 	steps  map[string]workflowStepRef
 	states map[string]*workflowState
@@ -73,15 +80,15 @@ type workflowSettings struct {
 }
 
 const (
-	commandStart = "start"
-	commandEvent = "event"
-	commandStop  = "stop"
+	commandStart  = "start"
+	commandEvent  = "event"
+	commandStop   = "stop"
+	commandForget = "forget"
 )
 
 func newWorkflowRunner(app *App) *workflowRunner {
 	runner := &workflowRunner{
-		app: app, commands: make(chan workflowCommand, 64), states: map[string]*workflowState{},
-		steps: map[string]workflowStepRef{},
+		app: app, states: map[string]*workflowState{}, steps: map[string]workflowStepRef{}, wake: make(chan struct{}, 1),
 	}
 	runner.stopInterrupted()
 	go runner.work()
@@ -103,7 +110,9 @@ func (r *workflowRunner) stopInterrupted() {
 				run.Steps[index].Status = protocol.WorkflowStepStatusStopped
 			}
 		}
-		_ = r.app.Workflows.UpdateRun(run)
+		if problem := r.app.Workflows.UpdateRun(run); problem != "" {
+			r.app.logger.Warn("a run the last daemon left working could not be marked stopped", "problem", problem, "run", run.ID)
+		}
 	}
 }
 
@@ -112,24 +121,52 @@ func (r *workflowRunner) observe(message protocol.ServerMessage) {
 	if _, ok := message.Value.(protocol.ServerMessageSessionEvent); !ok {
 		return
 	}
+	r.enqueue(workflowCommand{kind: commandEvent, message: &message})
+}
+
+// enqueue adds a command to the queue, without waiting: the caller may hold the sessions' lock.
+func (r *workflowRunner) enqueue(command workflowCommand) {
+	r.queued.Lock()
+	r.queued.commands = append(r.queued.commands, command)
+	r.queued.Unlock()
 	select {
-	case r.commands <- workflowCommand{kind: commandEvent, message: &message}:
+	case r.wake <- struct{}{}:
 	default:
-		go func() { r.commands <- workflowCommand{kind: commandEvent, message: &message} }()
 	}
 }
 
+// take is every command queued so far, in order.
+func (r *workflowRunner) take() []workflowCommand {
+	r.queued.Lock()
+	defer r.queued.Unlock()
+	taken := r.queued.commands
+	r.queued.commands = nil
+	return taken
+}
+
 func (r *workflowRunner) start(run protocol.WorkflowRun, workflow protocol.Workflow, project protocol.Project, settings workflowSettings) {
-	r.commands <- workflowCommand{kind: commandStart, run: run, settings: settings, workflow: workflow, project: project}
+	r.enqueue(workflowCommand{kind: commandStart, run: run, settings: settings, workflow: workflow, project: project})
 }
 
 func (r *workflowRunner) stop(runID string) {
-	r.commands <- workflowCommand{kind: commandStop, runID: runID}
+	r.enqueue(workflowCommand{kind: commandStop, runID: runID})
+}
+
+// forget drops what a run kept in memory, once its sessions are gone: it handles nothing of it any more.
+func (r *workflowRunner) forget(runID string) {
+	r.enqueue(workflowCommand{kind: commandForget, runID: runID})
 }
 
 func (r *workflowRunner) work() {
-	for command := range r.commands {
-		r.handle(command)
+	for {
+		commands := r.take()
+		if len(commands) == 0 {
+			<-r.wake
+			continue
+		}
+		for _, command := range commands {
+			r.handle(command)
+		}
 	}
 }
 
@@ -155,6 +192,18 @@ func (r *workflowRunner) handle(command workflowCommand) {
 		state := r.states[command.runID]
 		if state != nil {
 			r.stopRun(state)
+		}
+	case commandForget:
+		r.forgetRun(command.runID)
+	}
+}
+
+// forgetRun drops a run's state and the step sessions that pointed at it; the caller is the worker.
+func (r *workflowRunner) forgetRun(runID string) {
+	delete(r.states, runID)
+	for sessionID, ref := range r.steps {
+		if ref.runID == runID {
+			delete(r.steps, sessionID)
 		}
 	}
 }
@@ -411,11 +460,22 @@ func (r *workflowRunner) closeStep(state *workflowState, index int, status proto
 	state.run.Steps[index].FinishedAt = protocol.Timestamp(r.app.options.Now())
 }
 
-// save keeps the run as it is now; a run removed with its workflow leaves nothing to save.
+// save keeps the run as it is now; a run removed with its workflow leaves nothing to save. A run that ended is let go
+// of: its record keeps what it did, and no event of its steps is handled any more.
 func (r *workflowRunner) save(state *workflowState) {
 	if problem := r.app.Workflows.UpdateRun(state.run); problem != "" {
 		state.stopped = true
+		return
 	}
+	if ended(state.run.Status) {
+		r.forgetRun(state.run.ID)
+	}
+}
+
+// ended tells whether nothing follows a run in that status.
+func ended(status protocol.WorkflowRunStatus) bool {
+	return status == protocol.WorkflowRunStatusDone || status == protocol.WorkflowRunStatusFailed ||
+		status == protocol.WorkflowRunStatusStopped
 }
 
 // startWorkflowRun opens a run of a confirmed workflow: its run session, and the first step's session.
@@ -490,6 +550,7 @@ func (a *App) forgetWorkflowRun(runID string) {
 		}
 	}
 	_ = a.Workflows.ForgetRun(runID)
+	a.workflowRuns.forget(runID)
 }
 
 // stopWorkflowRun stops a run's step at work and starts no other.

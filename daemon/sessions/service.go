@@ -224,7 +224,7 @@ type live struct {
 	reports  []pendingReport
 	watching bool
 	// model is held by the agent's requests and by the peeks: one at a time on the agent's slot.
-	model sync.Mutex
+	model chan struct{}
 }
 
 // pendingReport is a subagent's report waiting for the main agent; one that wakes it starts a turn when the session
@@ -238,6 +238,9 @@ type pendingReport struct {
 // answers, keeps their files, and tells every open app what happens.
 type Service struct {
 	deps Deps
+	// life is the daemon's own context, ended when it stops: a peek waits on it, and so asks nothing after that.
+	life context.Context
+	stop context.CancelFunc
 	// turns are the turns running, which stopping the daemon waits for.
 	turns sync.WaitGroup
 	// stopping: the daemon is shutting down, and no turn starts any more.
@@ -249,7 +252,10 @@ type Service struct {
 }
 
 func NewService(deps Deps) *Service {
-	return &Service{deps: deps, listeners: map[int]Listener{}, sessions: map[string]*live{}}
+	life, stop := context.WithCancel(context.Background())
+	return &Service{
+		deps: deps, life: life, sessions: map[string]*live{}, listeners: map[int]Listener{}, stop: stop,
+	}
 }
 
 // Load reads the sessions kept on disk; a turn the daemon left halfway is closed as stopped.
@@ -281,6 +287,7 @@ func revive(stored Stored) *live {
 	return &live{
 		events: append([]protocol.SessionEvent{}, stored.Events...), grants: permissions.Grants{Programs: map[string]bool{}},
 		jobs: []protocol.SessionSummaryJob{}, meta: stored.Meta, readFiles: tools.NewReadFiles(),
+		model:       make(chan struct{}, 1),
 		startedJobs: map[string]bool{},
 		subagents:   map[string]runningSubagent{}, updatedAt: lastActivity(stored.Meta, stored.Events),
 	}
@@ -562,25 +569,31 @@ func (s *Service) RemoveRun(runID string) string {
 	return ""
 }
 
-// forget deletes a session: its files, its pictures, and its scratch folder on its host when the host answers.
+// forget deletes a session: its record at once, then its files, its pictures, its browser, its terminals, and its
+// scratch folder and worktree on its host. The caller holds the lock every session shares, so only the record goes
+// while it waits: the rest, which may take seconds, runs beside it.
 func (s *Service) forget(session *live) {
-	delete(s.sessions, session.meta.ID)
-	if s.deps.Browsers != nil {
-		s.deps.Browsers.Close(session.meta.ID)
-	}
-	if s.deps.Terminals != nil {
-		s.deps.Terminals.CloseSession(session.meta.ID)
-	}
-	s.deps.Store.Remove(session.meta.ID)
-	if s.deps.Checkpoints != nil {
-		s.deps.Checkpoints.Remove(session.meta.ID)
-	}
+	sessionID := session.meta.ID
+	delete(s.sessions, sessionID)
+	s.deps.Store.Remove(sessionID)
 	host := s.hostOf(session)
 	jobs := append([]protocol.SessionSummaryJob{}, session.jobs...)
 	meta := session.meta
 	go func() {
+		if s.deps.Browsers != nil {
+			s.deps.Browsers.Close(sessionID)
+		}
+		if s.deps.Terminals != nil {
+			s.deps.Terminals.CloseSession(sessionID)
+		}
+		if s.deps.Checkpoints != nil {
+			s.deps.Checkpoints.Remove(sessionID)
+		}
+		if err := images.Remove(s.deps.ImagesFolder, sessionID); err != nil {
+			s.deps.LogError(err)
+		}
 		ctx := context.Background()
-		if err := host.RemoveScratch(ctx, session.meta.ID); err != nil {
+		if err := host.RemoveScratch(ctx, sessionID); err != nil {
 			s.deps.LogError(err)
 		}
 		if err := removeWorktree(ctx, host, meta); err != nil {
@@ -592,9 +605,6 @@ func (s *Service) forget(session *live) {
 			}
 		}
 	}()
-	if err := images.Remove(s.deps.ImagesFolder, session.meta.ID); err != nil {
-		s.deps.LogError(err)
-	}
 }
 
 // picturesFolderOf is where a session's pictures are: those its agent made, and those the person pasted.
@@ -764,9 +774,8 @@ func (t *runningTurn) settleOf(requestID string, got answer) func(answer) {
 	return t.pending.settle
 }
 
-// Stop stops the running turn; what was queued for after it goes too, since people stop to think again.
-// Stop stops a session's turn and its subagents; the reports waiting no longer wake the agent, it gets them with
-// the person's next message.
+// Stop stops a session's turn and its subagents; what was queued for after it goes too, since people stop to think
+// again, and the reports waiting no longer wake the agent: it gets them with the person's next message.
 func (s *Service) Stop(sessionID string) string {
 	return s.withSession(sessionID, func(session *live) string {
 		session.queue, session.queueNow = nil, false
@@ -924,6 +933,7 @@ func (s *Service) SetPreset(sessionID, preset string) string {
 
 // StopAll stops every running turn and waits for them to end, for shutting down: their files stay consistent.
 func (s *Service) StopAll() {
+	s.stop()
 	s.mu.Lock()
 	s.stopping = true
 	for _, session := range s.sessions {
@@ -1004,10 +1014,8 @@ func (s *Service) takeQueued(session *live) *agent.PromptMessage {
 	return &message
 }
 
-// startQueued starts the next turn with the messages queued during a turn, together, as one message; the caller
-// holds the lock.
 // startQueued starts the next turn once one ends: on the messages that waited, else on the reports that wake the
-// agent.
+// agent; the caller holds the lock.
 func (s *Service) startQueued(session *live) {
 	if _, exists := s.sessions[session.meta.ID]; !exists {
 		return

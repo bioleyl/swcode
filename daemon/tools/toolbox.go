@@ -47,7 +47,8 @@ var (
 	// its own (With).
 	serverTools = []protocol.ToolName{protocol.ToolNameMcp}
 	// waitingTools only read, and mostly wait while they do (a disk, a host over SSH, a page): the calls of one
-	// reply to them run together. They ask nobody anything and change nothing, so no order between them matters.
+	// reply to them run together. They ask nobody anything and change nothing, so no order between them matters; a
+	// tool that asks would not fit, since a turn holds one permission or question at a time.
 	waitingTools = []protocol.ToolName{
 		protocol.ToolNameRead, protocol.ToolNameGrep, protocol.ToolNameGlob, protocol.ToolNameWebsearch, protocol.ToolNameWebfetch,
 	}

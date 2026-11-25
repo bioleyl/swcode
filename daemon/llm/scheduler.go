@@ -113,6 +113,10 @@ func NewScheduler(capacityOf func(ctx context.Context, model string) int) *Sched
 func (s *Scheduler) Acquire(ctx context.Context, model, agentID string) (*Lease, error) {
 	found := s.poolOf(ctx, model)
 	if found == nil {
+		// None for a caller whose turn stopped while another sized the pool.
+		if ctx.Err() != nil {
+			return nil, ErrStopped
+		}
 		return passThrough(), nil
 	}
 	s.mu.Lock()
@@ -157,8 +161,12 @@ func (s *Scheduler) poolOf(ctx context.Context, model string) *pool {
 	known, ok := s.sizings[model]
 	if ok {
 		s.mu.Unlock()
-		<-known.done
-		return known.pool
+		select {
+		case <-known.done:
+			return known.pool
+		case <-ctx.Done():
+			return nil
+		}
 	}
 	known = &sizing{done: make(chan struct{})}
 	s.sizings[model] = known

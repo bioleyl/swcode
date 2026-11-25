@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"runtime/debug"
 	"slices"
 	"sync"
 
@@ -74,18 +75,18 @@ func finished(callID string, outcome tools.Outcome) protocol.SessionEventToolFin
 	}
 }
 
-func toolName(name protocol.ToolName) protocol.ToolName { return name }
-
 // recordRefusal records a call that cannot run: the model reads why, and the turn goes on so it can correct itself.
 func recordRefusal(host TurnHost, call protocol.ToolCall, summary, problem string, tool protocol.ToolName) {
 	host.Record(protocol.SessionEventToolCall{CallID: call.ID, Summary: summary, Tool: tool})
 	host.Record(finished(call.ID, tools.Outcome{Meta: "refused", Output: problem}))
 }
 
-// runOutcome runs a prepared call; a tool that breaks fails its call, never the turn.
-func runOutcome(ctx context.Context, call tools.PreparedCall) (outcome tools.Outcome) {
+// runOutcome runs a prepared call; a tool that breaks fails its call, never the turn. The break is kept in the log
+// with the stack that caused it: the model reads only that it failed.
+func runOutcome(ctx context.Context, call tools.PreparedCall, host TurnHost) (outcome tools.Outcome) {
 	defer func() {
 		if broken := recover(); broken != nil {
+			host.LogProblem(fmt.Errorf("a tool broke: %v\n%s", broken, debug.Stack()))
 			outcome = tools.Outcome{Output: fmt.Sprintf("The tool failed: %v", broken)}
 		}
 	}()
@@ -102,7 +103,7 @@ func execute(ctx context.Context, callID string, call tools.PreparedCall, host T
 		}
 	}
 	host.Record(protocol.SessionEventToolRunning{CallID: callID})
-	host.Record(finished(callID, runOutcome(ctx, call)))
+	host.Record(finished(callID, runOutcome(ctx, call, host)))
 	return true
 }
 
@@ -126,7 +127,7 @@ func prepareCall(ctx context.Context, call protocol.ToolCall, host TurnHost, set
 		recordRefusal(host, call, prepared.Summary, prepared.Problem, tool.Name)
 		return tools.PreparedCall{}, false
 	}
-	host.Record(protocol.SessionEventToolCall{CallID: call.ID, Summary: prepared.Call.Summary, Tool: toolName(tool.Name)})
+	host.Record(protocol.SessionEventToolCall{CallID: call.ID, Summary: prepared.Call.Summary, Tool: tool.Name})
 	return prepared.Call, true
 }
 

@@ -280,12 +280,15 @@ func (s *Session) openedPage() (*rod.Page, error) {
 }
 
 func (s *Session) healthy(ctx context.Context) bool {
-	probe, cancel := context.WithTimeout(ctx, probeTimeout)
-	defer cancel()
-	if _, err := s.browser.Context(probe).Version(); err != nil {
+	version, done := context.WithTimeout(ctx, probeTimeout)
+	defer done()
+	if _, err := s.browser.Context(version).Version(); err != nil {
 		return false
 	}
-	_, err := s.page.Info()
+	// With its own time: a page whose browser stopped answering must not hold the session's lock forever.
+	info, doneInfo := context.WithTimeout(ctx, probeTimeout)
+	defer doneInfo()
+	_, err := s.page.Context(info).Info()
 	return err == nil
 }
 

@@ -41,7 +41,9 @@ type SubagentDeps struct {
 	NewID     func() string
 	// Record records an event in the main session: a line for each call the subagent made.
 	Record func(event protocol.SessionEventVariant)
-	Web    *web.Port
+	// LogError keeps a problem the daemon must not lose, such as a tool that broke with its stack.
+	LogError func(error)
+	Web      *web.Port
 	// Defined is the agent the person defined that does the task; nil for an explore subagent.
 	Defined *DefinedAgent
 }
@@ -163,6 +165,13 @@ func (h *subagentHost) TakeReports() []protocol.SessionEventSubagentReport { ret
 
 // UseModel: a subagent's requests take no peek, and wait for none.
 func (h *subagentHost) UseModel(use func()) { use() }
+
+// LogProblem keeps it in the daemon's log, when the session gave one.
+func (h *subagentHost) LogProblem(err error) {
+	if h.deps.LogError != nil {
+		h.deps.LogError(err)
+	}
+}
 
 // activityOf keeps a call's few words when it is made, and gives the line the session shows once it finished:
 // false for any other event. The caller holds the lock.

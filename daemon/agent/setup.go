@@ -57,6 +57,9 @@ type TurnHost interface {
 	// UseModel runs use while the agent has its model to itself: a peek waits for it to end, then goes on the
 	// agent's slot, where its conversation is cached.
 	UseModel(use func())
+	// LogProblem keeps a problem the daemon must not lose, such as the stack of a tool that broke: the model is only
+	// told that it failed.
+	LogProblem(err error)
 }
 
 // Setup is what an agent runs with.
