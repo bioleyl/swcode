@@ -3,9 +3,11 @@ import { JlButton, JlProgress } from '@syware/jlib';
 
 import { MAX_TERMINAL_TITLE } from '../../../shared/protocol/messages.schema';
 import { ScElement } from '../base/sc-element';
+import { agentLine } from '../lib/agents';
 import { daemonLine, hostOf } from '../lib/daemon-lines';
 import { tokens } from '../lib/format';
 import { BASE_STYLES } from '../styles/shared';
+import { ScAgentDetails } from './sc-agent-details';
 import styles from './sc-side-panel.css?inline';
 
 import type { Terminal } from '../../../shared/protocol/messages.schema';
@@ -26,21 +28,24 @@ const MAX_AGENTS_SHOWN = 4;
 const ENTER = 'Enter';
 const ESCAPE = 'Escape';
 
-// What a subagent shows before its first call ends, by its state.
-const STARTING = 'Starting';
-const WAITING = 'Waiting its turn';
-
-const agentNode = (agent: AgentView): Node => (
-  <div class="agent" data-state={agent.state} title={agent.description}>
+/** A subagent's row: its task in a few words, and what it does now. A press opens its details. */
+const agentNode = (agent: AgentView, open: (agent: AgentView) => void): Node => (
+  <button
+    aria-haspopup="dialog"
+    class="agent"
+    data-state={agent.state}
+    title={agent.description}
+    type="button"
+    onClick={() => open(agent)}>
     <span class="dot" aria-hidden="true" />
-    <div class="who">
-      <p class="heading">
+    <span class="who">
+      <span class="heading">
         <span class="name">{agent.description}</span>
         <span class="model">{agent.model ?? ''}</span>
-      </p>
-      <p class="activity">{agent.activity || (agent.state === 'waiting' ? WAITING : STARTING)}</p>
-    </div>
-  </div>
+      </span>
+      <span class="activity">{agentLine(agent)}</span>
+    </span>
+  </button>
 );
 
 const CONNECTED = 'Connected';
@@ -65,10 +70,14 @@ type SessionJob = SessionSummary['jobs'][number];
 /**
  * Beside a session on a wide screen: the agents at work, the commands they left running, the project's terminals, the
  * llm-servers and whether they answer, how full the context is, and at the bottom which build of swcode runs.
- * `stopJob` asks to stop a command; a terminal row opens it, and its own button closes it.
+ * `stopJob` asks to stop a command; a terminal row opens it, and its own button closes it; a subagent's row opens its
+ * task, model, state and calls.
  */
 export class ScSidePanel extends ScElement {
   static readonly selector = 'sc-side-panel';
+
+  // The subagent whose details are open, until another is picked.
+  private _shownAgent = '';
 
   readonly events = this.useEvents<{
     closeTerminal: string;
@@ -98,9 +107,12 @@ export class ScSidePanel extends ScElement {
     },
     { immediate: true }
   );
-  readonly agents = this.useChange<AgentView[]>([], (agents) =>
-    this._refs.subagents.replaceChildren(...agents.slice(0, MAX_AGENTS_SHOWN).map(agentNode))
-  );
+  readonly agents = this.useChange<AgentView[]>([], (agents) => {
+    this._refs.subagents.replaceChildren(
+      ...agents.slice(0, MAX_AGENTS_SHOWN).map((agent) => agentNode(agent, (picked) => this.openAgent(picked)))
+    );
+    this._refs.details.agent.set(agents.find((agent) => agent.id === this._shownAgent));
+  });
   /** The prompt tokens of the last reply: the conversation so far. */
   readonly used = this.useChange(0, () => this.render());
   /** How fast the last reply came and how much of its prompt was kept, as llm-server said; empty when it did not. */
@@ -122,6 +134,7 @@ export class ScSidePanel extends ScElement {
   private readonly _refs = this.useRefs((ref) => ({
     activity: ref('.main .activity'),
     context: ref(JlProgress),
+    details: ref(ScAgentDetails),
     jobs: ref('.jobs'),
     jobsSection: ref('.background'),
     newTerminal: ref<JlButton>('.new-terminal'),
@@ -180,6 +193,7 @@ export class ScSidePanel extends ScElement {
           <p class="speed" hidden />
         </section>
         <p class="version" />
+        <ScAgentDetails />
       </>
     );
   }
@@ -190,6 +204,12 @@ export class ScSidePanel extends ScElement {
 
   onConnect(): void {
     this._refs.newTerminal.events.register('press', () => this.events.emit('newTerminal'));
+  }
+
+  /** A subagent's row was pressed: its details open, and follow it while it works. */
+  private openAgent(agent: AgentView): void {
+    this._shownAgent = agent.id;
+    this._refs.details.show(agent);
   }
 
   /** A terminal: its name opens it, the pencil renames it in place, the × ends its shell. */

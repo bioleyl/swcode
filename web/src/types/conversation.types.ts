@@ -51,11 +51,13 @@ export interface SubagentLine {
 
 export type AgentState = 'waiting' | 'working' | 'done' | 'failed';
 
-/** A subagent as the side panel lists it: what it was asked, on which model, and what it does now. */
+/** A subagent as the side panel lists it: what it was asked, on which model, what it does now, and every call it made. */
 export interface AgentView {
   id: string;
   description: string;
   model: string | undefined;
   state: AgentState;
-  activity: string;
+  /** The whole task it was given; empty for a session from before the daemon kept it. */
+  prompt: string;
+  calls: SubagentLine[];
 }

@@ -87,8 +87,8 @@ func TestSubagentsWorkAtOnceInTheBackgroundAndTheirReportsWakeTheMainAgent(t *te
 		t.Fatalf("order %v", order)
 	}
 	Expect(t, OfKind(events, "subagentStarted"), []any{
-		map[string]any{"description": "Find the session store", "model": subagentModel},
-		map[string]any{"description": "Find the tools", "model": subagentModel},
+		map[string]any{"description": "Find the session store", "model": subagentModel, "prompt": "TASK-A: where are sessions saved?"},
+		map[string]any{"description": "Find the tools", "model": subagentModel, "prompt": "TASK-B: where are the tools listed?"},
 	})
 	tools := []string{}
 	for _, activity := range OfKind(events, "subagentActivity") {
@@ -301,6 +301,8 @@ func TestSubagentsPastThePresetsLimitWaitTheirTurnAndStartByThemselves(t *testin
 	if !reflect.DeepEqual(order, want) {
 		t.Fatalf("order %v", order)
 	}
+	Expect(t, OfKind(events, "subagentQueued"), `[{"description":"Find the tools","prompt":"TASK-B: where are the tools listed?"}]`)
+	Expect(t, OfKind(events, "subagentStarted")[1], `{"description":"Find the tools","prompt":"TASK-B: where are the tools listed?"}`)
 	Expect(t, OfKind(events, "subagentReport"), `[{"description":"Find the session store"},{"description":"Find the tools","note":"All your subagents have reported."}]`)
 }
 

@@ -1,0 +1,75 @@
+:host {
+  display: contents;
+}
+
+.task {
+  display: flex;
+  flex-direction: column;
+  gap: var(--jl-space-2);
+  margin-bottom: var(--jl-space-6);
+}
+
+.prompt {
+  font-size: 13.5px;
+  color: var(--jl-text-2);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.calls-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--jl-space-2);
+}
+
+.calls {
+  display: flex;
+  flex-direction: column;
+  gap: var(--jl-space-1);
+}
+
+.call {
+  display: flex;
+  align-items: center;
+  gap: var(--jl-space-2);
+  min-width: 0;
+  padding: var(--jl-space-1) var(--jl-space-2);
+  border-radius: var(--jl-radius-sm);
+  background: var(--jl-surface-2);
+}
+
+.call-name {
+  flex: none;
+  font-weight: 600;
+}
+
+.call-summary {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--jl-font-mono);
+  font-size: 12px;
+  color: var(--jl-text-2);
+}
+
+.call-meta {
+  flex: none;
+  margin-left: auto;
+  font-size: 12px;
+  white-space: nowrap;
+  color: var(--jl-muted);
+}
+
+.call[data-ok="false"] .call-meta {
+  color: var(--jl-danger);
+}
+
+.calls-empty {
+  font-size: 13px;
+  color: var(--jl-muted);
+}
+
+[hidden] {
+  display: none;
+}

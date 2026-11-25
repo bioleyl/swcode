@@ -2361,6 +2361,7 @@ type SessionEventSubagentQueued struct {
 	CallID      string `json:"callId"`
 	Description string `json:"description"`
 	Model       string `json:"model,omitempty"`
+	Prompt      string `json:"prompt,omitempty"`
 }
 
 func (v SessionEventSubagentQueued) MarshalJSON() ([]byte, error) {
@@ -2378,6 +2379,7 @@ type SessionEventSubagentStarted struct {
 	CallID      string `json:"callId"`
 	Description string `json:"description"`
 	Model       string `json:"model,omitempty"`
+	Prompt      string `json:"prompt,omitempty"`
 }
 
 func (v SessionEventSubagentStarted) MarshalJSON() ([]byte, error) {

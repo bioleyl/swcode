@@ -56,6 +56,24 @@ section {
   gap: 10px;
 }
 
+.agent {
+  padding: 2px 6px;
+  border-radius: var(--jl-radius-sm);
+}
+
+/* A subagent's row opens its details: a button of the panel's own, so the whole row is the target. */
+button.agent {
+  width: 100%;
+  border: 0;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+button.agent:hover {
+  background: var(--jl-surface-2);
+}
+
 .dot {
   flex: none;
   width: 8px;
@@ -104,7 +122,10 @@ section {
 }
 
 .who {
+  display: flex;
   flex: 1;
+  flex-direction: column;
+  gap: 2px;
   min-width: 0;
 }
 

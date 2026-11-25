@@ -305,6 +305,8 @@ export const SessionEventSchema = z.discriminatedUnion('kind', [
     description: z.string(),
     kind: z.literal('subagentQueued'),
     model: z.string().optional(),
+    // What it was asked, as the side panel shows it; none from before the panel kept it.
+    prompt: z.string().optional(),
   }),
   // A subagent the main agent started with the agent tool: it works in the background, beside the main agent and the
   // other subagents, its own calls under that call, in a line each.
@@ -315,6 +317,7 @@ export const SessionEventSchema = z.discriminatedUnion('kind', [
     description: z.string(),
     kind: z.literal('subagentStarted'),
     model: z.string().optional(),
+    prompt: z.string().optional(),
   }),
   z.object({
     agentId: z.string(),

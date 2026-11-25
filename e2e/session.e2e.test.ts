@@ -365,7 +365,10 @@ describe('subagents', () => {
       ],
       scripts: {
         'TASK-A': [{ delayMs: SUBAGENT_MS, text: 'src/store.ts saves them.' }],
-        'TASK-B': [{ delayMs: SUBAGENT_MS, text: 'src/tools.ts lists them.' }],
+        'TASK-B': [
+          { delayMs: SUBAGENT_MS, toolCalls: [{ arguments: { pattern: '**/*.ts' }, name: 'glob' }] },
+          { text: 'src/tools.ts lists them.' },
+        ],
       },
       slots: SUBAGENT_SLOTS,
     });
@@ -392,6 +395,13 @@ describe('subagents', () => {
     expect(await page.locator('session-page sc-tool-row[open]').count()).toBe(0);
     await page.getByText('Report of “Find the store”, given to the agent').waitFor();
     expect(JSON.stringify(rig.llama.requests.at(-1))).toContain('src/tools.ts lists them.');
+
+    // A row opens the subagent's details: the whole task it was given, its state, and every call it made.
+    await page.locator('sc-side-panel .agent').filter({ hasText: 'Find the tools' }).click();
+    const details = page.locator('sc-side-panel sc-agent-details');
+    await details.getByText('TASK-B: where?').waitFor();
+    expect(await details.getByText('Done', { exact: true }).count()).toBe(1);
+    expect(await details.locator('.call').count()).toBe(1);
   });
 });
 

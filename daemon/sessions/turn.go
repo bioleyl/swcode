@@ -737,6 +737,7 @@ type waitingSubagent struct {
 	callID      string
 	description string
 	model       string
+	prompt      string
 	run         func(ctx context.Context) agent.Report
 }
 
@@ -773,7 +774,7 @@ func (a subagents) Start(task tools.SubagentTask) tools.Outcome {
 		description = named + ": " + description
 	}
 	subagent := waitingSubagent{
-		agentID: agentID, callID: task.CallID, description: description, model: a.subagent.Model,
+		agentID: agentID, callID: task.CallID, description: description, model: a.subagent.Model, prompt: task.Prompt,
 		run: func(ctx context.Context) agent.Report { return agent.RunSubagent(ctx, agentID, task, deps) },
 	}
 	s.mu.Lock()
@@ -782,7 +783,7 @@ func (a subagents) Start(task tools.SubagentTask) tools.Outcome {
 		s.startSubagent(a.session, subagent)
 		return tools.Outcome{Meta: "started", OK: true, Output: fmt.Sprintf(subagentStarted, task.Description) + reportComes}
 	}
-	s.record(a.session, protocol.SessionEventSubagentQueued{AgentID: agentID, CallID: task.CallID, Description: task.Description, Model: a.subagent.Model})
+	s.record(a.session, protocol.SessionEventSubagentQueued{AgentID: agentID, CallID: task.CallID, Description: task.Description, Model: a.subagent.Model, Prompt: task.Prompt})
 	a.session.waiting = append(a.session.waiting, subagent)
 	s.publishSessions()
 	before := len(a.session.waiting) - 1
@@ -791,7 +792,7 @@ func (a subagents) Start(task tools.SubagentTask) tools.Outcome {
 
 // startSubagent records a subagent's start and runs it in the background; the caller holds the lock.
 func (s *Service) startSubagent(session *live, subagent waitingSubagent) {
-	s.record(session, protocol.SessionEventSubagentStarted{AgentID: subagent.agentID, CallID: subagent.callID, Description: subagent.description, Model: subagent.model})
+	s.record(session, protocol.SessionEventSubagentStarted{AgentID: subagent.agentID, CallID: subagent.callID, Description: subagent.description, Model: subagent.model, Prompt: subagent.prompt})
 	s.inBackground(session, subagent.agentID, subagent.description, subagent.run)
 }
 
