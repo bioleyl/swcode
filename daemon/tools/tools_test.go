@@ -201,6 +201,22 @@ func TestQuestionIsRefusedWhereNoOneCanAnswer(t *testing.T) {
 	f.refused("question", `{"questions":[{"header":"Approach","options":[{"description":"","label":"A"},{"description":"","label":"B"}],"question":"A or B?"}]}`, `No one can be asked`)
 }
 
+func TestDecisionRecordsAChoiceAndRefusesOneOutsideItsOptions(t *testing.T) {
+	f := setUp(t)
+	got := f.call("decision", `{"question":"Which framework?","options":["React","Vue"],"chosen":"React","why":"The project already uses it."}`)
+	display, _ := got.Display.Value.(protocol.ToolDisplayDecision)
+	if !got.OK || got.Meta != "React" || !strings.Contains(got.Output, "Chosen: React") || display.Chosen != "React" || len(display.Options) != 2 {
+		t.Fatalf("got %+v", got)
+	}
+	f.refused("decision", `{"question":"Which framework?","options":["React","Vue"],"chosen":"Svelte"}`, `must be one of the options`)
+	if _, found := Main.Find("decision"); !found {
+		t.Fatal("the main agent cannot record a choice")
+	}
+	if _, found := Explore.Find("decision"); found {
+		t.Fatal("subagents record choices")
+	}
+}
+
 func TestAPathLeadingOutsideTheWorkspaceThroughALinkIsRefused(t *testing.T) {
 	f := setUp(t)
 	outside := t.TempDir()

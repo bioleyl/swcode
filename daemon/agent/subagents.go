@@ -27,9 +27,11 @@ type SubagentDeps struct {
 	Model llm.Model
 	// Source is the llm-server it asks, and ModelName the model there: a smaller, faster one than the main
 	// agent's, typically.
-	Source        string
-	ModelName     string
-	Thinking      protocol.ThinkingMode
+	Source    string
+	ModelName string
+	Thinking  protocol.ThinkingMode
+	// ThinkingSpec is the model's own words for each thinking mode, when its preset says them.
+	ThinkingSpec  *protocol.ModelThinking
 	ContextTokens int
 	Tools         tools.Box
 	// Host is the session's host: a subagent reads where its main agent works.
@@ -205,7 +207,7 @@ func RunSubagent(ctx context.Context, agentID string, task tools.SubagentTask, d
 		prompt = DefinedAgentPrompt(deps.Defined.Instructions, deps.Workspace, deps.Platform)
 	}
 	setup := Setup{
-		Agent:         llm.Identity{AgentID: agentID, Model: deps.ModelName, Source: deps.Source, Thinking: deps.Thinking},
+		Agent:         llm.Identity{AgentID: agentID, Model: deps.ModelName, Source: deps.Source, Thinking: deps.Thinking, ThinkingSpec: deps.ThinkingSpec},
 		ContextTokens: deps.ContextTokens,
 		MaxSteps:      deps.MaxSteps,
 		Model:         deps.Model,

@@ -195,6 +195,20 @@ func (h handlers) CreateSession(message protocol.ClientMessageCreateSession) str
 	return struct{}{}
 }
 
+// ForkSession branches a session at a decision: a new session holding the source's first events, then the changed
+// text as its first message. The source stays as it was.
+func (h handlers) ForkSession(message protocol.ClientMessageForkSession) struct{} {
+	go func() {
+		session, refused := h.app.Sessions.Fork(h.ctx, message.SessionID, message.Keep, message.Text)
+		if refused != "" {
+			h.reply(problem(refused))
+			return
+		}
+		h.reply(protocol.ServerMessage{Value: protocol.ServerMessageSessionCreated{Session: session}})
+	}()
+	return struct{}{}
+}
+
 // linkPinnedTodos points the project's todos the session started on at it, for the project's page to link back.
 func (h handlers) linkPinnedTodos(session protocol.SessionSummary, todoIDs []string) {
 	if len(todoIDs) == 0 {

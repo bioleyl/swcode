@@ -2,6 +2,20 @@
 
 All notable changes to swcode are documented here.
 
+## [0.15.4] - 2026-11-19
+
+### Added
+
+- A session records the choices that shape the work with the `decision` tool (the question, the options weighed, the one chosen and why). The session page's map shows them as a graph, one node per decision; selecting one reads what was decided, and **Change…** replays the session from that decision with another option.
+- A preset's model names the thinking modes its API takes (`thinking.type`, `chat_template_kwargs.reasoning_effort`, a reasoning effort…), so the composer offers only the modes that model has and the preset dialog lets them be edited.
+
+### Changed
+
+- A turn takes 300 steps by default, a subagent 150 (`SWCODE_MAX_STEPS`, `SWCODE_SUBAGENT_MAX_STEPS`).
+- The composer's **Send now** sends the waiting messages at once, ending the running step, instead of waiting for it to finish.
+- The agent's icon is a bot, so it no longer shares the decision's branching arrows.
+- The composer's panel of choices takes the room on the side of its chip that has the most, and scrolls there, so its last group stays reachable in a short window.
+
 ## [0.15.3] - 2026-11-18
 
 ### Fixed

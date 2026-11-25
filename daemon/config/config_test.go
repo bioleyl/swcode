@@ -24,7 +24,7 @@ func TestTheDefaults(t *testing.T) {
 	if config.Thinking != "full" || config.SubagentThinking != "low" || config.LlamaURL != "http://127.0.0.1:8080" {
 		t.Fatalf("got %+v", config)
 	}
-	if config.MaxSteps != 150 || config.SubagentMaxSteps != 30 {
+	if config.MaxSteps != 300 || config.SubagentMaxSteps != 150 {
 		t.Fatalf("steps %d, subagents' %d", config.MaxSteps, config.SubagentMaxSteps)
 	}
 }

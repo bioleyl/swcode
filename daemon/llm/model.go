@@ -54,15 +54,18 @@ type Identity struct {
 	Source   string
 	Model    string
 	Thinking protocol.ThinkingMode
+	// ThinkingSpec is the model's own words for each thinking mode, when its preset says them.
+	ThinkingSpec *protocol.ModelThinking
 }
 
 // Choice is a model picked for an agent: its source and its name there, a slot's context (0 when the server does
-// not say), and whether it sees pictures.
+// not say), whether it sees pictures, and its thinking mapping when it has one.
 type Choice struct {
 	Source        string
 	Model         string
 	ContextTokens int
 	Vision        bool
+	Thinking      *protocol.ModelThinking
 }
 
 // Target is where a request goes: the agent's model, on the slot the scheduler gave it (-1 for none).

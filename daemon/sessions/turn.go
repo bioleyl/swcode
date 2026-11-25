@@ -694,6 +694,7 @@ func (s *Service) screenshotsFor(session *live, main llm.Choice, sees bool) tool
 	return &browser.Screenshots{
 		Browser: s.deps.Browser, Folder: s.picturesFolderOf(session), Model: s.deps.Model, ModelName: main.Model,
 		NewID: s.deps.NewID, Sees: sees, SessionID: session.meta.ID, Source: main.Source, Thinking: s.deps.Thinking.Subagents,
+		ThinkingSpec: main.Thinking,
 	}
 }
 
@@ -709,6 +710,7 @@ func (s *Service) imagesFor(session *live) images.Port {
 func (s *Service) webFor(subagent llm.Choice) *web.Port {
 	port := web.NewPort(s.deps.Search, s.deps.Pages, web.Reader{
 		Model: s.deps.Model, ModelName: subagent.Model, NewID: s.deps.NewID, Source: subagent.Source, Thinking: s.deps.Thinking.Subagents,
+		ThinkingSpec: subagent.Thinking,
 	})
 	return &port
 }
@@ -759,7 +761,7 @@ func (a subagents) Start(task tools.SubagentTask) tools.Outcome {
 			defer s.mu.Unlock()
 			s.record(a.session, event)
 		},
-		Thinking: s.deps.Thinking.Subagents, Tools: s.deps.SubagentTools, Web: s.webFor(a.subagent), Workspace: a.session.meta.Workspace,
+		Thinking: s.deps.Thinking.Subagents, ThinkingSpec: a.subagent.Thinking, Tools: s.deps.SubagentTools, Web: s.webFor(a.subagent), Workspace: a.session.meta.Workspace,
 	}
 	description := task.Description
 	if task.Agent != "" {
@@ -877,5 +879,5 @@ func (s *Service) closeSubagents(session *live) {
 }
 
 func llmIdentity(meta Meta, main llm.Choice) llm.Identity {
-	return llm.Identity{AgentID: meta.ID, Model: main.Model, Source: main.Source, Thinking: meta.Thinking}
+	return llm.Identity{AgentID: meta.ID, Model: main.Model, Source: main.Source, Thinking: meta.Thinking, ThinkingSpec: main.Thinking}
 }

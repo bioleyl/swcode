@@ -1,5 +1,5 @@
 import { css } from '@jadis/core';
-import { JlAlert, JlButton, JlDialog, JlField, JlInput, JlSelect, JlSwitch } from '@syware/jlib';
+import { JlAlert, JlButton, JlDialog, JlField, JlInput, JlSelect, JlSwitch, JlTextarea } from '@syware/jlib';
 
 import { ScElement } from '../base/sc-element';
 import { newId } from '../lib/model-settings';
@@ -10,12 +10,21 @@ import {
   subagentLimitChoice,
   subagentLimitOf,
 } from '../lib/presets';
+import {
+  dictionaryOf,
+  readThinking,
+  THINKING_MAPPING_HINT,
+  THINKING_OPTIONS,
+  thinkingChoiceOf,
+  thinkingText,
+} from '../lib/thinking-levels';
 import { ScModelPicker } from '../molecules/sc-model-picker';
 import { BASE_STYLES } from '../styles/shared';
 import styles from './sc-preset-dialog.css?inline';
 
-import type { ModelRef, ModelSettings, Preset } from '../../../shared/protocol/models.schema';
+import type { ModelRef, ModelSettings, ModelThinking, Preset } from '../../../shared/protocol/models.schema';
 import type { TokensInput } from '../types/presets.types';
+import type { ThinkingChoice, ThinkingInput } from '../types/thinking-levels.types';
 
 const NO_NAME = 'Name it: the composer shows its name.';
 const MAIN_EMPTY = 'Its model, or a router’s first loaded';
@@ -26,6 +35,8 @@ const CONTEXT_HINT =
 const BAD_CONTEXT = 'A context is a number of tokens: 131072, or 128k.';
 const VISION_NOTE =
   'Send it the pictures of a message even when its llm-server does not say it sees them, as a hosted API often does not. Off, what the llm-server says decides.';
+const THINKING_HINT =
+  'How this model is asked to think, in the words its API knows: DeepSeek takes a reasoning effort and a thinking switch, a llama.cpp template its own. A level the model does not offer sends nothing.';
 
 const withContext = (ref: ModelRef, typed: TokensInput): ModelRef =>
   typed.kind === 'tokens' ? { ...ref, contextTokens: typed.tokens } : ref;
@@ -55,6 +66,8 @@ export class ScPresetDialog extends ScElement {
     subagentLimit: ref<JlSelect>('.subagent-limit'),
     subagents: ref<ScModelPicker>('.subagents'),
     subagentsContext: ref<JlInput>('.subagents-context'),
+    thinking: ref<JlSelect<ThinkingChoice>>('.thinking'),
+    thinkingLevels: ref<JlTextarea>('.thinking-levels'),
     vision: ref<JlSwitch>('.vision'),
   }));
 
@@ -69,6 +82,12 @@ export class ScPresetDialog extends ScElement {
             <ScModelPicker class="main" empty={MAIN_EMPTY} />
           </JlField>
           <JlSwitch class="vision" label="Sees pictures" description={VISION_NOTE} />
+          <JlField label="Thinking" hint={THINKING_HINT}>
+            <JlSelect class="thinking" options={[...THINKING_OPTIONS]} />
+          </JlField>
+          <JlField label="Thinking levels" hint={THINKING_MAPPING_HINT}>
+            <JlTextarea class="thinking-levels" rows={6} />
+          </JlField>
           <JlField label="Main agent’s context" hint={CONTEXT_HINT}>
             <JlInput class="main-context" autocomplete="off" placeholder={CONTEXT_EMPTY} />
           </JlField>
@@ -100,6 +119,8 @@ export class ScPresetDialog extends ScElement {
   onConnect(): void {
     this._refs.cancel.events.register('press', () => this.close());
     this._refs.save.events.register('press', () => this.submit());
+    this._refs.thinking.events.register('change', (choice) => this.showThinkingLevels(choice));
+    this._refs.thinkingLevels.events.register('input', () => this._refs.thinking.value.set('custom'));
   }
 
   /** Opens on a preset to change, or on a new one, of the first llm-server. */
@@ -117,9 +138,42 @@ export class ScPresetDialog extends ScElement {
     this._refs.subagents.show(preset?.workers ?? { model: '', source: first });
     this._refs.mainContext.value.set(this.contextShown(preset?.main));
     this._refs.subagentsContext.value.set(this.contextShown(preset?.workers));
+    this.showThinking(
+      preset?.main.thinking,
+      settings.sources.find((source) => source.id === this.mainSource())?.url ?? ''
+    );
     this.showLimit(subagentLimitChoice(preset?.subagentLimit));
     this.refuse('');
     this._refs.dialog.show();
+  }
+
+  private mainSource(): string {
+    return this._refs.main.value().source;
+  }
+
+  /** Shows the preset's thinking mapping as the choice it is, or the person's own as typed. */
+  private showThinking(thinking: ModelThinking | undefined, sourceUrl: string): void {
+    const choice = thinkingChoiceOf(thinking, sourceUrl);
+    this._refs.thinking.value.set(choice);
+    this._refs.thinkingLevels.value.set(
+      thinkingText(choice === 'custom' ? thinking : (dictionaryOf(choice) ?? {}))
+    );
+    this._refs.thinkingLevels.disabled.set(choice === 'none');
+  }
+
+  /** A dictionary chosen: its levels show, ready to change; nothing at all takes them away. */
+  private showThinkingLevels(choice: ThinkingChoice): void {
+    this._refs.thinkingLevels.value.set(thinkingText(choice === 'custom' ? {} : (dictionaryOf(choice) ?? {})));
+    this._refs.thinkingLevels.disabled.set(choice === 'none');
+  }
+
+  /** What the thinking fields say: the dictionary chosen, or the levels as typed for a person's own. */
+  private thinkingEntered(): ThinkingInput {
+    const choice = this._refs.thinking.value.get() || 'llama';
+    const thinking = choice === 'custom' ? this._refs.thinkingLevels.value.get() : undefined;
+    return thinking === undefined
+      ? { kind: 'thinking', thinking: dictionaryOf(choice) ?? {} }
+      : readThinking(thinking);
   }
 
   private contextShown(ref: ModelRef | undefined): string {
@@ -159,11 +213,20 @@ export class ScPresetDialog extends ScElement {
       this.refuse(BAD_CONTEXT);
       return;
     }
+    const thinking = this.thinkingEntered();
+    if (thinking.kind === 'invalid') {
+      this.refuse(thinking.problem);
+      return;
+    }
     this._refs.save.loading.set(true);
     const limit = subagentLimitOf(this._refs.subagentLimit.value.get());
     this.events.emit('save', {
       id: this._id || newId(name, this._taken),
-      main: { ...withContext(this._refs.main.value(), mainContext), vision: this._refs.vision.checked.get() },
+      main: {
+        ...withContext(this._refs.main.value(), mainContext),
+        thinking: thinking.thinking,
+        vision: this._refs.vision.checked.get(),
+      },
       name,
       workers: withContext(this._refs.subagents.value(), subagentsContext),
       ...(limit === undefined ? {} : { subagentLimit: limit }),

@@ -17,6 +17,7 @@ import { ScTitle } from '../molecules/sc-title';
 import { ScArcade } from '../organisms/sc-arcade';
 import { ScComposer } from '../organisms/sc-composer';
 import { ScConversation } from '../organisms/sc-conversation';
+import { ScDecisionMap } from '../organisms/sc-decision-map';
 import { ScPeek } from '../organisms/sc-peek';
 import { ScPlan } from '../organisms/sc-plan';
 import { ScReview } from '../organisms/sc-review';
@@ -25,13 +26,14 @@ import { ScTerminal } from '../organisms/sc-terminal';
 import { ScWorkflowRun } from '../organisms/sc-workflow-run';
 import { daemon, daemonBus } from '../services/daemon';
 import { daemonState, daemonStatusBus } from '../services/daemon-status';
-import { navigate, newPathOf } from '../services/navigation';
+import { navigate, newPathOf, sessionPath } from '../services/navigation';
 import { presetChoices, presetsBus } from '../services/presets';
 import { projectAt, projectListBus } from '../services/project-list';
 import { foundSkills, projectSkillsBus, readProjectSkills } from '../services/project-skills';
 import { addProjectTodo } from '../services/project-todos';
 import { markSeen } from '../services/seen-sessions';
 import { deleteSession } from '../services/session-delete';
+import { forkSession } from '../services/session-fork';
 import { findSession, sessionListBus } from '../services/session-list';
 import { restoreCheckpoint } from '../services/session-restore';
 import { sessionRevealBus, takeReveal } from '../services/session-reveal';
@@ -60,6 +62,9 @@ import type { TerminalSize } from '../types/terminal.types';
 const NOT_FOUND = 'This session is not on the daemon.';
 const NO_PROJECT = 'This session works in no project: a todo needs one.';
 const REVIEW_HINT = 'What the workspace has uncommitted, to review and commit';
+const MAP_HINT = 'Show the decisions of this session';
+const CONVERSATION_HINT = 'Show the conversation';
+const FORK_PROBLEM = 'The session could not be branched: the daemon did not answer.';
 const COMMITTED = 'The changes are committed';
 const VISIBILITY_CHANGE = 'visibilitychange';
 // On the host while the side panel is hidden.
@@ -142,12 +147,15 @@ export class SessionPage extends ScElement {
   // What the panel lists and the view shows of the terminals: drawn again only when it changes, since the session's
   // list changes at every event of a turn.
   private _terminalsKey = '';
+  // Whether the decisions replace the conversation in its room, rather than showing beside it.
+  private _mapShown = false;
 
   readonly route = this.useAttributes({
     id: (id) => {
       this._sessionId = id ?? '';
       this._refs.conversation.session.set(this._sessionId);
       this._refs.composer.draftPlace.set(this._sessionId);
+      this.showMap(false);
     },
   });
 
@@ -211,17 +219,20 @@ export class SessionPage extends ScElement {
       this._events = [...history.events];
       this._keptBack = history.keptBack;
       this._refs.conversation.load(history.events, history.keptBack, history.streaming);
+      this.refreshMap();
       this.revealFound();
     },
     older: (history) => {
       this._events = [...history.events, ...this._events];
       this._keptBack = history.keptBack;
       this._refs.conversation.addOlder(history.events, history.keptBack);
+      this.refreshMap();
     },
     since: (history) => {
       this._opened = true;
       this._events = [...this._events, ...history.events];
       this._refs.conversation.resume(history.events, history.streaming);
+      this.refreshMap();
       this.revealFound();
     },
   };
@@ -230,6 +241,8 @@ export class SessionPage extends ScElement {
     arcade: ref(ScArcade),
     composer: ref(ScComposer),
     conversation: ref(ScConversation),
+    map: ref(ScDecisionMap),
+    mapToggle: ref<JlButton>('.map-toggle'),
     panel: ref(ScSidePanel),
     panelToggle: ref<JlButton>('.panel-toggle'),
     path: ref('.path'),
@@ -259,6 +272,7 @@ export class SessionPage extends ScElement {
                 <JlIcon name="laptop" size={14} />
                 <span class="path" />
               </span>
+              <JlButton class="map-toggle" icon="workflow" variant="ghost" size="sm" hint={MAP_HINT} />
               <JlButton class="review" icon="file-diff" variant="ghost" size="sm" hint={REVIEW_HINT} hidden />
               <JlButton class="delete" icon="trash" variant="ghost" size="sm" hidden />
               <JlButton class="panel-toggle" variant="ghost" size="sm" />
@@ -266,6 +280,7 @@ export class SessionPage extends ScElement {
             <ScWorkflowRun />
           </div>
           <ScConversation />
+          <ScDecisionMap hidden />
           <ScTerminal />
           <JlAlert tone="danger" hidden />
           <ScPlan hidden />
@@ -413,6 +428,8 @@ export class SessionPage extends ScElement {
       daemon.send({ sessionId: this._sessionId, title, type: 'renameSession' })
     );
     this._refs.remove.events.register('press', () => void this.deleteSession());
+    this._refs.mapToggle.events.register('press', () => this.showMap(!this._mapShown));
+    this._refs.map.events.register('change', (change) => void this.changeDecision(change.keep, change.text));
     this.wireReview();
     this._refs.panelToggle.events.register('press', () => this.showPanel(!sidePanelOpen()));
     this._refs.panel.events.register('stopJob', (jobId) =>
@@ -671,6 +688,7 @@ export class SessionPage extends ScElement {
   private applyEvent(event: SessionEvent): void {
     this._events.push(event);
     this._refs.conversation.apply(event);
+    this.refreshMap();
     if (PLAN_EVENTS.has(event.kind)) {
       this._refs.plan.show(currentPlan(this._events));
     }
@@ -726,6 +744,37 @@ export class SessionPage extends ScElement {
   private showPanel(open: boolean): void {
     setSidePanelOpen(open);
     this.renderPanel(open);
+  }
+
+  /** The decisions replace the conversation in its room, or give it back; the map takes what the page holds. */
+  private showMap(shown: boolean): void {
+    this._mapShown = shown;
+    this._refs.conversation.hidden = shown;
+    this._refs.map.hidden = !shown;
+    this._refs.mapToggle.icon.set(shown ? 'message' : 'workflow');
+    this._refs.mapToggle.hint.set(shown ? CONVERSATION_HINT : MAP_HINT);
+    if (!shown) {
+      return;
+    }
+    this._refs.map.history.set([...this._events]);
+    this._refs.map.showLatest();
+  }
+
+  /** The map follows the session while it is shown: a turn's new decisions come as its events do. */
+  private refreshMap(): void {
+    if (this._mapShown) {
+      this._refs.map.history.set([...this._events]);
+    }
+  }
+
+  /** The person changed an answer or a choice: a new session starts from that decision, with the change. */
+  private async changeDecision(keep: number, text: string): Promise<void> {
+    const sessionId = await forkSession(this._sessionId, this._keptBack + keep, text);
+    if (sessionId === undefined) {
+      this.showProblem(FORK_PROBLEM);
+      return;
+    }
+    navigate(sessionPath(sessionId));
   }
 
   /** Closed, the panel leaves its room to the conversation; its button offers the other way. */

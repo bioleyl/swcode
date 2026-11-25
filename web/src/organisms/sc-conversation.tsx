@@ -51,8 +51,8 @@ const MATCH_FLASH_MS = 2_400;
 // The events kept for a row an older page has yet to bring, by what they wait for: a call's row, or a subagent's call.
 const callKey = (callId: string): string => `call:${callId}`;
 const agentKey = (agentId: string): string => `agent:${agentId}`;
-// When the waiting messages go: after the turn, or at the agent's next step once the person asked for them now.
-const QUEUE_NOTES = { later: 'Sent when this turn ends.', now: 'Sent at the agent’s next step.' } as const;
+// When the waiting messages go: after the turn, or at once once the person asked for them now.
+const QUEUE_NOTES = { later: 'Sent when this turn ends.', now: 'Sent now.' } as const;
 
 // What swcode told the model in the middle of a turn, and why.
 const REMINDER_TITLES: Readonly<Record<ReminderReason, string>> = {

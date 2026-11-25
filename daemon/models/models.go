@@ -233,7 +233,9 @@ func (s *Service) presetOf(id string) (protocol.Preset, bool) {
 func (s *Service) Choose(ctx context.Context, presetID string) (llm.Choice, llm.Choice) {
 	preset, _ := s.presetOf(presetID)
 	main := s.mainOf(ctx, preset)
-	workers := llm.Choice{ContextTokens: preset.Workers.ContextTokens, Model: preset.Workers.Model, Source: preset.Workers.Source}
+	workers := llm.Choice{
+		ContextTokens: preset.Workers.ContextTokens, Model: preset.Workers.Model, Source: preset.Workers.Source, Thinking: preset.Workers.Thinking,
+	}
 	server, found := s.servers.Server(workers.Source)
 	if !found {
 		return main, workers
@@ -264,7 +266,10 @@ func (s *Service) SubagentLimit(presetID string) *protocol.SubagentLimit {
 }
 
 func (s *Service) mainOf(ctx context.Context, preset protocol.Preset) llm.Choice {
-	main := llm.Choice{ContextTokens: preset.Main.ContextTokens, Model: preset.Main.Model, Source: preset.Main.Source, Vision: preset.Main.Vision}
+	main := llm.Choice{
+		ContextTokens: preset.Main.ContextTokens, Model: preset.Main.Model, Source: preset.Main.Source, Thinking: preset.Main.Thinking,
+		Vision: preset.Main.Vision,
+	}
 	server, found := s.servers.Server(main.Source)
 	if !found {
 		return main

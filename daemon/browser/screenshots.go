@@ -33,8 +33,10 @@ type Screenshots struct {
 	Source    string
 	ModelName string
 	Thinking  protocol.ThinkingMode
-	Sees      bool
-	NewID     func() string
+	// ThinkingSpec is the model's own words for each thinking mode, when its preset says them.
+	ThinkingSpec *protocol.ModelThinking
+	Sees         bool
+	NewID        func() string
 }
 
 func (s *Screenshots) Seen() bool { return s.Sees }
@@ -56,7 +58,7 @@ func (s *Screenshots) Keep(shot Shot) (protocol.PictureRef, string, error) {
 }
 
 func (s *Screenshots) Ask(ctx context.Context, picture protocol.PictureRef, question, about string) (string, error) {
-	agent := llm.Identity{AgentID: s.NewID(), Model: s.ModelName, Source: s.Source, Thinking: s.Thinking}
+	agent := llm.Identity{AgentID: s.NewID(), Model: s.ModelName, Source: s.Source, Thinking: s.Thinking, ThinkingSpec: s.ThinkingSpec}
 	// One request, and done: its slot goes to the next agent, before the main agent's.
 	defer llm.AgentDone(s.Model, agent)
 	reply, err := s.Model.Complete(ctx, llm.Request{

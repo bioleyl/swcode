@@ -19,6 +19,7 @@ const (
 	exploreSearchLine = "- For what is not in the workspace, search the web with websearch and read pages with webfetch."
 	subagentLine      = "- For a broad search, start explore subagents with agent: one per question, all those the task needs in one reply. Your turn ends after that reply: they work in the background, and their reports wake you, all together once the last is done. Do not look yourself into what they look into: wait for their reports, then answer from them."
 	subagentLimitLine = " %d work at once: swcode starts the others by itself as those report."
+	decisionLine      = "- Before a choice that shapes the work and that the user did not make (a framework, a library, a data model, a protocol, a structure), record it with decision: the question, the options you weighed, the one you chose, and why — before you act on it. The user sees it on the session’s decision map and can change it and replay from there."
 )
 
 // Servers is which servers of the settings the main agent has: their lines join its prompt.
@@ -77,6 +78,7 @@ func SystemPrompt(workspace, scratch, platform string, servers Servers, subagent
 		"- When the user asks for a skill (a way to do a kind of task, kept for later sessions), write it in the project as .agents/skills/<name>/SKILL.md: a frontmatter with its name (lowercase letters, digits and hyphens) and its description (what it is for and when to use it), then the instructions.",
 		"- When a command fails twice, check what you assumed (its name, its --help, the project’s docs) before you try another way.",
 		"- When a decision is the user’s to make (what they want, a choice between approaches), ask them with question instead of guessing. Find out by yourself whatever the project can tell you.",
+		decisionLine,
 		"- When a call is declined, stop and wait for the user’s instructions.",
 		"",
 		"Scope:",

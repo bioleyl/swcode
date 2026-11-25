@@ -340,19 +340,75 @@ func bodyOf(request Request, model string, plain bool) map[string]any {
 	if model := firstNonEmpty(request.Target.Model, model); model != "" {
 		body["model"] = model
 	}
-	if plain {
-		return body
+	if !plain {
+		// Reuses the KV cache of the conversation's earlier turns: only what is new gets processed.
+		body["cache_prompt"] = true
+		// Each agent keeps to its slot, where its conversation is still cached.
+		if request.Target.Slot != NoSlot {
+			body["id_slot"] = request.Target.Slot
+		}
 	}
-	// Reuses the KV cache of the conversation's earlier turns: only what is new gets processed.
-	body["cache_prompt"] = true
-	// Each agent keeps to its slot, where its conversation is still cached.
-	if request.Target.Slot != NoSlot {
-		body["id_slot"] = request.Target.Slot
+	addThinking(body, request.Target, plain)
+	return body
+}
+
+// addThinking asks the model to think as the session says: in the words of its preset's own mapping, else the
+// llm-server template's. Plain, a field llama.cpp alone knows (`chat_template_kwargs`) is left out, as the server
+// refused those.
+func addThinking(body map[string]any, target Target, plain bool) {
+	if target.ThinkingSpec != nil {
+		for path, value := range thinkingLevelOf(target.ThinkingSpec, target.Thinking) {
+			setField(body, path, thinkingValue(value), plain)
+		}
+		return
 	}
-	if kwargs := templateKwargs[request.Target.Thinking]; kwargs != nil {
+	if kwargs := templateKwargs[target.Thinking]; kwargs != nil && !plain {
 		body["chat_template_kwargs"] = kwargs
 	}
-	return body
+}
+
+// thinkingLevelOf is what a model's mapping asks for a mode; nil when it does not offer it.
+func thinkingLevelOf(spec *protocol.ModelThinking, mode protocol.ThinkingMode) map[string]string {
+	levels := map[protocol.ThinkingMode]map[string]string{
+		protocol.ThinkingModeFull:   spec.Full,
+		protocol.ThinkingModeLow:    spec.Low,
+		protocol.ThinkingModeMedium: spec.Medium,
+		protocol.ThinkingModeOff:    spec.Off,
+	}
+	return levels[mode]
+}
+
+// setField sets a request field by its dotted path, making the objects on the way: `thinking.type` is
+// {"thinking": {"type": …}}. A llama.cpp-only field is not set of a plain server.
+func setField(body map[string]any, path string, value any, plain bool) {
+	parts := strings.Split(path, ".")
+	if plain && slices.Contains(llamaFields, parts[0]) {
+		return
+	}
+	target := body
+	for _, part := range parts[:len(parts)-1] {
+		child, _ := target[part].(map[string]any)
+		if child == nil {
+			child = map[string]any{}
+			target[part] = child
+		}
+		target = child
+	}
+	target[parts[len(parts)-1]] = value
+}
+
+// thinkingValue is a mapping's value as JSON when it reads so: true, false and numbers keep their type, other text
+// stays text, as `low` or `disabled`.
+func thinkingValue(text string) any {
+	var value any
+	if json.Unmarshal([]byte(text), &value) != nil {
+		return text
+	}
+	switch value.(type) {
+	case bool, float64:
+		return value
+	}
+	return text
 }
 
 // namesLlamaField tells a refusal that names one of llama.cpp's own fields: the server does not know it.

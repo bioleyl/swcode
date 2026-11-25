@@ -6,7 +6,7 @@ import type { ToolLabel } from '../types/labels.types';
 const TOOL_LABELS: Readonly<Record<ToolName, ToolLabel>> = {
   agent: {
     doing: 'Running an agent:',
-    icon: 'split',
+    icon: 'bot',
     name: 'Agent',
     question: 'Start this agent?',
     writing: 'Briefing an agent',
@@ -66,6 +66,13 @@ const TOOL_LABELS: Readonly<Record<ToolName, ToolLabel>> = {
     name: 'Close todo',
     question: 'Close this todo?',
     writing: 'Closing a todo',
+  },
+  decision: {
+    doing: 'Recording the decision',
+    icon: 'split',
+    name: 'Decision',
+    question: 'Record this decision?',
+    writing: 'Recording a decision',
   },
   draw: {
     doing: 'Drawing',
@@ -289,6 +296,7 @@ const GRANTS: Readonly<Record<ToolName, (summary: string, outside: boolean) => G
   browsersnapshot: never,
   browsertype: never,
   closetodo: never,
+  decision: never,
   draw: never,
   edit: edits,
   glob: never,

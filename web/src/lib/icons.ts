@@ -5,6 +5,7 @@ import {
   BellOff,
   BookOpen,
   BookPlus,
+  Bot,
   Brain,
   Camera,
   Check,
@@ -97,6 +98,8 @@ const ICONS = {
   'bell-off': BellOff,
   'book-open': BookOpen,
   'book-plus': BookPlus,
+  // A subagent the agent starts: its own worker, so a head of its own.
+  bot: Bot,
   brain: Brain,
   camera: Camera,
   check: Check,

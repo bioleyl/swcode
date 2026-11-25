@@ -48,6 +48,8 @@ const STOP_DICTATING_HINT = 'Stop dictating';
 const DICTATION_FAILED = 'Dictation stopped';
 const UNSEEN_NOTE = 'This model cannot see pictures: it is only told they are here.';
 const CHOICES_ICON_SIZE = 14;
+// The room the panel of choices keeps above the chip: jlib's 6 px gap and a little air, so it scrolls there.
+const CHOICES_PANEL_GAP = 12;
 const SUMMARY_SEPARATOR = ' · ';
 const CONCISE_LABEL = 'Token economy';
 const WORKTREE_LABEL = 'Worktree';
@@ -186,6 +188,7 @@ export class ScComposer extends ScElement {
     box: ref<HTMLFormElement>('form'),
     choices: ref(ScSessionChoices),
     choicesChip: ref<HTMLButtonElement>('.choices'),
+    choicesPopover: ref(JlPopover),
     commandList: ref('.command-menu'),
     commandOptions: ref('.options'),
     context: ref('.context'),
@@ -203,6 +206,17 @@ export class ScComposer extends ScElement {
 
   focusText(): void {
     this._refs.text.focus();
+  }
+
+  /**
+   * The panel goes on the side of the chip that has the most room, so it is capped by that room and scrolls there:
+   * a panel shorter than it takes its own height and shows no scrollbar.
+   */
+  private sizeChoicesPanel(): void {
+    const chip = this._refs.choicesChip.getBoundingClientRect();
+    const above = chip.top - CHOICES_PANEL_GAP;
+    const below = window.innerHeight - chip.bottom - CHOICES_PANEL_GAP;
+    this._refs.choicesPopover.style.setProperty('--choices-max', `${Math.round(Math.max(above, below))}px`);
   }
 
   templateHtml(): Node {
@@ -292,6 +306,7 @@ export class ScComposer extends ScElement {
       this.events.emit('workflow', workflow);
     });
     this.onBus(presetsBus, 'changed', () => this.renderChoices());
+    this._refs.choicesPopover.events.register('open', () => this.sizeChoicesPanel());
     this.renderChoices();
   }
 

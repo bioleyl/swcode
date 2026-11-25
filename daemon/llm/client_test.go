@@ -112,6 +112,40 @@ func TestStoppingTheTurnEndsTheWaitBeforeARequestGoesAgain(t *testing.T) {
 	}
 }
 
+func TestAModelsThinkingSendsItsFieldsByTheirPath(t *testing.T) {
+	fake := fakellama.Start(fakellama.Options{
+		Refuses: []string{"chat_template_kwargs"},
+		Replies: []fakellama.Reply{{Text: "First."}, {Text: "Second."}, {Text: "Third."}},
+	})
+	defer fake.Stop()
+	thinking := &protocol.ModelThinking{
+		Low:    map[string]string{"reasoning_effort": "max", "parallel_tool_calls": "false", "thinking.type": "disabled"},
+		Medium: map[string]string{"chat_template_kwargs.reasoning_effort": "medium"},
+	}
+	client := NewClient(Options{URL: fake.URL})
+	for _, mode := range []protocol.ThinkingMode{protocol.ThinkingModeMedium, protocol.ThinkingModeLow, protocol.ThinkingModeFull} {
+		request := Request{Target: Target{Identity: Identity{Thinking: mode, ThinkingSpec: thinking}, Slot: NoSlot}}
+		if _, err := client.Complete(context.Background(), request, func(Part) {}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// The template's own field is refused, and the request goes again without it.
+	if kwargs, _ := fake.Requests()[0]["chat_template_kwargs"].(map[string]any); kwargs["reasoning_effort"] != "medium" {
+		t.Fatalf("first body %v", fake.Requests()[0])
+	}
+	// Plain, the model's own fields still go, at their path and with their type.
+	low := fake.Requests()[2]
+	thinkingObject, _ := low["thinking"].(map[string]any)
+	if low["reasoning_effort"] != "max" || low["parallel_tool_calls"] != false || thinkingObject["type"] != "disabled" || low["chat_template_kwargs"] != nil {
+		t.Fatalf("low body %v", low)
+	}
+	// A mode the model's mapping does not name sends nothing at all.
+	full := fake.Requests()[3]
+	if full["reasoning_effort"] != nil || full["thinking"] != nil || full["chat_template_kwargs"] != nil {
+		t.Fatalf("full body %v", full)
+	}
+}
+
 func TestAServerThatRefusesLlamaCppsFieldsGetsRequestsWithoutThem(t *testing.T) {
 	fake := fakellama.Start(fakellama.Options{
 		Refuses: []string{"cache_prompt", "id_slot", "chat_template_kwargs", "reasoning_content"},

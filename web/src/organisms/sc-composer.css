@@ -52,9 +52,15 @@ textarea::placeholder {
   padding: 8px 8px 8px 12px;
 }
 
-/* The popover takes the room the chip needs, no more: its words give way before stop and send do. */
+/* The popover takes the room the chip needs, no more: its words give way before stop and send do.
+   Its panel of choices takes the room above the chip and scrolls: its last group stays in reach. */
 jl-popover {
   min-width: 0;
+}
+
+jl-popover::part(base) {
+  max-height: var(--choices-max, calc(100dvh - 24px));
+  overflow-y: auto;
 }
 
 /* What the session works with, in a pill that opens the panel of its choices. */

@@ -11,13 +11,22 @@ import { ScDiff } from './sc-diff';
 import { ScPlanSteps } from './sc-plan-steps';
 import styles from './sc-tool-row.css?inline';
 
-import type { ToolDisplay, ToolName } from '../../../shared/protocol/session.schema';
+import type { DecisionDisplay, ToolDisplay, ToolName } from '../../../shared/protocol/session.schema';
 import type { SubagentLine, ToolResult, ToolRowState } from '../types/conversation.types';
 
 const OPEN = 'open';
 const CALL_ICON_SIZE = 14;
 // What a running command shows of what it printed: its last lines, from the end of what came.
 const LIVE_LINES = 8;
+
+/** A choice the model recorded, as its row shows it when opened. */
+const decisionText = (display: DecisionDisplay): string => {
+  const lines = [`Chosen: ${display.chosen}`, `Options: ${display.options.join(', ')}`];
+  if (display.why !== undefined && display.why !== '') {
+    lines.push(`Why: ${display.why}`);
+  }
+  return lines.join('\n');
+};
 const LIVE_CHARS = 4000;
 
 const callNode = (line: SubagentLine): Node => {
@@ -156,10 +165,12 @@ export class ScToolRow extends ScElement {
   private renderDisplay(display: ToolDisplay | undefined): void {
     this._refs.diff.hidden = display?.kind !== 'diff';
     this._refs.plan.hidden = display?.kind !== 'plan';
-    this._refs.output.hidden = display?.kind !== 'text';
+    const text =
+      display?.kind === 'text' ? display.text : display?.kind === 'decision' ? decisionText(display) : '';
+    this._refs.output.hidden = text === '';
     this._refs.diff.lines.set(display?.kind === 'diff' ? display.lines : []);
     this._refs.plan.steps.set(display?.kind === 'plan' ? [...display.steps] : []);
-    this._refs.output.textContent = display?.kind === 'text' ? display.text : '';
+    this._refs.output.textContent = text;
     this.renderPicture(display?.kind === 'image' ? display : undefined);
     this.refreshHead();
     this.toggle(display?.kind === 'diff' || display?.kind === 'image');
