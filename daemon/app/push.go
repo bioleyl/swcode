@@ -31,10 +31,15 @@ func (a *App) startPush(logError func(error)) {
 	// The sessions tell one listener at a time, but nothing says they always will.
 	var mu sync.Mutex
 	tracker := watch.NewTracker()
+	// A project says whether its sessions tell; the browser's subscription is the device's own answer.
+	tracker.SetProjects(a.Projects.List())
+	a.Projects.Subscribe(func(message protocol.ServerMessage) {
+		mu.Lock()
+		defer mu.Unlock()
+		tracker.Take(message)
+	})
 	a.Sessions.Subscribe(func(message protocol.ServerMessage) {
 		mu.Lock()
-		// A project says whether its sessions tell; the browser's subscription is the device's own answer.
-		tracker.SetProjects(a.Projects.List())
 		notice, told := tracker.Take(message)
 		mu.Unlock()
 		if !told || !service.Any() {

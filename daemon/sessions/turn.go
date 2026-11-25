@@ -351,11 +351,11 @@ func (h *turnHost) TakeCheckpoint() []string {
 func (h *turnHost) StreamText(messageID, text string) {
 	h.service.mu.Lock()
 	defer h.service.mu.Unlock()
-	sofar := ""
-	if h.turn.streaming != nil && h.turn.streaming.MessageID == messageID {
-		sofar = h.turn.streaming.Text
+	if h.turn.streaming == nil || h.turn.streaming.MessageID != messageID {
+		h.turn.streamed.Reset()
 	}
-	h.turn.streaming = &protocol.Streaming{MessageID: messageID, Text: sofar + text}
+	h.turn.streamed.WriteString(text)
+	h.turn.streaming = &protocol.Streaming{MessageID: messageID, Text: h.turn.streamed.String()}
 	h.service.publish(protocol.ServerMessage{Value: protocol.ServerMessageAssistantDelta{MessageID: messageID, SessionID: h.session.meta.ID, Text: text}})
 }
 

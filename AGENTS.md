@@ -96,6 +96,8 @@ Read `README.md` first.
 - The composer's queued messages: "Send now" (`sendQueueNow` → `Sessions.SendQueueNow`) cancels the running turn, so the current step's model request and tool call end at once and `startQueued` starts the next turn with them joined (the queue and `queueNow` are kept, only `Stop` clears them). The conversation's note says "Sent now." (`QUEUE_NOTES.now`); `daemon/app/agent_test.go`'s `TestWhatWasQueuedSentNowEndsTheRunningTurnAndStartsTheNextOne` expects the extra `turnStarted`.
 - The session page's decision map (`ScDecisionMap`, `web/src/lib/decision-map.ts`) keeps one node per recorded `decision` tool call only: the model's replies, their tool calls, the questions and the permissions no longer make nodes (calling a tool is not a decision). Its node's `cut` is the index of the `assistantMessage` that made the call, so a fork lets the model decide again from what it knew then; `web/tests/decision-map.test.ts` covers the chain, the failed call and the cut.
 - A subagent's whole task is kept in its `subagentQueued`/`subagentStarted` event (`prompt`, optional: older events lack it), and `AgentView` (`lib/agents.ts`) holds it with every call the subagent made (`calls`, from `subagentActivity`). The side panel's subagent row is a button that opens `sc-agent-details` (a `JlDrawer` inside the panel) with the prompt, model, `AGENT_STATE_LOOKS` badge and the call list; the row's line is `agentLine`, the latest call or the state's label.
+- A streaming answer is accumulated in `runningTurn.streamed` (a `strings.Builder`) and `turnHost.StreamText` hands pages `streamed.String()`; never rebuild it as `sofar + text` per delta, which was quadratic (4000 deltas: 30 ms and 138 MB against 0.3 ms and 0.6 MB).
+- The push listener in `daemon/app/push.go` runs for every session message, one per streamed token: it seeds `watch.Tracker` from `Projects.List()` once at start and follows `Projects.Subscribe`, so never call `Projects.List()` from the sessions listener.
 
 ## Gotchas met so far
 
@@ -264,3 +266,7 @@ Read `README.md` first.
 - On this machine `go vet ./...` and `gofmt -l` are clean for the Go part, and `go test -race ./daemon/app ./daemon/sessions ./daemon/tools ./daemon/hosts ./daemon/terminals ./daemon/workflows` passes (34 s for daemon/app). No golangci-lint or staticcheck is installed, so those runs are what a Go check means here.
 - `npx vitest run --config vitest.e2e.config.ts …` (instead of `npm run test:e2e`) does **not** rebuild `dist/web`: its global setup builds only the Go daemon, so a web change served by an e2e test needs `npm run build` first, or the test runs the old bundle (the decision map e2e failed this way until the build).
 - Before merging or releasing, `git fetch --prune origin` and look at every branch, not just main: `origin/main` can lag a release (v0.15.4 was tagged on `feature/decision-map` while `origin/main` stayed at v0.15.3), and the local `main` may be ahead by unpushed commits.
+
+## Gotchas
+
+- `terminals.await` reads only new bytes since a cursor (`terminal.readFrom`) and checks prompts with `hosts.PromptAtEnd` on the tail; copying `t.since(start)` (the whole scrollback) every 100 ms cost 52 µs and 256 KiB a look against 6 µs and 32 KiB. It caps its output at `maxScrollback`.

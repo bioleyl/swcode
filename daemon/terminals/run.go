@@ -1,7 +1,6 @@
 package terminals
 
 import (
-	"bytes"
 	"context"
 	"strings"
 	"time"
@@ -16,11 +15,11 @@ const (
 	markLength = 8
 )
 
-// since is what a terminal printed from a point of all it printed, and whether it still runs; the caller holds
-// the lock. What the scrollback dropped since is gone.
-func (t *terminal) since(start int) ([]byte, bool) {
+// readFrom is what a terminal printed after a point of all it printed, and whether it still runs; the caller holds
+// the lock. What the scrollback dropped since that point is gone: the read starts at what is left.
+func (t *terminal) readFrom(after int) ([]byte, int, bool) {
 	dropped := t.printed - len(t.buffer)
-	return append([]byte(nil), t.buffer[max(0, start-dropped):]...), t.running
+	return append([]byte(nil), t.buffer[max(after, dropped)-dropped:]...), t.printed, t.running
 }
 
 // Run types a command in a terminal's shell and waits until the shell says it ended: the person answers what it
@@ -67,17 +66,25 @@ func (s *Service) await(ctx context.Context, t *terminal, start int, mark string
 	ticker := time.NewTicker(lookEvery)
 	defer ticker.Stop()
 	asking := false
+	output, cursor := []byte{}, start
 	for {
 		s.mu.Lock()
-		output, running := t.since(start)
+		chunk, next, running := t.readFrom(cursor)
 		s.mu.Unlock()
+		output = append(output, chunk...)
+		cursor = next
+		// Keep what a command printed as bounded as the scrollback: a command that floods its terminal does not
+		// keep growing the wait's copy of it.
+		if over := len(output) - maxScrollback; over > 0 {
+			output = append(output[:0], output[over:]...)
+		}
 		if at, code, ended := hosts.CommandEnd(output, mark); ended {
 			return Ran{Code: code, Ended: true, Output: output[:at]}
 		}
 		if !running {
 			return Ran{Closed: true, Output: output}
 		}
-		if waits := hosts.PromptOf(string(bytes.TrimRight(output, " "))) != ""; waits != asking {
+		if waits := hosts.PromptAtEnd(output) != ""; waits != asking {
 			asking = waits
 			asks(waits)
 		}

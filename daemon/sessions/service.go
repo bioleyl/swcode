@@ -188,7 +188,10 @@ type runningTurn struct {
 	// recorder keeps the files the turn changes, before it changes them; closed when the turn ends.
 	recorder  *checkpoints.Recorder
 	streaming *protocol.Streaming
-	pending   *pending
+	// streamed builds the answer as it comes, so a page that joins late is given it without the turn rebuilding it
+	// on every token.
+	streamed strings.Builder
+	pending  *pending
 	// asksInTerminal: a command of the turn waits for the person in a terminal of the app, on a password.
 	asksInTerminal bool
 	// setup is what the turn runs with once ready: a peek asks with the same, for the prompt llm-server cached.

@@ -1,6 +1,7 @@
 package hosts
 
 import (
+	"bytes"
 	"context"
 	"io"
 	"os"
@@ -111,6 +112,13 @@ func PromptOf(output string) string {
 		return strings.TrimSpace(tail[start+len(promptNote):])
 	}
 	return asked(tail[strings.LastIndexAny(tail, "\r\n")+1:])
+}
+
+// PromptAtEnd is what a command asked a password with when it printed this and stopped: the end alone is read, so a
+// watcher of a long command need not copy all of it.
+func PromptAtEnd(output []byte) string {
+	trimmed := bytes.TrimRight(output, " ")
+	return PromptOf(string(trimmed[max(0, len(trimmed)-maxPromptChars):]))
 }
 
 // asked is a line, when it asks for a password; empty when it does not.
