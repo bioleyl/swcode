@@ -24,6 +24,8 @@ Examples declare types inline to stay short; in real code they live in `types/`.
 14. A package for a few lines
 15. Not stopping when the task is done
 16. What restraint never cuts
+17. Relocating instead of refactoring
+18. One concept, many files
 
 ## 1. Hiding failures
 
@@ -298,3 +300,23 @@ Know what "done" means before starting. When it's reached, write the report and 
 ## 16. What restraint never cuts
 
 Restraint stops at the floor in [SKILL.md](../SKILL.md#the-floor-never-cut-these-to-simplify): boundary validation, error handling that prevents data loss, security, and anything the user asked for stay, however much simpler the code would look without them. Removing one of them is a behaviour change, not a clean-up.
+
+
+## 17. Relocating instead of refactoring
+
+Rule: **Moving is not refactoring.**
+
+```text
+Bad:  src/modules/catalog/sql/search-*.ts (14 files)
+      -> src/modules/search/adapters/postgres/ (14 files, same code)
+
+Good: src/modules/search/postgres.ts (one translator)
+```
+
+Extracting a module means deleting the parallel encodings, not changing their folder. Count files and lines before and after: if every file survived and the total is flat, nothing was refactored. The same applies to splitting: one phase per module, not one file per helper.
+
+## 18. One concept, many files
+
+Rule: **Concept locality.**
+
+A criterion parsed, routed, translated, projected and mapped back in five files is five encodings of one rule. The compiler cannot see they disagree. Declare the concept once (a union, a table, a query AST); derive the rest and let the type checker enforce exhaustiveness. A feature that needs a dozen files that only make sense together is a design signal, not thoroughness.

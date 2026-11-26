@@ -1,6 +1,6 @@
 ---
 name: swcode-base
-description: The user's coding rules, with a check of your own diff before you deliver. Load before writing, editing, refactoring, reviewing or exploring code in any project or language, and keep applying it to every later code change in the session. Covers reading before writing, named constants, SOLID applied without speculative abstraction, frontend business rules kept in services apart from atomic components, guard clauses and exhaustive mappers instead of if/else and switch, function size limits, error handling, TypeScript types in a types/ directory, the mistakes coding agents tend to make, and verification. Run its self-check on your own after writing or changing code, before presenting or committing; don't wait to be asked. Also keeps the project's AGENTS.md, the notes every session starts from, without being asked, going by them before exploring, creating them when the project has none and adding what each task found out, so the next session does not find it all out again. Not for conceptual questions, git workflow, CI configuration, prose or data analysis.
+description: The user's coding rules, with a check of your own diff before you deliver. Load before writing, editing, refactoring, reviewing or exploring code in any project or language, and keep applying it to every later code change in the session. Covers concept locality (one concept, few files), declarations derived rather than enumerated, move-vs-rewrite discipline, reading before writing, named constants, SOLID applied without speculative abstraction, frontend business rules kept in services apart from atomic components, guard clauses and exhaustive mappers instead of if/else and switch, function size limits, error handling, TypeScript types in a types/ directory, the mistakes coding agents tend to make, and verification. Run its self-check on your own after writing or changing code, before presenting or committing; don't wait to be asked. Also keeps the project's AGENTS.md, the notes every session starts from, without being asked, going by them before exploring, creating them when the project has none and adding what each task found out, so the next session does not find it all out again. Not for conceptual questions, git workflow, CI configuration, prose or data analysis.
 ---
 
 # Coding style
@@ -90,8 +90,21 @@ Reasons and examples for rule 8 and group E: [references/functions.md](reference
 ### H. Refactoring and verification
 
 29. **Refactors keep behaviour.** A refactor keeps the same outputs, errors, side effects and order. A bug found while refactoring is reported and fixed as a separate change, never bundled in.
-30. **Test behaviour and edges.** Add or update tests for behaviour and failure paths. Business rules get tests without a DOM: `lib/` functions directly, services with a fake gateway. For ranges and counts, list the edge cases (empty, one, many, exactly at the limit, just past it) and give each one a test, not a comment.
+30. **Test behaviour and edges.** Add or update tests for behaviour and failure paths, at the seam the feature crosses (a request, a command, a use case), not on private shapes. Business rules get tests without a DOM: `lib/` functions directly, services with a fake gateway. A test that freezes a private plan object, a generated SQL string or a helper's return is a change detector, not a specification: keep one golden case where it guards a real encoding, and delete the rest with the internals they test. For ranges and counts, list the edge cases (empty, one, many, exactly at the limit, just past it) and give each one a test, not a comment.
 31. **Verify narrowest first.** Run the tests closest to the change, then the whole suite, then type checking and linting across the workspace, then static analysis (Sonar or similar) when the project has it. Fix new issues on the changed code; never silence one without a stated reason. Format before finishing. If you couldn't run a step, or a language in the change has no linter, formatter or type checker in the project, say so.
+
+### I. Architecture: one concept, one place
+
+Why, a worked example and the move-or-rewrite table: [references/architecture.md](references/architecture.md).
+
+32. **Concept locality.** One concept has one owner module. Reading it end to end must not leave that module: a new case is added there, not in the six files that each re-decide part of it. If understanding one rule means opening the plan, the routing, the storage and the response files, the cut is wrong.
+33. **Derived, not enumerated.** Declare an operator list, a union or a kind table once; everywhere else derive it (`keyof typeof`, `satisfies Record<…>`). A second `Record` over the same union is a defect unless it is the registry that owns the concept. The compiler should fail when a case is missing, not the reader.
+34. **A feature's file count is a design signal.** One endpoint is a handful of files, not one file per SQL fragment, condition, row mapper or helper. If a small feature needs a dozen files that only make sense together, merge them by concept before adding anything. Count files and lines before and after: a rewrite that does not shrink is still the old design.
+35. **Moving is not refactoring.** Extracting a module must remove duplication, not relocate it. If every file survived the move and the total is the same, nothing was refactored: delete the parallel encodings first, then measure.
+36. **One phase per module, not one helper per file.** A pipeline's phases get names a reader can follow; do not split a single phase into anonymous helpers across files. The test: can someone explain the flow from the entry point without opening twenty files?
+37. **Agree the target shape before a large rewrite.** For an AST, a query builder or an API, write the shape down (`types`, one example) and get it agreed before rewriting. Then rewrite one module per session, green at each end. Do not answer a wrong abstraction with another layer of the same abstraction.
+38. **Enforce dependency direction.** Domain imports only domain; infrastructure imports domain; modules meet at a facade. Add an import rule (dependency-cruiser, lint) so the boundary is checked, not remembered.
+
 
 ## The floor: never cut these to simplify
 
@@ -131,7 +144,9 @@ Walk your diff once before you show it. Fix every "no", or say why it stays, the
 13. Does every new comment say why, or what an export means?
 14. For a refactor: is the behaviour unchanged?
 15. Did you run the checks in order (nearest tests, suite, type check and lint, static analysis, format), and say which ones you couldn't run?
-16. Does the project's AGENTS.md hold what this task found out (a command, a trap, a convention the code doesn't show)? Create it if the project has none, add what it lacks, fix what misled you, as [references/project-notes.md](references/project-notes.md) says, unasked, and name the change in the report.
+16. Can this concept be read end to end in one module, with every case derived from one declaration? Did the feature add code in one place, or in several parallel lists?
+17. For a refactor: are there fewer files and lines, or one encoding instead of N? Are the tests at the seam, and were the internals' tests deleted with the internals?
+18. Does the project's AGENTS.md hold what this task found out (a command, a trap, a convention the code doesn't show)? Create it if the project has none, add what it lacks, fix what misled you, as [references/project-notes.md](references/project-notes.md) says, unasked, and name the change in the report.
 
 Then report the pass, so the user can see it ran. List each fix as `<file>:<line> — <what changed>` (leave out the line if it isn't stable), and each thing you noticed but didn't change as `flagged: <file> — <what and why>`. End with one line:
 
