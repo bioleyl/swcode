@@ -2,6 +2,28 @@
 
 All notable changes to swcode are documented here.
 
+## [0.16.0] - 2026-11-26
+
+### Added
+
+- The agent has a browser: six tools (`browser_open`, `browser_snapshot`, `browser_click`, `browser_type`, `browser_screenshot`, `browser_diagnostics`) drive one Chromium per session, closed with it. A snapshot lists the page's controls by role and name, so a click or a field is named by its text or label, not a selector. Opening and reading pages is free; clicking and typing ask unless the session runs everything, and password or payment fields, a form sent to another site and a private-network address always ask. Downloads are refused.
+- Settings has a Browser topic: **Agent browser** set to **Visible window** (`SWCODE_BROWSER_HEADFUL=on`) runs the agent's Chromium in a real window you can watch and resize, on the computer running swcode, instead of headless.
+- A subagent's row in the side panel opens its details: the whole task it was given, its model, its state and every call it made.
+
+### Changed
+
+- An agent's terminal whose command finished leaves the side panel when the turn ends (at once if no turn runs). A server still running and a terminal you typed in stay.
+- Deleting a session closes the terminals its agent opened, beside its browser, and no longer holds up the other sessions while it cleans up.
+- The swcode-base skill teaches keeping a concept's code together and when to move code rather than rewrite it.
+
+### Fixed
+
+- Stopping a command, a background job or a terminal ends everything it started: on Windows each runs in a Job Object ended as a whole, and on Linux the descendants are stopped too.
+- A workflow step's handoff is no longer lost when the step's events come in a burst: the runner handles them in order.
+- A peek at a session and the model scheduler can be stopped and honour their timeouts, and a tool that breaks is logged with the stack that caused it.
+- Long streamed answers, push notices and terminal waits no longer re-read their whole buffer at every token, which slowed long replies and busy terminals.
+- The daemon's records of ended background jobs and of a session's started jobs are capped instead of growing without end.
+
 ## [0.15.4] - 2026-11-19
 
 ### Added

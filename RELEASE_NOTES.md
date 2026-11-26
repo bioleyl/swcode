@@ -1,7 +1,9 @@
-# swcode 0.15.4
+# swcode 0.16.0
 
-Released 2026-11-19.
+Released 2026-11-26.
 
-A session now records the choices that shape the work with the `decision` tool, and the session page's map shows them as a graph: select one to read what was decided and why, and **Change…** replays the session from there with another option. A preset's model also names the thinking modes its API takes, so the composer offers only the modes that model has.
+The agent now has a browser. Six tools open a page, read its controls, click, type, take screenshots and read the console and network errors, in one Chromium per session. Reading pages is free. Clicking and typing ask unless the session runs everything, and password or payment fields, forms sent to another site and private-network addresses always ask. Settings has a new Browser topic: set **Agent browser** to **Visible window** to watch the agent's browser on the computer running swcode instead of running it headless.
 
-A turn takes 300 steps by default and a subagent 150, the composer's **Send now** sends the waiting messages at once, the agent gets a bot icon, and the composer's panel of choices scrolls in a short window so its last group stays reachable.
+In the session's side panel, a subagent's row now opens its details: the task it was given, its model, its state and every call it made. A terminal the agent opened leaves the panel once its command has finished and the turn ends, unless you typed in it or it still runs a server, and deleting a session closes its terminals.
+
+Stopping a command, a job or a terminal now ends everything it started, Windows included. Workflow handoffs are no longer lost when events come in a burst, long streamed replies and busy terminals use far less CPU, and the daemon's job records stop growing over a long run.
