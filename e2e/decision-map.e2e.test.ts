@@ -34,7 +34,7 @@ describe('the decision map', () => {
     await page.locator('session-page .map-toggle').click();
     await settle(page);
     const map = page.locator('session-page sc-decision-map');
-    await expect.poll(() => map.locator('.hint').textContent()).toContain('4 decisions');
+    await expect.poll(() => map.locator('.hint').textContent()).toContain('1 decision ·');
 
     const node = map.locator('jl-flow .node[data-node^="decision:"]');
     expect(await node.locator('.label').textContent()).toBe('Which framework?');
@@ -57,7 +57,7 @@ describe('the decision map', () => {
     expect(page.url()).not.toBe(before);
   });
 
-  it('changes an answer the person gave, and replays from it', async () => {
+  it('makes no node of a question the person answered', async () => {
     const rig = await start({
       replies: [
         {
@@ -80,7 +80,6 @@ describe('the decision map', () => {
           ],
         },
         { text: 'Postgres it is.' },
-        { text: 'Now on SQLite.' },
       ],
     });
     const page = await rig.browser.newPage({ viewport: DESKTOP });
@@ -95,14 +94,7 @@ describe('the decision map', () => {
     await page.locator('session-page .map-toggle').click();
     await settle(page);
     const map = page.locator('session-page sc-decision-map');
-    await expect.poll(() => map.locator('.hint').textContent()).toContain('4 decisions');
-    await map.locator('jl-flow .node[data-node^="question:"]').click();
-    await settle(page);
-    await map.locator('.change').click();
-    await settle(page);
-    const dialog = map.locator('jl-dialog');
-    await dialog.locator('textarea').fill('SQLite');
-    await dialog.locator('.save').click();
-    await page.getByText('Now on SQLite.').waitFor();
+    await expect.poll(() => map.locator('.hint').textContent()).toContain('0 decisions');
+    expect(await map.locator('jl-flow .node').count()).toBe(0);
   });
 });
