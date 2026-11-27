@@ -78,9 +78,18 @@ func resolveTarget(ctx context.Context, tc *Context, input string) (string, stri
 const gitFolder = ".git"
 
 // gitFolderProblem is why a file tool does not change a file of a repository's own folder: a change there is a
-// command in all but name, which an approval of edits does not cover. Empty for any other file.
-func gitFolderProblem(paths hosts.Paths, path, label string) string {
-	if !slices.Contains(strings.Split(path, paths.Separator()), gitFolder) {
+// command in all but name, which an approval of edits does not cover. Empty for any other file. The file is looked
+// at where it really is too (a link named otherwise may lead there), and whatever the case of the folder's letters,
+// which Windows and its disks do not tell apart.
+func gitFolderProblem(ctx context.Context, tc *Context, path, label string) string {
+	paths := tc.Host.Paths()
+	inGitFolder := func(path string) bool {
+		return slices.ContainsFunc(strings.Split(path, paths.Separator()), func(part string) bool {
+			return strings.EqualFold(part, gitFolder)
+		})
+	}
+	real, err := tc.Host.RealPath(ctx, path)
+	if !inGitFolder(path) && (err != nil || !inGitFolder(real)) {
 		return ""
 	}
 	return fmt.Sprintf("%s is in %s, whose settings and hooks say what git runs: change it with git itself, in bash.", label, gitFolder)

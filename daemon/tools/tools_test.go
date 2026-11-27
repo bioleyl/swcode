@@ -259,6 +259,12 @@ func TestARepositorysOwnFolderIsNotChangedByAFileToolAndSaysNothingToRunWhenFile
 	f.refused("write", `{"path":".git/config","content":"[core]\n\tfsmonitor = ./payload.sh\n"}`, `\.git/config is in \.git`)
 	f.refused("edit", `{"path":".git/config","oldString":"[core]","newString":"[core]\n\tfsmonitor = ./payload.sh"}`, `is in \.git`)
 	f.refused("write", `{"path":".git/hooks/pre-commit","content":"#!/bin/sh\n"}`, `is in \.git`)
+	// Nor through a link that leads there, nor under letters of another case, which some disks take for the same.
+	if err := os.Symlink(".git", filepath.Join(f.workspace, "plain")); err != nil {
+		t.Fatal(err)
+	}
+	f.refused("write", `{"path":"plain/hooks/pre-commit","content":"#!/bin/sh\n"}`, `is in \.git`)
+	f.refused("write", `{"path":".GIT/hooks/pre-commit","content":"#!/bin/sh\n"}`, `is in \.git`)
 
 	// A repository that names a program for git to run, as one cloned from elsewhere may: listing its files runs
 	// nothing it says.
