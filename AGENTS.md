@@ -119,7 +119,7 @@ Read `README.md` first.
 - **jlib's page outlet keeps the page shown until the next one is ready**: both are in the document a moment, so
   the e2e `settle` waits for one page; Playwright's selectors reach into shadow roots, `jl-page-outlet > *` matches
   its insides too.
-- **jlib (0.19, on Jadis 1.10) moves a toast into the open dialog**, so a dialog then holds two `Close` buttons: the e2e tests take the dialog's own with `.first()`. Its page outlet waits for the next page's load states (`Jadis.settled()`), so the page before stays longer: `settle` before reading a page that was just navigated to.
+- **jlib (0.19, on Jadis 1.10) moves a toast into the open dialog**, so a dialog then holds two `Close` buttons: the e2e tests take the dialog's own with `.first()`. A toast that stays sits over the dialog's bottom-right buttons on a short screen: swcode's own offers leave by themselves (`OFFER_MS` in `services/swcode-base.ts`), never `duration: 0`. Its page outlet waits for the next page's load states (`Jadis.settled()`), so the page before stays longer: `settle` before reading a page that was just navigated to.
 - To see the app without a window: `npm run test:e2e` (its global setup builds the Go daemon into `dist/e2e`, and
   `e2e/rig.ts` starts it, the fake llm-server and Chromium for each test). Send a no-op `page.evaluate('0')` after
   each click: headless clicks land on the next command. The e2e code is typed for Node only: run DOM code in the

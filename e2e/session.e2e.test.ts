@@ -125,7 +125,8 @@ describe('a turn’s changes', () => {
     await expect.poll(async () => dialog.locator('sc-diff .line[data-kind="remove"]').count()).toBe(1);
     expect(await dialog.locator('sc-diff .line[data-kind="add"]').count()).toBe(1);
 
-    await dialog.getByRole('button', { exact: true, name: 'Close' }).click();
+    // The dialog's own Close comes first: jlib moves a toast into the open dialog, with a Close of its own.
+    await dialog.getByRole('button', { exact: true, name: 'Close' }).first().click();
     await settle(page);
     expect(await dialog.isVisible()).toBe(false);
     expect(await overflow(page)).toBe(0);

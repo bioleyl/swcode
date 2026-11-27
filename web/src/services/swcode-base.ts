@@ -88,9 +88,13 @@ async function installInHome(): Promise<void> {
   }
 }
 
+// How long the offer stays: long enough to read and answer, and no longer. jlib moves a toast into the dialog that
+// opens, where one that stayed for good sat over the dialog's own buttons; the project's Skills tab installs it too.
+const OFFER_MS = 20_000;
+
 /**
  * Asks once whether to install swcode-base, on a device where this computer's home does not have it. Its action has
- * npx skills install it in the home; closing the toast asks again on another device only.
+ * npx skills install it in the home; closed or left unanswered, it is asked again on another device only.
  */
 export function offerSwcodeBase(status: SwcodeBaseStatus): void {
   if (!wantsSwcodeBase(status)) {
@@ -99,7 +103,7 @@ export function offerSwcodeBase(status: SwcodeBaseStatus): void {
   markSwcodeBaseAsked();
   toast({
     actionLabel: 'Install',
-    duration: 0,
+    duration: OFFER_MS,
     heading: 'swcode has a skill of coding rules',
     icon: 'book-open',
     onAction: () => void installInHome(),

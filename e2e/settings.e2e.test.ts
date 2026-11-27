@@ -23,6 +23,8 @@ afterEach(stopRigs);
 // Whether the page kept a token of its own, which pairing a number gives it.
 const KEPT_TOKEN = "localStorage.getItem('swcode.token') !== null";
 
+// How long the skill offer's Close is looked for before taking the offer as gone.
+const OFFER_CLOSE_MS = 2_000;
 const GMKTEC = { address: 'http://gmktec:4500', id: 'g1', name: 'gmktec', reachable: true };
 const OFFLINE = { address: 'http://offline:4500', id: 'o1', name: 'offline', reachable: false };
 
@@ -192,6 +194,15 @@ describe('settings', () => {
     await subTab(page, '.model-tabs', 'Presets').click();
     await settle(page);
     await editor.locator('.presets jl-list-item').first().waitFor();
+    // The offer of swcode's coding rules may still show: jlib moves it into the dialog that opens, where it would
+    // sit over the dialog's own buttons on a screen as short as some fonts make this one. It leaves by itself after
+    // a while, so it may be gone already.
+    await page
+      .locator('jl-toast')
+      .getByRole('button', { name: 'Close' })
+      .click({ timeout: OFFER_CLOSE_MS })
+      .catch(() => undefined);
+    await page.evaluate('0');
     await editor.locator('.add-preset button').click();
     await settle(page);
     const preset = page.locator('sc-preset-dialog');
