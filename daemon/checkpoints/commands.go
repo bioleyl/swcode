@@ -20,8 +20,11 @@ const (
 	gitState        = "git"
 	changesFolder   = "changes"
 	changesList     = "list"
-	added           = "A"
-	fields          = 3
+	// ignoredList is what git ignored when the turn started: files that were there before it, though git's first
+	// look did not hold them.
+	ignoredList = "ignored"
+	added       = "A"
+	fields      = 3
 )
 
 // treeScript writes the workspace's files as a git tree and prints its name: every file git does not ignore,
@@ -44,6 +47,9 @@ func treeScript(scratch string) string {
 	}, "\n")
 }
 
+// ignoredScript lists what git ignores now, a folder wholly ignored as one line, named as the changes will name them.
+const ignoredScript = `git -c core.fsmonitor=false -c core.quotePath=false ls-files --others --ignored --exclude-standard --directory > "$state/` + ignoredList + `" 2>/dev/null`
+
 // changesScript looks at the workspace again and writes, in the scratch folder, what changed since a tree: a list
 // (a line per file: A for one that was not there, else M with the name of the copy of what it held), and those
 // copies. Links and repositories inside the repository are left out: a restore writes files.
@@ -55,11 +61,16 @@ func changesScript(scratch, before string) string {
 		`rm -rf -- "$out" && mkdir -p "$out" || exit 0`,
 		`tab=$(printf '\t')`,
 		`n=0`,
+		// Whether a path is a line of the list, or under a folder of it (a line ending in /).
+		`was_ignored() { [ -s "$state/` + ignoredList + `" ] && path="$1" awk 'BEGIN { path = ENVIRON["path"]; found = 1 } $0 == path || (substr($0, length($0)) == "/" && index(path, $0) == 1) { found = 0; exit } END { exit found }' "$state/` + ignoredList + `"; }`,
 		`git -c core.quotePath=false diff --raw --no-abbrev --no-renames --relative ` + before + ` "$tree" -- . | while IFS="$tab" read -r meta path; do`,
 		`  set -- $meta`,
 		`  case "$1$2" in *120000*|*160000*) continue ;; esac`,
 		fmt.Sprintf(`  [ "$n" -lt %d ] || break`, maxCommandFiles),
 		`  if [ "$5" = A ]; then`,
+		// A file git ignored at the turn's start was there before it, and is no file the turn made: the turn only
+		// changed what git ignores. Listed as made, a restore would delete it.
+		`    was_ignored "$path" && continue`,
 		`    printf 'A\t-\t%s\n' "$path"`,
 		`  else`,
 		`    size=$(git cat-file -s "$3" 2>/dev/null) || continue`,
@@ -94,7 +105,7 @@ func (r *Recorder) WatchCommands(scratch string) {
 	r.looked = make(chan struct{})
 	go func() {
 		defer close(r.looked)
-		r.before = r.run(treeScript(scratch) + "\necho \"$tree\"")
+		r.before = r.run(treeScript(scratch) + "\n" + ignoredScript + "\necho \"$tree\"")
 	}()
 }
 
@@ -162,6 +173,10 @@ func (r *Recorder) keepCommandFiles() {
 				r.store.log(err)
 				continue
 			}
+		}
+		if tooled && !kept.Existed && r.files[index].Existed {
+			// The tool read the file before it wrote it: it was there, whatever git held of it.
+			continue
 		}
 		if tooled {
 			r.files[index] = kept

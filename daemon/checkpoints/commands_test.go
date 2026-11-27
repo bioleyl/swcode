@@ -132,6 +132,45 @@ func TestARestorePointKeepsWhatTheTurnsCommandsChangedInARepository(t *testing.T
 	}
 }
 
+func TestARestoreLeavesTheFilesGitIgnoredWhenTheTurnStarted(t *testing.T) {
+	for name, host := range hostsOf(t) {
+		t.Run(name, func(t *testing.T) {
+			workspace, scratch, store := repository(t), t.TempDir(), newStore(t)
+			put(t, workspace, ".gitignore", "dist/\n.env\nprivate/\n")
+			git(t, workspace, "commit", "-q", "-am", "ignore more")
+			put(t, workspace, ".env", "the key\n")
+			put(t, workspace, "private/deep/note.txt", "mine\n")
+
+			recorder := store.Begin(host, "session", "turn", workspace)
+			recorder.WatchCommands(scratch)
+			recording := recorder.Host()
+			// The turn stops git ignoring them: to git's second look they are new files.
+			ran := recording.Run(context.Background(), ": > .gitignore && echo new > made.ts", hosts.CommandOptions{Cwd: workspace, Timeout: 20 * time.Second})
+			if ran.ExitCode == nil || *ran.ExitCode != 0 {
+				t.Fatalf("the command: %+v", ran)
+			}
+			if err := recording.WriteFile(context.Background(), filepath.Join(workspace, ".env"), []byte("changed\n")); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := recorder.Close(); err != nil {
+				t.Fatal(err)
+			}
+
+			if _, err := store.Restore(context.Background(), host, "session", "turn", workspace); err != nil {
+				t.Fatal(err)
+			}
+			for path, want := range map[string]string{
+				".env": "the key\n", "private/deep/note.txt": "mine\n", "dist/out.js": "old build\n", "made.ts": "(none)",
+				".gitignore": "dist/\n.env\nprivate/\n",
+			} {
+				if got := read(t, workspace, path); got != want {
+					t.Errorf("%s is %q after the restore, not %q", path, got, want)
+				}
+			}
+		})
+	}
+}
+
 func TestEachTurnKeepsWhatItsOwnCommandsChanged(t *testing.T) {
 	host := hostsOf(t)["local"]
 	workspace, scratch, store := repository(t), t.TempDir(), newStore(t)
