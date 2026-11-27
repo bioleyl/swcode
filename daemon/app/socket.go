@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
 	"net/http"
@@ -583,6 +584,9 @@ func (h handlers) Ping(protocol.ClientMessagePing) struct{} {
 	return struct{}{}
 }
 
+// forgottenDevice closes the socket of a phone that was forgotten while it connected.
+const forgottenDevice = "This device is no longer paired."
+
 // socket is the socket the app talks to the daemon through: commands one way, everything that happens the other.
 // What it sends is compressed, each message by itself: a session's history is text that shrinks several times.
 func (a *App) socket(response http.ResponseWriter, request *http.Request) {
@@ -595,8 +599,19 @@ func (a *App) socket(response http.ResponseWriter, request *http.Request) {
 	connection.SetReadLimit(maxMessage)
 	ctx, cancel := context.WithCancel(request.Context())
 	defer cancel()
-	if device, paired := a.pairing.DeviceOf(presentedToken(request)); paired {
+	// A phone's token let the request in, a moment ago: forgotten since, its socket would be one nobody ends. So a
+	// socket that is not the daemon's own token's is a known phone's, noted before the phone is looked up again.
+	if token := presentedToken(request); subtle.ConstantTimeCompare([]byte(token), []byte(a.Token)) != 1 {
+		device, paired := a.pairing.DeviceOf(token)
+		if !paired {
+			_ = connection.Close(websocket.StatusPolicyViolation, forgottenDevice)
+			return
+		}
 		defer a.deviceSockets.open(device, cancel)()
+		if !a.pairing.Knows(token) {
+			_ = connection.Close(websocket.StatusPolicyViolation, forgottenDevice)
+			return
+		}
 	}
 	box := &outbox{full: cancel, ready: make(chan struct{}, 1)}
 	socketID, leave := a.hub.join(box)
