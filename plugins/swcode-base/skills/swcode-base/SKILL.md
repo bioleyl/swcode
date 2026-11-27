@@ -11,7 +11,7 @@ The design comes from SOLID, applied to the code that exists today. The rest exi
 
 ## How to use this skill
 
-- **The project's notes, first and last**: go by its AGENTS.md before exploring. At the end of every task, before the report, update it without being asked (in swcode, with the notes tool), and create it when the project has none: [references/project-notes.md](references/project-notes.md) says how.
+- **The project's notes, first and last**: go by its AGENTS.md before exploring, the root's and the one of the folder you work in. At the end of every task, before the report, update the nearest one without being asked (in swcode, with the notes tool), keep it within its size, and create it when the project has none: [references/project-notes.md](references/project-notes.md) says how.
 - **Before writing**: read the rules below. The first time in a session, also read [references/agent-mistakes.md](references/agent-mistakes.md): it shows the mistakes these rules are aimed at.
 - **While writing**: apply the rules. For the reasons and examples behind a rule, read the reference it points to.
 - **Before delivering**: run the [self-check](#self-check-before-delivery) on your diff, fix what it finds, and end with the report line.
@@ -41,7 +41,7 @@ Each rule has a short name. Use the name, not the number, when you mention a rul
 
 ### B. Names and constants
 
-5. **Names say why.** A name tells why the thing exists and what it holds or does. `data`, `result`, `item`, `value`, `info`, `temp`, `obj`, `helper`, `manager` and `utils` need a qualifier (`parsedInvoice`, `rawCsv`), and so do `handle…`, `process…` and `do…` when a vague word follows (`processData`, `handleItem`).
+5. **Names say why.** A name tells why the thing exists and what it holds or does. `data`, `result`, `item`, `value`, `info`, `temp`, `obj`, `helper`, `manager` and `utils` need a qualifier (`parsedInvoice`, `rawCsv`), and so do `handle…`, `process…` and `do…` when a vague word follows (`processData`, `handleItem`). A file's name says what it holds and, where the project names roles by suffix (`.service`, `.store`, `.reader`…), what kind of thing it is: take the role from the project's list, never invent one, and never add a `utils`, `helpers`, `common` or `misc` file. A file that holds two kinds of thing (schemas and a class, constants and functions) is two files.
 6. **Named constants.** A number or string with domain meaning gets a named constant, in a `<name>.constants.ts` file next to its module, or in `src/shared.constants.ts` when several modules share it. Name constants after their module (`BUTTON_EVENT`, not `EVENT`). CSS class names stay plain strings. When two languages need the same value (a field name in the form and in the PHP handler), keep one source both read, or a test that fails when they drift; never comments alone. What may stay literal, and how to name lookups and lists: [references/constants.md](references/constants.md).
 
 ### C. Design: SOLID, without speculation
@@ -101,7 +101,7 @@ Why, a worked example and the move-or-rewrite table: [references/architecture.md
 33. **Derived, not enumerated.** Declare an operator list, a union or a kind table once; everywhere else derive it (`keyof typeof`, `satisfies Record<…>`). A second `Record` over the same union is a defect unless it is the registry that owns the concept. The compiler should fail when a case is missing, not the reader.
 34. **A feature's file count is a design signal.** One endpoint is a handful of files, not one file per SQL fragment, condition, row mapper or helper. If a small feature needs a dozen files that only make sense together, merge them by concept before adding anything. Count files and lines before and after: a rewrite that does not shrink is still the old design.
 35. **Moving is not refactoring.** Extracting a module must remove duplication, not relocate it. If every file survived the move and the total is the same, nothing was refactored: delete the parallel encodings first, then measure.
-36. **One phase per module, not one helper per file.** A pipeline's phases get names a reader can follow; do not split a single phase into anonymous helpers across files. The test: can someone explain the flow from the entry point without opening twenty files?
+36. **One phase per module, not one helper per file.** A pipeline's phases get names a reader can follow; do not split a single phase into anonymous helpers across files. The test: can someone explain the flow from the entry point without opening twenty files? A function with one caller lives in that caller, as a private method or a named local; it is exported, and gets a file, only once a second file reads it.
 37. **Agree the target shape before a large rewrite.** For an AST, a query builder or an API, write the shape down (`types`, one example) and get it agreed before rewriting. Then rewrite one module per session, green at each end. Do not answer a wrong abstraction with another layer of the same abstraction.
 38. **Enforce dependency direction.** Domain imports only domain; infrastructure imports domain; modules meet at a facade. Add an import rule (dependency-cruiser, lint) so the boundary is checked, not remembered.
 
@@ -146,7 +146,7 @@ Walk your diff once before you show it. Fix every "no", or say why it stays, the
 15. Did you run the checks in order (nearest tests, suite, type check and lint, static analysis, format), and say which ones you couldn't run?
 16. Can this concept be read end to end in one module, with every case derived from one declaration? Did the feature add code in one place, or in several parallel lists?
 17. For a refactor: are there fewer files and lines, or one encoding instead of N? Are the tests at the seam, and were the internals' tests deleted with the internals?
-18. Does the project's AGENTS.md hold what this task found out (a command, a trap, a convention the code doesn't show)? Create it if the project has none, add what it lacks, fix what misled you, as [references/project-notes.md](references/project-notes.md) says, unasked, and name the change in the report.
+18. Does the nearest AGENTS.md hold what this task found out (a command, a trap, a convention the code doesn't show), in the folder it is about and still within its size? Create it if the project has none, add what it lacks, fix or delete what misled you, as [references/project-notes.md](references/project-notes.md) says, unasked, and name the change in the report.
 
 Then report the pass, so the user can see it ran. List each fix as `<file>:<line> — <what changed>` (leave out the line if it isn't stable), and each thing you noticed but didn't change as `flagged: <file> — <what and why>`. End with one line:
 

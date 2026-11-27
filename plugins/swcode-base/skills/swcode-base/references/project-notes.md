@@ -14,7 +14,12 @@ In swcode, write notes with the **notes** tool: give it each fact with the secti
 
 ## Where
 
-- The AGENTS.md at the project's root, beside its README. A part of a large repository with rules of its own may have one in its folder: swcode reads each one from the repository's root down to the folder the session works in, the root's first.
+A note goes in the AGENTS.md of the folder it is about, the nearest one above the code it names. swcode reads each one from the repository's root down to the folder the session works in, the root's first; other agents read the nearest too.
+
+- **The root's AGENTS.md** holds only what is true of the whole repository: what it is and where its parts are, the commands run from the root, the rules every part follows, and one line per part saying where its notes are. It is an index, read by every session whatever it works on: a note about one part does not belong there.
+- **A part's AGENTS.md** (an app, a service, a package, the scripts) holds that part's commands, where things are, its rules and its traps. Make one the first time a note concerns one part only, and say so in the root's list.
+- Claude Code reads `CLAUDE.md`, not AGENTS.md: beside each AGENTS.md, a `CLAUDE.md` holding the one line `@AGENTS.md` gives it the same notes, the root's at start and a folder's when it reads files there.
+- What a skill or a document of the project already says (the coding style, the layout rules) is linked from the notes, never copied into them.
 
 ## First notes
 
@@ -39,22 +44,25 @@ What you had to dig for, and the next session would have to dig for too:
 
 ## What stays out
 
-- What the code, the README or the history already say: a list of files, a summary of a module, the last changes.
+- What the code, the README or the history already say: a list of files, a class's methods, a summary of a module, the last changes.
 - What only mattered to this task: the bug you fixed, the steps you took, what is left to do.
+- History: dates, "since", "no longer", "was renamed", who decided, what a refactor did. A note says what is true now; git says how it came to be.
+- A measurement made once, unless a decision still depends on the number.
+- What the typecheck, the linter or a test enforces by itself: at most, that it does.
 - Guesses: write what you checked, not what you suppose.
 - Secrets, tokens, passwords, and anything personal.
 
 ## How to write it
 
-- One fact per bullet, in a line or two: the fact, then the reason or the way around it.
-- A few headings (Commands, Conventions, Traps…): add to one before making another.
-- Short: the whole file goes to the model in every session, and each line costs context there. Past a couple of hundred lines, merge and prune.
-- A note that turned out wrong: correct it or delete it at once. A stale note costs more than none.
+- One fact per bullet, in a line or two: the fact, then the reason or the way around it. A bullet that grows into a paragraph holds several facts, or a story: split it, or cut it.
+- A few headings (Run and check, Where things are, Rules, Traps): add to one before making another.
+- **A size, kept**: about 100 lines for the root's file and for each part's. The whole file goes to the model in every session that works there, and each line costs context. A file at its size takes a new note only by losing one: merge two, delete what the code now shows or a check now enforces, or move what concerns one part to that part's file. Never let it grow and prune "later".
+- A note that turned out wrong: correct it or delete it at once. A stale note costs more than none. After a rename or a move, the notes that name the old path are part of the change.
 - Edit it as you edit code: read it first, change only what you learned, and keep its style.
-- Say in your report what you added or changed in it, so the user can check it.
+- Say in your report what you added, changed or removed in it, so the user can check it.
 
 ## When
 
-- At the end of every task, before the report, unasked: create the notes if there are none, add what this task found out that they lack, fix what misled you. Most tasks in a project that has notes add nothing; that is fine.
+- At the end of every task, before the report, unasked: create the notes if there are none, add what this task found out that they lack, fix what misled you. Most tasks in a project that has notes add nothing; that is fine, and a task that only adds is suspect: ask of each new note whether the next session would truly have to dig for it.
 - When the user corrects how you did something and it will recur: that is a convention, note it.
-- When the user asks for the project's notes: write or refresh them whole, as for first notes.
+- When the user asks for the project's notes: write or refresh them whole, as for first notes, checking each kept note against the code as it is.
