@@ -51,6 +51,9 @@ export class ScProjectDialog extends ScElement {
   // Set while the daemon makes the project: its answer is for this dialog.
   private _making = false;
 
+  // Counts the folders asked for: an answer is shown only when no other was asked for since.
+  private _asked = 0;
+
   private readonly _refs = this.useRefs((ref) => ({
     browser: ref(ScFolderBrowser),
     cancel: ref<JlButton>('.cancel'),
@@ -158,8 +161,11 @@ export class ScProjectDialog extends ScElement {
   private async goTo(path: string | undefined): Promise<void> {
     this._refs.browser.loading();
     this.render();
+    this._asked += 1;
+    const asked = this._asked;
     const folders = await askFolders(this._host, path);
-    if (!this.isConnected || !this._refs.dialog.open.get()) {
+    // Another folder or host was picked meanwhile: its own answer is the one to show.
+    if (!this.isConnected || !this._refs.dialog.open.get() || asked !== this._asked) {
       return;
     }
     if (!folders.ok) {
