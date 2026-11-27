@@ -247,15 +247,18 @@ describe('settings', () => {
     expect(await startup.getByRole('radio', { name: 'In the notification area' }).isChecked()).toBe(true);
   });
 
-  it('offer no install and no web notifications in the desktop app, which is installed and notifies by itself', async () => {
-    const rig = await start({ replies: [] });
+  it('offer no install in the desktop app, and its own notifications turned off and on there', async () => {
+    const rig = await start({ reachable: true, replies: [] });
     const app = await rig.browser.newPage({ viewport: DESKTOP });
     await app.addInitScript(fakeDesktopApp());
     await app.goto(`${rig.link}#/settings/computers`);
     const phone = app.locator('sc-computers');
     await phone.getByText('Open it on a phone', { exact: true }).waitFor();
     expect(await phone.locator('.install').isHidden()).toBe(true);
-    expect(await phone.locator('.notifications').isHidden()).toBe(true);
+    // The tray notifies through Windows: the switch is the app's own answer, which it keeps.
+    await phone.getByRole('button', { name: 'Stop notifying this device' }).click();
+    await app.evaluate('0');
+    await phone.getByRole('button', { name: 'Notify me on this device' }).waitFor();
 
     // A browser has both: there, swcode is a page until it is installed.
     const browser = await rig.browser.newPage({ viewport: DESKTOP });
@@ -279,6 +282,8 @@ describe('settings', () => {
 
     // That computer answers the pairing route as swcode does: first refusing the number, then giving a token.
     let refuse = true;
+    // That computer answers: asked before a number is shown for it.
+    await page.route('http://gmktec:4500/api/health', (route) => route.fulfill({ body: '{"ok":true}' }));
     await page.route('http://gmktec:4500/api/pairing', (route) =>
       route.fulfill({
         body: JSON.stringify(
@@ -439,8 +444,23 @@ describe('the computer', () => {
 });
 
 describe('pairing a phone', () => {
-  it('shows a number the phone types here: the phone gets in, and the number works once', async () => {
+  it('says so where swcode listens on its computer alone, with no code to scan and no number to type', async () => {
     const rig = await start({ replies: [] });
+    const page = await rig.browser.newPage({ viewport: DESKTOP });
+    await page.goto(`${rig.link}#/settings/computers`);
+    const computers = page.locator('sc-computers');
+    await computers.getByText('Other devices cannot reach this swcode', { exact: true }).waitFor();
+    expect(await computers.locator('.reach').isHidden()).toBe(true);
+    expect(await computers.locator('.pair-input input').isDisabled()).toBe(true);
+    expect(await computers.getByRole('button', { name: 'Pair the device' }).isDisabled()).toBe(true);
+
+    await computers.getByRole('button', { name: 'Network settings' }).click();
+    await settle(page);
+    expect(page.url()).toContain('#/settings/network');
+  });
+
+  it('shows a number the phone types here: the phone gets in, and the number works once', async () => {
+    const rig = await start({ reachable: true, replies: [] });
     const computer = await rig.browser.newPage({ viewport: DESKTOP });
     await computer.goto(rig.link);
     await settingsLink(computer).click();
@@ -450,7 +470,7 @@ describe('pairing a phone', () => {
     await topicTab(computer, 'Computers').click();
     await settle(computer);
     expect(computer.url()).toContain('#/settings/computers');
-    // The address a phone on the network reaches; the test's daemon listens here only.
+    // The address a phone on the network reaches: the one the test's daemon was given.
     const address = await computer.locator('sc-computers .reach .link').textContent();
     const phone = await rig.browser.newPage({ deviceScaleFactor: 2, viewport: PHONE });
     await phone.goto(address ?? '');

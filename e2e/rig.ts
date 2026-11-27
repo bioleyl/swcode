@@ -193,6 +193,7 @@ export async function startRig(options: E2eOptions): Promise<E2eRig> {
       SWCODE_WEB_DIR: WEB_DIR,
       SWCODE_WORKSPACE: workspace,
       ...(chromiumPath === undefined ? {} : { SWCODE_CHROMIUM: chromiumPath }),
+      ...(options.reachable === true ? { SWCODE_PUBLIC_URL: `http://${HOST}:${port}` } : {}),
     },
   });
   const output: string[] = [];

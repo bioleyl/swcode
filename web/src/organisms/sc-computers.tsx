@@ -19,8 +19,11 @@ import { PAIR_NUMBER_DIGITS } from '../../../shared/protocol/pairing.schema';
 import { ScElement } from '../base/sc-element';
 import { newPairNumber } from '../lib/pair-number';
 import {
-  isLocalBase,
-  LOCAL_ADDRESS_NOTE,
+  LOCAL_ONLY_HEADING,
+  LOCAL_ONLY_NOTE,
+  listensHereAlone,
+  NO_ANSWER_HINT,
+  nothingAnswersAt,
   PAIR_NUMBER_HINT,
   pairingWaitingText,
   reachableBaseOf,
@@ -35,7 +38,15 @@ import { daemonState, daemonStatusBus } from '../services/daemon-status';
 import { inDesktopApp } from '../services/desktop';
 import { installApp, installBus, installState } from '../services/install';
 import { inAndroidApp } from '../services/native-app';
-import { deviceName, forgetDevice, pairedDevices, pendPairing, waitForPairing } from '../services/pairing';
+import { navigate, settingsPath } from '../services/navigation';
+import {
+  answersAt,
+  deviceName,
+  forgetDevice,
+  pairedDevices,
+  pendPairing,
+  waitForPairing,
+} from '../services/pairing';
 import { pushState, turnPushOff, turnPushOn } from '../services/push';
 import { canScan } from '../services/qr-scan';
 import { BASE_STYLES } from '../styles/shared';
@@ -48,6 +59,8 @@ import type { ComputerAction, DesktopAnswerHandlers, DesktopAnswerMap } from '..
 import type { InstallState } from '../types/install.types';
 import type { PushState } from '../types/push.types';
 
+// The settings topic where swcode is told which addresses to listen on.
+const NETWORK_TOPIC = 'network';
 const PAIR_COMMAND = 'swcode pair ';
 const WAITING = 'Waiting for that computer to take the number…';
 const WAIT_LEAD = 'On that computer, run this where its swcode runs. The number waits a few minutes.';
@@ -126,6 +139,8 @@ export class ScComputers extends ScElement {
   private _saving = false;
   // Where notifications stood when last drawn: what a press on their button changes.
   private _pushState: PushState = 'unsupported';
+  // Whether the address typed is being asked for an answer, before a number is shown for it.
+  private _asking = false;
   // The number shown while waiting for its computer to take it, and the wait itself.
   private _number = '';
   private _origin = '';
@@ -194,8 +209,8 @@ export class ScComputers extends ScElement {
     installLine: ref('.install-line'),
     installSection: ref('.install'),
     link: ref('.link'),
+    localOnly: ref<JlAlert>('.local-only'),
     name: ref<JlInput>('#computer-name'),
-    note: ref('.note'),
     notifications: ref('.notifications'),
     pairButton: ref<JlButton>('.pair-device'),
     pairInput: ref<JlInput>('.pair-input'),
@@ -205,8 +220,10 @@ export class ScComputers extends ScElement {
     pushLine: ref('.push-line'),
     pushProblem: ref('.push-problem'),
     qr: ref('.qr'),
+    reach: ref('.reach'),
     scan: ref<JlButton>('.scan'),
     scanner: ref(ScQrScanner),
+    toNetwork: ref<JlButton>('.to-network'),
     wait: ref<JlDialog>('.wait'),
     waiting: ref('.waiting'),
   }));
@@ -217,6 +234,10 @@ export class ScComputers extends ScElement {
         <JlTabs label="Devices">
           <JlTabPanel name="connected" icon="laptop" label="Connected devices">
             <p class="lead">{CONNECTED_LEAD}</p>
+            <JlAlert class="local-only" tone="warn" heading={LOCAL_ONLY_HEADING} hidden>
+              {LOCAL_ONLY_NOTE}
+              <JlButton slot="actions" class="to-network" label="Network settings" size="sm" />
+            </JlAlert>
             <div class="pair">
               <h3>Pair a device</h3>
               <p class="lead">{PAIR_LEAD}</p>
@@ -246,7 +267,6 @@ export class ScComputers extends ScElement {
               </p>
               <div class="qr" />
               <p class="link" />
-              <p class="note" hidden />
             </section>
           </JlTabPanel>
           <JlTabPanel name="connect" icon="plug" label="Connect a device">
@@ -281,6 +301,7 @@ export class ScComputers extends ScElement {
               <JlCopyButton class="copy-command" />
             </div>
             <p class="waiting">{WAITING}</p>
+            <p class="lead">{NO_ANSWER_HINT}</p>
           </div>
           <JlButton slot="actions" class="cancel-wait" label="Cancel" />
         </JlDialog>
@@ -311,9 +332,9 @@ export class ScComputers extends ScElement {
     this._refs.scanner.events.register('found', (link) => this.scanned(link));
     this.on(this._refs.form, 'submit', (event) => {
       event.preventDefault();
-      this.add();
+      void this.add();
     });
-    this._refs.add.events.register('press', () => this.add());
+    this._refs.add.events.register('press', () => void this.add());
     this._refs.cancelWait.events.register('press', () => this.cancel());
     this._refs.wait.events.register('close', () => this.cancel());
     this._refs.edit.events.register('close', () => this.stopEditing());
@@ -323,11 +344,11 @@ export class ScComputers extends ScElement {
     this._refs.pairInput.events.register('enter', () => void this.pairDevice());
     this._refs.install.events.register('press', () => void installApp());
     this._refs.push.events.register('press', () => void this.togglePush());
-    // The desktop app is installed already, and tells the person of a session that waits through Windows itself: its
-    // window offers neither an install nor web notifications, which it refuses. The phone app is installed too, and
-    // its WebView has no push service, so its section offers Android's own notifications.
+    this._refs.toNetwork.events.register('press', () => navigate(settingsPath(NETWORK_TOPIC)));
+    // The desktop app and the phone app are installed already: their window offers no install. Each notifies by its
+    // own means (the tray through Windows, Android itself), which the section's switch turns on and off there.
     this._refs.installSection.hidden = inDesktopApp() || inAndroidApp();
-    this._refs.notifications.hidden = inDesktopApp();
+    this._refs.notifications.hidden = false;
     // Installed, the app may notify where its page could not (an iPhone).
     this.onBus(installBus, 'changed', () => void this.renderPush());
     this.onBus(installBus, 'changed', () => this.renderInstall());
@@ -358,8 +379,8 @@ export class ScComputers extends ScElement {
   }
 
   /** A number for the app to show, and the wait for the person to run `swcode pair` with it there. */
-  private add(): void {
-    if (this._waiting) {
+  private async add(): Promise<void> {
+    if (this._waiting || this._asking) {
       return;
     }
     const name = this._refs.name.value.get().trim();
@@ -372,10 +393,23 @@ export class ScComputers extends ScElement {
       this.say(target.problem, 'danger');
       return;
     }
+    this.showFeedback('');
+    // No number for an address nothing answers at: it would wait for nothing, and the person with it.
+    this._asking = true;
+    this._refs.add.loading.set(true);
+    const answers = await answersAt(target.answer);
+    this._asking = false;
+    this._refs.add.loading.set(false);
+    if (!this.isConnected) {
+      return;
+    }
+    if (!answers) {
+      this.say(nothingAnswersAt(target.answer), 'danger');
+      return;
+    }
     this._name = name;
     this._origin = target.answer;
     this._number = newPairNumber();
-    this.showFeedback('');
     this._refs.command.textContent = PAIR_COMMAND + this._number;
     this._refs.copyCommand.value.set(this._refs.command.textContent);
     this._refs.waiting.textContent = WAITING;
@@ -604,10 +638,15 @@ export class ScComputers extends ScElement {
   /** The address a phone opens: this computer's, as the daemon says it is reached. */
   private renderPairing(): void {
     const base = reachableBaseOf(daemonState(), daemonOrigin());
+    // Listening on this computer alone, swcode has no address to give and no device to pair: saying so beats a code
+    // that leads nowhere and a number that waits for nothing.
+    const alone = listensHereAlone(daemonState(), daemonOrigin());
+    this._refs.localOnly.hidden = !alone;
+    this._refs.reach.hidden = alone;
+    this._refs.pairInput.disabled.set(alone);
+    this._refs.pairButton.disabled.set(alone);
     this._refs.qr.replaceChildren(qrElement(base, QR_LABEL));
     this._refs.link.textContent = base;
-    this._refs.note.hidden = !isLocalBase(base);
-    this._refs.note.textContent = LOCAL_ADDRESS_NOTE;
   }
 
   private renderComputers(computers: readonly Computer[], current: string): void {

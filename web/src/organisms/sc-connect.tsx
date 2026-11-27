@@ -4,11 +4,12 @@ import { JlAlert, JlButton, JlCopyButton, JlField, JlInput } from '@syware/jlib'
 import { ScBrand } from '../atoms/sc-brand';
 import { ScElement } from '../base/sc-element';
 import { newPairNumber } from '../lib/pair-number';
+import { NO_ANSWER_HINT, nothingAnswersAt } from '../lib/pairing-view';
 import { DEFAULT_PORT, pairingOrigin } from '../lib/remote-computers';
 import { keepToken } from '../services/access';
 import { connectTo } from '../services/browser-computers';
 import { daemonState } from '../services/daemon-status';
-import { deviceName, waitForPairing } from '../services/pairing';
+import { answersAt, deviceName, waitForPairing } from '../services/pairing';
 import { BASE_STYLES } from '../styles/shared';
 import styles from './sc-connect.css?inline';
 
@@ -34,12 +35,17 @@ export class ScConnect extends ScElement {
   private _number = '';
   private _waiting: AbortController | undefined;
 
+  // Whether the address typed is being asked for an answer, before a number is shown for it.
+  private _asking = false;
+
   private readonly _refs = this.useRefs((ref) => ({
     address: ref<JlInput>('#connect-address'),
+    back: ref<JlButton>('.connect-back'),
     command: ref('.connect-command'),
     copyCommand: ref<JlCopyButton>('.connect-copy'),
     form: ref<HTMLFormElement>('form'),
     name: ref<JlInput>('#connect-name'),
+    noAnswer: ref('.no-answer'),
     port: ref<JlInput>('#connect-port'),
     problem: ref<JlAlert>('.connect-problem'),
     served: ref('.served'),
@@ -74,6 +80,8 @@ export class ScConnect extends ScElement {
             <JlCopyButton class="connect-copy" />
           </div>
           <p class="waiting">{WAITING}</p>
+          <p class="lead no-answer">{NO_ANSWER_HINT}</p>
+          <JlButton class="connect-back" variant="ghost" label="Another address" />
         </section>
         <JlAlert class="connect-problem" tone="danger" hidden />
       </div>
@@ -87,9 +95,14 @@ export class ScConnect extends ScElement {
   onConnect(): void {
     this.on(this._refs.form, 'submit', (event) => {
       event.preventDefault();
-      this.add();
+      void this.add();
     });
-    this._refs.submit.events.register('press', () => this.add());
+    this._refs.submit.events.register('press', () => void this.add());
+    // An address that never answers is asked for good: the person takes back the form to type another.
+    this._refs.back.events.register('press', () => {
+      this.stop();
+      this.failed('');
+    });
     if (this.active.get()) {
       this.start();
     }
@@ -132,13 +145,16 @@ export class ScConnect extends ScElement {
     this._refs.copyCommand.value.set(this._refs.command.textContent);
     this._refs.waiting.textContent = WAITING;
     this._refs.served.hidden = false;
+    // Served by the daemon it pairs with, the page has no other address to offer.
+    this._refs.back.hidden = this.served();
+    this._refs.noAnswer.hidden = this.served();
     const waiting = new AbortController();
     this._waiting = waiting;
     void this.waitFor(waiting);
   }
 
-  private add(): void {
-    if (this._waiting) {
+  private async add(): Promise<void> {
+    if (this._waiting || this._asking) {
       return;
     }
     const name = this._refs.name.value.get().trim();
@@ -152,6 +168,19 @@ export class ScConnect extends ScElement {
       return;
     }
     this.refuse('');
+    // No number for an address nothing answers at: it would wait for nothing, and the person with it.
+    this._asking = true;
+    this._refs.submit.loading.set(true);
+    const answers = await answersAt(target.answer);
+    this._asking = false;
+    this._refs.submit.loading.set(false);
+    if (!this.isConnected) {
+      return;
+    }
+    if (!answers) {
+      this.refuse(nothingAnswersAt(target.answer));
+      return;
+    }
     this._refs.form.hidden = true;
     this.begin(target.answer, name);
   }

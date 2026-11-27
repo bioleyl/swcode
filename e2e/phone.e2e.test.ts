@@ -55,6 +55,38 @@ describe('on a phone', () => {
     expect(await page.locator('sc-connect form').isHidden()).toBe(true);
   });
 
+  it('shows no number for an address nothing answers at, and says what to check', async () => {
+    const rig = await start({ replies: [] });
+    const page = await rig.browser.newPage({ viewport: PHONE });
+    await page.route('**/api/status', (route) => route.fulfill({ body: 'No daemon here.', status: 503 }));
+    await page.goto(rig.link);
+    await page.locator('#connect-name input').fill('home');
+    // Nothing listens there: a swcode on its computer alone, a wrong address, a computer that is off.
+    await page.locator('#connect-address input').fill('http://127.0.0.1:9');
+    await page.locator('sc-connect .connect-submit').click();
+
+    await page.getByText('Nothing answers at http://127.0.0.1:9', { exact: false }).waitFor();
+    expect(await page.locator('sc-connect .served').isHidden()).toBe(true);
+    expect(await page.locator('sc-connect form').isHidden()).toBe(false);
+  });
+
+  it('gives the form back from a number nobody types, to try another address', async () => {
+    const rig = await start({ replies: [] });
+    const page = await rig.browser.newPage({ viewport: PHONE });
+    await page.route('**/api/status', (route) => route.fulfill({ body: 'No daemon here.', status: 503 }));
+    await page.goto(rig.link);
+    await page.locator('#connect-name input').fill('home');
+    await page.locator('#connect-address input').fill(new URL(rig.link).origin);
+    await page.locator('sc-connect .connect-submit').click();
+    await shownPairNumber(page);
+    expect(await page.locator('sc-connect form').isHidden()).toBe(true);
+
+    await page.getByRole('button', { name: 'Another address' }).click();
+    await page.evaluate('0');
+    await page.locator('sc-connect form').waitFor();
+    expect(await page.locator('sc-connect .served').isHidden()).toBe(true);
+  });
+
   it('the settings say how to install it where the browser has no button for it', async () => {
     const rig = await start({ replies: [] });
     const page = await rig.browser.newPage({ viewport: PHONE });

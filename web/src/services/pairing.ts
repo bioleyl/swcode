@@ -26,12 +26,27 @@ const JSON_TYPE = { 'content-type': 'application/json' };
 const POLL_MS = 3000;
 // A refused try for lack of attempts: the wait is longer than a poll, or it would never get through.
 const RATE_LIMITED_MS = 30_000;
+// How long an address is given to answer before it counts as not reached.
+const REACH_WAIT_MS = 5000;
 const PAIRING_STOPPED = 'Pairing stopped before that computer made the number wait.';
 const UNREACHABLE = 'The daemon did not answer.';
 
 /** What a device calls itself when it pairs. */
 export const deviceName = (userAgent: string): string =>
   DEVICE_NAMES.find(([pattern]) => pattern.test(userAgent))?.[1] ?? SOME_BROWSER;
+
+/**
+ * Whether anything answers at an address, asked before a number is shown for it: a swcode that listens on its
+ * computer alone, a wrong address or a computer that is off would leave the number waiting for nothing. The answer
+ * itself is not read (another origin's is closed to the page): that one came is all that is asked.
+ */
+export async function answersAt(origin: string): Promise<boolean> {
+  const answered = await fetch(`${origin}${ENDPOINTS.health}`, {
+    mode: 'no-cors',
+    signal: AbortSignal.timeout(REACH_WAIT_MS),
+  }).catch(() => undefined);
+  return answered !== undefined;
+}
 
 /** One ask at another swcode: the token of the number it waits for, or why it gave none, and whether to ask again. */
 export async function askToPair(origin: string, number: string, name: string): Promise<PairAsk> {
@@ -40,7 +55,7 @@ export async function askToPair(origin: string, number: string, name: string): P
     headers: JSON_TYPE,
     method: 'POST',
   }).catch(() => undefined);
-  // The computer may be starting, or its address wrong: the person can still make the number wait.
+  // The computer answered before the number was shown; it may be restarting now: the next ask finds it.
   if (!response) {
     return { ok: false, problem: '', retry: true };
   }

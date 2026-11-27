@@ -34,6 +34,11 @@ export interface E2eOptions {
   model?: string;
   /** Whether that model sees pictures. */
   vision?: boolean;
+  /**
+   * Whether the daemon has an address to give other devices (its own, said as its public one); none when left out,
+   * as a daemon that listens on its computer alone.
+   */
+  reachable?: boolean;
   /** A newer release on the fake GitHub: the daemon then runs a copy of its program, which installing replaces. */
   release?: FakeRelease;
 }
