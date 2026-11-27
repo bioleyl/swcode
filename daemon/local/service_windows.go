@@ -33,7 +33,9 @@ func ServiceInstall(settings config.Config, place Place) int {
 	}
 	script := strings.Join([]string{
 		"$exe = " + PowerShellString(executable),
-		`$argument = '-NoProfile -WindowStyle Hidden -Command "& ' + $exe + ' serve --service; exit $LASTEXITCODE"'`,
+		// The program's path goes in quotes of its own: a profile folder with a space in its name (C:\Users\Jean
+		// Dupont) would else be run as its first word.
+		`$argument = '-NoProfile -WindowStyle Hidden -Command "& ''' + $exe.Replace("'", "''") + ''' serve --service; exit $LASTEXITCODE"'`,
 		`$powershell = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'`,
 		"$action = New-ScheduledTaskAction -Execute $powershell -Argument $argument",
 		"$trigger = New-ScheduledTaskTrigger -AtLogOn",
