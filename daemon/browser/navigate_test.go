@@ -20,6 +20,12 @@ func TestOnlyWebAddressesOpenAndPrivateOnesNeedAPerson(t *testing.T) {
 		{"http://192.168.1.10:8080/", true, false},
 		{"http://172.16.0.5/", true, false},
 		{"http://169.254.1.1/", true, false},
+		{"http://100.101.102.103/", true, false},
+		// 192.168.1.1 as Chromium also reads it.
+		{"http://3232235777/", true, false},
+		{"http://0xC0A80101/", true, false},
+		{"http://192.168.257/", true, false},
+		{"http://0300.0250.1.1/", true, false},
 		{"file:///etc/passwd", false, true},
 		{"javascript:alert(1)", false, true},
 		{"http://user:secret@example.com/", false, true},

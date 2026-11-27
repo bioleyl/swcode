@@ -3,7 +3,9 @@ package browser
 import (
 	"context"
 	"net"
+	"net/netip"
 	"net/url"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -54,6 +56,9 @@ func reachesPrivate(host string) bool {
 	if ip := net.ParseIP(name); ip != nil {
 		return !ip.IsLoopback() && !ip.IsUnspecified() && privateOrLinkLocal(ip)
 	}
+	if numbersOnly.MatchString(name) {
+		return true
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), lookupTimeout)
 	defer cancel()
 	ips, err := net.DefaultResolver.LookupIP(ctx, "ip", name)
@@ -70,6 +75,18 @@ func reachesPrivate(host string) bool {
 	return private
 }
 
+var (
+	// numbersOnly is a host Chromium reads as an IPv4 address though Go does not: one number (`3232235777`), hex
+	// (`0xC0A80101`), octal or fewer than four parts (`192.168.1`). Which address it is cannot be told here, so a
+	// person is asked.
+	numbersOnly = regexp.MustCompile(`^(0x[0-9a-f]*|[0-9]+)(\.(0x[0-9a-f]*|[0-9]+))*$`)
+	// sharedAddresses are the carrier-grade range, where a tailnet's machines are.
+	sharedAddresses = netip.MustParsePrefix("100.64.0.0/10")
+)
+
 func privateOrLinkLocal(ip net.IP) bool {
+	if address, ok := netip.AddrFromSlice(ip); ok && sharedAddresses.Contains(address.Unmap()) {
+		return true
+	}
 	return ip.IsPrivate() || ip.IsLinkLocalUnicast()
 }
