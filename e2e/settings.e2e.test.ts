@@ -264,6 +264,8 @@ describe('settings', () => {
     const browser = await rig.browser.newPage({ viewport: DESKTOP });
     await browser.goto(rig.link);
     await browser.goto(`${rig.link.split('?')[0]}#/settings/computers`);
+    // The page before stays until the settings have their data: one page, then its sections.
+    await settle(browser);
     await browser.locator('sc-computers').getByText('Install on this device', { exact: true }).waitFor();
     await browser.locator('sc-computers').getByText('Notifications on this device', { exact: true }).waitFor();
   });

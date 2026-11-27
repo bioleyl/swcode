@@ -25,12 +25,14 @@ describe('a terminal of the project', () => {
 
     const panel = page.locator('session-page sc-side-panel');
     const dialog = page.locator('session-page sc-terminal jl-dialog');
+    // The dialog's own Close comes first: jlib moves a toast into the open dialog, with a Close of its own.
+    const dialogClose = dialog.getByRole('button', { exact: true, name: 'Close' }).first();
     await panel.getByRole('button', { name: 'New terminal' }).click();
     await page.evaluate('0');
     // The dialog shows the terminal's name; the side panel renames it in place.
     await expect.poll(async () => dialog.isVisible()).toBe(true);
     expect(await dialog.getByRole('heading', { level: 2 }).textContent()).toBe('Terminal');
-    await dialog.getByRole('button', { exact: true, name: 'Close' }).click();
+    await dialogClose.click();
     await page.evaluate('0');
     await panel.locator('.terminals .terminal .rename').click();
     await panel.locator('.terminals .terminal .name').fill('dev server');
@@ -53,7 +55,7 @@ describe('a terminal of the project', () => {
     await page.evaluate(`document.documentElement.removeAttribute('data-theme')`);
 
     // A second terminal starts on a screen of its own, none of the first one's output in it.
-    await dialog.getByRole('button', { exact: true, name: 'Close' }).click();
+    await dialogClose.click();
     await page.evaluate('0');
     await panel.getByRole('button', { name: 'New terminal' }).click();
     await page.evaluate('0');
@@ -66,7 +68,7 @@ describe('a terminal of the project', () => {
     await expect.poll(async () => page.locator(ROWS).textContent()).toContain('second-terminal');
 
     // Back on the first, its own screen comes back, without the second one's lines.
-    await dialog.getByRole('button', { exact: true, name: 'Close' }).click();
+    await dialogClose.click();
     await page.evaluate('0');
     await panel.getByRole('button', { exact: true, name: 'dev server' }).click();
     await page.evaluate('0');
@@ -82,7 +84,7 @@ describe('a terminal of the project', () => {
 
     // The dialog's own close button leaves the view, the shell staying there for the next visit: Escape is the
     // terminal's, and goes to the shell.
-    await dialog.getByRole('button', { exact: true, name: 'Close' }).click();
+    await dialogClose.click();
     await page.evaluate('0');
     expect(await dialog.isVisible()).toBe(false);
     expect(await page.locator('session-page sc-conversation').isVisible()).toBe(true);
@@ -126,6 +128,8 @@ describe('a command that asks for a password', () => {
     // The password is typed in the terminal itself, which shows none of it.
     await card.getByRole('button', { name: 'Open the terminal' }).click();
     const dialog = page.locator('session-page sc-terminal jl-dialog');
+    // The dialog's own Close comes first: jlib moves a toast into the open dialog, with a Close of its own.
+    const dialogClose = dialog.getByRole('button', { exact: true, name: 'Close' }).first();
     await expect.poll(async () => dialog.isVisible()).toBe(true);
     await expect.poll(async () => page.locator(ROWS).textContent()).toContain('Password:');
     await page.locator('session-page sc-terminal .xterm').click();
@@ -135,7 +139,7 @@ describe('a command that asks for a password', () => {
     await expect.poll(async () => page.locator(ROWS).textContent()).toContain('it was hunter2');
     // The terminal shows no trace of how the shell told swcode the command ended.
     expect(await page.locator(ROWS).textContent()).not.toContain('777;swcode');
-    await dialog.getByRole('button', { exact: true, name: 'Close' }).click();
+    await dialogClose.click();
 
     // The agent went on by itself, and the card left with the call's result.
     await page.getByText('Installed.').waitFor();
