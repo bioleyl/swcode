@@ -120,7 +120,6 @@ type App struct {
 	// Workflows are the teams of sessions a run starts, global or a project's.
 	Workflows *workflows.Service
 	Token     string
-	LanURLs   []string
 
 	config       config.Config
 	options      Options
@@ -243,7 +242,7 @@ func New(settings config.Config, options Options) (*App, error) {
 	browsers := browserSessions(options, found, settings)
 	mainTools, exploreTools, chatTools := tools.Boxes(tools.Servers{Browser: found != nil, Images: settings.ImageURL != ""})
 	app := &App{
-		LanURLs: LANURLs(settings.Host, settings.Port, options.Interfaces()), Token: token,
+		Token:  token,
 		Models: modelService, config: settings, hosts: registry, http: options.HTTP,
 		SwcodeBase:   swcodebase.NewService(registry, logger),
 		Terminals:    terminalService,
@@ -414,3 +413,9 @@ func (a *App) Close() {
 
 // Logger is the daemon's log.
 func (a *App) Logger() *slog.Logger { return a.logger }
+
+// NetworkURLs is the links other machines open to reach this daemon, as its network is now: read each time, since a
+// daemon started at logon is up before the Wi-Fi is, and would say for good that it has no address but localhost.
+func (a *App) NetworkURLs() []string {
+	return LANURLs(a.config.Host, a.config.Port, a.options.Interfaces())
+}

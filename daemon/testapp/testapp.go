@@ -56,6 +56,8 @@ type Options struct {
 	ConnectHost func(protocol.HostRef) hosts.Host
 	MaxSteps    int
 	Environment map[string]string
+	// Interfaces are this computer's network interfaces, as they are when asked: its own otherwise.
+	Interfaces func() []app.Interface
 	// Home is this computer's home folder, where the person's skills are (~/.agents/skills): an empty one of its own
 	// otherwise, so the model's prompts are only what the test sets up.
 	Home string
@@ -142,7 +144,7 @@ func Start(t *testing.T, options Options) *App {
 	}
 	daemon, err := app.New(settings, app.Options{
 		Browser: options.Browser, ConnectHost: options.ConnectHost, Defaults: config.Defaults{Cwd: workspace, Home: home},
-		Environment: environmentOf, Home: home, MaxSteps: options.MaxSteps, Now: options.Now,
+		Environment: environmentOf, Home: home, Interfaces: options.Interfaces, MaxSteps: options.MaxSteps, Now: options.Now,
 		OnRestart: func() { test.restarts <- struct{}{} }, OnStop: func() { test.stops <- struct{}{} },
 		OnUpdated: func() { test.updates <- struct{}{} }, Program: options.Program, Startup: options.Startup,
 		Tailscale: options.Tailscale, Version: options.Version,

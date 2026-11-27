@@ -179,7 +179,7 @@ func announce(settings config.Config, options Options, daemon *app.App, log io.W
 		address = app.LocalURL(settings.Host, settings.Port)
 	}
 	network := ""
-	for _, link := range daemon.LanURLs {
+	for _, link := range daemon.NetworkURLs() {
 		network += "\n  On the network:  " + link + access
 	}
 	ready := fmt.Sprintf("\n  swcode is ready: %s%s%s\n", address, access, network)

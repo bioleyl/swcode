@@ -57,7 +57,7 @@ func (a *App) statusRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET "+protocol.EndpointStatus, func(response http.ResponseWriter, request *http.Request) {
 		computer, _ := os.Hostname()
 		answer(response, protocol.Status{
-			Computer: computer, LANURLs: a.LanURLs, Llama: a.Models.Status(request.Context()),
+			Computer: computer, LANURLs: a.NetworkURLs(), Llama: a.Models.Status(request.Context()),
 			PublicURL: a.publicURL(request.Context()), Thinking: a.config.Thinking, Update: a.Updates.Offer(), Version: a.options.Version,
 			Workspace: a.workspace,
 		})

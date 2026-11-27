@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"sync"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/coder/websocket"
 
+	"swcode/daemon/app"
 	"swcode/daemon/fakellama"
 	"swcode/daemon/pairing"
 	"swcode/daemon/protocol"
@@ -509,5 +511,31 @@ func TestAPairingNumberCannotBeGuessedByOneClient(t *testing.T) {
 	}
 	if status, _, _ := raw(t, test, "POST", protocol.EndpointPairing, "", map[string]string{"number": "000000"}); status != 429 {
 		t.Fatalf("status %d once the tries ran out", status)
+	}
+}
+
+func TestTheStatusNamesTheNetworkAddressesAsTheyAreNow(t *testing.T) {
+	// A daemon started at logon is up before the Wi-Fi is.
+	connected := false
+	test := Start(t, Options{
+		Settings: map[string]string{"SWCODE_HOST": "0.0.0.0", "SWCODE_PORT": "4500"},
+		Interfaces: func() []app.Interface {
+			if !connected {
+				return nil
+			}
+			return []app.Interface{{Name: "Wi-Fi", Addresses: []app.InterfaceAddress{{Address: "192.168.1.121", IPv4: true}}}}
+		},
+	})
+	linksNow := func() any {
+		_, body := test.Call("GET", protocol.EndpointStatus, nil)
+		said, _ := body.(map[string]any)
+		return said["lanUrls"]
+	}
+	if links := linksNow(); links != nil {
+		t.Fatalf("before the network is up: %v", links)
+	}
+	connected = true
+	if links := linksNow(); !reflect.DeepEqual(links, []any{"http://192.168.1.121:4500"}) {
+		t.Fatalf("once the network is up: %v", links)
 	}
 }
