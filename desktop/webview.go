@@ -31,8 +31,14 @@ func embedWebview(hwnd uintptr, folder string, look theme) (*edge.Chromium, erro
 	chromium.AdditionalBrowserArgs = []string{speechWithoutCeto}
 	chromium.DataPath = folder
 	chromium.SetErrorCallback(func(err error) { showError(err.Error()) })
-	chromium.MessageCallback = func(message string, sender *edge.ICoreWebView2, _ *edge.ICoreWebView2WebMessageReceivedEventArgs) {
-		app.pageMessage(message, sender)
+	chromium.MessageCallback = func(message string, sender *edge.ICoreWebView2, received *edge.ICoreWebView2WebMessageReceivedEventArgs) {
+		// Where the message came from, as WebView2 says: a page that cannot be placed is not answered.
+		source, err := received.GetSource()
+		if err != nil || source == "" {
+			// The page the window shows, when the message does not say its own.
+			source, _ = sender.GetSource()
+		}
+		app.pageMessage(message, source, sender)
 	}
 	// Pictures pasted in the composer.
 	chromium.SetPermission(edge.CoreWebView2PermissionKindClipboardRead, edge.CoreWebView2PermissionStateAllow)

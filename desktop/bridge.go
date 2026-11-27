@@ -24,9 +24,25 @@ type added struct {
 	err      error
 }
 
+// knownAddresses are the addresses whose pages the app answers: this computer's swcode, and those it paired with.
+func (w *window) knownAddresses() []string {
+	addresses := []string{}
+	if address, _, known := w.reachOf(protocol.ThisComputer); known {
+		addresses = append(addresses, address)
+	}
+	for _, computer := range w.computers.All() {
+		addresses = append(addresses, computer.Address)
+	}
+	return addresses
+}
+
 // pageMessage is what the page in the window asks the app (protocol.DesktopRequest), a JSON string, answered the
-// same way. WebView2 sends a page's message back to it too: the page tells the answers by their type.
-func (w *window) pageMessage(message string, sender *edge.ICoreWebView2) {
+// same way, when the page is one of a computer the app knows: any other page that came to be in the window (a link
+// followed there) is not answered. WebView2 sends a page's message back to it too: the page tells the answers by their type.
+func (w *window) pageMessage(message, source string, sender *edge.ICoreWebView2) {
+	if !computers.FromOneOf(source, w.knownAddresses()) {
+		return
+	}
 	var request protocol.DesktopRequest
 	if json.Unmarshal([]byte(message), &request) != nil {
 		return
