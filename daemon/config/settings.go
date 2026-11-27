@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -41,16 +42,24 @@ func settingNames(names []protocol.SettingName) []string {
 	return texts
 }
 
-// quoted writes a value: single quotes keep backslashes as they are (Windows paths: in double quotes, \n would be
-// a line break); a value with a single quote of its own gets double quotes.
+// quoted writes a value between quotes it does not hold itself, so that it reads back whole: single quotes keep
+// backslashes as they are (Windows paths: in double quotes, \n would be a line break), then back quotes, then double
+// ones. Between quotes of its own kind a value would end early, and the rest of it be read as other settings.
 func quoted(value string) string {
 	if plainValue.MatchString(value) {
 		return value
 	}
-	if strings.Contains(value, singleQuote) {
-		return doubleQuote + value + doubleQuote
+	for _, quote := range []string{singleQuote, backQuote, doubleQuote} {
+		if !strings.Contains(value, quote) {
+			return quote + value + quote
+		}
 	}
-	return singleQuote + value + singleQuote
+	return ""
+}
+
+// unwritable tells whether no quotes can hold a value: it has all three kinds itself.
+func unwritable(value string) bool {
+	return !plainValue.MatchString(value) && quoted(value) == ""
 }
 
 // DataDirOf is the data folder, where the settings file is: SWCODE_DATA_DIR, else ~/.swcode.
@@ -142,8 +151,13 @@ func SettingsText(values map[string]string) string {
 	return strings.Join(lines, "\n") + "\n"
 }
 
-// WriteSettings writes a settings file, its folder made first.
+// WriteSettings writes a settings file, its folder made first; not one a value of which would not read back.
 func WriteSettings(path string, values map[string]string) error {
+	for name, value := range values {
+		if unwritable(value) {
+			return fmt.Errorf("%s holds the three kinds of quotes (' \" `) together, which the settings file cannot keep", name)
+		}
+	}
 	if err := os.MkdirAll(filepath.Dir(path), settingsFolderMode); err != nil {
 		return err
 	}

@@ -166,3 +166,22 @@ func TestTheBrowserWindowIsShownOnlyWhenAskedFor(t *testing.T) {
 		t.Fatalf("headless: %+v %v", headless.BrowserHeadful, err)
 	}
 }
+
+func TestAValueWithQuotesAndLinesReadsBackWholeAndNeverAsOtherSettings(t *testing.T) {
+	file := filepath.Join(t.TempDir(), SettingsFile)
+	values := map[string]string{
+		"LLAMA_API_KEY": "a'\"\nSWCODE_TOKEN=\"planted-by-a-value",
+		"LLAMA_MODEL":   "it's \"quoted\"",
+		"LLAMA_URL":     "plain`back'",
+	}
+	if err := WriteSettings(file, values); err != nil {
+		t.Fatal(err)
+	}
+	if got := ReadSettings(file); !reflect.DeepEqual(got, values) {
+		t.Fatalf("read back %q", got)
+	}
+	// With the three kinds of quotes none is left to hold it: refused, not written as something else.
+	if err := WriteSettings(file, map[string]string{"LLAMA_MODEL": "'\"`"}); err == nil {
+		t.Fatal("a value no quotes can hold was written")
+	}
+}
