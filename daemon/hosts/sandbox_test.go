@@ -83,6 +83,53 @@ func TestASandboxedCommandWritesItsWorkspaceItsScratchFolderAndItsOwnTmpOnly(t *
 	}
 }
 
+func TestASandboxedCommandCannotPutARepositoryFolderOfItsOwnInPlace(t *testing.T) {
+	for name, host := range sandboxed(t) {
+		t.Run(name, func(t *testing.T) {
+			root, folder := project(t)
+			scratch := filepath.Join(root, "scratch")
+			// A repository without a hooks folder: one a command could otherwise make and fill.
+			write(t, filepath.Join(folder, ".git", "config"), "[core]\n")
+			if err := os.MkdirAll(scratch, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			sandbox := Sandbox{Host: host.state, Scratch: scratch, Workspace: folder}
+			run := func(command string) CommandResult {
+				return host.Run(context.Background(), sandbox.Wrap(command), CommandOptions{Cwd: folder, Timeout: 20 * time.Second})
+			}
+
+			run("mv .git .git-aside; mkdir -p .git/hooks; echo '[filter \"x\"]' > .git/config; echo planted > .git/hooks/pre-commit")
+			if data, _ := os.ReadFile(filepath.Join(folder, ".git", "config")); string(data) != "[core]\n" {
+				t.Fatalf("the repository's settings are a command's own: %q", data)
+			}
+			if _, err := os.Stat(filepath.Join(folder, ".git-aside")); err == nil {
+				t.Fatal("the repository's folder was moved aside")
+			}
+			if _, err := os.Stat(filepath.Join(folder, ".git", "hooks", "pre-commit")); err == nil {
+				t.Fatal("a hook was planted")
+			}
+			// What git itself writes there still is.
+			if wrote := run("echo ref > .git/HEAD"); wrote.ExitCode == nil || *wrote.ExitCode != 0 {
+				t.Fatalf("the repository's folder cannot be written at all: %+v", wrote)
+			}
+		})
+	}
+}
+
+func TestALookCutShortIsNotTakenForAHostWithoutASandbox(t *testing.T) {
+	for name, host := range sandboxed(t) {
+		t.Run(name, func(t *testing.T) {
+			sandboxes := NewSandboxes(time.Now)
+			stopped, stop := context.WithCancel(context.Background())
+			stop()
+			sandboxes.Of(stopped, name, host)
+			if state := sandboxes.Of(context.Background(), name, host); !state.Available {
+				t.Fatalf("the look that was stopped is still believed: %+v", state)
+			}
+		})
+	}
+}
+
 func TestASandboxedCommandIsStoppedWithAllItStarted(t *testing.T) {
 	for name, host := range sandboxed(t) {
 		t.Run(name, func(t *testing.T) {

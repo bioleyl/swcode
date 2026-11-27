@@ -47,8 +47,10 @@ var (
 	}
 	// keptInGit are the parts of a repository a sandboxed command reads but never writes: what git itself runs
 	// later, outside the sandbox, in the person's name.
-	keptInGit = []string{".git/hooks", ".git/config"}
+	keptInGit = []string{gitFolderName + "/hooks", gitFolderName + "/config"}
 )
+
+const gitFolderName = ".git"
 
 // KeptInGitFolder is the parts of a repository's .git folder a sandboxed command reads but never writes: its hooks
 // and its settings, which git runs later, outside the sandbox, in the person's name.
@@ -125,6 +127,13 @@ func (s Sandbox) Wrap(command string) string {
 		"for at in " + shellWords(hidden) + `; do [ -d "$at" ] && set -- "$@" --tmpfs "$at"; done`,
 		"for at in " + shellWords(s.Host.HiddenFiles) + `; do [ -f "$at" ] && set -- "$@" --ro-bind /dev/null "$at"; done`,
 		"for at in " + shellWords(open) + `; do [ -d "$at" ] && set -- "$@" --bind "$at" "$at"; done`,
+		// The repository's own folder is a mount of its own, which cannot be renamed: without it a command moves
+		// .git aside and puts one of its own there, whose settings and hooks git then runs outside the sandbox. A
+		// worktree's .git is a file naming its repository, which nothing in it writes. The hooks folder is made
+		// when there is none, so that the next line keeps it: a folder that is not there cannot be kept.
+		"git=" + ShellWord(s.Workspace+"/"+gitFolderName),
+		`[ -d "$git" ] && { [ -d "$git/hooks" ] || mkdir -- "$git/hooks" 2>/dev/null; set -- "$@" --bind "$git" "$git"; }`,
+		`[ -f "$git" ] && set -- "$@" --ro-bind "$git" "$git"`,
 		"for at in " + shellWords(kept) + `; do [ -e "$at" ] && set -- "$@" --ro-bind "$at" "$at"; done`,
 		sandboxProgram + ` "$@" -- bash -c ` + ShellWord(command),
 	}
@@ -161,6 +170,14 @@ func (s *Sandboxes) Of(ctx context.Context, key string, host Host) SandboxState 
 		return found.state
 	}
 	state := probeSandbox(ctx, host)
+	if ctx.Err() != nil && !state.Available {
+		// A look cut short (the turn was stopped) says nothing of the host: kept, it would let the next turns run
+		// their commands outside a sandbox the host does have.
+		if known {
+			return found.state
+		}
+		return state
+	}
 	s.mu.Lock()
 	s.known[key] = probed{at: s.now(), state: state}
 	s.mu.Unlock()
