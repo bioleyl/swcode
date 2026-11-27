@@ -204,6 +204,19 @@ export class ScComposer extends ScElement {
     thumbs: ref('.thumbs'),
   }));
 
+  /**
+   * Puts a message back in the field when what it was sent for did not happen (the daemon refused the session): it
+   * was cleared as it left. Not over what the person typed since.
+   */
+  putBack(draft: PromptDraft): void {
+    const place = this.draftPlace.get();
+    if (place === '' || this._refs.text.value !== '') {
+      return;
+    }
+    keepDraft(place, draft);
+    this.showDraft(place);
+  }
+
   focusText(): void {
     this._refs.text.focus();
   }

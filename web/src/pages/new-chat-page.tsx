@@ -26,6 +26,9 @@ export class NewChatPage extends ScElement {
   private _preset: string | undefined;
   private _concise = CONCISE_AT_FIRST;
 
+  // The message a session was asked for with, until the daemon made the session or refused it.
+  private _sent: PromptDraft | undefined;
+
   private readonly _refs = this.useRefs((ref) => ({
     composer: ref(ScComposer),
     problem: ref(JlAlert),
@@ -68,6 +71,11 @@ export class NewChatPage extends ScElement {
         return;
       }
       this.showProblem(message.message);
+      // The session was refused: the message that was to start it goes back in the field.
+      if (this._sent !== undefined) {
+        this._refs.composer.putBack(this._sent);
+        this._sent = undefined;
+      }
     });
     this.renderModel();
     composer.focusText();
@@ -76,6 +84,7 @@ export class NewChatPage extends ScElement {
   /** Creates the chat and starts it on the message; the app opens it once the daemon made it. */
   private start(draft: PromptDraft): void {
     this.showProblem('');
+    this._sent = draft;
     daemon.send({
       concise: this._concise,
       kind: 'chat',

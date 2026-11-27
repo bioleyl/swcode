@@ -65,6 +65,9 @@ export class HomePage extends ScElement {
     },
   });
 
+  // The message a session was asked for with, until the daemon made the session or refused it.
+  private _sent: PromptDraft | undefined;
+
   private readonly _refs = this.useRefs((ref) => ({
     composer: ref(ScComposer),
     newProject: ref<JlButton>('.new-project'),
@@ -128,6 +131,11 @@ export class HomePage extends ScElement {
         return;
       }
       this.showProblem(message.message);
+      // The session was refused: the message that was to start it goes back in the field.
+      if (this._sent !== undefined) {
+        this._refs.composer.putBack(this._sent);
+        this._sent = undefined;
+      }
     });
     this.renderProjects();
     composer.focusText();
@@ -136,6 +144,7 @@ export class HomePage extends ScElement {
   /** Creates the session and starts it on the message; the app opens it once the daemon made it. */
   private start(draft: PromptDraft): void {
     this.showProblem('');
+    this._sent = draft;
     const project = findProject(this._refs.project.value.get());
     const choices = this.choicesFor(project);
     const pinned = this.pinnedTodos(project);
