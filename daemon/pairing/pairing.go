@@ -9,6 +9,8 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"net"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"slices"
@@ -29,6 +31,12 @@ const (
 	// guessing while no machine can try millions of them within the minutes it waits.
 	TriesPerMinute = 60
 	tryWindow      = time.Minute
+	// MissesPerWait is how many wrong numbers may be asked for, by everyone together, while numbers wait: past it
+	// they all stop waiting. One client's limit means little to someone with many addresses, and this keeps the odds
+	// of a guess at a few in ten thousand; an app still showing its own number asks about a hundred times in a wait.
+	MissesPerWait = 300
+	// One IPv6 network (a /64) is one client: a machine there has as many addresses as it wants.
+	ipv6ClientBits = 64
 )
 
 // storedDevice is a phone as devices.json keeps it: its token only as its hash, so the file gives no access.
@@ -67,6 +75,7 @@ type Pairing struct {
 	newID   func() string
 	pending map[string]time.Time
 	tries   map[string]tries
+	misses  int
 	devices []storedDevice
 }
 
@@ -93,6 +102,9 @@ func (p *Pairing) Pend(number string) protocol.PairPending {
 	defer p.mu.Unlock()
 	now := p.now()
 	p.dropExpired(now)
+	if len(p.pending) == 0 {
+		p.misses = 0
+	}
 	expires := now.Add(NumberLifetime)
 	p.pending[number] = expires
 	return protocol.PairPending{ExpiresAt: protocol.Timestamp(expires), LifetimeMs: int(NumberLifetime.Milliseconds())}
@@ -106,6 +118,7 @@ func (p *Pairing) Redeem(number, name, origin string) string {
 	defer p.mu.Unlock()
 	p.dropExpired(p.now())
 	if _, waiting := p.pending[number]; !waiting {
+		p.missed()
 		return ""
 	}
 	delete(p.pending, number)
@@ -118,6 +131,42 @@ func (p *Pairing) Redeem(number, name, origin string) string {
 	})
 	p.save()
 	return token
+}
+
+// missed counts a wrong number asked for while others wait, and ends every wait once too many were: someone is
+// guessing.
+func (p *Pairing) missed() {
+	if len(p.pending) == 0 {
+		p.misses = 0
+		return
+	}
+	p.misses++
+	if p.misses > MissesPerWait {
+		clear(p.pending)
+		p.misses = 0
+	}
+}
+
+// ClientOf is who asks, from a connection's remote address: its machine, not the connection (the port differs at
+// each one), and for IPv6 its network.
+func ClientOf(remoteAddress string) string {
+	host, _, err := net.SplitHostPort(remoteAddress)
+	if err != nil {
+		return remoteAddress
+	}
+	address, err := netip.ParseAddr(host)
+	if err != nil {
+		return host
+	}
+	address = address.Unmap().WithZone("")
+	if address.Is4() {
+		return address.String()
+	}
+	network, err := address.Prefix(ipv6ClientBits)
+	if err != nil {
+		return address.String()
+	}
+	return network.String()
 }
 
 // Allow says whether a client may ask to redeem a number now: TriesPerMinute within any minute, so that a machine

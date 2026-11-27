@@ -13,6 +13,7 @@ import (
 	"swcode/daemon/config"
 	"swcode/daemon/hosts"
 	"swcode/daemon/llm"
+	"swcode/daemon/pairing"
 	"swcode/daemon/protocol"
 )
 
@@ -104,7 +105,7 @@ func (a *App) pairingRoutes(mux *http.ServeMux) {
 			fail(response, http.StatusBadRequest, noNumber)
 			return
 		}
-		if !a.pairing.Allow(request.RemoteAddr) {
+		if !a.pairing.Allow(pairing.ClientOf(request.RemoteAddr)) {
 			fail(response, http.StatusTooManyRequests, tooManyTries)
 			return
 		}
