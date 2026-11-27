@@ -44,6 +44,8 @@ final class Updater {
     private static final String READY_VERSION = "readyVersion";
     private static final String ASKED_VERSION = "askedVersion";
     private static final String ASKED_AT = "askedAt";
+    // The person was sent to Android's screen that allows this app to install packages, and has not been asked since.
+    private static final String AWAITS_ALLOWANCE = "awaitsAllowance";
     private static final String LOOKED_AT = "lookedAt";
     // The person who turned the installer down is asked again a day later, and not at every launch.
     private static final long ASK_AGAIN_MS = 24L * 60L * 60L * 1000L;
@@ -107,7 +109,7 @@ final class Updater {
             kept.edit().putString(READY_VERSION, ready).apply();
         }
         // A look the person asked for asks again even when the same version was turned down lately.
-        if (!forced && !mayAsk(kept, ready)) {
+        if (!forced && !mayAsk(activity, kept, ready)) {
             return "";
         }
         kept.edit().putString(ASKED_VERSION, ready).putLong(ASKED_AT, System.currentTimeMillis()).apply();
@@ -150,25 +152,38 @@ final class Updater {
         return tag;
     }
 
-    /** Whether the person may be asked again: not about the same version within a day. */
-    private static boolean mayAsk(SharedPreferences kept, String ready) {
+    /**
+     * Whether the person may be asked again: not about the same version within a day, unless what they were shown
+     * was Android's permission screen and they allowed it there, since the install itself was not offered yet.
+     */
+    private static boolean mayAsk(Activity activity, SharedPreferences kept, String ready) {
         if (!ready.equals(kept.getString(ASKED_VERSION, ""))) {
+            return true;
+        }
+        if (kept.getBoolean(AWAITS_ALLOWANCE, false) && mayInstall(activity)) {
             return true;
         }
         return System.currentTimeMillis() - kept.getLong(ASKED_AT, 0) >= ASK_AGAIN_MS;
     }
 
+    /** Whether Android lets this app hand a package to its installer: from Android 8 on, the person allows it. */
+    private static boolean mayInstall(Activity activity) {
+        return Build.VERSION.SDK_INT < Build.VERSION_CODES.O
+                || activity.getPackageManager().canRequestPackageInstalls();
+    }
+
     private static void install(Activity activity, SharedPreferences kept, File file) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
-                && !activity.getPackageManager().canRequestPackageInstalls()) {
-            // Answered, Android's permission screen has the app ask again rather than a day later: it was not asked.
-            kept.edit().remove(ASKED_VERSION).apply();
+        if (!mayInstall(activity)) {
+            // Coming back from this screen resumes the app, which looks again: left without allowing, it must count
+            // as asked, or every return to the app would open the screen once more.
+            kept.edit().putBoolean(AWAITS_ALLOWANCE, true).apply();
             activity.startActivity(
                     new Intent(
                             Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
                             Uri.parse("package:" + activity.getPackageName())));
             return;
         }
+        kept.edit().remove(AWAITS_ALLOWANCE).apply();
         Uri address = FileProvider.getUriForFile(activity, activity.getPackageName() + ".fileprovider", file);
         Intent installer = new Intent(Intent.ACTION_VIEW)
                 .setDataAndType(address, "application/vnd.android.package-archive")

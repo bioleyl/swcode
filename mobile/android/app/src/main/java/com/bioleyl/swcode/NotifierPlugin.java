@@ -42,8 +42,12 @@ public class NotifierPlugin extends Plugin {
         NotificationManagerCompat manager = NotificationManagerCompat.from(context);
         createChannel(manager, context);
 
+        String sessionId = call.getString("sessionId", "");
         Intent intent = new Intent(context, MainActivity.class);
-        intent.putExtra(SESSION, call.getString("sessionId", ""));
+        // Android takes two intents that differ by their extras alone for the same one, and would give every notice
+        // the session of the last: the action tells them apart, and from the service's own notice.
+        intent.setAction(SESSION + ":" + sessionId);
+        intent.putExtra(SESSION, sessionId);
         intent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
         int flags = Build.VERSION.SDK_INT >= 23
             ? PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
@@ -58,7 +62,7 @@ public class NotifierPlugin extends Plugin {
             .setAutoCancel(true)
             .setContentIntent(open);
         // One notice per session, the newest winning, as the web app's service worker does with its tag.
-        manager.notify(call.getString("sessionId", "").hashCode(), notice.build());
+        manager.notify(sessionId.hashCode(), notice.build());
         call.resolve();
     }
 
