@@ -110,7 +110,11 @@ export async function startFakeLlama(options: FakeLlamaOptions): Promise<FakeLla
   };
   const server = createServer(async (request, response) => {
     const path = request.url ?? '';
-    const body = await readBody(request);
+    // A daemon stopped at a test's end drops the request it was sending: there is nobody left to answer.
+    const body = await readBody(request).catch(() => undefined);
+    if (body === undefined) {
+      return;
+    }
     if (path === '/v1/models' && options.router) {
       answer(response, HTTP.ok, routerModels(options.router));
       return;
