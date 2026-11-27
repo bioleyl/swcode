@@ -1,11 +1,9 @@
-# swcode 0.17.0
+# swcode 0.17.1
 
 Released 2026-11-27.
 
-The session's header now says where its folder stands in git: the branch, how many files are uncommitted, and how many commits it is ahead of and behind the branch it follows. Outside a repository it says "no git". It is read again after each turn and after a commit.
+Pairing now tells you when it cannot work. Where swcode listens on its computer alone, Settings → Computers says so, with a button to the network settings, instead of showing a QR code and a number field that lead nowhere. A phone or another computer asks the address for an answer before it shows a number, and says what to check when nothing answers.
 
-The Android app asks for the microphone before it dictates: Android never showed its question, so dictation failed. It also stops reopening the "install unknown apps" screen at every return, and a tapped notification opens its own session.
+The QR code no longer stays on localhost when swcode started before the network was up, as it does at logon: it shows the computer's address on the network once there is one.
 
-This release follows a review of the whole project, and most of it is fixes. Restoring a turn no longer deletes files git ignored when the turn started, such as a `.env`, after the turn changed `.gitignore`. A sandboxed command can no longer swap the repository's `.git` folder for one of its own. A program you allowed no longer covers shell loops and conditions or commands hidden behind unusual quotes. Pairing numbers can no longer be guessed over many connections. A workflow no longer starts a step twice when the step before it used subagents. The Windows service starts when the profile folder's name has a space.
-
-The Android signing keystore was tracked in the repository by mistake and no longer is.
+The rest finishes the review begun in 0.17.0. Stop reaches a command on an SSH host even after ssh's warnings. The daemon's data files are written whole or not at all, so a full disk no longer empties one. A message is put back in the composer when its session is refused. An install from the `.deb` says to install the new package instead of failing its update.

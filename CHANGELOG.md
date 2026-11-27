@@ -2,6 +2,26 @@
 
 All notable changes to swcode are documented here.
 
+## [0.17.1] - 2026-11-27
+
+### Changed
+
+- Settings → Computers says when swcode listens on its computer alone: no QR code and no number field that lead nowhere, and a button to the network settings instead.
+- A device asks an address for an answer before it shows a pairing number, and says what to check when nothing answers. Under a number that waits, "Another address" gives the form back.
+- The desktop app shows its own notifications switch in Settings → Computers.
+
+### Fixed
+
+- The QR code and the address for a phone no longer stay on localhost when swcode started before the network was up (at logon): the addresses are read when asked.
+- Stop reaches a command on an SSH host even when ssh printed a warning before it, and searching on an SSH or WSL host no longer reads through links that leave the project.
+- The daemon's data files (sessions, projects, workflows, devices, settings) are written whole or not at all, so a full disk or a crash no longer leaves an empty one.
+- A device forgotten at the moment its connection opens no longer keeps it.
+- swcode installed from the `.deb` no longer fails an update on a permission error: it says to install the new package.
+- The desktop app answers only the pages of computers it knows.
+- A first message is put back in the composer when the session it was to start is refused.
+- In the new project dialog, a slow host's folders can no longer show under the host picked next.
+- Notifications read as on only for the computer that holds the browser's subscription.
+
 ## [0.17.0] - 2026-11-27
 
 ### Added
