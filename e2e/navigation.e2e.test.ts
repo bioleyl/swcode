@@ -150,7 +150,7 @@ describe('chats', () => {
     const request = JSON.stringify(rig.llama.requests[0]);
     expect(request).toContain('"name":"websearch"');
     expect(request).not.toContain('"name":"bash"');
-    expect(await page.locator('session-page header > .chip').isHidden()).toBe(true);
+    expect(await page.locator('session-page header > .place').isHidden()).toBe(true);
     expect(await page.locator('sc-nav .item[data-id^="session:"]').count()).toBe(1);
     expect(await page.locator('sc-nav .item[data-id^="project:"]').count()).toBe(0);
 

@@ -6,6 +6,7 @@ import { ScElement } from '../base/sc-element';
 import { agentsOf } from '../lib/agents';
 import { SESSION_COMMANDS } from '../lib/commands';
 import { contextText, speedLine } from '../lib/format';
+import { gitLine } from '../lib/git-state';
 import { currentPlan } from '../lib/plan';
 import { presetOf, presetStatusOf } from '../lib/presets';
 import { projectFolderOf } from '../lib/project-groups';
@@ -56,6 +57,7 @@ import type {
   SessionSummary,
 } from '../../../shared/protocol/session.schema';
 import type { PromptDraft } from '../types/composer.types';
+import type { GitState } from '../types/git-state.types';
 import type { ServerHandlers, ServerMessageMap } from '../types/page.types';
 import type { TerminalSize } from '../types/terminal.types';
 
@@ -132,6 +134,8 @@ export class SessionPage extends ScElement {
   // The session's events the page holds, oldest first: the side panel lists its subagents from them, and its token
   // count and plan come from them. Older pages are added in front as the person scrolls up.
   private _events: SessionEvent[] = [];
+  // Whether git was asked about the workspace once the session was known: later asks follow what may change it.
+  private _gitAsked = false;
   // How many events the session holds before the ones this page has: with them, how far into the session it is.
   private _keptBack = 0;
   // Whether this page has its history yet: a search's match is marked once it has.
@@ -172,6 +176,9 @@ export class SessionPage extends ScElement {
           message.files.filter((file): file is DiffDisplay => file.kind === 'diff')
         )
       ),
+    // What the workspace has uncommitted, for the review the person opened.
+    // Where the workspace stands in git, for the chip beside its folder.
+    gitState: (message) => this.forThisSession(message.sessionId, () => this.showGit(message)),
     peekDelta: (message) =>
       this.forThisSession(message.sessionId, () => this._refs.peek.delta(message.peekId, message.text)),
     peekState: (message) =>
@@ -183,7 +190,6 @@ export class SessionPage extends ScElement {
       this.forThisSession(message.sessionId, () =>
         this._refs.conversation.reasoning(message.messageId, message.text)
       ),
-    // What the workspace has uncommitted, for the review the person opened.
     reviewChanges: (message) => this.forThisSession(message.sessionId, () => this._refs.review.show(message)),
     sessionEvent: (message) => this.forThisSession(message.sessionId, () => this.applyEvent(message.event)),
     sessionHistory: (message) =>
@@ -239,15 +245,17 @@ export class SessionPage extends ScElement {
 
   private readonly _refs = this.useRefs((ref) => ({
     arcade: ref(ScArcade),
+    branch: ref('.branch'),
     composer: ref(ScComposer),
     conversation: ref(ScConversation),
+    git: ref('.git'),
     map: ref(ScDecisionMap),
     mapToggle: ref<JlButton>('.map-toggle'),
     panel: ref(ScSidePanel),
     panelToggle: ref<JlButton>('.panel-toggle'),
     path: ref('.path'),
     peek: ref(ScPeek),
-    place: ref('.chip'),
+    place: ref('.place'),
     plan: ref(ScPlan),
     problem: ref(JlAlert),
     remove: ref<JlButton>('.delete'),
@@ -268,9 +276,13 @@ export class SessionPage extends ScElement {
             <header>
               <ScTitle />
               <JlBadge class="status" />
-              <span class="chip">
+              <span class="chip place">
                 <JlIcon name="laptop" size={14} />
                 <span class="path" />
+              </span>
+              <span class="chip git" hidden>
+                <JlIcon name="git-branch" size={14} />
+                <span class="branch" />
               </span>
               <JlButton class="map-toggle" icon="workflow" variant="ghost" size="sm" hint={MAP_HINT} />
               <JlButton class="review" icon="file-diff" variant="ghost" size="sm" hint={REVIEW_HINT} hidden />
@@ -456,7 +468,29 @@ export class SessionPage extends ScElement {
     this._refs.review.committed(problem);
     if (problem === '') {
       toast({ heading: COMMITTED, tone: 'ok' });
+      this.askGit();
     }
+  }
+
+  /**
+   * Asks where the workspace stands in git: when the session shows, and after what may have changed it (a turn, a
+   * commit). A chat works in no folder and is not asked about.
+   */
+  private askGit(): void {
+    const session = findSession(this._sessionId);
+    if (session === undefined || session.kind === 'chat') {
+      return;
+    }
+    this._gitAsked = true;
+    daemon.send({ sessionId: this._sessionId, type: 'gitState' });
+  }
+
+  /** The branch and what waits on it, beside the folder; nothing where git could not say. */
+  private showGit(state: GitState): void {
+    const line = gitLine(state);
+    this._refs.git.hidden = line === undefined;
+    this._refs.git.title = line?.hint ?? '';
+    this._refs.branch.textContent = line?.text ?? '';
   }
 
   /**
@@ -688,6 +722,9 @@ export class SessionPage extends ScElement {
   private applyEvent(event: SessionEvent): void {
     this._events.push(event);
     this._refs.conversation.apply(event);
+    if (event.kind === 'turnFinished') {
+      this.askGit();
+    }
     this.refreshMap();
     if (PLAN_EVENTS.has(event.kind)) {
       this._refs.plan.show(currentPlan(this._events));
@@ -801,6 +838,9 @@ export class SessionPage extends ScElement {
     this._refs.place.hidden = kind === 'chat';
     // A chat works in no folder: it has nothing to review.
     this._refs.reviewOpen.hidden = session === undefined || kind === 'chat';
+    if (!this._gitAsked) {
+      this.askGit();
+    }
     this._refs.path.textContent = session ? sessionPlace(session) : '';
     this._refs.conversation.workspace.set(session?.workspace ?? '');
     this._refs.composer.kind.set(kind);

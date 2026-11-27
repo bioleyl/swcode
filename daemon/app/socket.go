@@ -503,6 +503,23 @@ func (h handlers) ReviewChanges(message protocol.ClientMessageReviewChanges) str
 	return struct{}{}
 }
 
+// GitState answers a page with where the session's workspace stands in git.
+func (h handlers) GitState(message protocol.ClientMessageGitState) struct{} {
+	go func() {
+		state, refused := h.app.Sessions.GitState(message.SessionID)
+		if refused != "" {
+			h.reply(problem(refused))
+			return
+		}
+		answer := protocol.ServerMessageGitState{
+			Ahead: state.Ahead, Behind: state.Behind, Branch: state.Branch, Changed: state.Changed, Detached: state.Detached,
+			Follows: state.Follows, Problem: state.Problem, Repository: state.Repository, SessionID: message.SessionID,
+		}
+		h.reply(protocol.ServerMessage{Value: answer})
+	}()
+	return struct{}{}
+}
+
 // CommitChanges commits what the session's workspace has uncommitted, and tells the page how it went.
 func (h handlers) CommitChanges(message protocol.ClientMessageCommitChanges) struct{} {
 	go func() {

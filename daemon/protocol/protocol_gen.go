@@ -2696,6 +2696,8 @@ func (ClientMessageCheckpointDiff) isClientMessage() {}
 
 func (ClientMessageReviewChanges) isClientMessage() {}
 
+func (ClientMessageGitState) isClientMessage() {}
+
 func (ClientMessageCommitChanges) isClientMessage() {}
 
 func (ClientMessageRenameTerminal) isClientMessage() {}
@@ -2945,6 +2947,12 @@ func (u *ClientMessage) UnmarshalJSON(data []byte) error {
 			return err
 		}
 		u.Value = value
+	case "\"gitState\"":
+		var value ClientMessageGitState
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
 	case "\"commitChanges\"":
 		var value ClientMessageCommitChanges
 		if err := json.Unmarshal(data, &value); err != nil {
@@ -3162,6 +3170,7 @@ type ClientMessageMapper[R any] interface {
 	CloseTerminal(ClientMessageCloseTerminal) R
 	CheckpointDiff(ClientMessageCheckpointDiff) R
 	ReviewChanges(ClientMessageReviewChanges) R
+	GitState(ClientMessageGitState) R
 	CommitChanges(ClientMessageCommitChanges) R
 	RenameTerminal(ClientMessageRenameTerminal) R
 	SetMode(ClientMessageSetMode) R
@@ -3255,6 +3264,8 @@ func MapClientMessage[R any](u ClientMessage, m ClientMessageMapper[R]) R {
 		return m.CheckpointDiff(value)
 	case ClientMessageReviewChanges:
 		return m.ReviewChanges(value)
+	case ClientMessageGitState:
+		return m.GitState(value)
 	case ClientMessageCommitChanges:
 		return m.CommitChanges(value)
 	case ClientMessageRenameTerminal:
@@ -4105,6 +4116,19 @@ func (v ClientMessageReviewChanges) MarshalJSON() ([]byte, error) {
 	}{"reviewChanges", p})
 }
 
+type ClientMessageGitState struct {
+	SessionID string `json:"sessionId"`
+}
+
+func (v ClientMessageGitState) MarshalJSON() ([]byte, error) {
+	type plain ClientMessageGitState
+	p := plain(v)
+	return json.Marshal(struct {
+		Key string `json:"type"`
+		plain
+	}{"gitState", p})
+}
+
 type ClientMessageCommitChanges struct {
 	Message   string `json:"message"`
 	SessionID string `json:"sessionId"`
@@ -4857,6 +4881,8 @@ func (ServerMessageCheckpointDiff) isServerMessage() {}
 
 func (ServerMessageReviewChanges) isServerMessage() {}
 
+func (ServerMessageGitState) isServerMessage() {}
+
 func (ServerMessageChangesCommitted) isServerMessage() {}
 
 func (ServerMessagePresets) isServerMessage() {}
@@ -5004,6 +5030,12 @@ func (u *ServerMessage) UnmarshalJSON(data []byte) error {
 			return err
 		}
 		u.Value = value
+	case "\"gitState\"":
+		var value ServerMessageGitState
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		u.Value = value
 	case "\"changesCommitted\"":
 		var value ServerMessageChangesCommitted
 		if err := json.Unmarshal(data, &value); err != nil {
@@ -5068,6 +5100,7 @@ type ServerMessageMapper[R any] interface {
 	TerminalOutput(ServerMessageTerminalOutput) R
 	CheckpointDiff(ServerMessageCheckpointDiff) R
 	ReviewChanges(ServerMessageReviewChanges) R
+	GitState(ServerMessageGitState) R
 	ChangesCommitted(ServerMessageChangesCommitted) R
 	Presets(ServerMessagePresets) R
 	Hosts(ServerMessageHosts) R
@@ -5119,6 +5152,8 @@ func MapServerMessage[R any](u ServerMessage, m ServerMessageMapper[R]) R {
 		return m.CheckpointDiff(value)
 	case ServerMessageReviewChanges:
 		return m.ReviewChanges(value)
+	case ServerMessageGitState:
+		return m.GitState(value)
 	case ServerMessageChangesCommitted:
 		return m.ChangesCommitted(value)
 	case ServerMessagePresets:
@@ -5634,6 +5669,27 @@ func (v ServerMessageReviewChanges) MarshalJSON() ([]byte, error) {
 		Key string `json:"type"`
 		plain
 	}{"reviewChanges", p})
+}
+
+type ServerMessageGitState struct {
+	Ahead      int    `json:"ahead"`
+	Behind     int    `json:"behind"`
+	Branch     string `json:"branch"`
+	Changed    int    `json:"changed"`
+	Detached   bool   `json:"detached"`
+	Follows    bool   `json:"follows"`
+	Problem    string `json:"problem,omitempty"`
+	Repository bool   `json:"repository"`
+	SessionID  string `json:"sessionId"`
+}
+
+func (v ServerMessageGitState) MarshalJSON() ([]byte, error) {
+	type plain ServerMessageGitState
+	p := plain(v)
+	return json.Marshal(struct {
+		Key string `json:"type"`
+		plain
+	}{"gitState", p})
 }
 
 type ServerMessageChangesCommitted struct {

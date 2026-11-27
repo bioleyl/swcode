@@ -232,6 +232,9 @@ export const ClientMessageSchema = z.discriminatedUnion('type', [
   // Asks what the session's workspace has uncommitted in its git repository, a diff a file: the daemon answers
   // reviewChanges, to this socket alone.
   z.object({ sessionId: z.string(), type: z.literal('reviewChanges') }),
+  // Asks where the session's workspace stands in git (a repository or not, its branch, what is uncommitted): the
+  // daemon answers gitState, to this socket alone.
+  z.object({ sessionId: z.string(), type: z.literal('gitState') }),
   // Commits everything the session's workspace has uncommitted, with this message: the daemon answers
   // changesCommitted, to this socket alone.
   z.object({
@@ -439,6 +442,21 @@ export const ServerMessageSchema = z.discriminatedUnion('type', [
     problem: z.string().optional(),
     sessionId: z.string(),
     type: z.literal('reviewChanges'),
+  }),
+  // Where a session's workspace stands in git: whether it is in a repository, the branch it is on (a commit's short
+  // name when on none: detached), how many files are uncommitted, and how many commits it is ahead of and behind
+  // the branch it follows, when it follows one. A problem when git could not say (not installed, no answer).
+  z.object({
+    ahead: z.number().int(),
+    behind: z.number().int(),
+    branch: z.string(),
+    changed: z.number().int(),
+    detached: z.boolean(),
+    follows: z.boolean(),
+    problem: z.string().optional(),
+    repository: z.boolean(),
+    sessionId: z.string(),
+    type: z.literal('gitState'),
   }),
   // A commit of the session's workspace was made, or git refused it and said why.
   z.object({ problem: z.string().optional(), sessionId: z.string(), type: z.literal('changesCommitted') }),

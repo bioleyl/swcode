@@ -84,7 +84,7 @@ describe('the side panel', () => {
     expect(await row('.delete')).toBe(await row('sc-title'));
     // The title gives way, cut short: it ends before the path begins.
     const title = await page.locator('session-page header sc-title button').boundingBox();
-    const path = await page.locator('session-page header .chip').boundingBox();
+    const path = await page.locator('session-page header .place').boundingBox();
     expect((title?.x ?? 0) + (title?.width ?? 0)).toBeLessThanOrEqual(path?.x ?? 0);
     expect(await page.locator('session-page sc-side-panel .version').textContent()).toBe(`swcode ${E2E_VERSION}`);
     const server = page.locator('session-page sc-side-panel .server');

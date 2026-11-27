@@ -27,6 +27,7 @@ import {
   FolderSearch,
   FoldVertical,
   Gamepad2,
+  GitBranch,
   Globe,
   Image,
   Keyboard,
@@ -123,6 +124,8 @@ const ICONS = {
   'folder-plus': FolderPlus,
   'folder-search': FolderSearch,
   gamepad: Gamepad2,
+  // The branch a session's workspace is on.
+  'git-branch': GitBranch,
   globe: Globe,
   image: Image,
   'key-round': KeyRound,

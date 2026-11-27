@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -66,6 +67,40 @@ describe('on a computer', () => {
     await page.getByText('Restored 1 file to before that turn.').waitFor();
     expect(readFileSync(join(rig.workspace, 'src/greet.ts'), 'utf8')).toBe(GREET);
     expect(await overflow(page)).toBe(0);
+  });
+});
+
+describe('the workspace’s git state', () => {
+  const git = (folder: string, ...args: string[]): void => {
+    execFileSync('git', ['-c', 'user.name=Test', '-c', 'user.email=test@example.com', ...args], { cwd: folder });
+  };
+
+  it('names the branch beside the folder, then what the turn left uncommitted', async () => {
+    const rig = await start(EDIT_FLOW);
+    git(rig.workspace, 'init', '-q', '-b', 'main');
+    git(rig.workspace, 'add', '-A');
+    git(rig.workspace, 'commit', '-q', '-m', 'first');
+    const page = await rig.browser.newPage({ viewport: DESKTOP });
+    await page.goto(rig.link);
+    await page.locator('home-page textarea').fill('Make greet say Hi');
+    await page.locator('home-page textarea').press('Enter');
+    await page.getByText('it says').waitFor();
+
+    const chip = page.locator('session-page .git');
+    await expect.poll(() => chip.locator('.branch').textContent()).toBe('main · 1 changed');
+    expect(await chip.getAttribute('title')).toBe('On branch main, 1 file uncommitted, follows no branch.');
+    expect(await overflow(page)).toBe(0);
+  });
+
+  it('says so where the folder is in no repository', async () => {
+    const rig = await start(EDIT_FLOW);
+    const page = await rig.browser.newPage({ viewport: DESKTOP });
+    await page.goto(rig.link);
+    await page.locator('home-page textarea').fill('Make greet say Hi');
+    await page.locator('home-page textarea').press('Enter');
+    await page.getByText('it says').waitFor();
+
+    await expect.poll(() => page.locator('session-page .git .branch').textContent()).toBe('no git');
   });
 });
 
