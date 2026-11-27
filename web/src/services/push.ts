@@ -1,8 +1,13 @@
+import { z } from 'zod';
+
+import { THIS_COMPUTER } from '../../../shared/protocol/desktop.schema';
 import { ENDPOINTS } from '../../../shared/protocol/endpoints';
 import { PushKeySchema, PushSubscriptionSchema } from '../../../shared/protocol/pairing.schema';
 import { isAppleMobile, keyBytes } from '../lib/push-view';
 import { jsonOf, request } from './api';
+import { shownComputer } from './computer-store';
 import { askNotifications, inDesktopApp } from './desktop';
+import { readStored, writeStored } from './device-store';
 import { inAndroidApp } from './native-app';
 import { noticesRunning, startNotices, stopNotices } from './native-notifications';
 import { navigate, sessionPath } from './navigation';
@@ -19,6 +24,19 @@ const NOT_ALLOWED = 'Notifications were not allowed: nothing changed.';
 const NO_KEY = 'The daemon did not give its push key.';
 const NOT_SUBSCRIBED = 'The browser could not subscribe to its push service.';
 const NOT_KEPT = 'The daemon did not keep the subscription: nothing changed.';
+
+// Which computer holds this browser's push subscription. A browser has one, made with one computer's key: the
+// others cannot write to it, so for them notifications are off, whatever the browser holds.
+const HOLDER_KEY = 'swcode.push-computer';
+const HOLDER = z.string();
+
+const shownId = (): string => shownComputer()?.id ?? THIS_COMPUTER;
+
+/** Whether the computer shown is the one the subscription was made with; one made before this was kept counts. */
+function heldHere(): boolean {
+  const holder = readStored(HOLDER_KEY, HOLDER, '');
+  return holder === '' || holder === shownId();
+}
 
 const canPush = (): boolean => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
 
@@ -50,7 +68,7 @@ export async function pushState(): Promise<PushState> {
   if (!registration) {
     return 'unsupported';
   }
-  return (await registration.pushManager.getSubscription()) ? 'on' : 'off';
+  return (await registration.pushManager.getSubscription()) && heldHere() ? 'on' : 'off';
 }
 
 /** Subscribes this browser to its push service with the daemon's key, and has the daemon keep the subscription. */
@@ -70,6 +88,12 @@ export async function turnPushOn(): Promise<PushOutcome> {
     return { ok: false, problem: NO_KEY };
   }
   const registration = await navigator.serviceWorker.ready;
+  // A subscription made with another computer's key is let go first: the browser refuses a second key, and that
+  // computer drops it when its next push is refused.
+  if (!heldHere()) {
+    const other = await registration.pushManager.getSubscription();
+    await other?.unsubscribe().catch(() => false);
+  }
   const subscription = await registration.pushManager
     .subscribe({ applicationServerKey: keyBytes(key.data.key), userVisibleOnly: true })
     .catch(() => undefined);
@@ -83,6 +107,7 @@ export async function turnPushOn(): Promise<PushOutcome> {
     await subscription.unsubscribe().catch(() => false);
     return { ok: false, problem: NOT_KEPT };
   }
+  writeStored(HOLDER_KEY, shownId());
   return { ok: true };
 }
 
