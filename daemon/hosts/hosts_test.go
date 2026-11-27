@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -338,5 +339,48 @@ func TestOnlyTheNewestEndedBackgroundJobsAreKept(t *testing.T) {
 	}
 	if state := jobs.Read(oldest, false); state != nil {
 		t.Fatalf("the oldest ended job is still kept: %+v", state)
+	}
+}
+
+func TestALinkIsNeitherListedNorSearchedThrough(t *testing.T) {
+	ctx := context.Background()
+	for name, host := range hostsUnderTest(t) {
+		t.Run(name, func(t *testing.T) {
+			root, folder := project(t)
+			write(t, filepath.Join(root, "secrets", "key.ts"), "const slow = 'the key';\n")
+			if err := os.Symlink(filepath.Join(root, "secrets", "key.ts"), filepath.Join(folder, "src", "link.ts")); err != nil {
+				t.Fatal(err)
+			}
+			// In a repository too, where git lists the link among its files.
+			for _, repository := range []bool{false, true} {
+				if repository {
+					if output, err := exec.Command("git", "init", "-q", folder).CombinedOutput(); err != nil {
+						t.Skipf("no git here: %s", output)
+					}
+				}
+				files, err := host.ListFiles(ctx, folder, "**/*.ts", 10)
+				if err != nil || !slices.Equal(files, []string{filepath.Join(folder, "src", "tags.ts")}) {
+					t.Fatalf("listed %v (repository: %v, %v)", files, repository, err)
+				}
+				matches, err := host.Search(ctx, SearchRequest{Include: "**/*", MaxFileBytes: 100_000, MaxFiles: 10, MaxMatches: 10, Root: folder, Source: "slow"})
+				if err != nil || len(matches) != 1 || strings.Contains(matches[0].Text, "the key") {
+					t.Fatalf("found %v (repository: %v, %v)", matches, repository, err)
+				}
+			}
+		})
+	}
+}
+
+func TestTheGroupIdIsFoundAfterWhatTheTransportSaidFirst(t *testing.T) {
+	output := NewOutputBuffer(headChars, tailChars)
+	errors := &groupOutput{known: make(chan struct{}), output: output}
+	for _, part := range []string{"Warning: Permanently added 'marvin' ", "to the list of known hosts.\n" + pidMarker + "41", "7\nthe command's own\n"} {
+		_, _ = errors.Write([]byte(part))
+	}
+	if errors.group() != "417" {
+		t.Fatalf("the group is %q", errors.group())
+	}
+	if said := output.Text(); said != "Warning: Permanently added 'marvin' to the list of known hosts.\nthe command's own\n" {
+		t.Fatalf("the output is %q", said)
 	}
 }

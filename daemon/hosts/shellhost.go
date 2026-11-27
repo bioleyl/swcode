@@ -181,7 +181,8 @@ func (h *ShellHost) ListFiles(ctx context.Context, base, pattern string, limit i
 	listing, err := h.session.Run(ctx, strings.Join([]string{
 		fmt.Sprintf("cd -- %s 2>/dev/null || exit 0", ShellWord(base)),
 		"if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then git -c core.fsmonitor=false ls-files --cached --others --exclude-standard -z",
-		fmt.Sprintf(`else find . \( -type d \( %s \) -prune \) -o -type f -printf '%%P\0' | LC_ALL=C sort -z; fi | head -z -n %d | base64 -w0`,
+		// git lists links too: left out, as on this computer, since grep would read through one to wherever it leads.
+		fmt.Sprintf(`else find . \( -type d \( %s \) -prune \) -o -type f -printf '%%P\0' | LC_ALL=C sort -z; fi | head -z -n %d | while IFS= read -r -d '' name; do [ -L "$name" ] || printf '%%s\0' "$name"; done | base64 -w0`,
 			strings.Join(prunes, " -o "), maxListed),
 	}, line))
 	if err != nil {
@@ -237,8 +238,8 @@ func (h *ShellHost) Search(ctx context.Context, request SearchRequest) ([]Search
 	return matches, nil
 }
 
-// groupOutput holds the error stream until the command's group id came, first, on a line of its own; then it is
-// the command's output.
+// groupOutput holds the error stream until the command's group id came, on a line of its own; then it is the
+// command's output, as are the lines the transport said before it.
 type groupOutput struct {
 	mu     sync.Mutex
 	output *OutputBuffer
@@ -254,14 +255,24 @@ func (g *groupOutput) Write(data []byte) (int, error) {
 		return g.output.Write(data)
 	}
 	g.said = append(g.said, data...)
-	end := bytes.IndexByte(g.said, '\n')
-	if end < 0 || !bytes.HasPrefix(g.said, []byte(pidMarker)) {
-		return len(data), nil
+	for {
+		end := bytes.IndexByte(g.said, '\n')
+		if end < 0 {
+			return len(data), nil
+		}
+		if bytes.HasPrefix(g.said, []byte(pidMarker)) {
+			g.pid = strings.TrimSpace(string(g.said[len(pidMarker):end]))
+			close(g.known)
+			g.output.Write(g.said[end+1:])
+			g.said = nil
+			return len(data), nil
+		}
+		// What the transport said before the command started (ssh's warning about a host key, a server's banner):
+		// it is output, and the group id is still to come. Taken for the id's absence, the command could not be
+		// stopped there.
+		g.output.Write(g.said[:end+1])
+		g.said = g.said[end+1:]
 	}
-	g.pid = strings.TrimSpace(string(g.said[len(pidMarker):end]))
-	close(g.known)
-	g.output.Write(g.said[end+1:])
-	return len(data), nil
 }
 
 func (g *groupOutput) group() string {
