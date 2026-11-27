@@ -66,9 +66,9 @@ swcode needs an LLM server that supports tool calls. Set that up first, then ins
 
 Each release carries one program for each platform, and these to install it with:
 
-- **Windows**: `swcode-desktop.exe` — open it once and it installs itself in `%LOCALAPPDATA%\Programs\swcode` with its shortcuts, its icon in the notification area, and its server started at logon.
+- **Windows**: `swcode-desktop.exe` — open it once and it installs itself in `%LOCALAPPDATA%\Programs\swcode` with its shortcuts and its icon in the notification area; Settings → Startup has it start at logon.
 - **Ubuntu / Debian**: `swcode_<version>_amd64.deb` (or `_arm64`) — `sudo apt install ./swcode_0.13.1_amd64.deb`, then `swcode`.
-- **Android**: `swcode-android.apk` — open it on the phone, allow this source in Android’s settings for that one install, and the app takes its next releases itself.
+- **Android**: `swcode-android.apk` — open it on the phone, allow this source in Android’s settings for that one install; the app then takes its next releases itself, once swcode is allowed to install them (Android asks at the first one).
 
 Or, from a terminal:
 
