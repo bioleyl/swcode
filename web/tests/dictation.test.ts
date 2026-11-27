@@ -1,6 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import { spokenText, textWithSpoken } from '../src/lib/dictation';
+import { dictationOnceAllowed, spokenText, textWithSpoken } from '../src/lib/dictation';
+
+const REFUSED = 'The microphone is not allowed.';
 
 describe('what was said so far', () => {
   it('is nothing before the first word', () => {
@@ -46,5 +48,55 @@ describe('the words said, in the field', () => {
       caret: 13,
       text: 'Please fix it, today',
     });
+  });
+});
+
+describe('a dictation that asks for the microphone first', () => {
+  function asked() {
+    const answer = Promise.withResolvers<boolean>();
+    const recognizer = { abort: vi.fn(), start: vi.fn(), stop: vi.fn() };
+    const listener = { ended: vi.fn(), failed: vi.fn() };
+    const dictation = dictationOnceAllowed(answer.promise, recognizer, listener, REFUSED);
+    const answered = async (isAllowed: boolean): Promise<void> => {
+      answer.resolve(isAllowed);
+      await answer.promise;
+    };
+    return { answered, dictation, listener, recognizer };
+  }
+
+  it('listens only once the microphone is allowed, and then stops through the recognizer', async () => {
+    const { answered, dictation, listener, recognizer } = asked();
+    expect(recognizer.start).not.toHaveBeenCalled();
+
+    await answered(true);
+    expect(recognizer.start).toHaveBeenCalledOnce();
+
+    dictation.stop();
+    expect(recognizer.stop).toHaveBeenCalledOnce();
+    // The recognizer says its own end.
+    expect(listener.ended).not.toHaveBeenCalled();
+  });
+
+  it('ends saying why when the microphone is refused, without listening', async () => {
+    const { answered, listener, recognizer } = asked();
+
+    await answered(false);
+
+    expect(recognizer.start).not.toHaveBeenCalled();
+    expect(listener.failed).toHaveBeenCalledWith(REFUSED);
+    expect(listener.ended).toHaveBeenCalledOnce();
+  });
+
+  it('never listens when it is stopped while the question shows', async () => {
+    const { answered, dictation, listener, recognizer } = asked();
+
+    dictation.stop();
+    expect(listener.ended).toHaveBeenCalledOnce();
+
+    await answered(true);
+    dictation.abort();
+    expect(recognizer.start).not.toHaveBeenCalled();
+    expect(recognizer.abort).not.toHaveBeenCalled();
+    expect(listener.ended).toHaveBeenCalledOnce();
   });
 });

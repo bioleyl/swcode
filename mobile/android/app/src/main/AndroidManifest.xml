@@ -50,6 +50,9 @@
     <!-- Capacitor asks for this when a page reads a QR code with the camera; without it declared, Android denies
          the ask at once, and the scanner's page never gets the camera. -->
     <uses-permission android:name="android.permission.CAMERA" />
+    <!-- Dictation in the composer: the WebView's speech recognition listens through Android's recognizer, which
+         refuses an app that does not hold this. The WebView never asks for it itself (MicrophonePlugin does). -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <!-- The app tells the person through Android itself (NotifierPlugin): on Android 13+ this is what Android asks. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Its service at the front of Android's list, which keeps the daemon's socket alive while the phone sleeps.
@@ -59,4 +62,11 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
     <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
+
+    <!-- Android 11+ hides other apps' services: the WebView looks the speech recognizer up by this action. -->
+    <queries>
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
+    </queries>
 </manifest>

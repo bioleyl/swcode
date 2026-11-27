@@ -1,4 +1,4 @@
-import type { DictatedText, TextAround } from '../types/dictation.types';
+import type { DictatedText, Dictation, DictationListener, TextAround } from '../types/dictation.types';
 
 const ENDS_IN_SPACE = /\s$/;
 // What follows the words said without a space between: a space already, or punctuation that sticks to a word.
@@ -21,4 +21,43 @@ export function textWithSpoken(around: TextAround, spoken: string): DictatedText
     around.after === '' || NEEDS_NO_SPACE_BEFORE.test(around.after) ? around.after : ` ${around.after}`;
   const said = before + spoken;
   return { caret: said.length, text: said + after };
+}
+
+/**
+ * A dictation that listens only once the microphone is allowed, where the device asks first (the Android app): until
+ * the answer, stopping or aborting ends it without the recognizer ever starting, and a refusal ends it saying
+ * `refused`.
+ */
+export function dictationOnceAllowed(
+  allowed: Promise<boolean>,
+  recognizer: Dictation & { start(): void },
+  listener: Pick<DictationListener, 'ended' | 'failed'>,
+  refused: string
+): Dictation {
+  let state: 'asking' | 'listening' | 'over' = 'asking';
+  const endUnheard = (): void => {
+    state = 'over';
+    listener.ended();
+  };
+  void allowed.then((isAllowed) => {
+    if (state !== 'asking') {
+      return;
+    }
+    if (!isAllowed) {
+      listener.failed(refused);
+      endUnheard();
+      return;
+    }
+    state = 'listening';
+    recognizer.start();
+  });
+  // Once it listens, the recognizer says its own end; before, there is nothing to stop but the wait.
+  const end = (endRecognizer: () => void) => (): void => {
+    if (state === 'listening') {
+      endRecognizer();
+    } else if (state === 'asking') {
+      endUnheard();
+    }
+  };
+  return { abort: end(() => recognizer.abort()), stop: end(() => recognizer.stop()) };
 }
