@@ -557,7 +557,7 @@ export class WorkflowsPage extends ScElement {
   /** A new output of the step selected; the edge it had with no output, if one, leaves by it. */
   private addExit(): void {
     const step = this._draft.steps.find((each) => each.id === this._selected);
-    if (!step || step.kind !== 'step') {
+    if (step?.kind !== 'step') {
       return;
     }
     const exit: WorkflowExit = {
@@ -597,7 +597,7 @@ export class WorkflowsPage extends ScElement {
   /** Takes the step form into the draft; the problem when it cannot, empty when it did. */
   private applySelectedStep(): string {
     const step = this._draft.steps.find((each) => each.id === this._selected);
-    if (!step || step.kind !== 'step') {
+    if (step?.kind !== 'step') {
       return '';
     }
     const name = this._refs.stepName.value.get().trim();
@@ -733,7 +733,7 @@ export class WorkflowsPage extends ScElement {
 
   private removeStep(): void {
     const step = this._draft.steps.find((each) => each.id === this._selected);
-    if (!step || step.kind !== 'step') {
+    if (step?.kind !== 'step') {
       return;
     }
     this._draft.steps = this._draft.steps.filter((each) => each.id !== step.id);

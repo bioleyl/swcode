@@ -155,10 +155,12 @@ async function edit(request: Extract<ComputerRequest, { type: 'editComputer' }>)
 
 async function forget(id: string): Promise<void> {
   const kept = storedComputers();
-  keepComputers({ ...kept, computers: kept.computers.filter((computer) => computer.id !== id) });
-  // Its sessions are on show: the page goes back to the computer it came from.
-  if (kept.current === id) {
-    showAnother(THIS_COMPUTER);
+  const remaining = kept.computers.filter((computer) => computer.id !== id);
+  keepComputers({ ...kept, computers: remaining });
+  // Its sessions are on show: the page goes back to the computer it came from. The phone app came from none: it
+  // goes to another it kept, or to the page that pairs with one.
+  if (currentOf(kept) === id) {
+    showAnother(showsHome() ? THIS_COMPUTER : (remaining[0]?.id ?? THIS_COMPUTER));
     return;
   }
   await list();

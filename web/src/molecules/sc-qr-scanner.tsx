@@ -75,6 +75,11 @@ export class ScQrScanner extends ScElement {
       return;
     }
     this._stream = stream;
+    // The dialog was closed while the browser still asked for the camera: it is let go at once, not left on behind it.
+    if (!this.isConnected || !this._refs.dialog.open.get()) {
+      this.letGo();
+      return;
+    }
     this._refs.video.srcObject = stream;
     // A video that cannot play shows no picture, and no code is ever read: the person cancels.
     await this._refs.video.play().catch(() => undefined);

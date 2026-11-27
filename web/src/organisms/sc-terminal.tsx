@@ -97,6 +97,11 @@ export class ScTerminal extends ScElement {
     this._observer = undefined;
     this._theme?.disconnect();
     this._theme = undefined;
+    // xterm keeps its screen, its scrollback and listeners of its own until it is told to let them go.
+    this._terminal?.dispose();
+    this._terminal = undefined;
+    this._fit = undefined;
+    this._loading = undefined;
   }
 
   /** Shows a terminal in its dialog: its name and how it stands; what it printed comes as the page writes it. */

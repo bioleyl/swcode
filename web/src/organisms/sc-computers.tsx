@@ -168,8 +168,9 @@ export class ScComputers extends ScElement {
       // The switch says that computer did not answer; the list says which ones are not reachable.
       askComputers({ type: 'listComputers' });
     },
-    // The app kept the answer: the section reads what it says, not what the press asked for.
-    notifications: () => void this.renderPush(),
+    // The app kept the answer: the section draws what it says, not what the press asked for. Asking again here
+    // would be answered again, and so on without end.
+    notifications: (answer) => this.drawPush(answer.on ? 'on' : 'off'),
   };
 
   private readonly _refs = this.useRefs((ref) => ({
@@ -575,9 +576,12 @@ export class ScComputers extends ScElement {
   /** Where notifications stand on the device showing this page, and the button that changes it where one can. */
   private async renderPush(problem = ''): Promise<void> {
     const state = await pushState();
-    if (!this.isConnected) {
-      return;
+    if (this.isConnected) {
+      this.drawPush(state, problem);
     }
+  }
+
+  private drawPush(state: PushState, problem = ''): void {
     this._pushState = state;
     const label = PUSH_BUTTONS[state];
     // A refusal that left notifications blocked is what the line itself says: it is said once.
