@@ -86,7 +86,10 @@ describe('the side panel', () => {
     const title = await page.locator('session-page header sc-title button').boundingBox();
     const path = await page.locator('session-page header .place').boundingBox();
     expect((title?.x ?? 0) + (title?.width ?? 0)).toBeLessThanOrEqual(path?.x ?? 0);
-    expect(await page.locator('session-page sc-side-panel .version').textContent()).toBe(`swcode ${E2E_VERSION}`);
+    // The build comes with the daemon's status, which the page asks for by itself: it may still be on its way.
+    await expect
+      .poll(() => page.locator('session-page sc-side-panel .version').textContent())
+      .toBe(`swcode ${E2E_VERSION}`);
     const server = page.locator('session-page sc-side-panel .server');
     await server.locator('.state', { hasText: 'Connected' }).waitFor();
     expect(await server.count()).toBe(1);
