@@ -130,11 +130,13 @@ func (s *Service) await(ctx context.Context, t *terminal, start int, mark string
 		if over := len(output) - maxScrollback; over > 0 {
 			output = append(output[:0], output[over:]...)
 		}
-		if at, code, ended := hosts.CommandEnd(output, mark); ended {
-			return Ran{Code: code, Ended: true, Output: output[:at]}
-		}
+		// A terminal that closed is looked at first: closing it ends the command, and its shell may still say so
+		// (ended, by a signal) before it goes itself. What happened is that the terminal closed.
 		if !running {
 			return Ran{Closed: true, Output: output}
+		}
+		if at, code, ended := hosts.CommandEnd(output, mark); ended {
+			return Ran{Code: code, Ended: true, Output: output[:at]}
 		}
 		if waits := hosts.PromptAtEnd(output) != ""; waits != asking {
 			asking = waits
