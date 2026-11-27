@@ -38,7 +38,7 @@ printf 'storeFile=swcode.keystore\nstorePassword=%s\nkeyAlias=swcode\nkeyPasswor
 ```
 
 Keep that keystore: an app updated by a release signed with another key is refused, and the person has to uninstall it
-first. `keystore.properties` and `*.keystore` are ignored by git.
+first. `keystore.properties` and `*.keystore` are ignored by git, here and at the repository's root: a keystore is never committed, even with a password on it.
 
 ## The workflow's secrets
 

@@ -6,4 +6,7 @@ data/
 .DS_Store
 .claude/worktrees/
 .agents/
-.swcode/
+.swcode/# The Android signing key is never committed: the workflow takes it from the repository's secrets.
+*.keystore
+*.jks
+keystore.properties
