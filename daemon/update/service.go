@@ -19,7 +19,7 @@ const checkEvery = 10 * time.Minute
 const (
 	folderMode   = 0o755
 	settingsMode = 0o644
-	noProgram    = "This swcode cannot replace itself: install the new version with the install command."
+	noProgram    = "This swcode cannot replace itself: install the new version the way this one was installed (the .deb with apt, else the install command)."
 	nothingNewer = "There is no newer version to install: look for one first."
 	installing   = "The new version is being installed already."
 )

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
 	"runtime"
 	"time"
 
@@ -45,13 +46,24 @@ func settings(environment map[string]string) config.Config {
 }
 
 // commandLine is the program that runs, as an update replaces it: nothing is replaced when it cannot say where it
-// is.
+// is, or may not write there.
 func commandLine() update.Program {
 	path, err := os.Executable()
-	if err != nil {
+	if err != nil || !writable(filepath.Dir(path)) {
 		return update.Program{}
 	}
 	return update.CommandLine(path)
+}
+
+// writable tells whether this process may put a file in a folder: the new program is written beside the old one.
+// Not so for a program a package installed (/usr/bin), which the package's own tool updates.
+func writable(folder string) bool {
+	probe, err := os.CreateTemp(folder, ".swcode-update-*")
+	if err != nil {
+		return false
+	}
+	_ = probe.Close()
+	return os.Remove(probe.Name()) == nil
 }
 
 func runServe(command cli.Command, environment map[string]string) int {
