@@ -15,8 +15,9 @@ import (
 )
 
 const (
-	// waitingForReports ends a turn whose last reply started subagents: their reports wake the agent.
-	waitingForReports = "Waiting for the subagents' reports: they wake the agent."
+	// WaitingForReports ends a turn whose last reply started subagents: their reports wake the agent. Whoever
+	// follows a session's turns (a workflow's runner) reads it as "not finished yet".
+	WaitingForReports = "Waiting for the subagents' reports: they wake the agent."
 	declinedOutput    = "The user declined this call. Wait for their instructions."
 	declinedMessage   = "Stopped: a call was declined. Say how to go on."
 	rawSummaryLength  = 80
@@ -352,7 +353,7 @@ func runSteps(ctx context.Context, host TurnHost, setup Setup) (Ending, error) {
 				return declinedEnding(ctx), nil
 			}
 			if delegates(host.History(), reply.ToolCalls) {
-				return Ending{Message: waitingForReports, Outcome: protocol.TurnOutcomeDone}, nil
+				return Ending{Message: WaitingForReports, Outcome: protocol.TurnOutcomeDone}, nil
 			}
 			continue
 		}

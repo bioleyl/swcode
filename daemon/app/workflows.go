@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"swcode/daemon/agent"
 	"sync"
 
 	"swcode/daemon/protocol"
@@ -303,6 +304,16 @@ func (r *workflowRunner) startStep(state *workflowState, step protocol.WorkflowS
 func (r *workflowRunner) finish(state *workflowState, ref workflowStepRef, event protocol.SessionEventTurnFinished) {
 	index := ref.index
 	if index < 0 || index >= len(state.run.Steps) {
+		return
+	}
+	// A step's session can have more turns than the one that ends the step: one that only started subagents, whose
+	// reports wake it for the turn that counts, and any a person starts in it later. Only the turn that ends the
+	// run's current step, still open, moves the run on; another would start the next step a second time.
+	if event.Message == agent.WaitingForReports {
+		return
+	}
+	if status := state.run.Steps[index].Status; index != len(state.run.Steps)-1 ||
+		(status != protocol.WorkflowStepStatusRunning && status != protocol.WorkflowStepStatusWaiting) {
 		return
 	}
 	if state.stopped {
