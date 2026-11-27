@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"swcode/daemon/atomicfile"
 	"swcode/daemon/protocol"
 )
 
@@ -144,7 +145,7 @@ func (s *Store) SaveMeta(meta Meta) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(s.metaPath(meta.ID), data, fileMode)
+	return atomicfile.Write(s.metaPath(meta.ID), data, fileMode)
 }
 
 // Append adds an event to a session's file: the event is the one it holds, so its kind and its time come from it.

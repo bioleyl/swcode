@@ -28,6 +28,8 @@ import (
 	"slices"
 	"sync"
 	"time"
+
+	"swcode/daemon/atomicfile"
 )
 
 const (
@@ -140,7 +142,7 @@ func (s *Service) save() error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(s.file, data, fileOnly)
+	return atomicfile.Write(s.file, data, fileOnly)
 }
 
 func (s *Service) log(err error) {

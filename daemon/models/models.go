@@ -12,6 +12,7 @@ import (
 	"slices"
 	"sync"
 
+	"swcode/daemon/atomicfile"
 	"swcode/daemon/config"
 	"swcode/daemon/llm"
 	"swcode/daemon/protocol"
@@ -143,7 +144,7 @@ func (s *Store) Save(settings protocol.ModelSettings) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(s.file, data, ownerOnly)
+	return atomicfile.Write(s.file, data, ownerOnly)
 }
 
 // Service is the models in use: it gives the sources to the llm-servers, picks a preset's models for each turn,

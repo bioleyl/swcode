@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"swcode/daemon/atomicfile"
 	"swcode/daemon/hosts"
 	"swcode/daemon/protocol"
 )
@@ -50,7 +51,7 @@ func (s *Store) Save(projects []protocol.Project) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(s.file, data, 0o600)
+	return atomicfile.Write(s.file, data, 0o600)
 }
 
 // Deps is what the projects work with.

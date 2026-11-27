@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"swcode/daemon/atomicfile"
 	"swcode/daemon/protocol"
 )
 
@@ -29,6 +30,9 @@ type Store struct {
 	file string
 }
 
+// unreadableSuffix names the copy kept of a workflows file that could not be read.
+const unreadableSuffix = ".unreadable"
+
 func NewStore(file string) *Store { return &Store{file: file} }
 
 func (s *Store) Load() File {
@@ -38,6 +42,8 @@ func (s *Store) Load() File {
 	}
 	var kept File
 	if json.Unmarshal(data, &kept) != nil {
+		// The next change writes the file anew: what cannot be read is put aside first, not written over.
+		_ = os.WriteFile(s.file+unreadableSuffix, data, 0o600)
 		return File{}
 	}
 	return kept
@@ -51,7 +57,7 @@ func (s *Store) Save(kept File) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(s.file, data, 0o600)
+	return atomicfile.Write(s.file, data, 0o600)
 }
 
 // Deps is what the workflows work with.

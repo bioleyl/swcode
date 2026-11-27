@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strings"
 
+	"swcode/daemon/atomicfile"
 	"swcode/daemon/protocol"
 )
 
@@ -161,7 +162,7 @@ func WriteSettings(path string, values map[string]string) error {
 	if err := os.MkdirAll(filepath.Dir(path), settingsFolderMode); err != nil {
 		return err
 	}
-	return os.WriteFile(path, []byte(SettingsText(values)), settingsFileMode)
+	return atomicfile.Write(path, []byte(SettingsText(values)), settingsFileMode)
 }
 
 // Environment is what the daemon starts with: the settings file's (`KEY=value` lines, as `swcode install` writes
