@@ -258,7 +258,11 @@ describe('a project the daemon refuses', () => {
     await dialog.locator('.name input').fill('docs');
     await dialog.locator('.confirm button').click();
     await settle(page);
-    await page.locator('home-page select').filter({ hasText: 'docs' }).waitFor();
+    // The app shows the home page anew for the project made, the page before it still there for a moment: one of
+    // them lists the project, and one page is left once it settled.
+    await page.locator('home-page select').filter({ hasText: 'docs' }).first().waitFor();
+    await settle(page);
+    expect(await page.locator('home-page select').filter({ hasText: 'docs' }).count()).toBe(1);
   });
 });
 
