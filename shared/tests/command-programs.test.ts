@@ -55,6 +55,31 @@ describe('commandPrograms', () => {
     expect(commandPrograms(command)).toBeUndefined();
   });
 
+  it.each([
+    ['a loop', 'for f in *.go; do gofmt -l $f; done'],
+    ['a condition', 'if true; then rm -rf x; fi'],
+    ['a negation', '! rm x'],
+    ['a group', '{ rm x; }'],
+    ['a file of commands', 'source ./payload.sh'],
+    ['a file of commands by its dot', '. ./payload.sh'],
+    ['a builtin named', 'builtin eval ls'],
+  ])('cannot vouch for the shell’s own words: %s', (_case, command) => {
+    expect(commandPrograms(command)).toBeUndefined();
+  });
+
+  it.each([
+    ['a quote that keeps escaped quotes', "ls $'\\'' ; rm -rf x #'"],
+    ['a comment hiding a line break', "ls #'\nrm -rf x #'"],
+    ['a comment with a quote in it', "ls # '; rm x"],
+    ['a translated string', 'echo $"a"'],
+  ])('cannot vouch for quotes bash ends elsewhere: %s', (_case, command) => {
+    expect(commandPrograms(command)).toBeUndefined();
+  });
+
+  it('reads a # inside a word as the word', () => {
+    expect(commandPrograms('gh issue view repo#12')).toEqual(['gh']);
+  });
+
   it('cannot vouch for an empty command', () => {
     expect(commandPrograms('   ')).toBeUndefined();
   });

@@ -2,6 +2,11 @@
 // redirection, a subshell, a background job or a second line. A rule about programs cannot vouch for those, so they
 // are always asked about.
 const OPAQUE_MARKS: ReadonlySet<string> = new Set(['`', '>', '<', '(', ')', '\n']);
+// What a new word may follow: a `#` after one of them starts a comment.
+const WORD_BREAKS: ReadonlySet<string> = new Set([' ', '\t', ';', '|', '&']);
+// What makes a `$` more than a variable: a substitution, or bash's `$'…'` and `$"…"` quotes.
+const AFTER_DOLLAR: ReadonlySet<string> = new Set(['(', "'", '"']);
+const COMMENT = '#';
 const SINGLE_QUOTE = "'";
 const DOUBLE_QUOTE = '"';
 const BACKSLASH = '\\';
@@ -58,6 +63,33 @@ const RUNNERS: ReadonlySet<string> = new Set([
   'xargs',
   'zsh',
 ]);
+// The shell's own words that begin a statement without being its program (`do rm -rf x`), or that run a file's
+// lines (`source`): allowing one by its name would allow anything after it.
+const SHELL_WORDS: ReadonlySet<string> = new Set([
+  '!',
+  '.',
+  '[[',
+  'builtin',
+  'case',
+  'coproc',
+  'do',
+  'done',
+  'elif',
+  'else',
+  'esac',
+  'fi',
+  'for',
+  'function',
+  'if',
+  'in',
+  'select',
+  'source',
+  'then',
+  'until',
+  'while',
+  '{',
+  '}',
+]);
 // The words that make a program named for itself run something else: git's own settings name programs it runs, and
 // npm runs any package's.
 const RUNNING_WORDS: Readonly<Record<string, readonly string[]>> = {
@@ -67,6 +99,7 @@ const RUNNING_WORDS: Readonly<Record<string, readonly string[]>> = {
 
 const runsItsWords = (program: string, words: readonly string[]): boolean =>
   RUNNERS.has(program)
+  || SHELL_WORDS.has(program)
   || (RUNNING_WORDS[program] ?? []).some((marker) =>
     words.some((word) => word === marker || word.startsWith(`${marker}=`))
   );
@@ -114,7 +147,9 @@ const isDefined = (value: string | undefined): value is string => value !== unde
  * The statements of a command, split at its separators (`;`, `|`, `&&`, `||`) and not inside its quotes, or
  * `undefined` when the command does more than a list of programs can tell: a substitution the shell runs (not one in
  * single quotes, which quotes it), a redirection, a subshell, a background job or a second line. A separator inside
- * quotes belongs to the argument, so `ssh marvin 'cd x && ls'` is one statement.
+ * quotes belongs to the argument, so `ssh marvin 'cd x && ls'` is one statement. The quotes understood are the plain
+ * two: bash's `$'…'` (where `\'` does not end it) and a `#` comment (where a quote is no quote) would make this
+ * reading and the shell's differ on where a quote ends, so a command with either is not known.
  */
 const statementsOf = (command: string): string[] | undefined => {
   const statements: string[] = [];
@@ -164,7 +199,9 @@ const statementsOf = (command: string): string[] | undefined => {
       }
       index += 1;
       flush();
-    } else if (char === '$' && next === '(') {
+    } else if (char === '$' && next !== undefined && AFTER_DOLLAR.has(next)) {
+      return undefined;
+    } else if (char === COMMENT && (index === 0 || WORD_BREAKS.has(command[index - 1] ?? ''))) {
       return undefined;
     } else if (OPAQUE_MARKS.has(char)) {
       return undefined;

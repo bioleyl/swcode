@@ -195,6 +195,13 @@ var (
 		"find": true, "fish": true, "nice": true, "nohup": true, "npx": true, "parallel": true, "pnpx": true, "sh": true,
 		"ssh": true, "sudo": true, "time": true, "timeout": true, "watch": true, "xargs": true, "zsh": true,
 	}
+	// shellWords are the shell's own words that begin a statement without being its program (`do rm -rf x`), or
+	// that run a file's lines (`source`): allowing one by its name would allow anything after it.
+	shellWords = map[string]bool{
+		"!": true, ".": true, "[[": true, "builtin": true, "case": true, "coproc": true, "do": true, "done": true,
+		"elif": true, "else": true, "esac": true, "fi": true, "for": true, "function": true, "if": true, "in": true,
+		"select": true, "source": true, "then": true, "until": true, "while": true, "{": true, "}": true,
+	}
 	// runningWords are the words that make a program named for itself run something else: git's own settings name
 	// programs it runs, and npm runs any package's.
 	runningWords = map[string][]string{
@@ -205,7 +212,7 @@ var (
 
 // runsItsWords tells whether a program runs what its words say, so that its name vouches for nothing.
 func runsItsWords(program string, words []string) bool {
-	if runners[program] {
+	if runners[program] || shellWords[program] {
 		return true
 	}
 	for _, marker := range runningWords[program] {
@@ -260,10 +267,15 @@ func programOf(part string) (string, bool) {
 	return words[0], true
 }
 
+// wordBreaks are the characters a new word may follow: a `#` after one of them starts a comment.
+const wordBreaks = " \t;|&"
+
 // splitParts are the statements of a command, split at its separators (`;`, `|`, `&&`, `||`) and not inside its
 // quotes, or none when the command does more than a list of programs can tell: a substitution the shell runs (not
 // one in single quotes, which quotes it), a redirection, a subshell, a background job or a second line. A separator
-// inside quotes belongs to the argument, so `ssh marvin 'cd x && ls'` is one statement.
+// inside quotes belongs to the argument, so `ssh marvin 'cd x && ls'` is one statement. The quotes understood are
+// the plain two: bash's `$'…'` (where `\'` does not end it) and a `#` comment (where a quote is no quote) would make
+// this reading and the shell's differ on where a quote ends, so a command with either is not known.
 func splitParts(command string) ([]string, bool) {
 	parts := []string{}
 	var current strings.Builder
@@ -315,7 +327,12 @@ func splitParts(command string) ([]string, bool) {
 			case '`', '>', '<', '(', ')', '\n':
 				return nil, false
 			case '$':
-				if i+1 < len(command) && command[i+1] == '(' {
+				if i+1 < len(command) && strings.IndexByte("('\"", command[i+1]) >= 0 {
+					return nil, false
+				}
+				current.WriteByte(c)
+			case '#':
+				if i == 0 || strings.IndexByte(wordBreaks, command[i-1]) >= 0 {
 					return nil, false
 				}
 				current.WriteByte(c)

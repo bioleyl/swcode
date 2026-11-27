@@ -68,6 +68,8 @@ func TestCommandPrograms(t *testing.T) {
 		"ssh marvin 'cd ~/tts/kokoro && curl -sL -o model.onnx https://example.com/model.onnx && ls -lh'": {"ssh marvin"},
 		"ssh -p 2222 marvin ls":       {"ssh marvin"},
 		"ssh -o BatchMode=yes marvin": {"ssh marvin"},
+		// A `#` inside a word is no comment.
+		"gh issue view repo#12": {"gh"},
 	}
 	for text, want := range cases {
 		if got, known := CommandPrograms(text); !known || !reflect.DeepEqual(got, want) {
@@ -79,6 +81,11 @@ func TestCommandPrograms(t *testing.T) {
 		"PATH=.:$PATH ls", "LD_PRELOAD=./x.so ls", "git -c core.fsmonitor=./payload.sh status", "git --exec-path=. status",
 		"npm exec -y -- some-package", "timeout 5 sh ./payload.sh", "bash ./payload.sh", "sudo rm -rf /", "find . -exec rm {} +",
 		"ssh", "ssh -o BatchMode=yes", `ssh marvin "echo $(date)"`, "V=1 ssh marvin ls", "ssh marvin 'unclosed",
+		// The shell's own words name no program: what follows them runs.
+		"for f in *.go; do gofmt -l $f; done", "if true; then rm -rf x; fi", "! rm x", "{ rm x; }", "source ./payload.sh",
+		". ./payload.sh", "builtin eval ls",
+		// Quotes this reading and bash would end at different places.
+		`ls $'\'' ; rm -rf x #'`, "ls #'\nrm -rf x #'", "ls # '; rm x", `echo $"a"`,
 	}
 	for _, opaque := range append(unnamed, "echo $(rm -rf /)", "echo `whoami`", "npm test > out.txt", "sleep 10 & rm file", "(cd /tmp && rm x)", "ls\nrm x", "   ") {
 		if _, known := CommandPrograms(opaque); known {
