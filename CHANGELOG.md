@@ -2,6 +2,32 @@
 
 All notable changes to swcode are documented here.
 
+## [0.17.0] - 2026-11-27
+
+### Added
+
+- The session's header says whether its folder is a git repository: the branch (or the commit when on none), how many files are uncommitted, and how many commits it is ahead of and behind the branch it follows, as git last fetched it. Outside a repository it says "no git". It is read again after each turn and after a commit.
+
+### Changed
+
+- The swcode-base skill keeps a project's notes in the folder they are about: the root's AGENTS.md is an index within a size, each part has its own, and a `CLAUDE.md` holding `@AGENTS.md` gives Claude Code the same notes. A file is named by its role, and a function with one caller lives in that caller.
+
+### Fixed
+
+- The Android app asks for the microphone before it dictates. The permission was neither declared nor asked, so dictation failed without Android ever showing its question.
+- Restoring a turn no longer deletes files git ignored when the turn started (a `.env`, a build folder) after the turn changed `.gitignore`.
+- A sandboxed command can no longer move the repository's `.git` aside for one of its own, or plant a hook where the hooks folder was missing: the daemon's own git ran those outside the sandbox. A turn stopped while the sandbox was being looked for no longer leaves the next turns without one.
+- A program allowed for a session or a project no longer covers the shell's own words (`for … do`, `if … then`, `!`, `{`, `source`), nor a command whose `$'…'` quotes or `#` comment hide a second command: those are always asked about.
+- Pairing counts tries by machine rather than by connection, and 300 wrong numbers while a number waits end the wait: the six digits could be guessed by opening many connections.
+- The file tools refuse a file in `.git` reached through a link or written `.GIT`.
+- The agent's browser asks before opening an address written as one number or in hex (`http://3232235777/`) or a tailnet's (100.64.0.0/10).
+- A settings value holding both kinds of quotes is written so that it reads back whole, instead of ending early and being read as other settings.
+- A workflow no longer starts its next step twice when a step used subagents, or when you write in a step's session afterwards.
+- The Android app no longer reopens Android's "install unknown apps" screen at every return when it was left without allowing it, and a tapped notification opens its own session instead of the last one notified.
+- `swcode service install` on Windows registers a task that starts when the profile folder's name has a space.
+- In the desktop app, Settings → Computers no longer asks the app about notifications without end. In the phone app, forgetting the computer on show goes to another one kept. The QR scanner lets the camera go when it was allowed after the dialog closed.
+- The Android signing keystore is no longer tracked in the repository.
+
 ## [0.16.0] - 2026-11-26
 
 ### Added
